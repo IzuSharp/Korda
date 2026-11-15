@@ -4,7 +4,7 @@
 
 NativeWeave aims to let developers write complete applications in natural, strongly typed C# while deeply reusing mature Rust engines. Native AOT, low-overhead interop and precompiled NuGet assets connect the two ecosystems. Performance and memory improvements are engineering goals to measure against equivalent workloads, never unconditional claims of superiority over C# or Rust.
 
-> **Current state: experimental bootstrap.** This repository implements a real C# → Rust Hello World, package consumption and Native AOT verification. Database, ORM, Server and the broader engine ecosystem remain planned. No public NuGet release is implied by this README.
+> **Current state: experimental bootstrap.** This repository implements a real C# → Rust Hello World, package consumption and Native AOT verification. Database, ORM, Server and the broader engine ecosystem remain planned. Public preview packages currently support Linux x64 only.
 
 ## Product principles
 
@@ -61,7 +61,7 @@ Linux CI additionally consumes the package in a separate .NET SDK container with
 
 First build the local candidate with `python3 eng/build.py verify`. Copy `samples/PackageConsumer` outside this checkout, add `artifacts/packages` as a local NuGet source, and run normal `dotnet build` / `dotnet run`. The [getting-started guide](docs/getting-started.md) gives exact commands, source mapping and Native AOT publication. No consumer MSBuild target launches Cargo; native files use standard `runtimes/<rid>/native/` assets.
 
-Public publication is configured separately and disabled until the maintainer finishes [NuGet setup](docs/releasing.md). Do not expect `dotnet add package NativeWeave.HelloWorld` from nuget.org to work before an actual release.
+The first [NuGet preview](https://www.nuget.org/packages/NativeWeave.HelloWorld/0.1.0-preview.1) is published. With [NuGet setup](docs/releasing.md) enabled, each push to `main` automatically builds, verifies and publishes a Linux x64 preview using `0.1.0-preview.<run-number>.<attempt>`. Topic branches and PRs run checks without publishing. No manual version bump is needed for ordinary development.
 
 ## Project context
 

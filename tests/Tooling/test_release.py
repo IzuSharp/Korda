@@ -1,11 +1,13 @@
 """Release gates must reject stale/tampered candidates before obtaining credentials."""
 import hashlib
+import io
 import json
 from pathlib import Path
 import sys
 import tempfile
 import unittest
 from unittest.mock import patch
+import urllib.error
 import zipfile
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'eng'))
@@ -99,3 +101,121 @@ class ReleaseTests(unittest.TestCase):
         with zipfile.ZipFile(downloaded, 'a') as archive:
             archive.writestr('unexpected.txt', b'not allowed')
         self.assertNotEqual(release.entries(self.package), release.entries(downloaded))
+
+    def test_upload_evidence_survives_indexing_timeout(self):
+        with patch.dict(release.os.environ, {'NUGET_API_KEY': 'test-only'}), \
+                patch.object(release.subprocess, 'run') as command, \
+                patch.object(release, 'download_registry_package', side_effect=TimeoutError('indexing')), \
+                patch.object(release, 'consume') as consume:
+            with self.assertRaises(TimeoutError):
+                release.publish(self.version)
+        self.assertEqual(command.call_count, 1)
+        self.assertNotIn('test-only', str(command.call_args))
+        consume.assert_not_called()
+        result = json.loads((self.root / 'publication.json').read_text())
+        self.assertEqual(result['status'], 'uploaded-awaiting-verification')
+        self.assertEqual(result['version'], self.version)
+        self.assertEqual(result['uploadSha256'], release.digest(self.package))
+
+
+class VersionSelectionTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        (root / 'Directory.Build.props').write_text(
+            '<Project><PropertyGroup><VersionPrefix>0.1.0</VersionPrefix></PropertyGroup></Project>')
+        root_patch = patch.object(release, 'ROOT', root)
+        root_patch.start()
+        self.addCleanup(root_patch.stop)
+        self.env = {'GITHUB_EVENT_NAME': 'push', 'GITHUB_REF': 'refs/heads/main',
+                    'GITHUB_RUN_NUMBER': '148', 'GITHUB_RUN_ATTEMPT': '1'}
+
+    def test_main_push_increments_run_and_full_rerun_increments_attempt(self):
+        self.assertEqual(release.select_version(self.env, '9.0.0'), '0.1.0-preview.148.1')
+        self.env['GITHUB_RUN_NUMBER'] = '149'
+        self.assertEqual(release.select_version(self.env), '0.1.0-preview.149.1')
+        self.env['GITHUB_RUN_ATTEMPT'] = '2'
+        self.assertEqual(release.select_version(self.env), '0.1.0-preview.149.2')
+
+    def test_dispatch_can_allocate_or_use_an_explicit_version(self):
+        self.env['GITHUB_EVENT_NAME'] = 'workflow_dispatch'
+        self.assertEqual(release.select_version(self.env), '0.1.0-preview.148.1')
+        self.assertEqual(release.select_version(self.env, '0.2.0-preview.1'), '0.2.0-preview.1')
+
+    def test_version_tags_keep_their_identity_on_retries(self):
+        self.env['GITHUB_REF'] = 'refs/tags/v0.2.0-preview.3'
+        self.assertEqual(release.select_version(self.env), '0.2.0-preview.3')
+        self.env['GITHUB_RUN_ATTEMPT'] = '2'
+        self.assertEqual(release.select_version(self.env), '0.2.0-preview.3')
+
+    def test_feature_branches_and_pr_events_cannot_allocate_releases(self):
+        for event, ref in [('push', 'refs/heads/codex/topic'),
+                           ('pull_request', 'refs/pull/1/merge'),
+                           ('workflow_dispatch', 'refs/heads/codex/topic'),
+                           ('workflow_dispatch', 'refs/tags/v0.2.0')]:
+            with self.subTest(event=event, ref=ref), self.assertRaises(ValueError):
+                release.select_version(dict(self.env, GITHUB_EVENT_NAME=event, GITHUB_REF=ref), '0.2.0')
+
+    def test_invalid_automatic_counters_are_rejected(self):
+        for field in ['GITHUB_RUN_NUMBER', 'GITHUB_RUN_ATTEMPT']:
+            for value in ['', '0', '-1', '01', '1.2', '1\n']:
+                with self.subTest(field=field, value=value), self.assertRaises(ValueError):
+                    release.select_version(dict(self.env, **{field: value}))
+
+    def test_local_identity_still_validates_explicit_versions(self):
+        self.assertEqual(release.select_version({}, '0.1.0-preview.1'), '0.1.0-preview.1')
+        with self.assertRaises(ValueError):
+            release.select_version({})
+
+
+class RegistryPollingTests(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.download = Path(temporary.name) / 'download.nupkg'
+        self.now = 0
+        self.delays = []
+        clock = patch.object(release.time, 'monotonic', side_effect=lambda: self.now)
+        sleeper = patch.object(release.time, 'sleep', side_effect=self.advance)
+        printer = patch('builtins.print')
+        for mock in (clock, sleeper, printer):
+            mock.start()
+            self.addCleanup(mock.stop)
+
+    def advance(self, seconds):
+        self.delays.append(seconds)
+        self.now += seconds
+
+    def missing(self):
+        return urllib.error.HTTPError('https://api.nuget.org/', 404, 'Not indexed', {}, None)
+
+    def test_available_package_is_downloaded_immediately(self):
+        with patch.object(release.urllib.request, 'urlopen', return_value=io.BytesIO(b'package')):
+            release.download_registry_package('0.1.0-preview.148.1', self.download)
+        self.assertEqual(self.delays, [])
+        self.assertEqual(self.download.read_bytes(), b'package')
+
+    def test_checks_are_two_minutes_apart_until_available(self):
+        with patch.object(release.urllib.request, 'urlopen',
+                          side_effect=[self.missing(), self.missing(), io.BytesIO(b'package')]) as request:
+            release.download_registry_package('0.1.0-preview.148.1', self.download)
+        self.assertEqual(self.delays, [120, 120])
+        self.assertEqual(request.call_count, 3)
+        self.assertEqual(self.download.read_bytes(), b'package')
+
+    def test_indexing_timeout_is_bounded_and_explains_upload_already_happened(self):
+        with patch.object(release.urllib.request, 'urlopen', side_effect=self.missing()) as request:
+            with self.assertRaisesRegex(TimeoutError, 'was uploaded.*20 minutes'):
+                release.download_registry_package('0.1.0-preview.148.1', self.download)
+        self.assertEqual(self.now, 1200)
+        self.assertEqual(self.delays, [120] * 10)
+        self.assertEqual(request.call_count, 11)
+        self.assertFalse(self.download.exists())
+
+    def test_other_http_errors_are_not_hidden_as_indexing_delays(self):
+        error = urllib.error.HTTPError('https://api.nuget.org/', 403, 'Forbidden', {}, None)
+        with patch.object(release.urllib.request, 'urlopen', side_effect=error):
+            with self.assertRaises(urllib.error.HTTPError):
+                release.download_registry_package('0.1.0-preview.148.1', self.download)
+        self.assertEqual(self.delays, [])

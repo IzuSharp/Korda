@@ -46,7 +46,7 @@ Use `-r linux-x64` on Linux with a Linux-built candidate. Each candidate contain
 ## Troubleshooting
 
 - **Missing local asset in a source build:** run `python3 eng/build.py native`.
-- **Package not found:** this scaffold does not imply public publication. Configure the local feed, matching version and source mapping.
+- **Package not found:** for a local build, configure the local feed, matching version and source mapping. For public Linux x64 previews, choose an available version on nuget.org and allow prerelease packages; see [release versions](releasing.md).
 - **DllNotFoundException / BadImageFormatException:** verify the package RID, architecture and output native asset. Do not copy a binary from another OS.
 - **ABI/version error:** reinstall the complete matching package. Do not swap its native library manually.
 - **AOT linker failure:** check Xcode Command Line Tools or Linux clang/zlib development prerequisites. A JIT run is not an AOT test.
