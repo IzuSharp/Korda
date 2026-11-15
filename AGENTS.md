@@ -13,6 +13,6 @@ This repository pins the NativeWeave API standard in public-api-standard.json an
 - Run `python3 eng/build.py verify`. It includes real JIT and Native AOT execution; compilation alone is not execution.
 - Keep public API work scoped to the requested component. Independent technical review is a separate release acceptance obligation; record self-review honestly.
 - Pin stable toolchains and lock dependencies. Do not inherit unrelated ArcForges policies or licensing.
-- Keep credentials out of source and logs. Preserve LICENSE and repository protections. Publication configuration is documented in docs/releasing.md; never infer permission to release from a green build.
+- Keep credentials out of source and logs. Preserve LICENSE and repository protections. The maintainer authorized automatic preview publication after a push to `main` passes the release gates; follow docs/releasing.md. Topic branches and PRs do not publish. This does not waive repository review rules or authorize unrelated stable releases.
 
 English is the repository documentation language. Prefer small, understandable changes; do not build future domain scaffolding to make the demo appear complete. Local worktrees belong in the parent project's `.worktree/` directory.

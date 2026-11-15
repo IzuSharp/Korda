@@ -1,13 +1,14 @@
 name: Release
 on:
   push:
+    branches: [main]
     tags: ["v*"]
   workflow_dispatch:
     inputs:
       version:
-        description: Canonical package version (for example 0.1.0-preview.1)
+        description: Optional version override (leave empty for an automatic preview)
         type: string
-        required: true
+        required: false
       publish:
         description: Publish the verified candidate to nuget.org
         type: boolean
@@ -16,6 +17,7 @@ permissions:
   contents: read
 concurrency:
   group: nativeweave-release
+  queue: max
   cancel-in-progress: false
 jobs:
   identity:
@@ -35,18 +37,11 @@ jobs:
         run: |
           if [ "$EVENT" = workflow_dispatch ]; then test "$GITHUB_REF" = refs/heads/main; fi
           git merge-base --is-ancestor HEAD origin/main
-      - name: Validate package version
+      - name: Allocate package version
         id: identity
         env:
-          REQUESTED_VERSION: ${{ inputs.version }}
-        run: |
-          if [ "$GITHUB_REF_TYPE" = tag ]; then
-            RELEASE_VERSION="${GITHUB_REF_NAME#v}"
-          else
-            RELEASE_VERSION="$REQUESTED_VERSION"
-          fi
-          export RELEASE_VERSION
-          python3 eng/release.py identity
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: python3 eng/release.py identity
   candidate:
     needs: identity
     uses: ./.github/workflows/build.yml
@@ -66,7 +61,7 @@ jobs:
       vars.NUGET_PUBLISH_ENABLED == 'true' &&
       (github.event_name == 'push' || inputs.publish)
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 40
     environment: nuget
     permissions:
       contents: read
@@ -90,6 +85,8 @@ jobs:
           name: ${{ needs.candidate.outputs.artifact }}
           path: artifacts/packages/
       - name: Validate retained bytes and source identity before obtaining credentials
+        # Reuse the version and artifact allocated by the producer, even when only
+        # failed jobs are rerun. Never derive a new version in the publishing job.
         run: python3 eng/release.py validate
       - name: Exchange GitHub identity for a short-lived NuGet credential
         id: login

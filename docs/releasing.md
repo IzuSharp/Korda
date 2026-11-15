@@ -1,6 +1,6 @@
 # NuGet release setup
 
-The repository builds and tests candidates without a NuGet login. Public publication is a separate authorized action. The initial distributable is **NativeWeave.HelloWorld**, an experimental Linux x64 package. macOS packages are local development artifacts until a separate release profile is approved and tested.
+The repository builds and tests candidates without a NuGet login. Maintainers have authorized automatic preview publication on pushes to `main`, including merged PRs, after all release gates pass. The distributable is **NativeWeave.HelloWorld**, an experimental Linux x64 package. macOS packages are local development artifacts until a separate release profile is approved and tested.
 
 ## One-time account setup (maintainer interaction)
 
@@ -24,14 +24,37 @@ The workflow uses `NuGet/login` with `id-token: write` and receives a short-live
 
 **A publishing glob and a reserved prefix are different.** `NativeWeave.*` limits the publishing policy; it does not reserve that namespace. For prefix protection, separately apply through NuGet's [prefix reservation process](https://learn.microsoft.com/en-us/nuget/nuget-org/id-prefix-reservation). Availability/approval is not assumed. If a one-time manual API key is needed for account bootstrapping, scope it to `NativeWeave.*` and only the required push operations, expire/revoke it promptly, and keep it outside source. The committed workflow intentionally uses OIDC.
 
+## Automatic preview versions
+
+Normal development needs no manual version edit, tag or **Run workflow** click. Push accepted changes to `main`, or merge a reviewed PR into `main`, following the repository's review rules. A push to a topic branch or a PR runs CI but does not publish.
+
+Release allocates `<VersionPrefix>-preview.<GITHUB_RUN_NUMBER>.<GITHUB_RUN_ATTEMPT>` once before building, with `VersionPrefix` read from `Directory.Build.props` (currently `0.1.0`). For example:
+
+| Event | Example version |
+| --- | --- |
+| Release run 148, first attempt | `0.1.0-preview.148.1` |
+| Next Release run | `0.1.0-preview.149.1` |
+| **Re-run all jobs** for run 149 | `0.1.0-preview.149.2` |
+
+The counter belongs to the **Release** workflow, not the CI workflow or NuGet. Failed runs and manual rehearsals also consume run numbers, so published versions can have gaps. The workflow does not commit version bumps or create tags. Local builds retain their default `0.1.0-preview.1` unless a version is passed explicitly.
+
+The numbering follows the approach in [DesktopPlatform's publisher](https://github.com/ArcForges/DesktopPlatform/blob/main/.github/workflows/publish-nuget.yml), using `preview` for this experimental package. See GitHub's [run number and attempt definitions](https://docs.github.com/en/actions/reference/workflows-and-actions/variables). Releases are serialized with [`queue: max`](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#concurrency), which retains up to 100 pending runs instead of replacing the previous pending run.
+
 ## Candidate and publication flow
 
-1. Merge the reviewed bootstrap into `main` after actual Linux `Verify` passes and normal repository review rules are met.
-2. For a non-publishing rehearsal, run **Release** on `main`, enter a version such as `0.1.0-preview.1`, and leave **publish** unchecked. This rebuilds and verifies a Linux candidate and security gates. Do not assume this rehearses authenticated registry publication.
-3. For an authorized release, enable publishing and either run Release on `main` with **publish** checked or push a version tag such as `v0.1.0-preview.1` pointing to a commit on `main`.
-4. The candidate job runs the full source/package/AOT loop and a Rust-free SDK container consumer. Security checks must also succeed. The publishing job downloads the exact artifact, checks SHA-256/native/source identities, exchanges OIDC credentials and uploads that package without rebuilding it.
-5. It waits for registry availability, verifies the NuGet signature, compares all unsigned payload entries against the candidate, then restores those registry bytes into a fresh cache and executes both JIT and AOT consumers. `publication.json` records upload and registry digests separately because repository signing may change archive bytes.
+1. Each `main` push starts **Release** and allocates its automatic preview version. Both `NUGET_PUBLISH_ENABLED=true` and the existing NuGet publisher configuration are still required; leave these configured for ongoing automatic publication.
+2. The candidate job runs the full source/package/AOT loop and a Rust-free SDK container consumer. Security checks must also succeed. The publishing job downloads the exact artifact, checks SHA-256/native/source identities, exchanges OIDC credentials and uploads that package without rebuilding it.
+3. After upload, it immediately checks the NuGet package download endpoint. If NuGet returns 404 while indexing, it checks again every **120 seconds**, for up to **20 minutes**. This is a bounded wait within the release job, not a recurring scheduled workflow. Other HTTP errors fail immediately. The job has a 40-minute budget including setup and consumption.
+4. Once available, it verifies the NuGet signature, compares all unsigned payload entries against the candidate, then restores those registry bytes into a fresh cache and executes both JIT and AOT consumers. `publication.json` records `uploaded-awaiting-verification` immediately after upload and becomes `published-and-consumed` only after these checks pass. Upload and registry digests differ when repository signing changes archive bytes.
 
-The first version is deliberately a preview. NuGet versions are immutable: there is no automatic overwrite or `--skip-duplicate` success assumption. A duplicate/conflicting upload fails and requires an explicit investigation or a new version. If upload succeeded but later indexing/verification failed, the version may already be public; inspect the retained evidence before retrying. Do not advertise a release as verified until registry consumption succeeds.
+To rehearse without uploading, run **Release** manually on `main` and leave **publish** unchecked. Leave **version** empty for an automatic preview, or supply a canonical explicit version. Checking **publish** performs a real release after verification. Version tags such as `v0.2.0-preview.1` still publish the exact tagged version from a commit on `main`. Automatic pushes never choose a stable version; stable-release policy will be decided separately.
 
-CI uploads packages, manifests and logs as run artifacts; it does not create a GitHub Release or publish documentation automatically. Source/manifest checksums are consistency evidence, not an author-signing certificate or a completed supply-chain attestation policy. Production engines require the fuller Design release obligations.
+## Retries and maintainer intervention
+
+- **Re-run failed jobs** retains the original allocated version and uses the candidate output selected by the build job. The publisher does not derive a new version from its own attempt. This is suitable when failure occurred before upload.
+- If upload succeeded but indexing or later verification failed, the version may already be public. Inspect `publication.json`, the logs and NuGet before retrying. Re-running only the publisher cannot overwrite that version. For a new automatic preview, use **Re-run all jobs** or a new manual Release with an empty version; this builds and tests a new candidate with a new version.
+- Explicit manual versions and tags do not change on retry. Use a new version when a package with the previous version already exists.
+- NuGet versions are immutable: there is no automatic overwrite or `--skip-duplicate` success assumption. Do not advertise a release as verified until registry consumption succeeds.
+- Missing/expired publisher configuration, a failed gate or environment approval rules can still require maintainer action. Set `NUGET_PUBLISH_ENABLED=false` to stop publication while retaining candidate checks.
+
+CI and Release upload packages, manifests and logs as run artifacts; they do not create a GitHub Release or publish documentation automatically. Source/manifest checksums are consistency evidence, not an author-signing certificate or a completed supply-chain attestation policy. Production engines require the fuller Design release obligations.
