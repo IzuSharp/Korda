@@ -128,11 +128,13 @@ class VersionSelectionTests(unittest.TestCase):
         root_patch = patch.object(release, 'ROOT', root)
         root_patch.start()
         self.addCleanup(root_patch.stop)
-        self.event_file = root / 'event.json'
-        self.event_file.write_text(json.dumps({'action': 'closed',
-            'pull_request': {'merged': True, 'base': {'ref': 'main'}}}))
-        self.env = {'GITHUB_EVENT_NAME': 'pull_request_target', 'GITHUB_REF': 'refs/heads/main',
-                    'GITHUB_EVENT_PATH': str(self.event_file),
+        self.event_file = root / 'pull-requests.json'
+        self.pr = {'merged_at': '2026-11-15T04:22:16Z', 'merge_commit_sha': 'a' * 40,
+                   'base': {'ref': 'main', 'repo': {'full_name': 'IzuSharp/NativeWeave'}}}
+        self.event_file.write_text(json.dumps([[self.pr]]))
+        self.env = {'GITHUB_EVENT_NAME': 'push', 'GITHUB_REF': 'refs/heads/main',
+                    'GITHUB_SHA': 'a' * 40, 'GITHUB_REPOSITORY': 'IzuSharp/NativeWeave',
+                    'MERGE_CANDIDATES': str(self.event_file),
                     'GITHUB_RUN_NUMBER': '148', 'GITHUB_RUN_ATTEMPT': '1'}
 
     def test_main_merge_increments_run_and_full_rerun_increments_attempt(self):
@@ -155,22 +157,35 @@ class VersionSelectionTests(unittest.TestCase):
         self.assertEqual(release.select_version(self.env), '0.2.0-preview.3')
 
     def test_branch_pushes_and_unmerged_pr_events_cannot_allocate_releases(self):
-        for event, ref in [('push', 'refs/heads/main'),
-                           ('push', 'refs/heads/codex/topic'),
+        for event, ref in [('push', 'refs/heads/codex/topic'),
                            ('pull_request', 'refs/pull/1/merge'),
+                           ('pull_request_target', 'refs/heads/main'),
                            ('pull_request_target', 'refs/heads/develop'),
                            ('workflow_dispatch', 'refs/heads/codex/topic'),
                            ('workflow_dispatch', 'refs/tags/v0.2.0')]:
             with self.subTest(event=event, ref=ref), self.assertRaises(ValueError):
                 release.select_version(dict(self.env, GITHUB_EVENT_NAME=event, GITHUB_REF=ref), '0.2.0')
 
-    def test_closed_without_merge_opened_and_other_base_prs_are_rejected(self):
-        for action, merged, base in [('closed', False, 'main'), ('opened', False, 'main'),
-                                     ('closed', True, 'develop'), ('closed', 'true', 'main')]:
-            self.event_file.write_text(json.dumps({'action': action,
-                'pull_request': {'merged': merged, 'base': {'ref': base}}}))
-            with self.subTest(action=action, merged=merged, base=base), self.assertRaises(ValueError):
-                release.select_version(self.env)
+    def test_direct_main_push_without_a_merged_pr_is_skipped(self):
+        self.event_file.write_text(json.dumps([[]]))
+        self.assertIsNone(release.select_version(self.env))
+
+    def test_only_the_exact_merged_main_commit_qualifies(self):
+        for field, value in [('merged_at', None), ('merge_commit_sha', 'b' * 40),
+                             ('base', {'ref': 'develop', 'repo': {'full_name': 'IzuSharp/NativeWeave'}}),
+                             ('base', {'ref': 'main', 'repo': {'full_name': 'someone/NativeWeave'}})]:
+            self.event_file.write_text(json.dumps([[dict(self.pr, **{field: value})]]))
+            with self.subTest(field=field, value=value):
+                self.assertIsNone(release.select_version(self.env))
+
+    def test_all_api_pages_are_considered(self):
+        self.event_file.write_text(json.dumps([[dict(self.pr, merged_at=None)], [self.pr]]))
+        self.assertEqual(release.select_version(self.env), '0.1.0-preview.148.1')
+
+    def test_unavailable_merge_evidence_fails_instead_of_publishing(self):
+        self.event_file.unlink()
+        with self.assertRaises(OSError):
+            release.select_version(self.env)
 
     def test_invalid_automatic_counters_are_rejected(self):
         for field in ['GITHUB_RUN_NUMBER', 'GITHUB_RUN_ATTEMPT']:

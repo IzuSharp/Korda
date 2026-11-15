@@ -35,13 +35,20 @@ def select_version(env, requested=""):
         return validate_version(requested)
     if event == "push" and ref.startswith("refs/tags/v"):
         return validate_version(ref[len("refs/tags/v"):])
-    if ref != "refs/heads/main" or event not in ("pull_request_target", "workflow_dispatch"):
+    if ref != "refs/heads/main" or event not in ("push", "workflow_dispatch"):
         raise ValueError("Release identity requires a merged main PR, main dispatch or version tag")
-    if event == "pull_request_target":
-        payload = json.loads(Path(env["GITHUB_EVENT_PATH"]).read_text())
-        pr = payload.get("pull_request", {})
-        if payload.get("action") != "closed" or pr.get("merged") is not True or pr.get("base", {}).get("ref") != "main":
-            raise ValueError("Automatic previews require a PR merged into main")
+    if event == "push":
+        commit, repository = env.get("GITHUB_SHA", ""), env.get("GITHUB_REPOSITORY", "")
+        if not re.fullmatch(r"[0-9a-f]{40}", commit) or not repository:
+            raise ValueError("Automatic previews require an exact source commit and repository")
+        # gh api --paginate --slurp returns one array per page. Only the actual
+        # merged PR commit qualifies; an associated open PR or head commit does not.
+        pages = json.loads(Path(env["MERGE_CANDIDATES"]).read_text())
+        if not any(pr.get("merged_at") and pr.get("merge_commit_sha") == commit
+                   and pr.get("base", {}).get("ref") == "main"
+                   and pr.get("base", {}).get("repo", {}).get("full_name") == repository
+                   for page in pages for pr in page):
+            return None
     if event == "workflow_dispatch" and requested:
         return validate_version(requested)
     prefix = ET.parse(ROOT / "Directory.Build.props").findtext(".//VersionPrefix", "")
@@ -150,15 +157,20 @@ def main():
     args = parser.parse_args()
     if args.command == "identity":
         version = select_version(os.environ, args.version)
+        eligible = version is not None
         output = os.environ.get("GITHUB_OUTPUT")
         if output:
             with open(output, "a", encoding="utf-8") as stream:
-                stream.write(f"version={version}\n")
-        print(version)
+                stream.write(f"eligible={str(eligible).lower()}\n")
+                if eligible:
+                    stream.write(f"version={version}\n")
+        message = (f"Allocated package version: `{version}`." if eligible else
+                   "Skipped automatic publication: this main commit is not the merge commit of a merged PR.")
+        print(message)
         summary = os.environ.get("GITHUB_STEP_SUMMARY")
         if summary:
             with open(summary, "a", encoding="utf-8") as stream:
-                stream.write(f"Allocated package version: `{version}`.\n")
+                stream.write(message + "\n")
     elif args.command == "validate":
         print(validate_candidate(validate_version(args.version)).name)
     else:
