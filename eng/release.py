@@ -35,8 +35,13 @@ def select_version(env, requested=""):
         return validate_version(requested)
     if event == "push" and ref.startswith("refs/tags/v"):
         return validate_version(ref[len("refs/tags/v"):])
-    if ref != "refs/heads/main" or event not in ("push", "workflow_dispatch"):
-        raise ValueError("Release identity requires a main push, main dispatch or version tag")
+    if ref != "refs/heads/main" or event not in ("pull_request_target", "workflow_dispatch"):
+        raise ValueError("Release identity requires a merged main PR, main dispatch or version tag")
+    if event == "pull_request_target":
+        payload = json.loads(Path(env["GITHUB_EVENT_PATH"]).read_text())
+        pr = payload.get("pull_request", {})
+        if payload.get("action") != "closed" or pr.get("merged") is not True or pr.get("base", {}).get("ref") != "main":
+            raise ValueError("Automatic previews require a PR merged into main")
     if event == "workflow_dispatch" and requested:
         return validate_version(requested)
     prefix = ET.parse(ROOT / "Directory.Build.props").findtext(".//VersionPrefix", "")

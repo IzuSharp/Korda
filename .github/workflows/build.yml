@@ -5,6 +5,9 @@ on:
       version:
         type: string
         default: 0.1.0-preview.1
+      source-commit:
+        type: string
+        default: ""
     outputs:
       artifact:
         value: ${{ jobs.build.outputs.artifact }}
@@ -25,6 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: ${{ inputs.source-commit || github.sha }}
           persist-credentials: false
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
