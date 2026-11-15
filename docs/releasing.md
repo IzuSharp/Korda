@@ -28,7 +28,9 @@ The workflow uses `NuGet/login` with `id-token: write` and receives a short-live
 
 Normal development needs no manual version edit, tag or **Run workflow** click. Push changes to a topic branch, open a PR and merge it into `main` following the repository's review rules. Only the completed merge triggers automatic publication; direct pushes to `main`, topic branch pushes, open PRs and PRs closed without merging do not publish.
 
-Release uses the [`pull_request_target: closed` event](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#running-your-pull_request_target-workflow-when-a-pull-request-merges) with a mandatory `merged == true` check and `main` base restriction. Before running repository scripts, it checks out the accepted `merge_commit_sha` and verifies that commit belongs to `main`. It never checks out an unmerged PR head. The same commit is passed to the build, security and publishing jobs, including after queued runs or retries. This also permits merged contributions from forks without granting a publishing job to an open fork PR.
+NuGet rejects `pull_request_target` publishing events. Release therefore listens for updates to `main` and uses GitHub's commit-to-PR API to require an already merged PR whose `merge_commit_sha` equals that exact commit and whose base is `main` in this repository. A direct push without that evidence exits successfully with publication skipped, before building a release candidate or obtaining credentials. API failures stop the release instead of assuming a merge. Open PRs and unmerged closures cannot qualify.
+
+The source commit must also belong to `main`. The same accepted commit is passed to the build, security and publishing jobs, including queued runs and retries. The workflow never builds an unmerged PR head with publishing permissions, and merged contributions from forks use the same checks.
 
 Release allocates `<VersionPrefix>-preview.<GITHUB_RUN_NUMBER>.<GITHUB_RUN_ATTEMPT>` once before building, with `VersionPrefix` read from `Directory.Build.props` (currently `0.1.0`). For example:
 
@@ -38,7 +40,7 @@ Release allocates `<VersionPrefix>-preview.<GITHUB_RUN_NUMBER>.<GITHUB_RUN_ATTEM
 | Next Release run | `0.1.0-preview.149.1` |
 | **Re-run all jobs** for run 149 | `0.1.0-preview.149.2` |
 
-The counter belongs to the **Release** workflow, not the CI workflow or NuGet. Failed runs and manual rehearsals also consume run numbers, so published versions can have gaps. The workflow does not commit version bumps or create tags. Local builds retain their default `0.1.0-preview.1` unless a version is passed explicitly.
+The counter belongs to the **Release** workflow, not the CI workflow or NuGet. Failed runs, skipped direct pushes and manual rehearsals also consume run numbers, so published versions can have gaps. The workflow does not commit version bumps or create tags. Local builds retain their default `0.1.0-preview.1` unless a version is passed explicitly.
 
 The numbering follows the approach in [DesktopPlatform's publisher](https://github.com/ArcForges/DesktopPlatform/blob/main/.github/workflows/publish-nuget.yml), using `preview` for this experimental package. See GitHub's [run number and attempt definitions](https://docs.github.com/en/actions/reference/workflows-and-actions/variables). Releases are serialized with [`queue: max`](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#concurrency), which retains up to 100 pending runs instead of replacing the previous pending run.
 
