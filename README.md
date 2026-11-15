@@ -61,7 +61,7 @@ Linux CI additionally consumes the package in a separate .NET SDK container with
 
 First build the local candidate with `python3 eng/build.py verify`. Copy `samples/PackageConsumer` outside this checkout, add `artifacts/packages` as a local NuGet source, and run normal `dotnet build` / `dotnet run`. The [getting-started guide](docs/getting-started.md) gives exact commands, source mapping and Native AOT publication. No consumer MSBuild target launches Cargo; native files use standard `runtimes/<rid>/native/` assets.
 
-The first [NuGet preview](https://www.nuget.org/packages/NativeWeave.HelloWorld/0.1.0-preview.1) is published. With [NuGet setup](docs/releasing.md) enabled, each push to `main` automatically builds, verifies and publishes a Linux x64 preview using `0.1.0-preview.<run-number>.<attempt>`. Topic branches and PRs run checks without publishing. No manual version bump is needed for ordinary development.
+The first [NuGet preview](https://www.nuget.org/packages/NativeWeave.HelloWorld/0.1.0-preview.1) is published. With [NuGet setup](docs/releasing.md) enabled, each PR merged into `main` automatically builds, verifies and publishes a Linux x64 preview using `0.1.0-preview.<run-number>.<attempt>`. Direct branch pushes, open PRs and PRs closed without merging do not publish. No manual version bump is needed for ordinary development.
 
 ## Project context
 

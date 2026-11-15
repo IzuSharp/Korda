@@ -128,10 +128,14 @@ class VersionSelectionTests(unittest.TestCase):
         root_patch = patch.object(release, 'ROOT', root)
         root_patch.start()
         self.addCleanup(root_patch.stop)
-        self.env = {'GITHUB_EVENT_NAME': 'push', 'GITHUB_REF': 'refs/heads/main',
+        self.event_file = root / 'event.json'
+        self.event_file.write_text(json.dumps({'action': 'closed',
+            'pull_request': {'merged': True, 'base': {'ref': 'main'}}}))
+        self.env = {'GITHUB_EVENT_NAME': 'pull_request_target', 'GITHUB_REF': 'refs/heads/main',
+                    'GITHUB_EVENT_PATH': str(self.event_file),
                     'GITHUB_RUN_NUMBER': '148', 'GITHUB_RUN_ATTEMPT': '1'}
 
-    def test_main_push_increments_run_and_full_rerun_increments_attempt(self):
+    def test_main_merge_increments_run_and_full_rerun_increments_attempt(self):
         self.assertEqual(release.select_version(self.env, '9.0.0'), '0.1.0-preview.148.1')
         self.env['GITHUB_RUN_NUMBER'] = '149'
         self.assertEqual(release.select_version(self.env), '0.1.0-preview.149.1')
@@ -144,18 +148,29 @@ class VersionSelectionTests(unittest.TestCase):
         self.assertEqual(release.select_version(self.env, '0.2.0-preview.1'), '0.2.0-preview.1')
 
     def test_version_tags_keep_their_identity_on_retries(self):
+        self.env['GITHUB_EVENT_NAME'] = 'push'
         self.env['GITHUB_REF'] = 'refs/tags/v0.2.0-preview.3'
         self.assertEqual(release.select_version(self.env), '0.2.0-preview.3')
         self.env['GITHUB_RUN_ATTEMPT'] = '2'
         self.assertEqual(release.select_version(self.env), '0.2.0-preview.3')
 
-    def test_feature_branches_and_pr_events_cannot_allocate_releases(self):
-        for event, ref in [('push', 'refs/heads/codex/topic'),
+    def test_branch_pushes_and_unmerged_pr_events_cannot_allocate_releases(self):
+        for event, ref in [('push', 'refs/heads/main'),
+                           ('push', 'refs/heads/codex/topic'),
                            ('pull_request', 'refs/pull/1/merge'),
+                           ('pull_request_target', 'refs/heads/develop'),
                            ('workflow_dispatch', 'refs/heads/codex/topic'),
                            ('workflow_dispatch', 'refs/tags/v0.2.0')]:
             with self.subTest(event=event, ref=ref), self.assertRaises(ValueError):
                 release.select_version(dict(self.env, GITHUB_EVENT_NAME=event, GITHUB_REF=ref), '0.2.0')
+
+    def test_closed_without_merge_opened_and_other_base_prs_are_rejected(self):
+        for action, merged, base in [('closed', False, 'main'), ('opened', False, 'main'),
+                                     ('closed', True, 'develop'), ('closed', 'true', 'main')]:
+            self.event_file.write_text(json.dumps({'action': action,
+                'pull_request': {'merged': merged, 'base': {'ref': base}}}))
+            with self.subTest(action=action, merged=merged, base=base), self.assertRaises(ValueError):
+                release.select_version(self.env)
 
     def test_invalid_automatic_counters_are_rejected(self):
         for field in ['GITHUB_RUN_NUMBER', 'GITHUB_RUN_ATTEMPT']:

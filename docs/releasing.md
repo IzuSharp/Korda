@@ -1,6 +1,6 @@
 # NuGet release setup
 
-The repository builds and tests candidates without a NuGet login. Maintainers have authorized automatic preview publication on pushes to `main`, including merged PRs, after all release gates pass. The distributable is **NativeWeave.HelloWorld**, an experimental Linux x64 package. macOS packages are local development artifacts until a separate release profile is approved and tested.
+The repository builds and tests candidates without a NuGet login. Maintainers have authorized automatic preview publication when a PR is merged into `main`, after all release gates pass. Direct branch pushes do not publish. The distributable is **NativeWeave.HelloWorld**, an experimental Linux x64 package. macOS packages are local development artifacts until a separate release profile is approved and tested.
 
 ## One-time account setup (maintainer interaction)
 
@@ -26,7 +26,9 @@ The workflow uses `NuGet/login` with `id-token: write` and receives a short-live
 
 ## Automatic preview versions
 
-Normal development needs no manual version edit, tag or **Run workflow** click. Push accepted changes to `main`, or merge a reviewed PR into `main`, following the repository's review rules. A push to a topic branch or a PR runs CI but does not publish.
+Normal development needs no manual version edit, tag or **Run workflow** click. Push changes to a topic branch, open a PR and merge it into `main` following the repository's review rules. Only the completed merge triggers automatic publication; direct pushes to `main`, topic branch pushes, open PRs and PRs closed without merging do not publish.
+
+Release uses the [`pull_request_target: closed` event](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#running-your-pull_request_target-workflow-when-a-pull-request-merges) with a mandatory `merged == true` check and `main` base restriction. Before running repository scripts, it checks out the accepted `merge_commit_sha` and verifies that commit belongs to `main`. It never checks out an unmerged PR head. The same commit is passed to the build, security and publishing jobs, including after queued runs or retries. This also permits merged contributions from forks without granting a publishing job to an open fork PR.
 
 Release allocates `<VersionPrefix>-preview.<GITHUB_RUN_NUMBER>.<GITHUB_RUN_ATTEMPT>` once before building, with `VersionPrefix` read from `Directory.Build.props` (currently `0.1.0`). For example:
 
@@ -42,12 +44,12 @@ The numbering follows the approach in [DesktopPlatform's publisher](https://gith
 
 ## Candidate and publication flow
 
-1. Each `main` push starts **Release** and allocates its automatic preview version. Both `NUGET_PUBLISH_ENABLED=true` and the existing NuGet publisher configuration are still required; leave these configured for ongoing automatic publication.
+1. Each PR merged into `main` starts **Release** and allocates its automatic preview version. Both `NUGET_PUBLISH_ENABLED=true` and the existing NuGet publisher configuration are still required; leave these configured for ongoing automatic publication.
 2. The candidate job runs the full source/package/AOT loop and a Rust-free SDK container consumer. Security checks must also succeed. The publishing job downloads the exact artifact, checks SHA-256/native/source identities, exchanges OIDC credentials and uploads that package without rebuilding it.
 3. After upload, it immediately checks the NuGet package download endpoint. If NuGet returns 404 while indexing, it checks again every **120 seconds**, for up to **20 minutes**. This is a bounded wait within the release job, not a recurring scheduled workflow. Other HTTP errors fail immediately. The job has a 40-minute budget including setup and consumption.
 4. Once available, it verifies the NuGet signature, compares all unsigned payload entries against the candidate, then restores those registry bytes into a fresh cache and executes both JIT and AOT consumers. `publication.json` records `uploaded-awaiting-verification` immediately after upload and becomes `published-and-consumed` only after these checks pass. Upload and registry digests differ when repository signing changes archive bytes.
 
-To rehearse without uploading, run **Release** manually on `main` and leave **publish** unchecked. Leave **version** empty for an automatic preview, or supply a canonical explicit version. Checking **publish** performs a real release after verification. Version tags such as `v0.2.0-preview.1` still publish the exact tagged version from a commit on `main`. Automatic pushes never choose a stable version; stable-release policy will be decided separately.
+To rehearse without uploading, run **Release** manually on `main` and leave **publish** unchecked. Leave **version** empty for an automatic preview, or supply a canonical explicit version. Checking **publish** performs a real release after verification. Version tags such as `v0.2.0-preview.1` still publish the exact tagged version from a commit on `main`. Automatic merge releases never choose a stable version; stable-release policy will be decided separately.
 
 ## Retries and maintainer intervention
 

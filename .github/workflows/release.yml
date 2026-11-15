@@ -1,8 +1,10 @@
 name: Release
 on:
   push:
-    branches: [main]
     tags: ["v*"]
+  pull_request_target:
+    branches: [main]
+    types: [closed]
   workflow_dispatch:
     inputs:
       version:
@@ -22,21 +24,30 @@ concurrency:
 jobs:
   identity:
     name: Validate release identity
+    if: >-
+      github.event_name != 'pull_request_target' ||
+      (github.event.action == 'closed' && github.event.pull_request.merged == true &&
+      github.event.pull_request.base.ref == 'main')
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
       version: ${{ steps.identity.outputs.version }}
+      commit: ${{ steps.source.outputs.commit }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          # Only the accepted merge commit, never the PR's unmerged head.
+          ref: ${{ github.event.pull_request.merge_commit_sha || github.sha }}
           fetch-depth: 0
           persist-credentials: false
       - name: Require main or a tag on main
+        id: source
         env:
           EVENT: ${{ github.event_name }}
         run: |
-          if [ "$EVENT" = workflow_dispatch ]; then test "$GITHUB_REF" = refs/heads/main; fi
+          if [ "$EVENT" != push ]; then test "$GITHUB_REF" = refs/heads/main; fi
           git merge-base --is-ancestor HEAD origin/main
+          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - name: Allocate package version
         id: identity
         env:
@@ -47,8 +58,12 @@ jobs:
     uses: ./.github/workflows/build.yml
     with:
       version: ${{ needs.identity.outputs.version }}
+      source-commit: ${{ needs.identity.outputs.commit }}
   security:
+    needs: identity
     uses: ./.github/workflows/security.yml
+    with:
+      source-commit: ${{ needs.identity.outputs.commit }}
     permissions:
       contents: read
       pull-requests: read
@@ -59,7 +74,9 @@ jobs:
     if: >-
       github.repository == 'IzuSharp/NativeWeave' &&
       vars.NUGET_PUBLISH_ENABLED == 'true' &&
-      (github.event_name == 'push' || inputs.publish)
+      (github.event_name == 'push' ||
+      (github.event_name == 'pull_request_target' && github.event.pull_request.merged == true) ||
+      inputs.publish)
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     environment: nuget
@@ -72,6 +89,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          ref: ${{ needs.identity.outputs.commit }}
           persist-credentials: false
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
