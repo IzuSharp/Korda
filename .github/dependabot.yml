@@ -5,6 +5,15 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    groups:
+      # CodeQL steps share a versioned configuration and must move together.
+      codeql:
+        patterns:
+          - github/codeql-action/*
+      codeql-security:
+        applies-to: security-updates
+        patterns:
+          - github/codeql-action/*
   - package-ecosystem: cargo
     directory: /
     schedule:
