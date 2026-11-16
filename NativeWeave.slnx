@@ -9,6 +9,7 @@
     <Project Path="samples/api/interop-abi/Interop.Abi.Sample.csproj" />
     <Project Path="samples/api/benchmarks-harness/Managed/Managed.csproj" />
     <Project Path="samples/api/benchmarks-harness/Native/Native.csproj" />
+    <Project Path="samples/api/data-abstractions/DataAbstractions.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/NativeWeave.HelloWorld.Tests/NativeWeave.HelloWorld.Tests.csproj" />

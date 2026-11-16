@@ -20,7 +20,7 @@ public sealed class EntityKey<TEntity> where TEntity : class
         ArgumentNullException.ThrowIfNull(column);
         if (!ReferenceEquals(column.Identity, Table.Identity) || column.Definition.KeyOrdinal != Values.Length || column.Codec.Descriptor.Nullable)
             throw new ArgumentException("Expected the next non-null primary-key component of this table.", nameof(column));
-        return new(Table, [.. Values, new ColumnValue(column.Binding, column.Codec.Encode(value))]);
+        return new(Table, [.. Values, new ColumnValue(column.Binding, column.Snapshot(value))]);
     }
     internal void RequireComplete()
     { if (Values.Length == 0 || Values.Length != Table.KeyColumns.Length) throw new ArgumentException("The complete primary key is required."); }
@@ -46,7 +46,7 @@ public sealed class Changes<TEntity> where TEntity : class
     public Changes<TEntity> Set<T>(Column<TEntity, T> column, T value)
     {
         ArgumentNullException.ThrowIfNull(column); Check(column.Binding);
-        var bytes = column.Codec.Encode(value);
+        var bytes = column.Snapshot(value);
         if (bytes is not null && column.Definition.Options.MaxLength is { } maximum && bytes.Length > maximum) throw new ArgumentException("The value exceeds its column byte capacity.", nameof(value));
         _table ??= column.Identity; _values[column.Id] = new(column.Binding, bytes); return this;
     }
@@ -91,7 +91,7 @@ public sealed class ConcurrencyCheck<TEntity> where TEntity : class
         ArgumentNullException.ThrowIfNull(column);
         if (!column.Identity.Built || !column.Definition.Options.IsConcurrencyToken || (_table is not null && !ReferenceEquals(_table, column.Identity)) || _values.ContainsKey(column.Id))
             throw new ArgumentException("Expected a unique concurrency token of one built table.", nameof(column));
-        var encoded = column.Codec.Encode(value); _table ??= column.Identity; _values.Add(column.Id, new(column.Binding, encoded)); return this;
+        var encoded = column.Snapshot(value); _table ??= column.Identity; _values.Add(column.Id, new(column.Binding, encoded)); return this;
     }
     internal ColumnValue[] Snapshot(Table<TEntity> table)
     {

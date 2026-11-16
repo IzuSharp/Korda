@@ -1,0 +1,3 @@
+using NativeWeave.Data;
+_ = new TableBuilder<Entity>("Entity");
+readonly record struct Entity(int Value);

@@ -159,11 +159,12 @@ public sealed class ResultField
 /// no CLR delegate or function pointer is encoded in metadata. Instances are shareable if their delegates are.</remarks>
 public sealed class Projection<T>
 {
-    internal Projection(ResultField[] fields, RowMaterializer<T> materializer, TableIdentity? table = null)
-    { Fields = fields; Materializer = materializer; Table = table; CanonicalBytes = Canonical.Projection(fields); ShapeHash = Canonical.Hash(CanonicalBytes); }
+    internal Projection(ResultField[] fields, RowMaterializer<T> materializer, TableIdentity? table = null, bool scalar = false)
+    { Fields = fields; Materializer = materializer; Table = table; IsScalar = scalar; CanonicalBytes = Canonical.Projection(fields); ShapeHash = Canonical.Hash(CanonicalBytes); }
     internal ResultField[] Fields { get; }
     internal RowMaterializer<T> Materializer { get; }
     internal TableIdentity? Table { get; }
+    internal bool IsScalar { get; }
     internal byte[] CanonicalBytes { get; }
     /// <summary>Gets lowercase SHA-256 of the exact logical shape, excluding managed delegate and native IDs.</summary>
     public string ShapeHash { get; }
@@ -179,8 +180,13 @@ public sealed class Projection<T>
         if (fields.Length > DbWire.MaxDescriptors) throw new ArgumentException("Projection field limit exceeded.", nameof(fields));
         if (fields.IsEmpty) throw new ArgumentException("A projection requires at least one field.", nameof(fields));
         var copy = fields.ToArray(); var names = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var field in copy) if (field is null || !names.Add(field.Name)) throw new ArgumentException("Fields require unique non-null aliases.", nameof(fields));
+        foreach (var field in copy) if (field is null || string.IsNullOrEmpty(field.Name) || !names.Add(field.Name)) throw new ArgumentException("Fields require unique nonempty aliases.", nameof(fields));
         return new(copy, materializer);
+    }
+    internal static Projection<T> Scalar(ValueCodec<T> codec)
+    {
+        ArgumentNullException.ThrowIfNull(codec);
+        return new([new ResultField("", codec.Descriptor)], row => row.Read(0, codec), scalar: true);
     }
     internal T Read(IRowLease lease)
     {
@@ -189,7 +195,7 @@ public sealed class Projection<T>
         for (var i = 0; i < Fields.Length; i++)
         {
             var expected = Fields[i]; var actual = lease.Codec(i);
-            if (lease.Name(i) != expected.Name || !actual.SameScalar(expected.Descriptor) || actual.Nullable != expected.IsNullable)
+            if (!IsScalar && lease.Name(i) != expected.Name || !actual.SameScalar(expected.Descriptor) || actual.Nullable != expected.IsNullable)
                 throw new DatabaseException("The complete ordered row shape differs from its projection.", DatabaseErrorKind.ShapeMismatch);
             if (lease.Value(i) is null && !expected.IsNullable) throw new DatabaseException("A non-null column contains SQL NULL.", DatabaseErrorKind.Conversion);
         }
@@ -207,9 +213,8 @@ internal sealed class RowSnapshot(TableIdentity table)
         if (_complete) throw new InvalidOperationException("The row snapshot has completed.");
         if (!ReferenceEquals(table, column.Identity)) throw new ArgumentException("The column belongs to another table.", nameof(column));
         if (_values.ContainsKey(column.Id)) throw new ArgumentException("The writer assigned a column twice.", nameof(column));
-        var bytes = column.Codec.Encode(value);
-        if (bytes is not null && column.Definition.Options.MaxLength is { } maximum && bytes.Length > maximum)
-            throw new ArgumentException("The value exceeds its declared byte capacity.", nameof(value));
+        if (column.Definition.Options.IsGenerated) { _values.Add(column.Id, new(column.Binding, null)); return; }
+        var bytes = column.Snapshot(value);
         _values.Add(column.Id, new(column.Binding, bytes));
     }
     internal ColumnValue[] Complete(IColumn[] columns)

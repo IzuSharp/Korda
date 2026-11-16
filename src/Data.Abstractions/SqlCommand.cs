@@ -65,7 +65,7 @@ public sealed class SqlCommand
     /// <summary>Snapshots built-in scalar interpolation values and literal segments, without building SQL.</summary>
     /// <param name="sql">A composite format with unformatted, unaligned typed non-null scalar arguments.</param>
     /// <param name="kind">The explicit effect classification.</param>
-    /// <param name="timeout">A positive finite timeout, or the source's configured default.</param>
+    /// <param name="timeout">A nonnegative finite timeout, or the source's configured default; zero expires before dispatch.</param>
     /// <returns>An immutable template whose value holes will be bound by Rust.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="sql"/> is null.</exception>
     /// <exception cref="ArgumentException">An argument is untyped null, requires an explicit codec, is unused, or a format/alignment is supplied.</exception>
@@ -82,7 +82,7 @@ public sealed class SqlCommand
     /// <param name="sql">Nonempty strict-Unicode trusted SQL with logical @name placeholders.</param>
     /// <param name="parameters">Typed parameters, or no parameters.</param>
     /// <param name="kind">The explicit effect classification.</param>
-    /// <param name="timeout">A positive finite timeout, or the source's configured default.</param>
+    /// <param name="timeout">A nonnegative finite timeout, or the source's configured default; zero expires before dispatch.</param>
     /// <returns>An immutable command; subsequent collection changes do not affect it.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="sql"/> is null.</exception>
     /// <exception cref="ArgumentException">The SQL is empty or invalid Unicode.</exception>
@@ -92,7 +92,7 @@ public sealed class SqlCommand
     private static void ValidateOptions(SqlCommandKind kind, TimeSpan? timeout)
     {
         if (!Enum.IsDefined(kind)) throw new ArgumentOutOfRangeException(nameof(kind));
-        if (timeout is { } value && (value <= TimeSpan.Zero || value.Ticks > (long)(ulong.MaxValue / 100))) throw new ArgumentOutOfRangeException(nameof(timeout));
+        if (timeout is { } value && (value < TimeSpan.Zero || value.Ticks > (long)(ulong.MaxValue / 100))) throw new ArgumentOutOfRangeException(nameof(timeout));
     }
     private static ParameterValue Value<T>(uint id, string name, T value, ValueCodec<T> codec) => new(id, name, codec.Descriptor, codec.Encode(value));
     private static ParameterValue BuiltIn(uint id, string name, object? value) => value switch

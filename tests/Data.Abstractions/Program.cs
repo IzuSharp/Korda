@@ -1,10 +1,14 @@
 using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using NativeWeave.Data;
 
 var output = Path.GetFullPath(args.Length == 0 ? "artifacts/B01/managed" : args[0]);
 Directory.CreateDirectory(output);
+if (args.Contains("--require-aot", StringComparer.Ordinal) && RuntimeFeature.IsDynamicCodeSupported)
+    throw new InvalidOperationException("Actual Native AOT execution requires dynamic code to be unavailable.");
+Console.WriteLine("Dynamic code supported: " + RuntimeFeature.IsDynamicCodeSupported);
 var cases = new List<string>();
 void Check(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
 void Reject<T>(Action action) where T : Exception { try { action(); } catch (T) { return; } throw new InvalidOperationException("Expected " + typeof(T).Name); }
@@ -98,6 +102,10 @@ Test("row_writer_and_changes_snapshot_atomicity", () => {
     var check = new ConcurrencyCheck<Parent>().Expect(token, 1L); Check(check.Snapshot(parent).Length == 1, "Expected token missing."); Reject<ArgumentException>(() => check.Expect(token, 2L));
     var b = new TableBuilder<Named>("badwriter"); var col = b.Column("value", Codecs.String); var t = b.Build(_ => new(""), (r, _) => { r.Set(col, "a"); r.Set(col, "b"); });
     Reject<ArgumentException>(() => RowSnapshot.Capture(t, new Named("x")));
+    var generated = new TableBuilder<Named>("generated"); var g = generated.Column("generated", Codecs.String, new() { IsGenerated = true });
+    var gt = generated.Build(_ => new(""), (r, _) => r.Set(g, null!));
+    Check(RowSnapshot.Capture(gt, new Named("x")).Length == 0, "Generated value was encoded instead of omitted.");
+    Reject<ArgumentException>(() => new Changes<Parent>().Set(name, new string('x', 129)));
 });
 Test("typed_sql_snapshot_and_interpolation_boundaries", () => {
     byte[] bytes = [1, 2]; var parameters = new SqlParameters().Add("bytes", bytes, Codecs.Bytes).Add("nullable", (long?)null, Codecs.Nullable(Codecs.Int64));
@@ -111,7 +119,9 @@ Test("typed_sql_snapshot_and_interpolation_boundaries", () => {
     Reject<ArgumentException>(() => SqlCommand.Parameterized(FormattableStringFactory.Create("SELECT {0,3}", 1)));
     Reject<ArgumentException>(() => SqlCommand.Parameterized(FormattableStringFactory.Create("SELECT {0}", [null])));
     Reject<ArgumentException>(() => SqlCommand.Parameterized(FormattableStringFactory.Create("SELECT 1", 2)));
-    Reject<ArgumentOutOfRangeException>(() => SqlCommand.Create("x", timeout: TimeSpan.Zero));
+    Check(SqlCommand.Create("x", timeout: TimeSpan.Zero).Timeout == TimeSpan.Zero, "Explicit zero timeout was not preserved.");
+    Check(SqlCommand.Parameterized(FormattableStringFactory.Create("SELECT {0}", 1), timeout: TimeSpan.Zero).Timeout == TimeSpan.Zero, "Interpolated zero timeout was not preserved.");
+    Reject<ArgumentOutOfRangeException>(() => SqlCommand.Create("x", timeout: TimeSpan.FromTicks(-1)));
     File.WriteAllBytes(Path.Combine(output, "template.bin"), interpolated.EncodeTemplate());
 });
 Test("scalar_exactness_and_null_distinctions", () => {
@@ -129,6 +139,24 @@ Test("scalar_exactness_and_null_distinctions", () => {
     Check(Codecs.NullableReference(Codecs.String).Encode(null) is null && Codecs.String.Encode("") is { Length: 0 }, "NULL and empty collapsed.");
     Check(Validation.Utf8.GetString(Codecs.Json(TestJson.Default.Payload).Encode(null!)!) == "null", "JSON null collapsed into SQL NULL.");
     Reject<DatabaseException>(() => Codecs.Boolean.Decode(new byte[] { 2 }));
+});
+Test("rfc8259_numeric_range_and_container_depth", () => {
+    var json = Codecs.Json(TestJson.Default.Payload).Descriptor;
+    foreach (var text in new[] { "1e400", "{\"x\":1e400}", "{\"$serde_json::private::Number\":\"ordinary-text\"}", new string('[', 64) + "0" + new string(']', 64), new string('[', 64) + new string(']', 64) })
+        DbWire.ValidateScalar(json, Validation.Utf8.GetBytes(text));
+    foreach (var text in new[] { new string('[', 65) + new string(']', 65), "{\"x\":01}", "[1,]", "NaN" })
+        Reject<JsonException>(() => DbWire.ValidateScalar(json, Validation.Utf8.GetBytes(text)));
+    Reject<ArgumentException>(() => DbWire.ValidateScalar(json, new byte[] { 0xef, 0xbb, 0xbf, (byte)'0' }));
+});
+Test("scalar_projection_context_preserves_shape_checks", () => {
+    Reject<ArgumentException>(() => ResultField.Create("", Codecs.Int64));
+    var scalar = Projection<long>.Scalar(Codecs.Int64);
+    Reject<ArgumentException>(() => Projection<long>.Create(scalar.Fields, _ => 1));
+    Check(scalar.Read(new FixtureLease([ResultField.Create("provider-expression", Codecs.Int64)], [Codecs.Int64.Encode(42)])) == 42, "Scalar sentinel did not ignore provider name.");
+    Reject<DatabaseException>(() => scalar.Read(new FixtureLease([], [])));
+    Reject<DatabaseException>(() => scalar.Read(new FixtureLease([ResultField.Create("x", Codecs.Int32)], [Codecs.Int32.Encode(42)])));
+    Reject<DatabaseException>(() => scalar.Read(new FixtureLease([ResultField.Create("x", Codecs.Nullable(Codecs.Int64))], [null])));
+    File.WriteAllBytes(Path.Combine(output, "scalar-projection.json"), scalar.CanonicalBytes);
 });
 
 var codecs = new CodecDescriptor[] { Codecs.Int16.Descriptor, Codecs.Int32.Descriptor, Codecs.Int64.Descriptor, Codecs.Boolean.Descriptor, Codecs.String.Descriptor, Codecs.Bytes.Descriptor, Codecs.Guid.Descriptor, Codecs.Date.Descriptor, Codecs.Time.Descriptor, Codecs.UtcInstant.Descriptor, Codecs.Double.Descriptor, Codecs.Single.Descriptor, Codecs.Decimal(18, 2).Descriptor, Codecs.DecimalText.Descriptor, Codecs.FixedScaleMoney(2).Descriptor, Codecs.Json(TestJson.Default.Payload).Descriptor, Codecs.EnumInt32<Small>().Descriptor, Codecs.NullableReference(Codecs.String).Descriptor, Codecs.Bytes.Descriptor };
@@ -160,7 +188,13 @@ File.WriteAllBytes(Path.Combine(output, "relation.json"), relation.CanonicalByte
 File.WriteAllBytes(Path.Combine(output, "relation.bin"), ControlRecord.Relation(relation));
 File.WriteAllBytes(Path.Combine(output, "values.bin"), wire);
 var key = parent.Key(id, 123); key.RequireComplete();
-var keyExpectation = new WireExpectation(PayloadKind.MutationValues, 1, Convert.FromHexString(parent.MetadataHash), parent.Identity.Id, 0, [new(id.Id, Codecs.Int64.Descriptor, 3)]);
+var keyExpectation = DbWire.KeyExpectation(key, 1, [3]);
+Reject<ArgumentException>(() => DbWire.Encode(keyExpectation, 2, [Codecs.Int64.Encode(1), Codecs.Int64.Encode(2)]));
+var multirow = DbWire.Encode(keyExpectation with { ExactRows = null }, 2, [Codecs.Int64.Encode(1), Codecs.Int64.Encode(2)]);
+Reject<ArgumentException>(() => DbWire.Parse(multirow, keyExpectation));
+Check(DbWire.Parse(multirow, keyExpectation with { ExactRows = null }).Rows == 2, "Generic mutation kind4 lost its multiple-row domain.");
+var generatedOnly = keyExpectation with { Descriptors = [] };
+Check(DbWire.Parse(DbWire.Encode(generatedOnly, 1, []), generatedOnly).Rows == 1, "Generated-only insert must preserve the empty kind4 descriptor shape.");
 File.WriteAllBytes(Path.Combine(output, "key.bin"), DbWire.Encode(keyExpectation, 1, [Codecs.Int64.Encode(123)]));
 File.WriteAllText(Path.Combine(output, "managed-results.json"), "{\"platform\":\"linux-x64\",\"cases\":[" + string.Join(',', cases.Select(Canonical.Quote)) + "],\"status\":\"passed\"}\n");
 Console.WriteLine($"PASS {cases.Count} managed cases; no native library was loaded.");

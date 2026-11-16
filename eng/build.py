@@ -20,14 +20,16 @@ PROJECT = ROOT / "src/NativeWeave.HelloWorld/NativeWeave.HelloWorld.csproj"
 LOGS = ARTIFACTS / "logs"
 
 
-def run(args, label, cwd=ROOT, env=None):
+def run(args, label, cwd=ROOT, env=None, json_stdout=False):
     LOGS.mkdir(parents=True, exist_ok=True)
     print("+ " + " ".join(map(str, args)), flush=True)
     result = subprocess.run(list(map(str, args)), cwd=cwd, env=env, text=True,
-                            stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    (LOGS / (label + ".log")).write_text(result.stdout, encoding="utf-8")
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE if json_stdout else subprocess.STDOUT)
+    logged = result.stdout + ("\n[stderr]\n" + result.stderr if json_stdout and result.stderr else "")
+    (LOGS / (label + ".log")).write_text(logged, encoding="utf-8")
     if result.returncode:
-        print(result.stdout, flush=True)
+        print(logged, flush=True)
         raise RuntimeError(f"{label} failed ({result.returncode}); see artifacts/logs/{label}.log")
     if "--message-format=json-render-diagnostics" not in args:
         print(result.stdout[-3000:], end="", flush=True)
@@ -190,7 +192,7 @@ def verify(version, write_docs=False):
     standard = json.loads((ROOT / "public-api-standard.json").read_text())
     if digest(ROOT / standard["localPath"]) != standard["sha256"]:
         raise RuntimeError("Pinned public API standard bytes changed; review adoption explicitly")
-    closure = json.loads(run(["cargo", "metadata", "--format-version=1", "--locked"], "cargo-closure"))
+    closure = json.loads(run(["cargo", "metadata", "--format-version=1", "--locked", "--no-deps"], "cargo-closure", json_stdout=True))
     # This verifier publishes only HelloWorld. Other task-owned crates share the
     # workspace but are not part of that package's native dependency closure.
     # Keep the original no-third-party-dependency invariant for the actual asset.

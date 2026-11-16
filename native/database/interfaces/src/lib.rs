@@ -346,6 +346,14 @@ impl Projection {
 
     /// Validates a projection before any row can be interpreted as NULL.
     pub fn parse(bytes: &[u8], profile: Profile) -> Result<Self> {
+        Self::parse_context(bytes, profile, false)
+    }
+    /// Validates the scalar-only single-field empty-alias sentinel.
+    /// The admitted scalar operation must additionally require exactly one result row.
+    pub fn parse_scalar(bytes: &[u8], profile: Profile) -> Result<Self> {
+        Self::parse_context(bytes, profile, true)
+    }
+    fn parse_context(bytes: &[u8], profile: Profile, scalar: bool) -> Result<Self> {
         if bytes.len() > MAX_BYTES {
             return Err(ContractError("projection byte limit"));
         }
@@ -356,7 +364,7 @@ impl Projection {
             return Err(ContractError("unsupported projection version"));
         }
         let values = array(&value, "fields")?;
-        if values.is_empty() || values.len() > MAX_NODES {
+        if values.is_empty() || values.len() > MAX_NODES || scalar && values.len() != 1 {
             return Err(ContractError("invalid projection count"));
         }
         let mut names = HashSet::new();
@@ -366,7 +374,16 @@ impl Projection {
             if number(field, "ordinal")? != ordinal as u64 {
                 return Err(ContractError("projection ordinal mismatch"));
             }
-            let field_name = name(field, "name")?.to_owned();
+            let field_name = if scalar {
+                if field["name"].as_str() != Some("") {
+                    return Err(ContractError(
+                        "scalar shape requires the empty-alias sentinel",
+                    ));
+                }
+                String::new()
+            } else {
+                name(field, "name")?.to_owned()
+            };
             if !names.insert(field_name.clone()) {
                 return Err(ContractError("duplicate result alias"));
             }

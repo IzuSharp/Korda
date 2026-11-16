@@ -25,7 +25,7 @@ def source_hashes(include_outputs=True):
     for directory in OWNED:
         for path in sorted((ROOT / directory).rglob("*")):
             if path.is_file() and not any(part in ("bin", "obj", "__pycache__") for part in path.relative_to(ROOT).parts):
-                if include_outputs or path.name not in ("api-reference.md", "packages.lock.json"):
+                if include_outputs or path.name != "api-reference.md":
                     source[str(path.relative_to(ROOT))] = digest(path)
     for name in ["global.json", "rust-toolchain.toml", "Directory.Build.props", "Directory.Build.targets", "Cargo.lock", "docs/guides/interop-abi.md"]:
         source[name] = digest(ROOT / name)
@@ -183,7 +183,7 @@ def main():
         project = "tests/Interop.Abi/Interop.Abi.Tests.csproj"
         sample = "samples/api/interop-abi/Interop.Abi.Sample.csproj"
         for name, path in [("tests", project), ("sample", sample)]:
-            run(f"{name}-restore", ["dotnet", "restore", path, prop, *restore_options])
+            run(f"{name}-restore", ["dotnet", "restore", path, "--locked-mode", prop, *restore_options])
             run(f"{name}-build", ["dotnet", "build", path, "-c", "Release", "--no-restore", prop])
         testdll = ROOT / "tests/Interop.Abi/bin/Release/net11.0/NativeWeave.Interop.Abi.Tests.dll"
         sampledll = ROOT / "samples/api/interop-abi/bin/Release/net11.0/NativeWeave.Interop.Abi.Sample.dll"
@@ -204,7 +204,7 @@ def main():
         if not args.skip_aot:
             for name, path, executable in [("tests", project, "NativeWeave.Interop.Abi.Tests"), ("sample", sample, "NativeWeave.Interop.Abi.Sample")]:
                 destination = out / f"aot-{name}"
-                run(f"{name}-aot-restore", ["dotnet", "restore", path, "-r", "linux-x64", "-p:PublishAot=true", prop, *restore_options])
+                run(f"{name}-aot-restore", ["dotnet", "restore", path, "-r", "linux-x64", "-p:PublishAot=true", "--locked-mode", prop, *restore_options])
                 if name == "tests":
                     selection = json.loads(run("aot-linker-selection", ["dotnet", "msbuild", path, "-nologo", "-t:ResolveReferences,SetupOSSpecificProps",
                                                "-p:RuntimeIdentifier=linux-x64", "-p:PublishAot=true",

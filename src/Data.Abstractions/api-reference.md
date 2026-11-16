@@ -774,7 +774,7 @@ public static NativeWeave.Data.SqlCommand NativeWeave.Data.SqlCommand.Create(str
 
 **param kind:** The explicit effect classification.
 
-**param timeout:** A positive finite timeout, or the source's configured default.
+**param timeout:** A nonnegative finite timeout, or the source's configured default; zero expires before dispatch.
 
 **returns:** An immutable command; subsequent collection changes do not affect it.
 
@@ -796,7 +796,7 @@ public static NativeWeave.Data.SqlCommand NativeWeave.Data.SqlCommand.Parameteri
 
 **param kind:** The explicit effect classification.
 
-**param timeout:** A positive finite timeout, or the source's configured default.
+**param timeout:** A nonnegative finite timeout, or the source's configured default; zero expires before dispatch.
 
 **returns:** An immutable template whose value holes will be bound by Rust.
 
