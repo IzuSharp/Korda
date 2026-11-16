@@ -1,0 +1,5 @@
+using NativeWeave.Data;
+var builder = new TableBuilder<Entity>("Entity");
+var column = builder.Column("Value", Codecs.Int64);
+new Changes<Entity>().Set(column, "wrong");
+sealed class Entity;

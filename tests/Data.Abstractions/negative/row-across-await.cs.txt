@@ -1,0 +1,8 @@
+using NativeWeave.Data;
+static async Task InvalidAsync()
+{
+    RowReader reader = default;
+    await Task.Yield();
+    _ = reader.IsNull(0);
+}
+await InvalidAsync();

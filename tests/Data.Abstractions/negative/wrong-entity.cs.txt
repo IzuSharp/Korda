@@ -1,0 +1,6 @@
+using NativeWeave.Data;
+var builder = new TableBuilder<First>("First");
+var column = builder.Column("Value", Codecs.Int64);
+new Changes<Second>().Set(column, 1L);
+sealed class First;
+sealed class Second;
