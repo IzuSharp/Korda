@@ -3,6 +3,11 @@
     <Project Path="src/NativeWeave.HelloWorld/NativeWeave.HelloWorld.csproj" />
     <Project Path="src/Interop.Abi/Interop.Abi.csproj" />
     <Project Path="src/Data.Abstractions/NativeWeave.Data.csproj" />
+    <Project Path="src/NativeWeave.Core/NativeWeave.Core.csproj" />
+    <Project Path="src/Data.Codecs/NativeWeave.Data.Codecs.csproj" />
+    <Project Path="src/Data.Transactions/NativeWeave.Database.Transactions.csproj" />
+    <Project Path="src/Data.Postgres/NativeWeave.Database.PostgreSql.csproj" />
+    <Project Path="src/Generators.Model/NativeWeave.Generators.Model.csproj" />
   </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/HelloWorld/HelloWorld.csproj" />
@@ -10,15 +15,46 @@
     <Project Path="samples/api/benchmarks-harness/Managed/Managed.csproj" />
     <Project Path="samples/api/benchmarks-harness/Native/Native.csproj" />
     <Project Path="samples/api/data-abstractions/DataAbstractions.csproj" />
+    <Project Path="samples/api/interop-negotiation/Interop.Negotiation.Sample.csproj" />
+    <Project Path="samples/api/interop-errors/Interop.Errors.Sample.csproj" />
+    <Project Path="samples/api/data-codecs/DataCodecs.csproj" />
+    <Project Path="samples/api/data-transactions/Data.Transactions.Sample.csproj" />
+    <Project Path="samples/api/data-postgres/PostgresExample.csproj" />
+    <Project Path="samples/api/generators-model/Generators.Model.Sample.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/NativeWeave.HelloWorld.Tests/NativeWeave.HelloWorld.Tests.csproj" />
     <Project Path="tests/Interop.Abi/Interop.Abi.Tests.csproj" />
     <Project Path="tests/Data.Abstractions/NativeWeave.Data.Tests.csproj" />
+    <Project Path="tests/Interop.Negotiation/Interop.Negotiation.Tests.csproj" />
+    <Project Path="tests/Interop.Errors/Interop.Errors.Tests.csproj" />
+    <Project Path="tests/Data.Codecs/NativeWeave.Data.Codecs.Tests.csproj" />
+    <Project Path="tests/Data.Transactions/NativeWeave.Data.Transactions.Tests.csproj" />
+    <Project Path="tests/Data.Postgres/NativeWeave.Database.PostgreSql.Tests.csproj" />
+    <Project Path="tests/Generators.Model/NativeWeave.Generators.Model.Tests.csproj" />
+    <Project Path="tests/Interop.Errors/InvalidUco/InvalidUco.csproj" />
   </Folder>
   <Folder Name="/tools/">
     <Project Path="tools/ApiDocs/ApiDocs.csproj" />
     <Project Path="tests/Data.Abstractions/ApiCheck/ApiCheck.csproj" />
     <Project Path="tests/Benchmarks.Harness/AssemblyInventory/AssemblyInventory.csproj" />
+  </Folder>
+  <Folder Name="/tools/A02/">
+    <Project Path="tests/Interop.Negotiation/ApiCheck/ApiCheck.csproj" />
+  </Folder>
+  <Folder Name="/tools/A05/">
+    <Project Path="tests/Interop.Errors/ApiCheck/ApiCheck.csproj" />
+  </Folder>
+  <Folder Name="/tools/A09/">
+    <Project Path="tests/Generators.Model/ApiCheck/ApiCheck.csproj" />
+  </Folder>
+  <Folder Name="/tools/B05/">
+    <Project Path="tests/Data.Transactions/ApiCheck/ApiCheck.csproj" />
+  </Folder>
+  <Folder Name="/tools/B07/">
+    <Project Path="tests/Data.Codecs/ApiCheck/ApiCheck.csproj" />
+  </Folder>
+  <Folder Name="/tools/B02/">
+    <Project Path="tests/Data.Postgres/ApiCheck/ApiCheck.csproj" />
   </Folder>
 </Solution>

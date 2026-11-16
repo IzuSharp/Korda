@@ -1,0 +1,23 @@
+# Retain all upstream rules and the full-history scan. These narrowly matched values
+# are public SHA-256 identities of the locked Design inputs, not credentials.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Exact public Design JSON/header digests in Task-02 provenance records"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^(src|tests)/(Interop\.(Negotiation|Errors)|Data\.(Transactions|Postgres|Sqlite|Streaming)|Generators\.Model|Query\.Binding)/(design-inputs|public-api\.expected)\.json$''']
+regexTarget = "secret"
+regexes = [
+  '''^d3e989c4f8732f2514c66a2c1ecf038b460fc29e3581d0b36855612751e974e4$''',
+  '''^6d79a3d030ec429e4706f6012d4e9f876ddc35307d4b4c814fc18d5100b4c6e2$''',
+]
+
+[[allowlists]]
+description = "Literal local NuGet source name in the A02 package fixture"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^tests/Interop\.Negotiation/verify\.py$''']
+regexTarget = "line"
+regexes = ['''^\s*ET\.SubElement\(sources, "add", key="a02-fixtures", value=str\(feed\)\)\s*$''']

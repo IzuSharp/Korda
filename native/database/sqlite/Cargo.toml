@@ -1,0 +1,31 @@
+[package]
+name = "nativeweave-data-sqlite"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.100"
+license = "MIT"
+publish = false
+description = "Bounded SQLx SQLite provider operations and retained worker cleanup"
+
+[lib]
+crate-type = ["rlib", "cdylib"]
+
+[dependencies]
+nativeweave-data-contracts = { path = "../interfaces" }
+nativeweave-data-codecs = { path = "../codecs" }
+nativeweave-data-transactions = { path = "../transactions" }
+nativeweave-interop-abi = { path = "../../interop/abi" }
+sqlx = { version = "=0.9.0", default-features = false, features = ["runtime-tokio", "sqlite", "migrate"] }
+sqlx-core = { version = "=0.9.0", default-features = false }
+libsqlite3-sys = { version = "=0.37.0", default-features = false, features = ["bundled"] }
+tokio = { version = "=1.54.1", default-features = false, features = ["rt-multi-thread", "macros", "sync", "time"] }
+futures-util = { version = "=0.3.34", default-features = false, features = ["std"] }
+
+[dev-dependencies]
+sha2 = "=0.10.9"
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+
+[lints.clippy]
+undocumented_unsafe_blocks = "deny"
