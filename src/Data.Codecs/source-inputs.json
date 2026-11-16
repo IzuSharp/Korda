@@ -1,0 +1,54 @@
+{
+  "design_commit": "c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9",
+  "toolchain": {
+    "dotnet_sdk": "11.0.100",
+    "csharp": "15.0",
+    "rust": "1.100.0"
+  },
+  "source_records": [
+    {
+      "package": "sqlx-core-0.9.0",
+      "path": "src/arguments.rs",
+      "sha256": "988065552995906e6cd4b6d5dbf7bb35c47a69a173336460b39975bdb9dc7fa4",
+      "inspection": "read conversion, fallible add, raw-value and finite value-enum definitions; tests are separately executed on NativeWeave product sources"
+    },
+    {
+      "package": "sqlx-postgres-0.9.0",
+      "path": "src/arguments.rs",
+      "sha256": "9cf557fe3d45139768e1149f3610d393875de91e646daed5384be511e086f556",
+      "inspection": "read conversion, fallible add, raw-value and finite value-enum definitions; tests are separately executed on NativeWeave product sources"
+    },
+    {
+      "package": "sqlx-postgres-0.9.0",
+      "path": "src/types/rust_decimal.rs",
+      "sha256": "4e5f3b08f1d40add3c8797f41ba8f28af114824b5a02cb0d35d8742c99fb442e",
+      "inspection": "read conversion, fallible add, raw-value and finite value-enum definitions; tests are separately executed on NativeWeave product sources"
+    },
+    {
+      "package": "sqlx-postgres-0.9.0",
+      "path": "src/types/chrono/datetime.rs",
+      "sha256": "cad2020b1ae7dd3b7b734b2a762f847210c87eda0af6222e8b87eb2409e11bbd",
+      "inspection": "read conversion, fallible add, raw-value and finite value-enum definitions; tests are separately executed on NativeWeave product sources"
+    },
+    {
+      "package": "sqlx-postgres-0.9.0",
+      "path": "src/value.rs",
+      "sha256": "80f9303a892fb97ac0a4084532bc03e0a344d881495cad1af2d2357150cde0c6",
+      "inspection": "read conversion, fallible add, raw-value and finite value-enum definitions; tests are separately executed on NativeWeave product sources"
+    },
+    {
+      "package": "sqlx-sqlite-0.9.0",
+      "path": "src/arguments.rs",
+      "sha256": "ba3cf95aa22adacddb01aee53918e77aaea8636c0e390e7800299eec1498ff58",
+      "inspection": "read conversion, fallible add, raw-value and finite value-enum definitions; tests are separately executed on NativeWeave product sources"
+    },
+    {
+      "package": "sea-query-1.0.2",
+      "path": "src/value.rs",
+      "sha256": "6ecd51945ed9890043bb9a7b4b1b9586d6ae04c3c83576bdb7b20135b6a73502",
+      "inspection": "read conversion, fallible add, raw-value and finite value-enum definitions; tests are separately executed on NativeWeave product sources"
+    }
+  ],
+  "sqlx_pinned_git_source": "https://github.com/transact-rs/sqlx/tree/75bc0487eb661da811bb7a3c5d158f1bd463fef4",
+  "limits": "Registry package hashes are retained independently; no unobserved entire-repository equality or upstream test execution is claimed."
+}
