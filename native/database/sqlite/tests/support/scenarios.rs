@@ -371,26 +371,48 @@ async fn savepoints(file: &Path) -> TestResult {
 
 async fn cancellation(file: &Path) -> TestResult {
     let pool = pool(file, &Options::default(), limits()).await?;
-    let (s, budget) = session(&pool, Options::default(), limits()).await?;
+    let mut connection = pool.acquire().await?;
+    let (entered_tx, entered_rx) = tokio::sync::oneshot::channel();
+    let (release_tx, release_rx) = std::sync::mpsc::channel();
+    let gate = std::sync::Mutex::new(Some((entered_tx, release_rx)));
+    let released = Arc::new(AtomicUsize::new(0));
+    let callback_released = released.clone();
+    connection
+        .lock_handle()
+        .await?
+        .create_collation("b03_worker_gate", move |left, right| {
+            if let Some((entered, release)) = gate.lock().ok().and_then(|mut gate| gate.take()) {
+                // TEST ONLY: this comparison runs inside SQLite's actual worker.
+                // A bounded wait cannot strand it if the caller errors or times out.
+                let _ = entered.send(());
+                callback_released.store(
+                    usize::from(release.recv_timeout(WAIT).is_ok()),
+                    Ordering::Release,
+                );
+            }
+            left.cmp(right)
+        })?;
+    let budget = Admission::new(limits())?;
+    let s = Session::start(
+        connection,
+        Options::default(),
+        budget.clone(),
+        &tokio::runtime::Handle::current(),
+    )?;
     mark(&s).await?;
-    let old = Cancellation::default();
-    let mut rows = s.stream("WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM n WHERE x<100000000) SELECT sum(x) FROM n", None, old.clone())?;
+
+    // A full adapter channel prevents the next fetch. Stop can close the row
+    // stream without manufacturing a SQLx error; its retirement receipt is required.
+    let before_fetch = Cancellation::default();
+    let mut rows = s.stream("SELECT 1 UNION ALL SELECT 2", None, before_fetch.clone())?;
     let receipt = rows.receipt();
     tokio::time::timeout(WAIT, async {
-        while s.observer().snapshot().active_operations == 0 {
+        while rows.buffered_rows() == 0 {
             tokio::task::yield_now().await;
         }
     })
     .await?;
-    old.cancel();
-    let error = tokio::time::timeout(WAIT, rows.next())
-        .await?
-        .ok_or("cancel result missing")?
-        .expect_err("long query must stop");
-    assert!(matches!(
-        error.kind,
-        ErrorKind::Interrupted | ErrorKind::CanceledBeforeDispatch
-    ));
+    before_fetch.cancel();
     let retired = tokio::time::timeout(WAIT, receipt.join()).await??;
     assert!(
         retired.native_retired
@@ -398,9 +420,68 @@ async fn cancellation(file: &Path) -> TestResult {
             && retired.stop_requested
             && retired.stopped
     );
+    assert_eq!(retired.disposition, ConnectionDisposition::Usable);
+    assert_eq!(retired.provider_rows_peak, 1);
+    assert_eq!(
+        rows.next()
+            .await
+            .ok_or("retained row missing")??
+            .try_get::<i64, _>(0)?,
+        1
+    );
+    assert!(
+        rows.next().await.is_none(),
+        "stop before the next fetch ends with EOF"
+    );
+    assert_eq!(rows.buffered_rows(), 0);
+    drop(rows);
+    same(&s).await?;
+    assert_eq!(budget.snapshot().active_commands, 0);
+    assert_eq!(budget.snapshot().retained_input_bytes, 0);
+    println!(
+        "B03 cancellation before next fetch: one retained row, EOF, stopped=true, worker retired"
+    );
+
+    let old = Cancellation::default();
+    let mut rows = s.stream("WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM n WHERE x<100000000 AND CAST(x AS TEXT) COLLATE b03_worker_gate != '') SELECT sum(x) FROM n", None, old.clone())?;
+    let receipt = rows.receipt();
+    tokio::time::timeout(WAIT, entered_rx).await??;
+    assert!(
+        receipt.snapshot().is_none(),
+        "the worker is still inside the comparison"
+    );
+    old.cancel();
+    release_tx.send(())?;
+    let error = tokio::time::timeout(WAIT, rows.next())
+        .await?
+        .ok_or("in-worker interruption result missing")?
+        .expect_err("in-worker progress cancellation must interrupt");
+    assert_eq!(
+        released.load(Ordering::Acquire),
+        1,
+        "worker barrier did not time out"
+    );
+    assert_eq!(error.kind, ErrorKind::Interrupted);
+    let retired = tokio::time::timeout(WAIT, receipt.join()).await??;
+    assert!(
+        retired.native_retired
+            && retired.progress_handler_removed
+            && retired.stop_requested
+            && retired.stopped
+    );
+    assert_eq!(retired.disposition, ConnectionDisposition::Usable);
+    println!(
+        "B03 cancellation inside worker: comparison observed, explicit release, Interrupted, worker retired"
+    );
     drop(rows);
     old.cancel();
-    assert_eq!(scalar(&s, "SELECT 43").await?, 43);
+    // Exceed the installed 1,000-op progress interval with a fresh generation;
+    // a constant SELECT could succeed without ever exercising its progress hook.
+    assert_eq!(
+        scalar(&s, "WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM n WHERE x<5000) SELECT sum(x) FROM n").await?,
+        12_502_500
+    );
+    println!("B03 stale cancellation generation: fresh 5000-row recursive query completed");
     same(&s).await?;
     assert!(s.stream("SELECT 44", None, old).is_err());
     let before = Cancellation::default();
@@ -410,6 +491,9 @@ async fn cancellation(file: &Path) -> TestResult {
         Some(ErrorKind::CanceledBeforeDispatch)
     ));
     assert_eq!(budget.snapshot().active_commands, 0);
+    assert_eq!(budget.snapshot().queued_commands, 0);
+    assert_eq!(budget.snapshot().retained_input_bytes, 0);
+    assert_eq!(s.observer().snapshot().active_operations, 0);
     close(s, pool).await
 }
 
