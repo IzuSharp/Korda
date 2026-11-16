@@ -149,8 +149,14 @@ admitted projection and then every actual row's storage classes with B07.
 and `OperationReceipt`. Dropping the stream requests stop. `receipt.join()` waits
 for the worker/handler facts; receiver drop alone is not retirement evidence.
 `stop_requested` records intent, while `stopped` records the observed terminal
-path. Natural EOF wins a cancellation request made afterward. Errors retain the
-native extended code; INTEGER/REAL/TEXT/BLOB/NULL conversions use B07 rather than
+path. Stopping before the next fetch may end the row channel without a SQLx error;
+the retirement receipt distinguishes that stopped EOF from natural completion.
+The cancellation fixture separately controls a full row channel and an actual
+SQLite comparison callback, so actor admission is never treated as proof that
+the worker began execution. A fresh finite recursive query exercises progress
+after an old generation requests cancellation again. Natural EOF wins a later
+cancellation request. Errors retain the native extended code;
+INTEGER/REAL/TEXT/BLOB/NULL conversions use B07 rather than
 SQLite's permissive affinity coercion. Ordinary SQLite does not acquire PostgreSQL
 numeric decimal, row-lock, or isolation semantics through this provider.
 
