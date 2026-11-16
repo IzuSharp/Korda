@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>NativeWeave.Benchmark.Managed</AssemblyName>
+    <IsAotCompatible>true</IsAotCompatible>
+    <IlcInstructionSet>x86-64-v2</IlcInstructionSet>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../Target.cs" Link="Target.cs" />
+  </ItemGroup>
+</Project>
