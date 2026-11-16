@@ -10,6 +10,7 @@
     <Project Path="src/Data.Sqlite/NativeWeave.Database.Sqlite.csproj" />
     <Project Path="src/Data.Streaming/NativeWeave.Data.Streaming.csproj" />
     <Project Path="src/Generators.Model/NativeWeave.Generators.Model.csproj" />
+    <Project Path="src/Query.Binding/NativeWeave.Query.Binding.csproj" />
   </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/HelloWorld/HelloWorld.csproj" />
@@ -25,6 +26,7 @@
     <Project Path="samples/api/data-sqlite/Data.Sqlite.Sample.csproj" />
     <Project Path="samples/api/data-streaming/DataStreaming.csproj" />
     <Project Path="samples/api/generators-model/Generators.Model.Sample.csproj" />
+    <Project Path="samples/api/query-binding/QueryBindingSample.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/NativeWeave.HelloWorld.Tests/NativeWeave.HelloWorld.Tests.csproj" />
@@ -38,6 +40,7 @@
     <Project Path="tests/Data.Sqlite/NativeWeave.Data.Sqlite.Tests.csproj" />
     <Project Path="tests/Data.Streaming/NativeWeave.Data.Streaming.Tests.csproj" />
     <Project Path="tests/Generators.Model/NativeWeave.Generators.Model.Tests.csproj" />
+    <Project Path="tests/Query.Binding/NativeWeave.Query.Binding.Tests.csproj" />
     <Project Path="tests/Interop.Errors/InvalidUco/InvalidUco.csproj" />
   </Folder>
   <Folder Name="/tools/">
@@ -68,5 +71,8 @@
   </Folder>
   <Folder Name="/tools/B06/">
     <Project Path="tests/Data.Streaming/ApiCheck/ApiCheck.csproj" />
+  </Folder>
+  <Folder Name="/tools/B09/">
+    <Project Path="tests/Query.Binding/ApiCheck/ApiCheck.csproj" />
   </Folder>
 </Solution>

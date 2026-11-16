@@ -907,6 +907,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "nativeweave-query-binding"
+version = "0.1.0"
+dependencies = [
+ "nativeweave-data-contracts",
+ "nativeweave-interop-abi",
+ "serde_json",
+ "sha2 0.10.9",
+]
+
+[[package]]
 name = "num-traits"
 version = "0.2.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
