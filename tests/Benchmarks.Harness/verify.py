@@ -99,7 +99,7 @@ def main():
     for kind, route in [("Managed", "managed-aot"), ("Native", "nativeweave-aot-rust")]:
         project = SAMPLE / kind / f"{kind}.csproj"
         props = [f"-p:A21NativeFixture={native}", "-p:UseSharedCompilation=false", "-p:CppCompilerAndLinker=gcc"]
-        run(["dotnet", "restore", project, "-r", "linux-x64", "-p:PublishAot=true", *config_args, *props], kind + "-restore")
+        run(["dotnet", "restore", project, "--locked-mode", "-r", "linux-x64", "-p:PublishAot=true", *config_args, *props], kind + "-restore")
         run(["dotnet", "build", project, "-c", "Release", "--no-restore", "--disable-build-servers", *props], kind + "-build")
         assembly = SAMPLE / kind / "bin/Release/net11.0" / ("NativeWeave.Benchmark." + kind + ".dll")
         compiled_assemblies.append(assembly)
@@ -127,7 +127,8 @@ def main():
     run(["dotnet", "restore", inventory, *config_args], "inventory-restore")
     run(["dotnet", "run", "--project", inventory, "-c", "Release", "--no-restore", "--disable-build-servers", "--", *compiled_assemblies], "compiled-public-api")
     locks = {str(file): bench.sha256(file) for file in [ROOT / "global.json", ROOT / "rust-toolchain.toml",
-              SAMPLE / "Managed/packages.lock.json", SAMPLE / "Native/packages.lock.json"]}
+              SAMPLE / "Managed/packages.lock.json", SAMPLE / "Native/packages.lock.json",
+              SAMPLE / "Managed/packages.linux-x64.aot.lock.json", SAMPLE / "Native/packages.linux-x64.aot.lock.json"]}
     commit = run(["git", "rev-parse", "HEAD"], "source-commit").strip()
     plan = {
         "schema_version": 1, "workload_id": "a21-scalar-adapter-smoke", "workload_kind": "harness-smoke",

@@ -152,7 +152,11 @@ warnings. The test-only export is separate from the product Engine ABI. The
 commands and protocol above are the tooling reference and have strict versioned
 input validation; unknown schema versions are rejected.
 
-The executable source examples are in `samples/api/benchmarks-harness/`. Their
+The executable source examples are in `samples/api/benchmarks-harness/`.
+Their ordinary `packages.lock.json` and Linux AOT
+`packages.linux-x64.aot.lock.json` files are committed separately. Restore uses
+locked mode; switching between ordinary builds and AOT does not rewrite either
+lock. The AOT lock is selected for both restore and build RID properties. Their
 execution state and exact source/toolchain/log/artifact identities live in
 `Plan/ledger/evidence/A21/`. Linux evidence does not certify Windows. A16/B24
 retain final package/pristine-consumer/release obligations; A21 does not claim
