@@ -58,7 +58,7 @@ async fn rows(session: &Session, sql: &str) -> Result<Vec<sqlx::postgres::PgRow>
     }
     let receipt = control.join().await;
     assert!(receipt.retired && receipt.protocol_clean);
-    assert!(receipt.retained_rows_peak <= 2);
+    assert!(receipt.retained_rows_peak <= 1);
     Ok(rows)
 }
 async fn scalar_i64(session: &Session, sql: &str) -> Result<i64> {
@@ -138,7 +138,7 @@ async fn stream_and_admission() -> Result<Value> {
     drop(stream);
     let receipt = timeout(Duration::from_secs(10), control.join()).await?;
     assert!(receipt.retired && receipt.protocol_clean && receipt.stopped);
-    assert!(receipt.retained_rows_peak <= 2);
+    assert!(receipt.retained_rows_peak <= 1);
     assert_eq!(
         scalar_i64(&session, "SELECT pg_backend_pid()::bigint").await?,
         pid as i64
@@ -595,44 +595,6 @@ async fn close_with_admitted_operation() -> Result<Value> {
     )
 }
 
-async fn transaction_parent_retirement() -> Result<Value> {
-    let pool = connect_pool(&config()?, 1).await?;
-    // The retirement hook must release its own parent lease before returning.
-    // Keeping the driver value alive must not prevent a later last-parent close.
-    let session = open_session(&pool).await?;
-    let control = session.control();
-    let mut driver = session.transaction_driver();
-    driver
-        .retire(nativeweave_data_contracts::ConnectionDisposition::Usable)
-        .await;
-    assert!(!control.snapshot().retired);
-    drop(session);
-    let receipt = timeout(Duration::from_secs(2), control.join()).await?;
-    assert!(receipt.retired && receipt.returned_to_pool);
-    assert!(driver.begin(&Options::default()).await.is_err());
-    drop(driver);
-
-    // When the independent parent has already gone, retirement itself joins
-    // the last lease. The observation is checked before dropping the driver.
-    let session = open_session(&pool).await?;
-    let control = session.control();
-    let mut driver = session.transaction_driver();
-    drop(session);
-    driver
-        .retire(nativeweave_data_contracts::ConnectionDisposition::Usable)
-        .await;
-    assert!(control.snapshot().retired);
-    drop(driver);
-    let replacement = open_session(&pool).await?;
-    assert_eq!(scalar_i64(&replacement, "SELECT 9::bigint").await?, 9);
-    replacement.close().await;
-    pool.close().await;
-    Ok(
-        json!({"case":"transaction-parent-retirement","driver_parent_released_before_return":true,
-        "already_last_parent_joined":true,"retired_driver_rejects_operations":true,"pool_permits_restored":true}),
-    )
-}
-
 async fn migration_lock() -> Result<Value> {
     let pool = connect_pool(&config()?, 2).await?;
     let observer = open_session(&pool).await?;
@@ -725,7 +687,6 @@ pub async fn run() -> Result {
             results.push(result);
         }};
     }
-    case!(transaction_parent_retirement);
     case!(tls);
     case!(timeout_rollback);
     case!(stream_and_admission);

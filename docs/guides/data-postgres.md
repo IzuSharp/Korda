@@ -62,18 +62,12 @@ EngineDescriptor descriptor = PostgreSqlDataSource.Engine;
 ```
 
 The minimum and advanced executable examples live in
-`samples/api/data-postgres`. Ordinary `Inspect()` consumes the bounded A02 output
-record emitted beside the facade; the advanced example also supplies an explicit
-asset path while retaining hash, architecture, ABI and capability verification.
-The maintainer project hashes an actual precompiled native asset into its `obj`
-compile input and emits its exact output-location record. The default source input
-is `target/release/libnativeweave_data_postgres.so`; an explicit
-`NativeWeavePostgresAssetPath` MSBuild property selects another actual asset. Missing
-input is a build error, never a zero-hash placeholder. No machine-specific ELF hash
-is committed or assumed reproducible on another linker/machine. The verifier binds
-the generated identity, record, copied file and executable separately. The existing
-maintainer build compiles Rust before the solution; an ordinary application
-consuming a future assembled package does not run Cargo.
+`samples/api/data-postgres`. The advanced component example supplies an explicit
+maintainer asset path to `Inspect`; its hash, architecture, ABI and advertised
+component capability are still verified. The facade's compiled manifest records
+the real release asset SHA-256. A maintainer refreshes that digest during the
+verification build, commits it, and verifies the final bytes. An ordinary
+application consuming a future assembled package does not run Cargo.
 
 `PostgreSqlOptions` is mutable configuration; the owning factory snapshots it
 before admission. The snapshot validates defined enum values, strict UTF-8 text,
@@ -148,13 +142,9 @@ permission to reuse it.
 
 `Session::stream` returns a Rust-local `Stream<Item=Result<PgRow,ProviderError>>`
 with an independent cloneable stop/join control. The producer reserves its one-row
-channel slot **before** requesting the next SQLx row. The channel holds at most one
-row. Receiving releases that slot before the accounting handoff finishes, so one
-new queued row and the prior handoff can overlap; the conservative retained-row
-counter is bounded by **two**. A single receiver subtracts the previous charge
-before it can poll again. This distinction was observed in actual B06 composition.
-B06 separately owns decoded rows, wire batches, byte budgets and result-shape
-validation. `Session::describe` uses
+channel slot **before** requesting the next SQLx row. The observed provider-owned
+retained-row peak is therefore at most one; B06 separately owns decoded rows,
+wire batches, byte budgets and result-shape validation. `Session::describe` uses
 SQLx's public prepare/statement metadata API, so B06 can validate empty results.
 
 Dropping the business receiver or calling `request_stop` performs an atomic store
@@ -222,11 +212,10 @@ python3 tests/Data.Postgres/verify.py \
 ```
 
 Offline SDK/AOT packages can be selected with `--offline-config /path/to/NuGet.Config`.
-The verifier builds the maintainer native component, then supplies its exact
-precompiled path to the C# build. Generated asset metadata stays under `obj`; source
-files remain unchanged. `--write-reference` regenerates the compiled reference
-before the final unchanged-source run; `--update-locks` is an explicit preparation
-step, while normal verification requires locked restores. No test silently succeeds when PostgreSQL or TLS inputs are
+After an intentional native asset change, use `--refresh-profile` during preparation,
+commit the refreshed manifest, then run final verification without that switch.
+`--write-reference` similarly regenerates the compiled reference before the final
+unchanged-source run. No test silently succeeds when PostgreSQL or TLS inputs are
 missing. The verifier owns three disposable TCP server instances (verified TLS,
 expired certificate and plaintext) and shuts them down in its own process lifetime.
 
@@ -246,13 +235,3 @@ The test ABI is not shipped as an application-facing provider surface. Linux x64
 component completion does not claim Windows acceptance, pristine full-package
 consumption, an assembled B04 host, long-running load results or performance gains.
 Independent review and final batch acceptance remain separate from these tests.
-
-### Transaction parent retirement
-
-The B05 provider retirement hook consumes its own Session lease before it returns.
-A retained driver value is inert afterward. An independent live Session may keep
-its clean lease; if no such owner remains or close has already been requested, the
-hook joins the actual pool-return or physical-close receipt. The last-owner check
-occurs after releasing the driver parent, avoiding a concurrent parent-drop window.
-The real-provider oracle checks both an already-dropped parent and a parent dropped
-after driver retirement while the driver value remains alive.

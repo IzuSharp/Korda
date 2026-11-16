@@ -3,30 +3,14 @@
     <AssemblyName>NativeWeave.Database.PostgreSql</AssemblyName>
     <RootNamespace>NativeWeave.Database.PostgreSql</RootNamespace>
     <IsAotCompatible>true</IsAotCompatible>
-    <NativeWeavePostgresAssetPath Condition="'$(NativeWeavePostgresAssetPath)' == ''">$(MSBuildThisFileDirectory)../../target/release/libnativeweave_data_postgres.so</NativeWeavePostgresAssetPath>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifiers)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifiers).aot.lock.json</NuGetLockFilePath>
     <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifier)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifier).aot.lock.json</NuGetLockFilePath>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="$(IntermediateOutputPath)PostgreSqlAssetIdentity.g.cs" />
-    <None Include="$(NativeWeavePostgresAssetPath)" Link="runtimes/linux-x64/native/libnativeweave_data_postgres.so" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
-    <None Include="$(IntermediateOutputPath)NativeWeave.nativeweave.postgres.component.assets.json" Link="NativeWeave.nativeweave.postgres.component.assets.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <ProjectReference Include="../NativeWeave.Core/NativeWeave.Core.csproj" />
     <ProjectReference Include="../Data.Abstractions/NativeWeave.Data.csproj" />
     <InternalsVisibleTo Include="NativeWeave.Database.PostgreSql.Tests" />
     <InternalsVisibleTo Include="NativeWeave.Database" />
   </ItemGroup>
-  <Target Name="GeneratePostgreSqlAssetIdentity" BeforeTargets="CoreCompile">
-    <Error Condition="!Exists('$(NativeWeavePostgresAssetPath)')" Text="Build the maintainer PostgreSQL native component first or supply NativeWeavePostgresAssetPath. Consumer builds never invoke Cargo." />
-    <GetFileHash Files="$(NativeWeavePostgresAssetPath)" Algorithm="SHA256">
-      <Output TaskParameter="Items" ItemName="_PostgreSqlNativeHash" />
-    </GetFileHash>
-    <PropertyGroup>
-      <_PostgreSqlHash>@(_PostgreSqlNativeHash->'%(FileHash)')</_PostgreSqlHash>
-      <_PostgreSqlLowerHash>$(_PostgreSqlHash.ToLowerInvariant())</_PostgreSqlLowerHash>
-    </PropertyGroup>
-    <WriteLinesToFile File="$(IntermediateOutputPath)PostgreSqlAssetIdentity.g.cs" Overwrite="true" WriteOnlyWhenDifferent="true" Lines="namespace NativeWeave.Database.PostgreSql { internal static class PostgreSqlAssetIdentity { internal const string Sha256 = &quot;$(_PostgreSqlLowerHash)&quot;%3B } }" />
-    <WriteLinesToFile File="$(IntermediateOutputPath)NativeWeave.nativeweave.postgres.component.assets.json" Overwrite="true" WriteOnlyWhenDifferent="true" Lines="{ &quot;schemaVersion&quot;: 1, &quot;engineId&quot;: &quot;nativeweave.postgres.component&quot;, &quot;packageId&quot;: &quot;NativeWeave.Database.PostgreSql&quot;, &quot;packageVersion&quot;: &quot;0.1.0-preview.1&quot;, &quot;rid&quot;: &quot;linux-x64&quot;, &quot;sourcePath&quot;: &quot;runtimes/linux-x64/native/libnativeweave_data_postgres.so&quot;, &quot;outputPath&quot;: &quot;runtimes/linux-x64/native/libnativeweave_data_postgres.so&quot;, &quot;sha256&quot;: &quot;$(_PostgreSqlLowerHash)&quot; }" />
-  </Target>
 </Project>

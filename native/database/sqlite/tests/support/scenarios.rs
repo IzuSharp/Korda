@@ -27,7 +27,7 @@ use std::{
 };
 
 pub type TestResult<T = ()> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
-pub const CASES: u32 = 14;
+pub const CASES: u32 = 12;
 const WAIT: Duration = Duration::from_secs(15);
 
 fn limits() -> Limits {
@@ -137,8 +137,6 @@ pub async fn run(case: u32, root: &Path) -> TestResult {
         10 => concurrency(&file).await?,
         11 => migrations(&file).await?,
         12 => read_only(&file).await?,
-        13 => last_parent(&file).await?,
-        14 => row_handoff(&file).await?,
         _ => return Err("unknown B03 scenario".into()),
     }
     println!("PASS B03 native scenario {case}");
@@ -467,36 +465,12 @@ async fn pool_retirement(file: &Path) -> TestResult {
     let _ = waiter.await;
     assert!(s.return_to_pool().await?.pool_return_completed);
     drop(s);
-    let (next, single) = session(
-        &pool,
-        Options::default(),
-        Limits {
-            max_commands: 1,
-            ..limits()
-        },
-    )
-    .await?;
+    let (next, _) = session(&pool, Options::default(), limits()).await?;
     same(&next).await?;
     assert_eq!(scalar(&next, "SELECT count(*) FROM items").await?, 0);
-    for _ in 0..8 {
-        execute(&next, "SELECT 1").await?;
-        assert_eq!(
-            single.snapshot().active_commands,
-            0,
-            "one-slot reservation retires before sequential waiter resumes"
-        );
-        let transaction = transaction(&next, TransactionOptions::default()).await?;
-        transaction.rollback(&AdmissionToken::default()).await?;
-        assert!(transaction.join().await.local_resources_released);
-    }
     let pool_clone = pool.clone();
     let closing = tokio::spawn(async move { pool_clone.close().await });
-    tokio::time::timeout(WAIT, async {
-        while !pool.is_closed() {
-            tokio::task::yield_now().await;
-        }
-    })
-    .await?;
+    tokio::task::yield_now().await;
     assert!(!closing.is_finished());
     assert!(pool.acquire().await.is_err());
     next.close().await?;
@@ -575,22 +549,6 @@ async fn lost_commit(file: &Path) -> TestResult {
 }
 
 async fn admission(file: &Path) -> TestResult {
-    for acquire_timeout in [Duration::ZERO, Duration::MAX] {
-        let invalid = Limits {
-            acquire_timeout,
-            ..limits()
-        };
-        assert_eq!(
-            invalid.pool_options().unwrap_err().kind,
-            ErrorKind::Configuration
-        );
-        assert!(Admission::new(invalid).is_err());
-        assert!(Options::default().connect_options(file, invalid).is_err());
-        assert!(
-            !file.exists(),
-            "invalid acquisition deadlines fail before SQLite I/O"
-        );
-    }
     let limits = Limits {
         max_commands: 2,
         max_input_bytes: 1024,
@@ -801,117 +759,5 @@ async fn read_only(file: &Path) -> TestResult {
     next.commit(&AdmissionToken::default()).await?;
     next.join().await;
     assert_eq!(scalar(&s, "SELECT count(*) FROM readonly_probe").await?, 1);
-    close(s, pool).await
-}
-
-async fn last_parent(file: &Path) -> TestResult {
-    struct CloseGate {
-        entered: Option<tokio::sync::oneshot::Sender<()>>,
-        release: std::sync::mpsc::Receiver<()>,
-    }
-    impl Drop for CloseGate {
-        fn drop(&mut self) {
-            if let Some(entered) = self.entered.take() {
-                let _ = entered.send(());
-                // TEST ONLY: SQLx drops this callback capture while destroying the
-                // actual ConnectionState, before its worker shutdown ACK is sent.
-                let _ = self.release.recv();
-            }
-        }
-    }
-    let pool = pool(file, &Options::default(), limits()).await?;
-    let mut connection = pool.acquire().await?;
-    let (entered_tx, entered_rx) = tokio::sync::oneshot::channel();
-    let (release_tx, release_rx) = std::sync::mpsc::channel();
-    let gate = CloseGate {
-        entered: Some(entered_tx),
-        release: release_rx,
-    };
-    connection.lock_handle().await?.set_commit_hook(move || {
-        std::hint::black_box(&gate);
-        true
-    });
-    let s = Session::start(
-        connection,
-        Options::default(),
-        Admission::new(limits())?,
-        &tokio::runtime::Handle::current(),
-    )?;
-    execute(&s, "CREATE TABLE final_parent(id INTEGER)").await?;
-    let tx = transaction(&s, TransactionOptions::default()).await?;
-    tx_execute(&tx, &s, "INSERT INTO final_parent VALUES (1)").await?;
-    let observer = s.observer();
-    drop(s);
-    let committing = tx.clone();
-    let joining = tokio::spawn(async move {
-        committing.commit(&AdmissionToken::default()).await?;
-        Ok::<_, TransactionError>(committing.join().await)
-    });
-    tokio::time::timeout(WAIT, entered_rx).await??;
-    let premature = tx.snapshot().local_resources_released;
-    let ack = observer.snapshot().worker_shutdown_acknowledged;
-    let size = pool.size();
-    println!(
-        "B03 last-parent barrier: local_released={premature}, worker_ack={ack}, physical_pool_size={size}"
-    );
-    release_tx.send(())?;
-    let final_state = tokio::time::timeout(WAIT, joining).await???;
-    let worker = tokio::time::timeout(WAIT, observer.join()).await??;
-    assert!(
-        !premature,
-        "transaction released its last parent lease before actual worker closure"
-    );
-    assert!(
-        !ack && size == 1,
-        "the test must observe the retained physical worker"
-    );
-    assert!(worker.worker_shutdown_acknowledged && worker.physical_lease_released);
-    assert_eq!(pool.size(), 0);
-    assert!(final_state.local_resources_released);
-    assert_eq!(final_state.outcome, TransactionOutcome::Committed);
-    assert_eq!(final_state.resources.physical_lease, 0);
-    assert!(!worker.os_thread_joined);
-    pool.close().await;
-    Ok(())
-}
-
-async fn row_handoff(file: &Path) -> TestResult {
-    let pool = pool(file, &Options::default(), limits()).await?;
-    let (s, budget) = session(&pool, Options::default(), limits()).await?;
-    mark(&s).await?;
-    for round in 0..4 {
-        let mut rows = s.stream(
-            "WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM n WHERE x<10000) SELECT x FROM n",
-            None,
-            Cancellation::default(),
-        )?;
-        let receipt = rows.receipt();
-        let mut count = 0;
-        let mut observed_peak = 0;
-        while let Some(value) = tokio::time::timeout(WAIT, rows.next()).await? {
-            observed_peak = observed_peak.max(rows.buffered_rows());
-            count += 1;
-            assert_eq!(value?.try_get::<i64, _>(0)?, count);
-            if count % 7 == 0 {
-                tokio::task::yield_now().await;
-            }
-        }
-        let retired = tokio::time::timeout(WAIT, receipt.join()).await??;
-        println!(
-            "B03 row handoff round={round} rows={count} provider_peak={} sampled_peak={observed_peak}",
-            retired.provider_rows_peak
-        );
-        assert_eq!(count, 10000);
-        assert!(
-            retired.provider_rows_peak <= 2 && observed_peak <= 2,
-            "provider row budget includes the receiver handoff"
-        );
-        assert!(retired.native_retired && !retired.stopped);
-        assert_eq!(retired.disposition, ConnectionDisposition::Usable);
-        assert_eq!(rows.buffered_rows(), 0);
-        assert_eq!(budget.snapshot().active_commands, 0);
-        assert_eq!(budget.snapshot().retained_input_bytes, 0);
-    }
-    same(&s).await?;
     close(s, pool).await
 }

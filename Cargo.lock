@@ -864,18 +864,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "nativeweave-data-streaming"
-version = "0.1.0"
-dependencies = [
- "futures-util",
- "nativeweave-data-codecs",
- "nativeweave-data-contracts",
- "serde_json",
- "sqlx",
- "tokio",
-]
-
-[[package]]
 name = "nativeweave-data-transactions"
 version = "0.1.0"
 dependencies = [
@@ -904,6 +892,16 @@ name = "nativeweave-interop-errors"
 version = "0.1.0"
 dependencies = [
  "nativeweave-interop-abi",
+]
+
+[[package]]
+name = "nativeweave-query-binding"
+version = "0.1.0"
+dependencies = [
+ "nativeweave-data-contracts",
+ "nativeweave-interop-abi",
+ "serde_json",
+ "sha2 0.10.9",
 ]
 
 [[package]]

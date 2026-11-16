@@ -39,8 +39,7 @@ unsafe
 }
 EngineDescriptor descriptor = PostgreSqlDataSource.Engine;
 Check(descriptor.EngineId == "nativeweave.postgres.component");
-EngineInfo info = descriptor.Inspect();
-Check(ReferenceEquals(info, descriptor.Inspect(new() { NativeAssetPath = Environment.GetEnvironmentVariable("NW_PG_COMPONENT_ASSET") })));
+EngineInfo info = descriptor.Inspect(new() { NativeAssetPath = Environment.GetEnvironmentVariable("NW_PG_COMPONENT_ASSET") });
 Check(info.Supports(new("postgres.component.v1")) && info.Capabilities.Count == 1);
 if (Environment.GetEnvironmentVariable("NW_PG_OPTION_RECORD") is string optionPath) File.WriteAllBytes(optionPath, record);
 Check(Native.Run() == 0);

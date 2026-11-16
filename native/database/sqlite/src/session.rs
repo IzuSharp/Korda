@@ -166,7 +166,7 @@ impl SessionObserver {
 
 /// Bounded SQLx row owner. Drop requests stop; only the independent receipt proves retirement.
 pub struct RowStream {
-    rx: mpsc::Receiver<(Result<SqliteRow>, RowCount)>,
+    rx: mpsc::Receiver<Result<SqliteRow>>,
     rows: Arc<AtomicUsize>,
     control: StopControl,
     receipt: OperationReceipt,
@@ -182,32 +182,15 @@ impl RowStream {
         self.rows.load(Ordering::Acquire)
     }
 }
-// A reserved send can race receiver destruction and has no error return. Keep
-// accounting attached to the row so every channel/drop path relinquishes it.
-struct RowCount(Arc<AtomicUsize>);
-impl RowCount {
-    fn retain(count: &Arc<AtomicUsize>, peak: &mut usize) -> Self {
-        *peak = (*peak).max(count.fetch_add(1, Ordering::AcqRel) + 1);
-        Self(count.clone())
-    }
-}
-impl Drop for RowCount {
-    fn drop(&mut self) {
-        self.0.fetch_sub(1, Ordering::AcqRel);
-    }
-}
 impl Stream for RowStream {
     type Item = Result<SqliteRow>;
     fn poll_next(mut self: Pin<&mut Self>, context: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         match self.rx.poll_recv(context) {
-            Poll::Ready(Some((value, count))) => {
-                // poll_recv has already released channel capacity; until this transfer
-                // is accounted, the row belongs to the bounded delivery handoff.
-                drop(count);
+            Poll::Ready(Some(value)) => {
+                self.rows.fetch_sub(1, Ordering::AcqRel);
                 Poll::Ready(Some(value))
             }
-            Poll::Ready(None) => Poll::Ready(None),
-            Poll::Pending => Poll::Pending,
+            other => other,
         }
     }
 }
@@ -215,7 +198,9 @@ impl Drop for RowStream {
     fn drop(&mut self) {
         self.control.request_stop();
         self.rx.close();
-        while self.rx.try_recv().is_ok() {}
+        while self.rx.try_recv().is_ok() {
+            self.rows.fetch_sub(1, Ordering::AcqRel);
+        }
     }
 }
 
@@ -259,11 +244,7 @@ enum Command {
         Query,
         oneshot::Sender<Result<sqlx::sqlite::SqliteStatement>>,
     ),
-    Stream(
-        Query,
-        mpsc::Sender<(Result<SqliteRow>, RowCount)>,
-        Arc<AtomicUsize>,
-    ),
+    Stream(Query, mpsc::Sender<Result<SqliteRow>>, Arc<AtomicUsize>),
 }
 pub(crate) enum ControlKind {
     Begin(bool),
@@ -335,24 +316,6 @@ impl Session {
     pub async fn close(&self) -> Result<SessionRetirement> {
         self.request_close();
         self.observer().join().await
-    }
-    /// Releases this transaction's parent lease before deciding who owns physical
-    /// cleanup. An independent parent may retain a usable connection; the final
-    /// parent and an explicitly closing connection require actual actor retirement.
-    pub(crate) async fn retire_transaction(self, discard: bool) -> Result<()> {
-        let observer = self.observer();
-        let shared = self.0.shared.clone();
-        let remaining = Arc::downgrade(&self.0);
-        if discard {
-            self.request_close();
-        }
-        drop(self);
-        // A before-drop strong_count check races a concurrent public parent drop.
-        // Shared and observer retain cleanup evidence, but neither owns SessionInner.
-        if remaining.strong_count() == 0 || shared.closing.load(Ordering::Acquire) {
-            observer.join().await?;
-        }
-        Ok(())
     }
     /// Stops admission, explicitly rolls back remaining tracked scopes, and awaits
     /// SQLx's public return-to-pool future. This is a pool handoff, not worker closure.
@@ -526,16 +489,15 @@ async fn run_actor(
             biased;
             _ = shared.close.notified() => {},
             item = control.recv() => if let Some(item) = item {
-                let Control { kind, result: sender, _capacity } = item;
                 shared.observation.send_modify(|s| s.active_operations = 1);
-                let result = run_control(&mut connection, &options, kind).await;
-                drop(_capacity);
+                let result = run_control(&mut connection, &options, item.kind).await;
                 shared.observation.send_modify(|s| s.active_operations = 0);
-                let _ = sender.send(result);
+                let _ = item.result.send(result);
             } else { break; },
             item = business.recv() => if let Some(item) = item {
                 shared.observation.send_modify(|s| s.active_operations = 1);
                 run_query(&mut connection, progress_operations, item, &shared).await;
+                shared.observation.send_modify(|s| s.active_operations = 0);
             } else { break; },
         }
     }
@@ -587,8 +549,10 @@ fn reject(command: Command) {
             (query, 0)
         }
         Command::Stream(query, tx, count) => {
-            let counter = RowCount::retain(&count, &mut 0);
-            let _ = tx.try_send((Err(closed()), counter));
+            count.fetch_add(1, Ordering::AcqRel);
+            if tx.try_send(Err(closed())).is_err() {
+                count.fetch_sub(1, Ordering::AcqRel);
+            }
             (query, 1)
         }
     };
@@ -653,33 +617,30 @@ async fn run_query(
         let prepared = sqlx::query_with(AssertSqlSafe(std::mem::take(&mut query.sql)), arguments);
         if let Some((sender, count)) = stream.as_ref() {
             let mut rows = prepared.fetch(&mut *connection);
-            loop {
-                // Reserve existing channel capacity before fetching. The producer and
-                // queue together retain at most capacity rows; poll_recv can hold one
-                // additional row during delivery. No independent row semaphore is needed.
-                let permit = tokio::select! {
-                    permit = sender.reserve() => match permit {
-                        Ok(permit) => permit,
-                        Err(_) => { stopped = true; break; },
-                    },
-                    _ = query.token.canceled() => { stopped = true; break; },
-                    _ = shared.close.notified() => { stopped = true; break; },
-                };
-                let Some(row) = rows.next().await else {
-                    break;
-                };
+            while let Some(row) = rows.next().await {
                 let row = row.map_err(ProviderError::from);
-                operation_error = row.as_ref().err().cloned();
-                let counter = RowCount::retain(count, &mut peak);
-                permit.send((row, counter));
-                if sender.is_closed() {
+                if let Err(error) = &row {
+                    operation_error = Some(error.clone());
+                    let retained = count.fetch_add(1, Ordering::AcqRel) + 1;
+                    peak = peak.max(retained);
+                    if sender.try_send(row).is_err() {
+                        count.fetch_sub(1, Ordering::AcqRel);
+                    }
+                    break;
+                }
+                let retained = count.fetch_add(1, Ordering::AcqRel) + 1;
+                peak = peak.max(retained);
+                let sent = tokio::select! {
+                    result = sender.send(row) => result.is_ok(),
+                    _ = query.token.canceled() => false,
+                    _ = shared.close.notified() => false,
+                };
+                if !sent {
+                    count.fetch_sub(1, Ordering::AcqRel);
                     stopped = true;
                     break;
                 }
-                if operation_error.is_some() {
-                    break;
-                }
-                if query.token.is_canceled() {
+                if operation_error.is_some() || query.token.is_canceled() {
                     stopped = true;
                     break;
                 }
@@ -717,7 +678,15 @@ async fn run_query(
         shared.closing.store(true, Ordering::Release);
         shared.close.notify_one();
     }
-    let primary_error = operation_error.clone();
+    if let Some(tx) = execute {
+        let _ = tx.send(operation_error.clone().map_or(Ok(affected), Err));
+    }
+    if let Some(tx) = describe {
+        let _ = tx.send(match operation_error.clone() {
+            Some(error) => Err(error),
+            None => description.ok_or_else(closed),
+        });
+    }
     stopped |= operation_error.as_ref().is_some_and(|e| {
         matches!(
             e.kind,
@@ -728,13 +697,14 @@ async fn run_query(
         if let Some(error) = operation_error {
             // Initial admission/install errors have not yet entered the row stream.
             if peak == 0 {
-                let counter = RowCount::retain(&count, &mut peak);
-                let _ = tx.try_send((Err(error), counter));
+                count.fetch_add(1, Ordering::AcqRel);
+                if tx.send(Err(error)).await.is_err() {
+                    count.fetch_sub(1, Ordering::AcqRel);
+                }
             }
         }
         drop(tx);
     }
-    shared.observation.send_modify(|s| s.active_operations = 0);
     finish(
         query,
         if clean {
@@ -746,17 +716,6 @@ async fn run_query(
         peak,
         stopped,
     );
-    // Release admission and publish actual native retirement before waking a
-    // sequential command waiter; otherwise a one-slot profile can race itself.
-    if let Some(tx) = execute {
-        let _ = tx.send(primary_error.clone().map_or(Ok(affected), Err));
-    }
-    if let Some(tx) = describe {
-        let _ = tx.send(match primary_error {
-            Some(error) => Err(error),
-            None => description.ok_or_else(closed),
-        });
-    }
 }
 fn finish(
     query: Query,

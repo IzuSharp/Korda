@@ -19,10 +19,8 @@ pub struct StreamReceipt {
     pub retired: bool,
     pub protocol_clean: bool,
     pub quarantined: bool,
-    /// Maximum charged rows in the single-item channel plus its delivery handoff.
-    /// poll_recv frees channel capacity before the receiver subtracts its charge,
-    /// so one queued row and one handoff may overlap: the finite bound is two.
-    /// SQLx buffers and B06's decoded bytes are separate, not an RSS cap.
+    /// Maximum rows retained in this provider's single-item channel. SQLx buffers
+    /// and B06's currently decoded row are accounted separately, not as an RSS cap.
     pub retained_rows_peak: usize,
 }
 struct State {
@@ -83,9 +81,6 @@ impl RowStream {
 impl Stream for RowStream {
     type Item = Result<PgRow>;
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        // Receiving releases the slot before this accounting handoff completes.
-        // The next producer may add one row in between; a single receiver must
-        // subtract before another poll, bounding this conservative counter at two.
         let polled = self.receiver.poll_recv(cx);
         if matches!(polled, Poll::Ready(Some(Ok(_)))) {
             self.control.state.rows.fetch_sub(1, Ordering::AcqRel);

@@ -65,16 +65,17 @@ impl TransactionDriver for SqliteTransactionDriver {
             .map(|()| ProtocolState::Clean)
     }
     async fn retire(&mut self, disposition: ConnectionDisposition) {
-        if let Some(session) = self.session.take() {
-            let observer = session.observer();
-            let discard = !matches!(
+        if let Some(session) = self.session.take()
+            && !matches!(
                 disposition,
                 ConnectionDisposition::Usable | ConnectionDisposition::ProviderResetPending
-            );
-            if session.retire_transaction(discard).await.is_err() {
+            )
+        {
+            // Retain until the observed shutdown response, not close_on_drop or a deadline.
+            if session.close().await.is_err() {
                 // The upstream API did not establish worker retirement. Keep the
-                // transaction's cleanup evidence/budget retained; a deadline cannot free it.
-                let retained = observer;
+                // transaction's parent owner/budget retained; a deadline cannot free it.
+                let retained = session;
                 std::future::pending::<()>().await;
                 drop(retained);
             }
