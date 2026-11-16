@@ -14,9 +14,7 @@ R = {"u32": "u32", "i32": "i32", "u64": "u64", "uintptr": "usize", "bytes_ptr": 
      "void_ptr": "*const core::ffi::c_void", "error_ptr": "*const NwErrorInfoV1", "abi_ptr": "*mut NwAbiInfoV1",
      "terminal_fn": "Option<NwOnTerminalFn>", "event_fn": "Option<NwOnEventFn>"}
 CS = {"u32": "uint", "i32": "int", "u64": "ulong", "uintptr": "nuint", "bytes_ptr": "byte*",
-      "void_ptr": "void*", "error_ptr": "NwErrorInfoV1*", "abi_ptr": "NwAbiInfoV1*",
-      "terminal_fn": "delegate* unmanaged[Cdecl]<nuint, uint, NwErrorInfoV1*, uint>",
-      "event_fn": "delegate* unmanaged[Cdecl]<nuint, uint, void*, ulong, uint>"}
+      "void_ptr": "void*", "error_ptr": "NwErrorInfoV1*", "abi_ptr": "NwAbiInfoV1*"}
 
 
 def pascal(value):
@@ -26,6 +24,12 @@ def pascal(value):
 def generated(schema):
     digest = hashlib.sha256(SCHEMA.read_bytes()).hexdigest()
     tag = f"Generated from abi-v1.json; SHA-256 {digest}. Do not edit."
+    callbacks = {callback["name"]: callback for callback in schema["callbacks"]}
+    cs_types = dict(CS)
+    for kind in ("terminal_fn", "event_fn"):
+        callback = callbacks[C[kind]]
+        signature = [CS[kind] for _, kind in callback["parameters"]] + [CS[callback["return"]]]
+        cs_types[kind] = "delegate* unmanaged[Cdecl]<" + ", ".join(signature) + ">"
     h = [f"/* {tag} */", "#ifndef NATIVEWEAVE_ABI_V1_H", "#define NATIVEWEAVE_ABI_V1_H",
          "#include <stdint.h>", "#include <stddef.h>", "#if defined(_WIN32)", "#define NW_CDECL __cdecl",
          "#else", "#define NW_CDECL", "#endif", "#ifdef __cplusplus", 'extern "C" {', "#endif",
@@ -43,9 +47,11 @@ def generated(schema):
         h.append(f"typedef struct {rec['name']} {rec['name']};")
     for cb in schema["callbacks"]:
         parameters = ", ".join(f"{C[t]} {n}" for n, t in cb["parameters"])
-        h.append(f"typedef nw_status (NW_CDECL *{cb['name']})({parameters});")
+        c_return = "nw_status" if cb["return"] == "u32" else C[cb["return"]]
+        h.append(f"typedef {c_return} (NW_CDECL *{cb['name']})({parameters});")
         parameters = ", ".join(f"{n}: {R[t]}" for n, t in cb["parameters"])
-        rs.extend(["#[rustfmt::skip]", f'pub type {pascal(cb["name"])} = unsafe extern "C" fn({parameters}) -> NwStatus;'])
+        rust_return = "NwStatus" if cb["return"] == "u32" else R[cb["return"]]
+        rs.extend(["#[rustfmt::skip]", f'pub type {pascal(cb["name"])} = unsafe extern "C" fn({parameters}) -> {rust_return};'])
     for rec in schema["records"]:
         name, typ = rec["name"], pascal(rec["name"])
         h.append(f"struct {name} {{")
@@ -54,7 +60,7 @@ def generated(schema):
         for field, kind in rec["fields"]:
             h.append(f"    {C[kind]} {field};")
             rs.append(f"    pub {field}: {R[kind]},")
-            cs.append(f"    internal {CS[kind]} {pascal(field)};")
+            cs.append(f"    internal {cs_types[kind]} {pascal(field)};")
         h.append("};")
         rs.append("}")
         cs.append("}")
@@ -68,7 +74,10 @@ def generated(schema):
             checks_cs = " && ".join(f"value.{pascal(field)} == 0" for field in rec["zero_fields"])
             cs.append(f"    internal static bool AreZero(in {pascal(rec['name'])} value) => {checks_cs};")
     cs.append("}")
-    h.extend(["typedef nw_status (NW_CDECL *nw_get_abi_v1_fn)(uint32_t requested_major, uint32_t out_capacity, nw_abi_info_v1 *out_info);",
+    bootstrap = schema["bootstrap"]
+    bootstrap_parameters = ", ".join(f"{C[kind]} {name}" for name, kind in bootstrap["parameters"])
+    bootstrap_return = "nw_status" if bootstrap["return"] == "u32" else C[bootstrap["return"]]
+    h.extend([f"typedef {bootstrap_return} (NW_CDECL *nw_get_abi_v1_fn)({bootstrap_parameters});",
               "#ifdef __cplusplus", "}", "#endif", "#endif", ""])
     rs.append("")
     cs.append("")

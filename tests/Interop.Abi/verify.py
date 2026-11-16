@@ -5,6 +5,8 @@ import hashlib
 import json
 import os
 import platform
+import shlex
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -23,7 +25,7 @@ def source_hashes(include_outputs=True):
     for directory in OWNED:
         for path in sorted((ROOT / directory).rglob("*")):
             if path.is_file() and not any(part in ("bin", "obj", "__pycache__") for part in path.relative_to(ROOT).parts):
-                if include_outputs or path.name not in ("api-reference.md", "packages.lock.json"):
+                if include_outputs or path.name != "api-reference.md":
                     source[str(path.relative_to(ROOT))] = digest(path)
     for name in ["global.json", "rust-toolchain.toml", "Directory.Build.props", "Directory.Build.targets", "Cargo.lock", "docs/guides/interop-abi.md"]:
         source[name] = digest(ROOT / name)
@@ -110,11 +112,20 @@ def main():
             "cc": run("cc-version", ["cc", "--version"]),
             "kernel": platform.release(), "machine": platform.machine(),
             "native_isa": "x86-64-v2", "features": [], "cargo_dependencies": []}
+        cc_path = Path(shutil.which("cc")).resolve()
+        linker_name = run("cc-linker-selection", [cc_path, "-print-prog-name=ld"]).strip()
+        linker_path = Path(shutil.which(linker_name) or linker_name).resolve()
+        result["toolchain"]["c_compiler_path"] = str(cc_path)
+        result["toolchain"]["c_compiler_sha256"] = digest(cc_path)
+        result["toolchain"]["c_linker_path"] = str(linker_path)
+        result["toolchain"]["c_linker_sha256"] = digest(linker_path)
+        result["toolchain"]["c_linker_version"] = run("c-linker-version", [linker_path, "--version"])
         if not result["toolchain"]["rustc"].startswith("rustc 1.100.0 "):
             raise ValueError("Use the locked Rust 1.100.0 toolchain")
         if run("sdk-version", ["dotnet", "--version"]).strip() != "11.0.100":
             raise ValueError("Use the locked .NET SDK 11.0.100")
         run("generation", [sys.executable, "native/interop/abi/generate.py", "--check"])
+        run("signature-generation-mutations", [sys.executable, "tests/Interop.Abi/test_generation.py"])
         rustflags = ["--edition=2024", "-Dwarnings", "-C", "target-cpu=x86-64-v2"]
         rlib = native / "libnativeweave_interop_abi.rlib"
         run("rust-library", ["rustc", *rustflags, "--crate-name", "nativeweave_interop_abi", "--crate-type", "rlib", "-C", "opt-level=3", "native/interop/abi/src/lib.rs", "-o", rlib])
@@ -122,7 +133,19 @@ def main():
         run("rust-tests", [native / "rust-tests", "--nocapture"])
         external = ["--extern", f"nativeweave_interop_abi={rlib}"]
         library = native / "libnw_abi_conformance.so"
-        run("test-engine-build", ["rustc", *rustflags, *external, "--crate-type", "cdylib", "-C", "opt-level=3", "tests/Interop.Abi/native/fixture.rs", "-o", library])
+        link_args = shlex.split(run("test-engine-build", ["rustc", *rustflags, *external, "--crate-type", "cdylib", "-C", "opt-level=3", "tests/Interop.Abi/native/fixture.rs", "-o", library, "--print=link-args"]))
+        while link_args and "=" in link_args[0]:
+            link_args.pop(0)  # rustc prints its child-process environment before the driver.
+        rust_driver = Path(shutil.which(link_args[0]) or link_args[0]).resolve()
+        rust_search = [arg for arg in link_args[1:] if arg.startswith("-B")]
+        rust_flavor = next((arg.split("=", 1)[1] for arg in link_args if arg.startswith("-fuse-ld=")), None)
+        selected = "ld." + rust_flavor if rust_flavor else "ld"
+        rust_linker_name = run("rust-driver-linker-selection", [rust_driver, *rust_search, "-print-prog-name=" + selected]).strip()
+        rust_linker = Path(shutil.which(rust_linker_name) or rust_linker_name).resolve()
+        result["toolchain"]["rust_linker"] = {"driver_path": str(rust_driver), "driver_sha256": digest(rust_driver),
+            "search_arguments": rust_search, "flavor": rust_flavor, "linker_path": str(rust_linker),
+            "linker_sha256": digest(rust_linker), "linker_version": run("rust-linker-version", [rust_linker, "--version"]),
+            "artifact_comment": run("rust-artifact-comment", ["readelf", "-p", ".comment", library])}
         exported = run("symbol-inventory", ["nm", "-D", "--defined-only", library])
         symbols = [line.split()[-1] for line in exported.splitlines() if line.strip()]
         if symbols != ["nw_abi_conformance_get_abi_v1"]:
@@ -160,7 +183,7 @@ def main():
         project = "tests/Interop.Abi/Interop.Abi.Tests.csproj"
         sample = "samples/api/interop-abi/Interop.Abi.Sample.csproj"
         for name, path in [("tests", project), ("sample", sample)]:
-            run(f"{name}-restore", ["dotnet", "restore", path, prop, *restore_options])
+            run(f"{name}-restore", ["dotnet", "restore", path, "--locked-mode", prop, *restore_options])
             run(f"{name}-build", ["dotnet", "build", path, "-c", "Release", "--no-restore", prop])
         testdll = ROOT / "tests/Interop.Abi/bin/Release/net11.0/NativeWeave.Interop.Abi.Tests.dll"
         sampledll = ROOT / "samples/api/interop-abi/bin/Release/net11.0/NativeWeave.Interop.Abi.Sample.dll"
@@ -181,7 +204,19 @@ def main():
         if not args.skip_aot:
             for name, path, executable in [("tests", project, "NativeWeave.Interop.Abi.Tests"), ("sample", sample, "NativeWeave.Interop.Abi.Sample")]:
                 destination = out / f"aot-{name}"
-                run(f"{name}-aot-restore", ["dotnet", "restore", path, "-r", "linux-x64", "-p:PublishAot=true", prop, *restore_options])
+                run(f"{name}-aot-restore", ["dotnet", "restore", path, "-r", "linux-x64", "-p:PublishAot=true", "--locked-mode", prop, *restore_options])
+                if name == "tests":
+                    selection = json.loads(run("aot-linker-selection", ["dotnet", "msbuild", path, "-nologo", "-t:ResolveReferences,SetupOSSpecificProps",
+                                               "-p:RuntimeIdentifier=linux-x64", "-p:PublishAot=true",
+                                               "-getProperty:CppCompilerAndLinker,CppLinker,LinkerFlavor"]))["Properties"]
+                    driver = Path(shutil.which(selection["CppLinker"]) or selection["CppLinker"]).resolve()
+                    selected_linker = "ld." + selection["LinkerFlavor"] if selection["LinkerFlavor"] else "ld"
+                    linker_name = run("aot-driver-linker", [driver, "-print-prog-name=" + selected_linker]).strip()
+                    linker = Path(shutil.which(linker_name) or linker_name).resolve()
+                    result["toolchain"]["aot_linker"] = {"sdk_selection": selection, "driver_path": str(driver),
+                        "driver_sha256": digest(driver), "linker_path": str(linker), "linker_sha256": digest(linker),
+                        "driver_version": run("aot-driver-version", [driver, "--version"]),
+                        "linker_version": run("aot-linker-version", [linker, "--version"])}
                 run(f"{name}-aot-publish", ["dotnet", "publish", path, "--no-restore", "-c", "Release", "-r", "linux-x64", "-p:PublishAot=true", prop, "-o", destination])
                 run(f"{name}-aot-execute", [destination / executable, "--require-aot", "--advanced"])
                 if name == "tests":

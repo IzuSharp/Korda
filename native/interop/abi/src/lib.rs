@@ -88,8 +88,8 @@ mod tests {
             assert_eq!(status, NW_NOT_SUPPORTED);
             assert_eq!(output.0, [0xa5; 64]);
         }
-        // SAFETY: a null pointer is an explicitly supported rejection case.
         assert_eq!(
+            // SAFETY: a null pointer is an explicitly supported rejection case.
             unsafe { write_abi_v1(1, 32, core::ptr::null_mut(), 0, 0) },
             NW_INVALID_ARGUMENT
         );
@@ -99,8 +99,8 @@ mod tests {
         let status = unsafe { write_abi_v1(1, 32, output.0.as_mut_ptr().add(1).cast(), 0, 0) };
         assert_eq!(status, NW_INVALID_ARGUMENT);
         assert_eq!(output.0, [0xa5; 64]);
-        // SAFETY: allocated aligned output has its declared writable capacity.
         assert_eq!(
+            // SAFETY: allocated aligned output has its declared writable capacity.
             unsafe {
                 write_abi_v1(
                     1,

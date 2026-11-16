@@ -118,6 +118,11 @@ the exact native export inventory and retains compiled offset/width mutation
 counterexamples. The native build explicitly uses the portable x86-64-v2 CPU
 baseline; no host-native instruction set is selected.
 
+Ordinary restores use `packages.lock.json`; the explicit Linux AOT restores use
+the task-owned `packages.linux-x64.aot.lock.json` files. Both restore paths run in
+locked mode, so publishing the AOT fixtures preserves the ordinary solution's
+dependency locks. Verification also rejects a lock-file change during the run.
+
 Each run creates a fresh `artifacts/A01/attempt-NNN/` directory with commands,
 stdout/stderr bytes, return codes, toolchain identity, source/lock hashes,
 native/managed/AOT artifact hashes and `result.json`. Failed attempts are kept.

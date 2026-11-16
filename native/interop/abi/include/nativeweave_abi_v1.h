@@ -64,7 +64,7 @@ struct nw_callbacks_v1 {
     uintptr_t cookie;
     nw_on_event_fn on_event;
 };
-typedef nw_status (NW_CDECL *nw_get_abi_v1_fn)(uint32_t requested_major, uint32_t out_capacity, nw_abi_info_v1 *out_info);
+typedef nw_status (NW_CDECL *nw_get_abi_v1_fn)(uint32_t requested_major, uint32_t out_capacity, nw_abi_info_v1 * out_info);
 #ifdef __cplusplus
 }
 #endif
