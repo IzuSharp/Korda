@@ -164,10 +164,14 @@ internal static class EnumValue<T> where T : struct, Enum
     private static readonly TypeCode Code = Type.GetTypeCode(Enum.GetUnderlyingType(typeof(T)));
     internal static int ToInt32(T value) => Code switch
     {
-        TypeCode.SByte => Unsafe.As<T, sbyte>(ref value), TypeCode.Byte => Unsafe.As<T, byte>(ref value),
-        TypeCode.Int16 => Unsafe.As<T, short>(ref value), TypeCode.UInt16 => Unsafe.As<T, ushort>(ref value),
-        TypeCode.Int32 => Unsafe.As<T, int>(ref value), TypeCode.UInt32 => checked((int)Unsafe.As<T, uint>(ref value)),
-        TypeCode.Int64 => checked((int)Unsafe.As<T, long>(ref value)), TypeCode.UInt64 => checked((int)Unsafe.As<T, ulong>(ref value)),
+        TypeCode.SByte => Unsafe.As<T, sbyte>(ref value),
+        TypeCode.Byte => Unsafe.As<T, byte>(ref value),
+        TypeCode.Int16 => Unsafe.As<T, short>(ref value),
+        TypeCode.UInt16 => Unsafe.As<T, ushort>(ref value),
+        TypeCode.Int32 => Unsafe.As<T, int>(ref value),
+        TypeCode.UInt32 => checked((int)Unsafe.As<T, uint>(ref value)),
+        TypeCode.Int64 => checked((int)Unsafe.As<T, long>(ref value)),
+        TypeCode.UInt64 => checked((int)Unsafe.As<T, ulong>(ref value)),
         _ => throw new ArgumentException("Unsupported enum storage.")
     };
     internal static T FromInt32(int value)

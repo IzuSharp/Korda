@@ -36,18 +36,21 @@ string[] Attributes(ImmutableArray<AttributeData> attributes) => attributes
     .Select(a => a.ToString() ?? throw new InvalidOperationException("Missing attribute display"))
     .OrderBy(x => x, StringComparer.Ordinal).ToArray();
 string InlineAttributes(ImmutableArray<AttributeData> attributes) => string.Concat(Attributes(attributes).Select(a => "[" + a + "] "));
-ImmutableArray<IParameterSymbol> Parameters(ISymbol symbol) => symbol switch {
+ImmutableArray<IParameterSymbol> Parameters(ISymbol symbol) => symbol switch
+{
     IMethodSymbol method => method.Parameters,
     IPropertySymbol property => property.Parameters,
     INamedTypeSymbol { DelegateInvokeMethod: { } invoke } => invoke.Parameters,
     _ => ImmutableArray<IParameterSymbol>.Empty
 };
-ImmutableArray<ITypeParameterSymbol> TypeParameters(ISymbol symbol) => symbol switch {
+ImmutableArray<ITypeParameterSymbol> TypeParameters(ISymbol symbol) => symbol switch
+{
     IMethodSymbol method => method.TypeParameters,
     INamedTypeSymbol type => type.TypeParameters,
     _ => ImmutableArray<ITypeParameterSymbol>.Empty
 };
-ImmutableArray<AttributeData> ReturnAttributes(ISymbol symbol) => symbol switch {
+ImmutableArray<AttributeData> ReturnAttributes(ISymbol symbol) => symbol switch
+{
     IMethodSymbol method => method.GetReturnTypeAttributes(),
     IPropertySymbol { GetMethod: { } getter } => getter.GetReturnTypeAttributes(),
     INamedTypeSymbol { DelegateInvokeMethod: { } invoke } => invoke.GetReturnTypeAttributes(),
@@ -69,10 +72,14 @@ string ConstraintClause(ITypeParameterSymbol parameter)
     return constraints.Count == 0 ? "" : "where " + parameter.ToDisplayString(typeFormat) + " : " + string.Join(", ", constraints);
 }
 string[] Constraints(ISymbol symbol) => TypeParameters(symbol).Select(ConstraintClause).Where(x => x.Length != 0).ToArray();
-string AccessibilityText(Accessibility accessibility) => accessibility switch {
-    Accessibility.Public => "public", Accessibility.Protected => "protected",
-    Accessibility.ProtectedOrInternal => "protected internal", Accessibility.ProtectedAndInternal => "private protected",
-    Accessibility.Internal => "internal", Accessibility.Private => "private",
+string AccessibilityText(Accessibility accessibility) => accessibility switch
+{
+    Accessibility.Public => "public",
+    Accessibility.Protected => "protected",
+    Accessibility.ProtectedOrInternal => "protected internal",
+    Accessibility.ProtectedAndInternal => "private protected",
+    Accessibility.Internal => "internal",
+    Accessibility.Private => "private",
     _ => throw new InvalidOperationException("Unsupported declared accessibility: " + accessibility)
 };
 string[] TypeModifiers(INamedTypeSymbol type)
@@ -91,8 +98,11 @@ string[] TypeModifiers(INamedTypeSymbol type)
     }
     return modifiers.ToArray();
 }
-string RefPrefix(RefKind kind) => kind switch {
-    RefKind.Ref => "ref ", RefKind.RefReadOnly => "ref readonly ", _ => ""
+string RefPrefix(RefKind kind) => kind switch
+{
+    RefKind.Ref => "ref ",
+    RefKind.RefReadOnly => "ref readonly ",
+    _ => ""
 };
 string NamedTypeDeclaration(INamedTypeSymbol type)
 {
@@ -107,10 +117,12 @@ string NamedTypeDeclaration(INamedTypeSymbol type)
     }
     else
     {
-        string kind = type.TypeKind switch {
+        string kind = type.TypeKind switch
+        {
             TypeKind.Class => type.IsRecord ? "record class" : "class",
             TypeKind.Struct => type.IsRecord ? "record struct" : "struct",
-            TypeKind.Interface => "interface", TypeKind.Enum => "enum",
+            TypeKind.Interface => "interface",
+            TypeKind.Enum => "enum",
             _ => throw new InvalidOperationException("Unsupported public type kind: " + type.TypeKind)
         };
         declaration = prefix + kind + " " + name;

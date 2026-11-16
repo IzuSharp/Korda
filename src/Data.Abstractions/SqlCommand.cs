@@ -97,11 +97,19 @@ public sealed class SqlCommand
     private static ParameterValue Value<T>(uint id, string name, T value, ValueCodec<T> codec) => new(id, name, codec.Descriptor, codec.Encode(value));
     private static ParameterValue BuiltIn(uint id, string name, object? value) => value switch
     {
-        short v => Value(id, name, v, Codecs.Int16), int v => Value(id, name, v, Codecs.Int32), long v => Value(id, name, v, Codecs.Int64),
-        bool v => Value(id, name, v, Codecs.Boolean), string v => Value(id, name, v, Codecs.String), byte[] v => Value(id, name, v, Codecs.Bytes),
-        Guid v => Value(id, name, v, Codecs.Guid), DateOnly v => Value(id, name, v, Codecs.Date), TimeOnly v => Value(id, name, v, Codecs.Time),
-        DateTimeOffset v => Value(id, name, v, Codecs.UtcInstant), DateTime v => Value(id, name, v, Codecs.UtcDateTime),
-        double v => Value(id, name, v, Codecs.Double), float v => Value(id, name, v, Codecs.Single),
+        short v => Value(id, name, v, Codecs.Int16),
+        int v => Value(id, name, v, Codecs.Int32),
+        long v => Value(id, name, v, Codecs.Int64),
+        bool v => Value(id, name, v, Codecs.Boolean),
+        string v => Value(id, name, v, Codecs.String),
+        byte[] v => Value(id, name, v, Codecs.Bytes),
+        Guid v => Value(id, name, v, Codecs.Guid),
+        DateOnly v => Value(id, name, v, Codecs.Date),
+        TimeOnly v => Value(id, name, v, Codecs.Time),
+        DateTimeOffset v => Value(id, name, v, Codecs.UtcInstant),
+        DateTime v => Value(id, name, v, Codecs.UtcDateTime),
+        double v => Value(id, name, v, Codecs.Double),
+        float v => Value(id, name, v, Codecs.Single),
         _ => throw new ArgumentException("Interpolation requires a non-null built-in scalar; use typed SqlParameters for null, decimal, JSON or enum values.")
     };
     private static TemplateSegment[] ParseFormat(string format, int argumentCount)

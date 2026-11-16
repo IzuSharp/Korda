@@ -25,7 +25,8 @@ var foreign = childBuilder.Column("ParentId", Codecs.Nullable(Codecs.Int64));
 var child = childBuilder.Build(r => new(r.Get(childId), r.Get(foreign)), (r, v) => { r.Set(childId, v.Id); r.Set(foreign, v.ParentId); });
 var relation = Relation<Parent, Child>.CreateOptional(parent, id, child, foreign);
 
-Test("canonical_model_projection_and_generated_manual_identity", () => {
+Test("canonical_model_projection_and_generated_manual_identity", () =>
+{
     var other = new TableBuilder<Parent>("Parents");
     var oid = other.Column("Id", Codecs.Int64, new() { IsPrimaryKey = true });
     var oname = other.Column("Name", Codecs.String, new() { MaxLength = 128 });
@@ -39,7 +40,8 @@ Test("canonical_model_projection_and_generated_manual_identity", () => {
     Reject<InvalidOperationException>(() => parentBuilder.Column("Late", Codecs.Int32));
     Reject<InvalidOperationException>(() => parentBuilder.Build(_ => new(0, "", 0), (_, _) => { }));
 });
-Test("canonical_unicode_escaping_and_invalid_utf16", () => {
+Test("canonical_unicode_escaping_and_invalid_utf16", () =>
+{
     Check(Canonical.Quote("a\n\t\0\u2028é🦀/\\\"") == "\"a\\u000a\\u0009\\u0000\u2028é🦀/\\\\\\\"\"", "Canonical Unicode escaping differs.");
     Reject<ArgumentException>(() => new TableBuilder<Parent>("\ud800"));
     Reject<ArgumentException>(() => new TableBuilder<Parent>(""));
@@ -47,7 +49,8 @@ Test("canonical_unicode_escaping_and_invalid_utf16", () => {
     var t = b.Build(_ => new(0, "", 0), (_, _) => { });
     File.WriteAllBytes(Path.Combine(output, "unicode-model.json"), t.CanonicalBytes);
 });
-Test("configured_codec_and_nullable_key_metadata", () => {
+Test("configured_codec_and_nullable_key_metadata", () =>
+{
     var b = new TableBuilder<Parent>("p");
     Reject<ArgumentException>(() => b.Column("id", Codecs.Nullable(Codecs.Int64), new() { IsPrimaryKey = true }));
     b.Column("amount", Codecs.Decimal(18, 2));
@@ -60,7 +63,8 @@ Test("configured_codec_and_nullable_key_metadata", () => {
     Check(t.TryGetColumn("amount", Codecs.Decimal(18, 2), out _) && !t.TryGetColumn("amount", Codecs.Decimal(18, 3), out _), "Configured codec identities aliased.");
     File.WriteAllBytes(Path.Combine(output, "configured-model.json"), t.CanonicalBytes);
 });
-Test("composite_key_and_relation_immutability", () => {
+Test("composite_key_and_relation_immutability", () =>
+{
     var p = new TableBuilder<Composite>("parent"); var a = p.Column("Tenant", Codecs.Int32, new() { IsPrimaryKey = true }); var b = p.Column("Id", Codecs.Int64, new() { IsPrimaryKey = true });
     var pt = p.Build(r => new(r.Get(a), r.Get(b)), (r, v) => { r.Set(a, v.Tenant); r.Set(b, v.Id); });
     var c = new TableBuilder<Composite>("child"); var ca = c.Column("Tenant", Codecs.Int32); var cb = c.Column("Parent", Codecs.Int64);
@@ -74,7 +78,8 @@ Test("composite_key_and_relation_immutability", () => {
     Reject<ArgumentException>(() => Relation<Composite, Composite>.Create(pt, b, ct, cb));
     Reject<ArgumentException>(() => Relation<Parent, Child>.Create(parent, id, child, childId).And(id, childId));
 });
-Test("relation_nullable_configuration_collation_negatives", () => {
+Test("relation_nullable_configuration_collation_negatives", () =>
+{
     var p = new TableBuilder<Price>("price"); var pk = p.Column("id", Codecs.Decimal(18, 2), new() { IsPrimaryKey = true }); var pt = p.Build(_ => new(0), (_, _) => { });
     var c = new TableBuilder<Price>("cost"); var ck = c.Column("id", Codecs.Decimal(18, 3)); var ct = c.Build(_ => new(0), (_, _) => { });
     Reject<ArgumentException>(() => Relation<Price, Price>.Create(pt, pk, ct, ck));
@@ -82,7 +87,8 @@ Test("relation_nullable_configuration_collation_negatives", () => {
     var cp = new TableBuilder<Named>("other"); var fk = cp.Column("id", Codecs.NullableReference(Codecs.String), new() { Collation = "different" }); var cpt = cp.Build(_ => new(""), (_, _) => { });
     Reject<ArgumentException>(() => Relation<Named, Named>.CreateOptionalReference(rt, rk, cpt, fk));
 });
-Test("row_shape_before_nullable_decode_and_lease_retirement", () => {
+Test("row_shape_before_nullable_decode_and_lease_retirement", () =>
+{
     var lease = new FixtureLease(parent.Row.Fields, [Codecs.Int64.Encode(7), Codecs.String.Encode("Ada"), Codecs.Int64.Encode(1)]);
     Check(parent.Row.Read(lease) == new Parent(7, "Ada", 1), "Typed row materialization failed.");
     lease.Dispose(); Reject<ObjectDisposedException>(() => parent.Row.Read(lease));
@@ -93,7 +99,8 @@ Test("row_shape_before_nullable_decode_and_lease_retirement", () => {
     var safe = Projection<int>.Create([ResultField.Create("x", Codecs.Int32)], r => { try { _ = r.Get(default(ResultColumn<int>)); } catch (ArgumentException) { return r.Read(0, Codecs.Int32); } throw new InvalidOperationException("Default token accepted."); });
     Check(safe.Read(new FixtureLease(safe.Fields, [Codecs.Int32.Encode(42)])) == 42, "Default result token did not reject.");
 });
-Test("row_writer_and_changes_snapshot_atomicity", () => {
+Test("row_writer_and_changes_snapshot_atomicity", () =>
+{
     var values = RowSnapshot.Capture(parent, new Parent(1, "A", 2)); Check(values.Length == 3, "Writer omitted a field.");
     var changes = new Changes<Parent>().Set(name, "before").Set(token, 2L); var snap = changes.Snapshot(parent); changes.Set(name, "after").Unset(token);
     Check(Codecs.String.Decode(snap.Single(x => x.Column.Definition.Id == name.Id).Bytes) == "before", "Submitted changes changed in place.");
@@ -107,7 +114,8 @@ Test("row_writer_and_changes_snapshot_atomicity", () => {
     Check(RowSnapshot.Capture(gt, new Named("x")).Length == 0, "Generated value was encoded instead of omitted.");
     Reject<ArgumentException>(() => new Changes<Parent>().Set(name, new string('x', 129)));
 });
-Test("typed_sql_snapshot_and_interpolation_boundaries", () => {
+Test("typed_sql_snapshot_and_interpolation_boundaries", () =>
+{
     byte[] bytes = [1, 2]; var parameters = new SqlParameters().Add("bytes", bytes, Codecs.Bytes).Add("nullable", (long?)null, Codecs.Nullable(Codecs.Int64));
     bytes[0] = 9; var command = SqlCommand.Create("SELECT @bytes, @nullable", parameters); parameters.Add("later", 3, Codecs.Int32);
     Check(command.Parameters.Length == 2 && command.Parameters[0].Bytes![0] == 1 && command.Parameters[1].Bytes is null, "Command or mutable value was not snapshotted.");
@@ -124,7 +132,8 @@ Test("typed_sql_snapshot_and_interpolation_boundaries", () => {
     Reject<ArgumentOutOfRangeException>(() => SqlCommand.Create("x", timeout: TimeSpan.FromTicks(-1)));
     File.WriteAllBytes(Path.Combine(output, "template.bin"), interpolated.EncodeTemplate());
 });
-Test("scalar_exactness_and_null_distinctions", () => {
+Test("scalar_exactness_and_null_distinctions", () =>
+{
     Reject<ArgumentException>(() => Codecs.UtcDateTime.Encode(new DateTime(2020, 1, 1)));
     Reject<ArgumentException>(() => Codecs.Time.Encode(new TimeOnly(1)));
     Reject<ArgumentException>(() => Codecs.UtcInstant.Encode(DateTimeOffset.UnixEpoch.AddTicks(1)));
@@ -140,7 +149,8 @@ Test("scalar_exactness_and_null_distinctions", () => {
     Check(Validation.Utf8.GetString(Codecs.Json(TestJson.Default.Payload).Encode(null!)!) == "null", "JSON null collapsed into SQL NULL.");
     Reject<DatabaseException>(() => Codecs.Boolean.Decode(new byte[] { 2 }));
 });
-Test("rfc8259_numeric_range_and_container_depth", () => {
+Test("rfc8259_numeric_range_and_container_depth", () =>
+{
     var json = Codecs.Json(TestJson.Default.Payload).Descriptor;
     foreach (var text in new[] { "1e400", "{\"x\":1e400}", "{\"$serde_json::private::Number\":\"ordinary-text\"}", new string('[', 64) + "0" + new string(']', 64), new string('[', 64) + new string(']', 64) })
         DbWire.ValidateScalar(json, Validation.Utf8.GetBytes(text));
@@ -148,7 +158,8 @@ Test("rfc8259_numeric_range_and_container_depth", () => {
         Reject<JsonException>(() => DbWire.ValidateScalar(json, Validation.Utf8.GetBytes(text)));
     Reject<ArgumentException>(() => DbWire.ValidateScalar(json, new byte[] { 0xef, 0xbb, 0xbf, (byte)'0' }));
 });
-Test("scalar_projection_context_preserves_shape_checks", () => {
+Test("scalar_projection_context_preserves_shape_checks", () =>
+{
     Reject<ArgumentException>(() => ResultField.Create("", Codecs.Int64));
     var scalar = Projection<long>.Scalar(Codecs.Int64);
     Reject<ArgumentException>(() => Projection<long>.Create(scalar.Fields, _ => 1));
@@ -164,7 +175,8 @@ ReadOnlyMemory<byte>?[] cells = [Codecs.Int16.Encode(-7), Codecs.Int32.Encode(42
 var descriptors = codecs.Select((codec, i) => new WireDescriptor((uint)i + 1, codec, codec.Configuration is null ? codec.Id : (uint)(1024 + i))).ToArray();
 var expectation = new WireExpectation(PayloadKind.Parameters, 2, new byte[32], 0, 0, descriptors);
 var wire = DbWire.Encode(expectation, 1, cells);
-Test("db_wire_all_scalar_golden_and_malformed_inputs", () => {
+Test("db_wire_all_scalar_golden_and_malformed_inputs", () =>
+{
     var parsed = DbWire.Parse(wire, expectation); Check(parsed.Cell(0, 17) is null && parsed.Cell(0, 18) is { Length: 0 }, "Wire NULL/empty collapsed.");
     void Mutation(Action<byte[]> mutate) { var copy = (byte[])wire.Clone(); mutate(copy); Reject<ArgumentException>(() => DbWire.Parse(copy, expectation)); }
     Mutation(b => b[4] = 2); Mutation(b => b[12] = 1); Mutation(b => b[76] = 9); Mutation(b => b[68] = 1);
