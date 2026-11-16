@@ -170,6 +170,12 @@ internal sealed class BindingReader
                 if (!(Scalars.ContainsKey(targetType) || (pointer && (targetType == "void" || recordNames.Contains(targetType) || ownerNames.Contains(targetType)))))
                     Fail("NWABI001", parameterPath + ".type", "Unknown or unsupported ABI type; supply a declared record/owner or a fixed scalar.");
                 if (owner.Length != 0 && !ownerNames.Contains(owner)) Fail("NWOWN001", parameterPath + ".owner", "Unknown owner kind.");
+                if (ownerNames.Contains(targetType) && owner != targetType)
+                    Fail("NWOWN001", parameterPath, "An opaque owner pointer requires its exact declared owner kind.");
+                if (owner.Length != 0 && (borrow == "transfer-success"
+                    ? type != "mut:mut:" + owner
+                    : type != "mut:" + owner && type != "const:" + owner))
+                    Fail("NWOWN001", parameterPath, "An owner borrow points to its exact kind; ownership transfer requires a mutable pointer-to-owner output slot.");
                 if (!pointer && (nullable || direction != "in" || borrow != "none" || mutable || copied || bound != 0 || owner.Length != 0))
                     Fail("NWABI001", parameterPath, "Scalar by-value inputs have no pointer lifetime/nullability contract.");
                 if (pointer && (bound == 0 || borrow == "none" || (direction != "in" && !type.StartsWith("mut:", StringComparison.Ordinal))))
@@ -191,7 +197,8 @@ internal sealed class BindingReader
         {
             var release = Function(owner.Release, "$.owners");
             if (release.ErrorProfile != "cleanup-no-fail" || release.Parameters.Length != 1 ||
-                release.Parameters[0].Owner != owner.Kind || release.Parameters[0].BorrowEnd != "call" || release.Parameters[0].Type != "mut:" + owner.Kind)
+                release.Parameters[0].Owner != owner.Kind || release.Parameters[0].BorrowEnd != "call" ||
+                release.Parameters[0].Direction != "in" || release.Parameters[0].Type != "mut:" + owner.Kind)
                 Fail("NWOWN001", "$.owners", "Release must be nonfallible cleanup of exactly one borrowed owner from this module.");
             if (owner.ReleaseExecutor == "owner-thread" && release.ThreadProfile != "owner-thread") Fail("NWOWN001", "$.owners", "Owner-thread release requires a matching export thread profile.");
             if (owner.ReleaseExecutor == "external-driver" && owner.CloseProgress != "caller-drives") Fail("NWOWN001", "$.owners", "An externally driven release must declare caller progress.");
@@ -199,7 +206,10 @@ internal sealed class BindingReader
             if (owner.CloneExport.Length != 0)
             {
                 var clone = Function(owner.CloneExport, "$.owners");
-                if (!clone.Parameters.Any(x => x.Owner == owner.Kind && x.BorrowEnd == "transfer-success")) Fail("NWOWN001", "$.owners", "Clone must return one explicitly transferred owner of the same kind.");
+                if (clone.ReturnType != "u32" ||
+                    clone.Parameters.Count(x => x.Owner == owner.Kind && x.BorrowEnd == "call" && x.Direction == "in") != 1 ||
+                    clone.Parameters.Count(x => x.Owner == owner.Kind && x.BorrowEnd == "transfer-success") != 1)
+                    Fail("NWOWN001", "$.owners", "Clone must borrow exactly one source owner and transfer exactly one same-kind owner only on successful status.");
             }
         }
         var operations = ImmutableArray.CreateBuilder<BindingOperation>();
@@ -216,11 +226,13 @@ internal sealed class BindingReader
             var functions = new[] { create, start, cancel, take, retire, release };
             if (functions.Distinct(StringComparer.Ordinal).Count() != 6) Fail("NWASYNC001", path, "Create/start/cancel/take/retire/release are separate operation steps.");
             foreach (var symbol in functions) _ = Function(symbol, path);
+            if (functions.Where(x => x != release).Any(x => Function(x, path).ReturnType != "u32"))
+                Fail("NWASYNC001", path, "D06 create/start/cancel/take/retire must return status; only final release is nonfallible void cleanup.");
             if (owners.First(x => x.Kind == owner).Release != release) Fail("NWOWN001", path, "Operation release differs from its owner release pair.");
             if (!Function(create, path).Parameters.Any(x => x.Owner == owner && x.BorrowEnd == "transfer-success")) Fail("NWOWN001", path, "Create must transfer its operation owner only on success.");
             foreach (var symbol in new[] { start, cancel, take, retire })
-                if (!Function(symbol, path).Parameters.Any(x => x.Owner == owner && x.BorrowEnd == "call")) Fail("NWASYNC001", path, "Every operation step must borrow the same retained operation owner.");
-            foreach (var parameter in Function(start, path).Parameters.Where(x => x.Direction == "in" && x.Type.Contains(':') && x.Owner.Length == 0))
+                if (!Function(symbol, path).Parameters.Any(x => x.Owner == owner && x.BorrowEnd == "call" && x.Direction == "in")) Fail("NWASYNC001", path, "Every operation step must borrow the same retained operation owner as an input.");
+            foreach (var parameter in Function(start, path).Parameters.Where(x => (x.Direction is "in" or "inout") && x.Type.Contains(':') && x.Owner.Length == 0))
             {
                 if (inputEnd == "copied-before-accept" && !parameter.CopyBeforeAccept || inputEnd == "retirement" && parameter.BorrowEnd != "retirement")
                     Fail("NWASYNC001", path, "Async input cannot retain a call-scoped pin: copy before accept or keep it until retirement.");
@@ -236,10 +248,21 @@ internal sealed class BindingReader
             if (!callbackSymbols.Add(callback.Symbol)) Fail("NWGEN001", path, "Duplicate callback contract.");
             if (cookie >= callback.Parameters.Length || callback.Parameters[(int)cookie].Type != "usize" || callback.ReturnType != "u32")
                 Fail("NWABI001", path, "Callback needs an exact blittable usize cookie and u32 return.");
-            if (!ownerNames.Contains(Identifier(entry, "notification_owner", path)) || Text(entry, "reentrancy", path) != "notification-only" || callback.Reentrancy != "notification-only")
+            var notificationOwner = Identifier(entry, "notification_owner", path);
+            if (!ownerNames.Contains(notificationOwner) || Text(entry, "reentrancy", path) != "notification-only" || callback.Reentrancy != "notification-only")
                 Fail("NWASYNC001", path, "Callbacks publish notifications under a retained owner; they cannot call user code reentrantly.");
             if (Text(entry, "profile", path) != "D05-close-drain-v1") Fail("NWASYNC001", path, "Callback retirement must follow D05 close/drain.");
-            _ = Function(Identifier(entry, "close", path), path); _ = Function(Identifier(entry, "drain", path), path);
+            if (callback.Parameters.Any(p => p.Type.Contains(':') &&
+                (p.Direction != "in" || p.BorrowEnd != "callback" || p.Mutable || !p.Type.StartsWith("const:", StringComparison.Ordinal))))
+                Fail("NWASYNC001", path, "D05 notification payloads are readonly callback-scoped borrows; owned results require a later typed take.");
+            var close = Function(Identifier(entry, "close", path), path);
+            var drain = Function(Identifier(entry, "drain", path), path);
+            if (close.Symbol == drain.Symbol || new[] { close, drain }.Any(f => f.ReturnType != "u32" ||
+                !f.Parameters.Any(p => p.Owner == notificationOwner && p.BorrowEnd == "call" && p.Direction == "in")))
+                Fail("NWASYNC001", path, "Distinct close and drain status exports must borrow the exact notification owner.");
+            var ownerOperations = operations.Where(x => x.Owner == notificationOwner).ToArray();
+            if (ownerOperations.Length != 0 && !ownerOperations.Any(x => x.RequestCancel == close.Symbol && x.TryRetire == drain.Symbol))
+                Fail("NWASYNC001", path, "An operation notification must use that operation's cancel and retirement authorities.");
         }
         var managed = Strings(root.GetProperty("managed_symbols"), "$.managed_symbols", false).Order(StringComparer.Ordinal).ToImmutableArray();
         using var buffer = new MemoryStream();
