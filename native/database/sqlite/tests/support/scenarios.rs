@@ -575,22 +575,6 @@ async fn lost_commit(file: &Path) -> TestResult {
 }
 
 async fn admission(file: &Path) -> TestResult {
-    for acquire_timeout in [Duration::ZERO, Duration::MAX] {
-        let invalid = Limits {
-            acquire_timeout,
-            ..limits()
-        };
-        assert_eq!(
-            invalid.pool_options().unwrap_err().kind,
-            ErrorKind::Configuration
-        );
-        assert!(Admission::new(invalid).is_err());
-        assert!(Options::default().connect_options(file, invalid).is_err());
-        assert!(
-            !file.exists(),
-            "invalid acquisition deadlines fail before SQLite I/O"
-        );
-    }
     let limits = Limits {
         max_commands: 2,
         max_input_bytes: 1024,

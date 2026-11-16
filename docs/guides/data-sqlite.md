@@ -93,9 +93,7 @@ second pool or silently acquire a replacement connection.
 Native `Admission` is shared by the engine. It reserves command count and input
 bytes before argument conversion or queued ownership. The finite component
 defaults are 32 active/queued commands, 4 MiB retained input reservations, a 64 KiB
-SQL limit, one adapter row slot, and 32 cached statements. The host supplies the
-acquisition timeout; zero or a duration that overflows the monotonic deadline
-is rejected before configuring or opening the SQLx pool. B04 supplies the mapped
+SQL limit, one adapter row slot, and 32 cached statements. B04 supplies the mapped
 host limits; these values do not redefine `DatabaseLimits`' public defaults.
 SQLx's native command buffer and row buffer are each explicitly one slot. A
 separate one-slot transaction-control admission remains available while business
