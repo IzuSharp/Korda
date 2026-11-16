@@ -848,34 +848,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "nativeweave-data-sqlite"
-version = "0.1.0"
-dependencies = [
- "futures-util",
- "libsqlite3-sys",
- "nativeweave-data-codecs",
- "nativeweave-data-contracts",
- "nativeweave-data-transactions",
- "nativeweave-interop-abi",
- "sha2 0.10.9",
- "sqlx",
- "sqlx-core",
- "tokio",
-]
-
-[[package]]
-name = "nativeweave-data-streaming"
-version = "0.1.0"
-dependencies = [
- "futures-util",
- "nativeweave-data-codecs",
- "nativeweave-data-contracts",
- "serde_json",
- "sqlx",
- "tokio",
-]
-
-[[package]]
 name = "nativeweave-data-transactions"
 version = "0.1.0"
 dependencies = [
