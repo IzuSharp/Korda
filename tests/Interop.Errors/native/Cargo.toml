@@ -1,0 +1,21 @@
+[package]
+name = "nativeweave-errors-fixture"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[[bin]]
+name = "panic_probe"
+path = "src/panic_probe.rs"
+
+[dependencies]
+nativeweave-interop-abi = { path = "../../../native/interop/abi" }
+nativeweave-interop-errors = { path = "../../../native/interop/errors" }
+
+[lints]
+workspace = true

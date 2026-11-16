@@ -1,0 +1,16 @@
+{
+  "schema": 1,
+  "task": "B09",
+  "platform_validated": "linux-x64",
+  "design_commit": "c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9",
+  "surface": "Internal typed call descriptors, source/owner/arena references and bounded native metadata validation",
+  "public_types": [],
+  "public_members": [],
+  "preserved_canonical_api": "NativeWeave.Data Table/Column/Relation/Projection/ValueCodec and their existing accepted XML/reference",
+  "downstream_api": "NativeWeave.Database.DataSession and NativeWeave.Query application Fluent declarations remain B04/B13 composition, per the B09 packet dependency rationale",
+  "exact_native_inventory": "../../native/database/binding/signatures-v1.json",
+  "compiled_gate": "../../tests/Query.Binding/ApiCheck/Program.cs",
+  "package": "Not independently distributed; no NuGet or automatic-release scope added",
+  "execution": "Real production B09 native validators and managed bindings executed through an explicitly test-only owner/operation fixture in JIT and Linux Native AOT",
+  "not_claimed": ["B04 database host", "B11 SQL rendering or provider execution", "pristine package consumption", "Windows acceptance", "performance benefit"]
+}
