@@ -1,3 +1,5 @@
+using System.Text;
+
 namespace NativeWeave.Interop;
 
 /// <summary>A native panic, poisoned engine or interop contract failure with optional native diagnostics.</summary>

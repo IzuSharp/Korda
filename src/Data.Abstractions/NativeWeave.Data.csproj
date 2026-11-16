@@ -13,12 +13,5 @@
   <ItemGroup>
     <InternalsVisibleTo Include="NativeWeave.Data.Tests" />
     <InternalsVisibleTo Include="NativeWeave.Database" />
-    <InternalsVisibleTo Include="NativeWeave.Data.Streaming" />
-    <InternalsVisibleTo Include="NativeWeave.Data.Streaming.Tests" />
-    <InternalsVisibleTo Include="NativeWeave.Data.Streaming.Sample" />
-    <InternalsVisibleTo Include="NativeWeave.Database.PostgreSql" />
-    <InternalsVisibleTo Include="NativeWeave.Database.Sqlite" />
-    <InternalsVisibleTo Include="NativeWeave.Data.Codecs" />
-    <InternalsVisibleTo Include="NativeWeave.Data.Codecs.Tests" />
   </ItemGroup>
 </Project>
