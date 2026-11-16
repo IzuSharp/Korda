@@ -5,7 +5,10 @@ namespace NativeWeave.Data;
 
 internal enum PayloadKind : ushort { Parameters = 1, Rows = 2, ExpressionValues = 3, MutationValues = 4 }
 internal sealed record WireDescriptor(uint Id, CodecDescriptor Codec, uint BoundCodecId);
-internal sealed record WireExpectation(PayloadKind Kind, uint Profile, byte[] MetadataHash, uint EntityId, uint ProjectionId, WireDescriptor[] Descriptors);
+internal sealed record WireExpectation(PayloadKind Kind, uint Profile, byte[] MetadataHash, uint EntityId, uint ProjectionId, WireDescriptor[] Descriptors)
+{
+    internal uint? ExactRows { get; init; }
+}
 
 // One field serialization contract, not a CLR/Rust struct ABI. Only owned bytes escape parsing.
 internal sealed class DbWire
@@ -91,6 +94,13 @@ internal sealed class DbWire
         catch (Exception e) when (e is OverflowException or ArgumentOutOfRangeException or JsonException)
         { throw new ArgumentException("Malformed bounded db-wire payload.", nameof(bytes), e); }
     }
+    internal static WireExpectation KeyExpectation<TEntity>(EntityKey<TEntity> key, uint profile, uint[] boundCodecs) where TEntity : class
+    {
+        key.RequireComplete();
+        if (boundCodecs.Length != key.Values.Length) throw new ArgumentException("The parent key requires every bound codec.", nameof(boundCodecs));
+        return new(PayloadKind.MutationValues, profile, Convert.FromHexString(key.Table.MetadataHash), key.Table.Identity.Id, 0,
+            key.Values.Select((v, i) => new WireDescriptor(v.Column.Definition.Id, v.Column.Definition.Codec, boundCodecs[i])).ToArray()) { ExactRows = 1 };
+    }
     internal ReadOnlyMemory<byte>? Cell(uint row, int column)
     {
         if (row >= Rows || (uint)column >= Expected.Descriptors.Length) throw new ArgumentOutOfRangeException(nameof(row));
@@ -100,6 +110,8 @@ internal sealed class DbWire
     }
     private static void CheckExpectation(WireExpectation expected, uint rows)
     {
+        if (expected.ExactRows is { } exact && rows != exact) Bad("The consumer requires an exact row count.");
+        if (expected.Kind == PayloadKind.Rows && expected.Descriptors.Length == 0) Bad("Result rows require an actual row shape.");
         if (expected.Profile is not (1 or 2) || expected.MetadataHash.Length != 32 || expected.Descriptors.Length > MaxDescriptors || !Enum.IsDefined(expected.Kind)) Bad("Unknown profile, kind or shape limit.");
         if (expected.Kind == PayloadKind.Parameters && rows != 1 || expected.Kind == PayloadKind.MutationValues && (rows == 0 || expected.EntityId == 0)
             || expected.Kind == PayloadKind.ExpressionValues && (expected.Descriptors.Length != 1 || expected.Descriptors[0].Id != 1 || expected.MetadataHash.Any(b => b != 0))

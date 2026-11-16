@@ -30,9 +30,17 @@ pub struct Expectation {
     pub projection_id: u32,
     /// Exact ordered descriptor shape.
     pub descriptors: Vec<Descriptor>,
+    /// Consumer-specific exact record count, independent from the broad payload-kind domain.
+    pub exact_rows: Option<u32>,
 }
 impl Expectation {
     fn validate(&self, rows: u32) -> Result<()> {
+        if self.exact_rows.is_some_and(|exact| exact != rows) {
+            return Err(ContractError("consumer-specific exact row count mismatch"));
+        }
+        if self.kind == 2 && self.descriptors.is_empty() {
+            return Err(ContractError("row shape is required"));
+        }
         if !(1..=4).contains(&self.kind) || self.descriptors.len() > MAX_NODES {
             return Err(ContractError("unknown kind or descriptor limit"));
         }
@@ -363,22 +371,43 @@ pub fn validate_scalar(codec: &Codec, bytes: &[u8], profile: Profile) -> Result<
             }
         }
         16 => {
-            if bytes.starts_with(&[0xef, 0xbb, 0xbf]) {
-                return Err(ContractError("JSON BOM"));
+            if bytes.len() > MAX_BYTES || bytes.starts_with(&[0xef, 0xbb, 0xbf]) {
+                return Err(ContractError("JSON size limit or BOM"));
             }
-            let value: serde_json::Value =
-                serde_json::from_slice(bytes).map_err(|_| ContractError("invalid JSON"))?;
-            fn depth(value: &serde_json::Value, level: usize) -> bool {
-                level <= 64
-                    && match value {
-                        serde_json::Value::Array(a) => a.iter().all(|v| depth(v, level + 1)),
-                        serde_json::Value::Object(o) => o.values().all(|v| depth(v, level + 1)),
-                        _ => true,
+            let text =
+                std::str::from_utf8(bytes).map_err(|_| ContractError("invalid JSON UTF-8"))?;
+            // This is only a bounded nesting guard. The mature RawValue parser below
+            // owns the complete RFC8259 grammar without materializing f64 or object keys.
+            let (mut quoted, mut escaped, mut level) = (false, false, 0u32);
+            for byte in bytes {
+                if quoted {
+                    if escaped {
+                        escaped = false;
+                    } else if *byte == b'\\' {
+                        escaped = true;
+                    } else if *byte == b'"' {
+                        quoted = false;
                     }
+                } else {
+                    match *byte {
+                        b'"' => quoted = true,
+                        b'[' | b'{' => {
+                            level += 1;
+                            if level > 64 {
+                                return Err(ContractError("JSON depth limit"));
+                            }
+                        }
+                        b']' | b'}' => {
+                            level = level
+                                .checked_sub(1)
+                                .ok_or(ContractError("unbalanced JSON container"))?
+                        }
+                        _ => {}
+                    }
+                }
             }
-            if !depth(&value, 0) {
-                return Err(ContractError("JSON depth limit"));
-            }
+            let _: &serde_json::value::RawValue =
+                serde_json::from_str(text).map_err(|_| ContractError("invalid JSON"))?;
         }
         _ => {}
     }
@@ -566,6 +595,7 @@ impl Relation {
             entity_id: self.parent.table_id,
             projection_id: 0,
             descriptors,
+            exact_rows: Some(1),
         })
     }
 }
@@ -611,7 +641,12 @@ fn vector(bytes: &[u8]) -> Result<Vec<u32>> {
     if !bytes.len().is_multiple_of(4) || bytes.len() / 4 > MAX_NODES {
         return Err(ContractError("invalid u32 vector"));
     }
-    bytes.chunks_exact(4).map(|b| u32at(b, 0)).collect()
+    bytes
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|b| u32at(b, 0))
+        .collect()
 }
 fn encode_vector(values: &[u32]) -> Vec<u8> {
     values.iter().flat_map(|n| n.to_le_bytes()).collect()

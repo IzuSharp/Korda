@@ -1,0 +1,6 @@
+{
+  "wrong-value.cs.txt": ["CS0411", "CS1503"],
+  "wrong-entity.cs.txt": ["CS1503", "CS0411"],
+  "row-across-await.cs.txt": ["CS4007"],
+  "value-entity.cs.txt": ["CS0452"]
+}

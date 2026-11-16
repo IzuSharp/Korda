@@ -4,6 +4,8 @@
     <RootNamespace>NativeWeave.Data</RootNamespace>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <IsAotCompatible>true</IsAotCompatible>
+    <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifiers)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifiers).aot.lock.json</NuGetLockFilePath>
+    <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifier)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifier).aot.lock.json</NuGetLockFilePath>
     <IsPackable>true</IsPackable>
     <PackageId>NativeWeave.Data</PackageId>
     <Description>Strongly typed NativeWeave data descriptors and shared wire contracts. No database runtime is loaded.</Description>
@@ -11,6 +13,5 @@
   <ItemGroup>
     <InternalsVisibleTo Include="NativeWeave.Data.Tests" />
     <InternalsVisibleTo Include="NativeWeave.Database" />
-    <Compile Remove="DatabaseContracts.cs" />
   </ItemGroup>
 </Project>

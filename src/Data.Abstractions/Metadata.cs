@@ -51,6 +51,13 @@ public sealed class Column<TEntity, T> where TEntity : class
     internal TableIdentity Identity { get; }
     internal ColumnDefinition Definition { get; }
     internal IColumn Binding { get; }
+    internal byte[]? Snapshot(T value)
+    {
+        var bytes = Codec.Encode(value);
+        if (bytes is not null && Definition.Options.MaxLength is { } maximum && bytes.Length > maximum)
+            throw new ArgumentException("The value exceeds its declared byte capacity.", nameof(value));
+        return bytes;
+    }
     /// <summary>Gets the exact store name, preserving case and Unicode.</summary>
     public string Name => Definition.Name;
     /// <summary>Gets the stable nonzero little-endian SHA-256-derived column ID.</summary>

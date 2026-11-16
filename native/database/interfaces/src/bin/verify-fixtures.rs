@@ -1,5 +1,7 @@
 //! Executes actual Rust contract validation against managed-produced golden bytes.
-use nativeweave_data_contracts::wire::{Batch, Descriptor, Expectation, Relation, hex};
+use nativeweave_data_contracts::wire::{
+    Batch, Descriptor, Expectation, Relation, hex, validate_scalar,
+};
 use nativeweave_data_contracts::{Codec, MetadataRegistry, Model, Profile, Projection};
 use std::{fs, path::PathBuf, sync::Arc};
 
@@ -22,12 +24,23 @@ fn main() {
         read("unicode-model.json")
     );
     assert!(Model::parse(&read("configured-model.json"), Profile::Sqlite).is_err());
-    Model::parse(&read("configured-model.json"), Profile::PostgreSql)
-        .expect("configured decimal metadata");
+    assert_eq!(
+        Model::parse(&read("configured-model.json"), Profile::PostgreSql)
+            .expect("configured decimal metadata")
+            .encode(),
+        read("configured-model.json")
+    );
     let projection_bytes = read("projection.json");
     let projection =
         Projection::parse(&projection_bytes, Profile::Sqlite).expect("exact ordered projection");
     assert_eq!(projection.encode(), projection_bytes);
+    let scalar_bytes = read("scalar-projection.json");
+    assert_eq!(
+        Projection::parse_scalar(&scalar_bytes, Profile::Sqlite)
+            .expect("scalar-only empty alias")
+            .encode(),
+        scalar_bytes
+    );
     let relation_bytes = read("relation.bin");
     let relation = Relation::parse(&relation_bytes, Arc::clone(&parent), Arc::clone(&child))
         .expect("canonical kind23");
@@ -74,6 +87,7 @@ fn main() {
         entity_id: 0,
         projection_id: 0,
         descriptors,
+        exact_rows: Some(1),
     };
     let values_bytes = read("values.bin");
     let values =
@@ -118,6 +132,67 @@ fn main() {
     assert_eq!(values.cell(0, 18).expect("empty cell"), Some([].as_slice()));
 
     let mut malformed = 0;
+    assert!(Projection::parse(&scalar_bytes, Profile::Sqlite).is_err());
+    malformed += 1;
+    assert!(Projection::parse_scalar(&projection_bytes, Profile::Sqlite).is_err());
+    malformed += 1;
+    let two_scalar_fields = b"{\"version\":1,\"fields\":[{\"ordinal\":0,\"name\":\"\",\"codec\":3,\"codec_config\":null,\"nullable\":false},{\"ordinal\":1,\"name\":\"\",\"codec\":3,\"codec_config\":null,\"nullable\":false}]}";
+    assert!(Projection::parse_scalar(two_scalar_fields, Profile::Sqlite).is_err());
+    malformed += 1;
+    let two_keys = [Some(1i64.to_le_bytes()), Some(2i64.to_le_bytes())];
+    let key_refs = two_keys
+        .iter()
+        .map(|x| x.as_ref().map(|v| v.as_slice()))
+        .collect::<Vec<_>>();
+    assert!(Batch::encode(&key_expected, 2, &key_refs).is_err());
+    malformed += 1;
+    let mut generic_mutation = key_expected.clone();
+    generic_mutation.exact_rows = None;
+    let multirow =
+        Batch::encode(&generic_mutation, 2, &key_refs).expect("kind4 general multiple-row domain");
+    assert!(Batch::parse(&multirow, key_expected.clone()).is_err());
+    malformed += 1;
+    assert_eq!(
+        Batch::parse(&multirow, generic_mutation)
+            .expect("generic mutation preserves multiple rows")
+            .rows(),
+        2
+    );
+    let mut generated_only = key_expected.clone();
+    generated_only.descriptors.clear();
+    let generated_row =
+        Batch::encode(&generated_only, 1, &[]).expect("generated-only insert kind4 empty shape");
+    assert_eq!(
+        Batch::parse(&generated_row, generated_only)
+            .expect("generated-only insert roundtrip")
+            .rows(),
+        1
+    );
+    let json = Codec {
+        id: 16,
+        configuration: None,
+        nullable: false,
+    };
+    for text in [
+        "1e400".to_owned(),
+        "{\"x\":1e400}".to_owned(),
+        "{\"$serde_json::private::Number\":\"ordinary-text\"}".to_owned(),
+        format!("{}0{}", "[".repeat(64), "]".repeat(64)),
+        format!("{}{}", "[".repeat(64), "]".repeat(64)),
+    ] {
+        validate_scalar(&json, text.as_bytes(), Profile::Sqlite)
+            .expect("RFC8259 syntax without numeric narrowing");
+    }
+    for text in [
+        format!("{}{}", "[".repeat(65), "]".repeat(65)),
+        "{\"x\":01}".to_owned(),
+        "[1,]".to_owned(),
+        "NaN".to_owned(),
+        "\u{feff}0".to_owned(),
+    ] {
+        assert!(validate_scalar(&json, text.as_bytes(), Profile::Sqlite).is_err());
+        malformed += 1;
+    }
     // Canonical metadata rejects both semantic corruption and lossy JSON normalization.
     for (from, to) in [
         ("\"version\":1", "\"version\":2"),
@@ -217,7 +292,7 @@ fn main() {
     assert!(Profile::try_from(0).is_err());
     assert!(Profile::try_from(3).is_err());
     println!(
-        "{{\"status\":\"passed\",\"platform\":\"linux-x64\",\"cross_language_goldens\":7,\"malformed_rejections\":{malformed},\"scalar_kinds\":17,\"registry_atomicity\":true,\"parent_hash\":\"{}\",\"relation_hash\":\"{}\"}}",
+        "{{\"status\":\"passed\",\"platform\":\"linux-x64\",\"cross_language_goldens\":10,\"malformed_rejections\":{malformed},\"scalar_kinds\":17,\"registry_atomicity\":true,\"parent_hash\":\"{}\",\"relation_hash\":\"{}\"}}",
         hex(&parent.hash()),
         hex(&relation.hash())
     );
