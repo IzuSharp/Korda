@@ -1,4 +1,0 @@
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup><AssemblyName>NativeWeave.Data.Transactions.Sample</AssemblyName></PropertyGroup>
-  <ItemGroup><ProjectReference Include="../../../src/Data.Transactions/NativeWeave.Database.Transactions.csproj" /></ItemGroup>
-</Project>
