@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "design_commit": "c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9",
+  "wire_version": 1,
+  "header_bytes": 96,
+  "descriptor_bytes": 16,
+  "cell_bytes": 24,
+  "control_header_bytes": 16,
+  "control_entry_bytes": 16,
+  "relation_control_kind": 23,
+  "profiles": { "sqlite": 1, "postgresql": 2 },
+  "payload_kinds": { "parameters": 1, "rows": 2, "expression_values": 3, "mutation_values": 4 },
+  "scalar_ids": { "int16": 1, "int32": 2, "int64": 3, "boolean": 4, "utf8": 5, "bytes": 6, "guid": 7, "date": 8, "time": 9, "utc_instant": 10, "double": 11, "single": 12, "decimal": 13, "decimal_text": 14, "money": 15, "json": 16, "enum_int32": 17 },
+  "model_keys": ["version", "logical_id", "table_id", "schema", "table", "columns", "projection", "relations"],
+  "column_keys": ["id", "name", "codec", "codec_config", "nullable", "key_ordinal", "generated", "concurrency", "collation", "max_length"],
+  "projection_keys": ["version", "fields"],
+  "projection_field_keys": ["ordinal", "name", "codec", "codec_config", "nullable"],
+  "relation_keys": ["version", "parent_model", "parent_table", "child_model", "child_table", "parent_columns", "child_columns", "child_nullable"]
+}
