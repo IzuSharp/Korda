@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>NativeWeave.Benchmark.Native</AssemblyName>
+    <IsAotCompatible>true</IsAotCompatible>
+    <IlcInstructionSet>x86-64-v2</IlcInstructionSet>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <DefineConstants>$(DefineConstants);NATIVE_ROUTE</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../Target.cs" Link="Target.cs" />
+    <None Include="$(A21NativeFixture)" Link="libnativeweave_benchmark_fixture.so"
+          CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest"
+          Condition="'$(A21NativeFixture)' != ''" />
+  </ItemGroup>
+</Project>

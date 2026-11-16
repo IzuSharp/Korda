@@ -1,14 +1,23 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/NativeWeave.HelloWorld/NativeWeave.HelloWorld.csproj" />
+    <Project Path="src/Interop.Abi/Interop.Abi.csproj" />
+    <Project Path="src/Data.Abstractions/NativeWeave.Data.csproj" />
   </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/HelloWorld/HelloWorld.csproj" />
+    <Project Path="samples/api/interop-abi/Interop.Abi.Sample.csproj" />
+    <Project Path="samples/api/benchmarks-harness/Managed/Managed.csproj" />
+    <Project Path="samples/api/benchmarks-harness/Native/Native.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/NativeWeave.HelloWorld.Tests/NativeWeave.HelloWorld.Tests.csproj" />
+    <Project Path="tests/Interop.Abi/Interop.Abi.Tests.csproj" />
+    <Project Path="tests/Data.Abstractions/NativeWeave.Data.Tests.csproj" />
   </Folder>
   <Folder Name="/tools/">
     <Project Path="tools/ApiDocs/ApiDocs.csproj" />
+    <Project Path="tests/Data.Abstractions/ApiCheck/ApiCheck.csproj" />
+    <Project Path="tests/Benchmarks.Harness/AssemblyInventory/AssemblyInventory.csproj" />
   </Folder>
 </Solution>

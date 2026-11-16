@@ -1,0 +1,56 @@
+{
+  "schema_version": 1,
+  "abi_major": 1,
+  "abi_minor": 0,
+  "design_commit": "c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9",
+  "design_header_sha256": "6d79a3d030ec429e4706f6012d4e9f876ddc35307d4b4c814fc18d5100b4c6e2",
+  "profile": {
+    "pointer_width_bits": 64,
+    "endianness": "little",
+    "alignment": "natural",
+    "calling_convention": "C",
+    "wire_boolean_values": [0, 1],
+    "status_width_bits": 32
+  },
+  "statuses": {
+    "OK": 0,
+    "PENDING": 1,
+    "CANCELED": 2,
+    "INVALID_ARGUMENT": 3,
+    "INVALID_STATE": 4,
+    "OUT_OF_MEMORY": 5,
+    "NOT_SUPPORTED": 6,
+    "BUFFER_TOO_SMALL": 7,
+    "CALLBACK_FAILED": 8,
+    "NATIVE_PANIC": 9,
+    "ENGINE_POISONED": 10,
+    "CONTRACT_VIOLATION": 11,
+    "TIMEOUT": 12,
+    "DOMAIN_ERROR": 13
+  },
+  "records": [
+    {"name": "nw_abi_info_v1", "fields": [["struct_size", "u32"], ["abi_major", "u32"], ["abi_minor", "u32"], ["pointer_width_bits", "u32"], ["capabilities", "u64"], ["reserved", "u64"]], "zero_fields": ["reserved"]},
+    {"name": "nw_error_info_v1", "fields": [["struct_size", "u32"], ["domain", "u32"], ["code", "i32"], ["flags", "u32"], ["correlation_id", "u64"]], "zero_fields": ["flags"]},
+    {"name": "nw_bytes_view_v1", "fields": [["data", "bytes_ptr"], ["length", "u64"]]},
+    {"name": "nw_operation_callbacks_v1", "fields": [["struct_size", "u32"], ["flags", "u32"], ["cookie", "uintptr"], ["on_terminal", "terminal_fn"]], "zero_fields": ["flags"]},
+    {"name": "nw_callbacks_v1", "fields": [["struct_size", "u32"], ["flags", "u32"], ["cookie", "uintptr"], ["on_event", "event_fn"]], "zero_fields": ["flags"]}
+  ],
+  "callbacks": [
+    {"name": "nw_on_terminal_fn", "return": "u32", "parameters": [["cookie", "uintptr"], ["terminal_status", "u32"], ["borrowed_error", "error_ptr"]]},
+    {"name": "nw_on_event_fn", "return": "u32", "parameters": [["cookie", "uintptr"], ["event_kind", "u32"], ["payload", "void_ptr"], ["payload_bytes", "u64"]]}
+  ],
+  "bootstrap": {
+    "symbol_pattern": "nw_<engine>_get_abi_v1",
+    "return": "u32",
+    "parameters": [["requested_major", "u32"], ["out_capacity", "u32"], ["out_info", "abi_ptr"]],
+    "nullability": "out_info must be non-null on success; null returns INVALID_ARGUMENT without writes",
+    "aliasing": "output must not overlap another live input or output; scalar inputs have no borrowed storage",
+    "alignment": "output must address naturally aligned writable memory; invalid addresses are never probed",
+    "borrow_end": "synchronous return; the provider retains no pointer",
+    "ownership": "no owner is created, retained or transferred",
+    "threading": "concurrent and reentrant, with immutable provider version/capability inputs",
+    "work": "bounded constant work; no allocation, callback, runtime, I/O or unload",
+    "failure": "null, unsupported major, short complete-record capacity or misalignment writes no bytes",
+    "success": "writes exactly 32 bytes, struct_size=32 and reserved=0; a larger caller tail is untouched"
+  }
+}

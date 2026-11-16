@@ -1,0 +1,3134 @@
+{
+  "design_commit": "c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9",
+  "source": "docs/api/public-api.json",
+  "types": [
+    "NativeWeave.Data.Changes",
+    "NativeWeave.Data.Codecs",
+    "NativeWeave.Data.Column",
+    "NativeWeave.Data.ColumnOptions",
+    "NativeWeave.Data.ConcurrencyCheck",
+    "NativeWeave.Data.DatabaseCapabilityException",
+    "NativeWeave.Data.DatabaseErrorKind",
+    "NativeWeave.Data.DatabaseException",
+    "NativeWeave.Data.EntityKey",
+    "NativeWeave.Data.EntityWriter",
+    "NativeWeave.Data.Projection",
+    "NativeWeave.Data.Relation",
+    "NativeWeave.Data.ResultColumn",
+    "NativeWeave.Data.ResultField",
+    "NativeWeave.Data.RowMaterializer",
+    "NativeWeave.Data.RowReader",
+    "NativeWeave.Data.RowWriter",
+    "NativeWeave.Data.SqlCommand",
+    "NativeWeave.Data.SqlCommandKind",
+    "NativeWeave.Data.SqlParameters",
+    "NativeWeave.Data.Table",
+    "NativeWeave.Data.TableBuilder",
+    "NativeWeave.Data.ValueCodec"
+  ],
+  "symbols": [
+    {
+      "id": "T:NativeWeave.Data.Changes`1",
+      "signature": "public sealed class NativeWeave.Data.Changes<TEntity> where TEntity : class",
+      "implicit_member": false,
+      "kind": "NamedType",
+      "type_kind": "Class",
+      "parameters": [],
+      "type_parameters": [
+        {
+          "name": "TEntity",
+          "ordinal": 0,
+          "variance": "None",
+          "attributes": [],
+          "has_reference_type_constraint": true,
+          "reference_type_constraint_nullable": "NotAnnotated",
+          "has_value_type_constraint": false,
+          "has_unmanaged_type_constraint": false,
+          "has_notnull_constraint": false,
+          "has_constructor_constraint": false,
+          "allows_ref_like_type": false,
+          "constraint_types": []
+        }
+      ],
+      "semantic_policy": "NativeWeave.Data.Changes"
+    },
+    {
+      "id": "M:NativeWeave.Data.Changes`1.#ctor",
+      "signature": "public NativeWeave.Data.Changes<TEntity>.Changes()",
+      "implicit_member": false,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.Changes"
+    },
+    {
+      "id": "M:NativeWeave.Data.Changes`1.Set``1(NativeWeave.Data.Column{`0,``0},``0)",
+      "signature": "public NativeWeave.Data.Changes<TEntity> NativeWeave.Data.Changes<TEntity>.Set<T>(NativeWeave.Data.Column<TEntity, T> column, T value)",
+      "implicit_member": false,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [
+        {
+          "name": "column",
+          "type": "NativeWeave.Data.Column<TEntity, T>",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        },
+        {
+          "name": "value",
+          "type": "T",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        }
+      ],
+      "type_parameters": [
+        {
+          "name": "T",
+          "ordinal": 0,
+          "variance": "None",
+          "attributes": [],
+          "has_reference_type_constraint": false,
+          "reference_type_constraint_nullable": "None",
+          "has_value_type_constraint": false,
+          "has_unmanaged_type_constraint": false,
+          "has_notnull_constraint": false,
+          "has_constructor_constraint": false,
+          "allows_ref_like_type": false,
+          "constraint_types": []
+        }
+      ],
+      "semantic_policy": "NativeWeave.Data.Changes"
+    },
+    {
+      "id": "M:NativeWeave.Data.Changes`1.Unset``1(NativeWeave.Data.Column{`0,``0})",
+      "signature": "public NativeWeave.Data.Changes<TEntity> NativeWeave.Data.Changes<TEntity>.Unset<T>(NativeWeave.Data.Column<TEntity, T> column)",
+      "implicit_member": false,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [
+        {
+          "name": "column",
+          "type": "NativeWeave.Data.Column<TEntity, T>",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        }
+      ],
+      "type_parameters": [
+        {
+          "name": "T",
+          "ordinal": 0,
+          "variance": "None",
+          "attributes": [],
+          "has_reference_type_constraint": false,
+          "reference_type_constraint_nullable": "None",
+          "has_value_type_constraint": false,
+          "has_unmanaged_type_constraint": false,
+          "has_notnull_constraint": false,
+          "has_constructor_constraint": false,
+          "allows_ref_like_type": false,
+          "constraint_types": []
+        }
+      ],
+      "semantic_policy": "NativeWeave.Data.Changes"
+    },
+    {
+      "id": "T:NativeWeave.Data.Codecs",
+      "signature": "public static class NativeWeave.Data.Codecs",
+      "implicit_member": false,
+      "kind": "NamedType",
+      "type_kind": "Class",
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.Codecs"
+    },
+    {
+      "id": "M:NativeWeave.Data.Codecs.Decimal(System.Byte,System.Byte)",
+      "signature": "public static NativeWeave.Data.ValueCodec<decimal> NativeWeave.Data.Codecs.Decimal(byte precision, byte scale)",
+      "implicit_member": false,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [
+        {
+          "name": "precision",
+          "type": "byte",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        },
+        {
+          "name": "scale",
+          "type": "byte",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        }
+      ],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.Codecs"
+    },
+    {
+      "id": "M:NativeWeave.Data.Codecs.EnumInt32``1",
+      "signature": "public static NativeWeave.Data.ValueCodec<TEnum> NativeWeave.Data.Codecs.EnumInt32<TEnum>() where TEnum : struct, System.Enum",
+      "implicit_member": false,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [
+        {
+          "name": "TEnum",
+          "ordinal": 0,
+          "variance": "None",
+          "attributes": [],
+          "has_reference_type_constraint": false,
+          "reference_type_constraint_nullable": "None",
+          "has_value_type_constraint": true,
+          "has_unmanaged_type_constraint": false,
+          "has_notnull_constraint": false,
+          "has_constructor_constraint": false,
+          "allows_ref_like_type": false,
+          "constraint_types": [
+            "System.Enum"
+          ]
+        }
+      ],
+      "semantic_policy": "NativeWeave.Data.Codecs"
+    },
+    {
+      "id": "M:NativeWeave.Data.Codecs.FixedScaleMoney(System.Byte)",
+      "signature": "public static NativeWeave.Data.ValueCodec<decimal> NativeWeave.Data.Codecs.FixedScaleMoney(byte scale)",
+      "implicit_member": false,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [
+        {
+          "name": "scale",
+          "type": "byte",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        }
+      ],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.Codecs"
+    },
+    {
+      "id": "M:NativeWeave.Data.Codecs.Json``1(System.Text.Json.Serialization.Metadata.JsonTypeInfo{``0})",
+      "signature": "public static NativeWeave.Data.ValueCodec<T> NativeWeave.Data.Codecs.Json<T>(System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> typeInfo)",
+      "implicit_member": false,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [
+        {
+          "name": "typeInfo",
+          "type": "System.Text.Json.Serialization.Metadata.JsonTypeInfo<T>",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        }
+      ],
+      "type_parameters": [
+        {
+          "name": "T",
+          "ordinal": 0,
+          "variance": "None",
+          "attributes": [],
+          "has_reference_type_constraint": false,
+          "reference_type_constraint_nullable": "None",
+          "has_value_type_constraint": false,
+          "has_unmanaged_type_constraint": false,
+          "has_notnull_constraint": false,
+          "has_constructor_constraint": false,
+          "allows_ref_like_type": false,
+          "constraint_types": []
+        }
+      ],
+      "semantic_policy": "NativeWeave.Data.Codecs"
+    },
+    {
+      "id": "M:NativeWeave.Data.Codecs.NullableReference``1(NativeWeave.Data.ValueCodec{``0})",
+      "signature": "public static NativeWeave.Data.ValueCodec<T?> NativeWeave.Data.Codecs.NullableReference<T>(NativeWeave.Data.ValueCodec<T> codec) where T : class",
+      "implicit_member": false,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [
+        {
+          "name": "codec",
+          "type": "NativeWeave.Data.ValueCodec<T>",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        }
+      ],
+      "type_parameters": [
+        {
+          "name": "T",
+          "ordinal": 0,
+          "variance": "None",
+          "attributes": [],
+          "has_reference_type_constraint": true,
+          "reference_type_constraint_nullable": "NotAnnotated",
+          "has_value_type_constraint": false,
+          "has_unmanaged_type_constraint": false,
+          "has_notnull_constraint": false,
+          "has_constructor_constraint": false,
+          "allows_ref_like_type": false,
+          "constraint_types": []
+        }
+      ],
+      "semantic_policy": "NativeWeave.Data.Codecs"
+    },
+    {
+      "id": "M:NativeWeave.Data.Codecs.Nullable``1(NativeWeave.Data.ValueCodec{``0})",
+      "signature": "public static NativeWeave.Data.ValueCodec<T?> NativeWeave.Data.Codecs.Nullable<T>(NativeWeave.Data.ValueCodec<T> codec) where T : struct",
+      "implicit_member": false,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [
+        {
+          "name": "codec",
+          "type": "NativeWeave.Data.ValueCodec<T>",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        }
+      ],
+      "type_parameters": [
+        {
+          "name": "T",
+          "ordinal": 0,
+          "variance": "None",
+          "attributes": [],
+          "has_reference_type_constraint": false,
+          "reference_type_constraint_nullable": "None",
+          "has_value_type_constraint": true,
+          "has_unmanaged_type_constraint": false,
+          "has_notnull_constraint": false,
+          "has_constructor_constraint": false,
+          "allows_ref_like_type": false,
+          "constraint_types": []
+        }
+      ],
+      "semantic_policy": "NativeWeave.Data.Codecs"
+    },
+    {
+      "id": "P:NativeWeave.Data.Codecs.Boolean",
+      "signature": "public static NativeWeave.Data.ValueCodec<bool> NativeWeave.Data.Codecs.Boolean { get; }",
+      "implicit_member": false,
+      "kind": "Property",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.Codecs"
+    },
+    {
+      "id": "P:NativeWeave.Data.Codecs.Bytes",
+      "signature": "public static NativeWeave.Data.ValueCodec<byte[]> NativeWeave.Data.Codecs.Bytes { get; }",
+      "implicit_member": false,
+      "kind": "Property",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.Codecs"
+    },
+    {
+      "id": "P:NativeWeave.Data.Codecs.Date",
+      "signature": "public static NativeWeave.Data.ValueCodec<System.DateOnly> NativeWeave.Data.Codecs.Date { get; }",
+      "implicit_member": false,
+      "kind": "Property",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.Codecs"
+    },
+    {
+      "id": "P:NativeWeave.Data.Codecs.DecimalText",
+      "signature": "public static NativeWeave.Data.ValueCodec<decimal> NativeWeave.Data.Codecs.DecimalText { get; }",
+      "implicit_member": false,
+      "kind": "Property",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.Codecs"
+    },
+    {
+      "id": "P:NativeWeave.Data.Codecs.Double",
+      "signature": "public static NativeWeave.Data.ValueCodec<double> NativeWeave.Data.Codecs.Double { get; }",
+      "implicit_member": false,
+      "kind": "Property",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.Codecs"
+    },
+    {
+      "id": "P:NativeWeave.Data.Codecs.Guid",
+      "signature": "public static NativeWeave.Data.ValueCodec<System.Guid> NativeWeave.Data.Codecs.Guid { get; }",
+      "implicit_member": false,
+      "kind": "Property",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.Codecs"
+    },
+    {
+      "id": "P:NativeWeave.Data.Codecs.Int16",
+      "signature": "public static NativeWeave.Data.ValueCodec<short> NativeWeave.Data.Codecs.Int16 { get; }",
+      "implicit_member": false,
+      "kind": "Property",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.Codecs"
+    },
+    {
+      "id": "P:NativeWeave.Data.Codecs.Int32",
+      "signature": "public static NativeWeave.Data.ValueCodec<int> NativeWeave.Data.Codecs.Int32 { get; }",
+      "implicit_member": false,
+      "kind": "Property",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.Codecs"
+    },
+    {
+      "id": "P:NativeWeave.Data.Codecs.Int64",
+      "signature": "public static NativeWeave.Data.ValueCodec<long> NativeWeave.Data.Codecs.Int64 { get; }",
+      "implicit_member": false,
+      "kind": "Property",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.Codecs"
+    },
+    {
+      "id": "P:NativeWeave.Data.Codecs.Single",
+      "signature": "public static NativeWeave.Data.ValueCodec<float> NativeWeave.Data.Codecs.Single { get; }",
+      "implicit_member": false,
+      "kind": "Property",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.Codecs"
+    },
+    {
+      "id": "P:NativeWeave.Data.Codecs.String",
+      "signature": "public static NativeWeave.Data.ValueCodec<string> NativeWeave.Data.Codecs.String { get; }",
+      "implicit_member": false,
+      "kind": "Property",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.Codecs"
+    },
+    {
+      "id": "P:NativeWeave.Data.Codecs.Time",
+      "signature": "public static NativeWeave.Data.ValueCodec<System.TimeOnly> NativeWeave.Data.Codecs.Time { get; }",
+      "implicit_member": false,
+      "kind": "Property",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.Codecs"
+    },
+    {
+      "id": "P:NativeWeave.Data.Codecs.UtcDateTime",
+      "signature": "public static NativeWeave.Data.ValueCodec<System.DateTime> NativeWeave.Data.Codecs.UtcDateTime { get; }",
+      "implicit_member": false,
+      "kind": "Property",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.Codecs"
+    },
+    {
+      "id": "P:NativeWeave.Data.Codecs.UtcInstant",
+      "signature": "public static NativeWeave.Data.ValueCodec<System.DateTimeOffset> NativeWeave.Data.Codecs.UtcInstant { get; }",
+      "implicit_member": false,
+      "kind": "Property",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.Codecs"
+    },
+    {
+      "id": "T:NativeWeave.Data.Column`2",
+      "signature": "public sealed class NativeWeave.Data.Column<TEntity, T> where TEntity : class",
+      "implicit_member": false,
+      "kind": "NamedType",
+      "type_kind": "Class",
+      "parameters": [],
+      "type_parameters": [
+        {
+          "name": "TEntity",
+          "ordinal": 0,
+          "variance": "None",
+          "attributes": [],
+          "has_reference_type_constraint": true,
+          "reference_type_constraint_nullable": "NotAnnotated",
+          "has_value_type_constraint": false,
+          "has_unmanaged_type_constraint": false,
+          "has_notnull_constraint": false,
+          "has_constructor_constraint": false,
+          "allows_ref_like_type": false,
+          "constraint_types": []
+        },
+        {
+          "name": "T",
+          "ordinal": 1,
+          "variance": "None",
+          "attributes": [],
+          "has_reference_type_constraint": false,
+          "reference_type_constraint_nullable": "None",
+          "has_value_type_constraint": false,
+          "has_unmanaged_type_constraint": false,
+          "has_notnull_constraint": false,
+          "has_constructor_constraint": false,
+          "allows_ref_like_type": false,
+          "constraint_types": []
+        }
+      ],
+      "semantic_policy": "NativeWeave.Data.Column"
+    },
+    {
+      "id": "P:NativeWeave.Data.Column`2.Codec",
+      "signature": "public NativeWeave.Data.ValueCodec<T> NativeWeave.Data.Column<TEntity, T>.Codec { get; }",
+      "implicit_member": false,
+      "kind": "Property",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.Column"
+    },
+    {
+      "id": "P:NativeWeave.Data.Column`2.Id",
+      "signature": "public uint NativeWeave.Data.Column<TEntity, T>.Id { get; }",
+      "implicit_member": false,
+      "kind": "Property",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.Column"
+    },
+    {
+      "id": "P:NativeWeave.Data.Column`2.Name",
+      "signature": "public string NativeWeave.Data.Column<TEntity, T>.Name { get; }",
+      "implicit_member": false,
+      "kind": "Property",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.Column"
+    },
+    {
+      "id": "T:NativeWeave.Data.ColumnOptions",
+      "signature": "public sealed record class NativeWeave.Data.ColumnOptions : System.IEquatable<NativeWeave.Data.ColumnOptions>",
+      "implicit_member": false,
+      "kind": "NamedType",
+      "type_kind": "Class",
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.ColumnOptions"
+    },
+    {
+      "id": "M:NativeWeave.Data.ColumnOptions.#ctor",
+      "signature": "public NativeWeave.Data.ColumnOptions.ColumnOptions()",
+      "implicit_member": true,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.ColumnOptions"
+    },
+    {
+      "id": "M:NativeWeave.Data.ColumnOptions.Equals(NativeWeave.Data.ColumnOptions)",
+      "signature": "public bool NativeWeave.Data.ColumnOptions.Equals(NativeWeave.Data.ColumnOptions? other)",
+      "implicit_member": true,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [
+        {
+          "name": "other",
+          "type": "NativeWeave.Data.ColumnOptions?",
+          "nullable": "Annotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        }
+      ],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.ColumnOptions"
+    },
+    {
+      "id": "M:NativeWeave.Data.ColumnOptions.Equals(System.Object)",
+      "signature": "public override bool NativeWeave.Data.ColumnOptions.Equals(object? obj)",
+      "implicit_member": true,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [
+        {
+          "name": "obj",
+          "type": "object?",
+          "nullable": "Annotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        }
+      ],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.ColumnOptions"
+    },
+    {
+      "id": "M:NativeWeave.Data.ColumnOptions.GetHashCode",
+      "signature": "public override int NativeWeave.Data.ColumnOptions.GetHashCode()",
+      "implicit_member": true,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.ColumnOptions"
+    },
+    {
+      "id": "M:NativeWeave.Data.ColumnOptions.ToString",
+      "signature": "public override string NativeWeave.Data.ColumnOptions.ToString()",
+      "implicit_member": true,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.ColumnOptions"
+    },
+    {
+      "id": "M:NativeWeave.Data.ColumnOptions.op_Equality(NativeWeave.Data.ColumnOptions,NativeWeave.Data.ColumnOptions)",
+      "signature": "public static bool NativeWeave.Data.ColumnOptions.operator ==(NativeWeave.Data.ColumnOptions? left, NativeWeave.Data.ColumnOptions? right)",
+      "implicit_member": true,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [
+        {
+          "name": "left",
+          "type": "NativeWeave.Data.ColumnOptions?",
+          "nullable": "Annotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        },
+        {
+          "name": "right",
+          "type": "NativeWeave.Data.ColumnOptions?",
+          "nullable": "Annotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        }
+      ],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.ColumnOptions"
+    },
+    {
+      "id": "M:NativeWeave.Data.ColumnOptions.op_Inequality(NativeWeave.Data.ColumnOptions,NativeWeave.Data.ColumnOptions)",
+      "signature": "public static bool NativeWeave.Data.ColumnOptions.operator !=(NativeWeave.Data.ColumnOptions? left, NativeWeave.Data.ColumnOptions? right)",
+      "implicit_member": true,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [
+        {
+          "name": "left",
+          "type": "NativeWeave.Data.ColumnOptions?",
+          "nullable": "Annotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        },
+        {
+          "name": "right",
+          "type": "NativeWeave.Data.ColumnOptions?",
+          "nullable": "Annotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        }
+      ],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.ColumnOptions"
+    },
+    {
+      "id": "M:NativeWeave.Data.ColumnOptions.{Clone}$",
+      "signature": "public NativeWeave.Data.ColumnOptions NativeWeave.Data.ColumnOptions.<Clone>$()",
+      "implicit_member": true,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.ColumnOptions"
+    },
+    {
+      "id": "P:NativeWeave.Data.ColumnOptions.Collation",
+      "signature": "public string? NativeWeave.Data.ColumnOptions.Collation { get; init; }",
+      "implicit_member": false,
+      "kind": "Property",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.ColumnOptions"
+    },
+    {
+      "id": "P:NativeWeave.Data.ColumnOptions.IsConcurrencyToken",
+      "signature": "public bool NativeWeave.Data.ColumnOptions.IsConcurrencyToken { get; init; }",
+      "implicit_member": false,
+      "kind": "Property",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.ColumnOptions"
+    },
+    {
+      "id": "P:NativeWeave.Data.ColumnOptions.IsGenerated",
+      "signature": "public bool NativeWeave.Data.ColumnOptions.IsGenerated { get; init; }",
+      "implicit_member": false,
+      "kind": "Property",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.ColumnOptions"
+    },
+    {
+      "id": "P:NativeWeave.Data.ColumnOptions.IsPrimaryKey",
+      "signature": "public bool NativeWeave.Data.ColumnOptions.IsPrimaryKey { get; init; }",
+      "implicit_member": false,
+      "kind": "Property",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.ColumnOptions"
+    },
+    {
+      "id": "P:NativeWeave.Data.ColumnOptions.MaxLength",
+      "signature": "public int? NativeWeave.Data.ColumnOptions.MaxLength { get; init; }",
+      "implicit_member": false,
+      "kind": "Property",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.ColumnOptions"
+    },
+    {
+      "id": "T:NativeWeave.Data.ConcurrencyCheck`1",
+      "signature": "public sealed class NativeWeave.Data.ConcurrencyCheck<TEntity> where TEntity : class",
+      "implicit_member": false,
+      "kind": "NamedType",
+      "type_kind": "Class",
+      "parameters": [],
+      "type_parameters": [
+        {
+          "name": "TEntity",
+          "ordinal": 0,
+          "variance": "None",
+          "attributes": [],
+          "has_reference_type_constraint": true,
+          "reference_type_constraint_nullable": "NotAnnotated",
+          "has_value_type_constraint": false,
+          "has_unmanaged_type_constraint": false,
+          "has_notnull_constraint": false,
+          "has_constructor_constraint": false,
+          "allows_ref_like_type": false,
+          "constraint_types": []
+        }
+      ],
+      "semantic_policy": "NativeWeave.Data.ConcurrencyCheck"
+    },
+    {
+      "id": "M:NativeWeave.Data.ConcurrencyCheck`1.#ctor",
+      "signature": "public NativeWeave.Data.ConcurrencyCheck<TEntity>.ConcurrencyCheck()",
+      "implicit_member": false,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.ConcurrencyCheck"
+    },
+    {
+      "id": "M:NativeWeave.Data.ConcurrencyCheck`1.Expect``1(NativeWeave.Data.Column{`0,``0},``0)",
+      "signature": "public NativeWeave.Data.ConcurrencyCheck<TEntity> NativeWeave.Data.ConcurrencyCheck<TEntity>.Expect<T>(NativeWeave.Data.Column<TEntity, T> column, T value)",
+      "implicit_member": false,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [
+        {
+          "name": "column",
+          "type": "NativeWeave.Data.Column<TEntity, T>",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        },
+        {
+          "name": "value",
+          "type": "T",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        }
+      ],
+      "type_parameters": [
+        {
+          "name": "T",
+          "ordinal": 0,
+          "variance": "None",
+          "attributes": [],
+          "has_reference_type_constraint": false,
+          "reference_type_constraint_nullable": "None",
+          "has_value_type_constraint": false,
+          "has_unmanaged_type_constraint": false,
+          "has_notnull_constraint": false,
+          "has_constructor_constraint": false,
+          "allows_ref_like_type": false,
+          "constraint_types": []
+        }
+      ],
+      "semantic_policy": "NativeWeave.Data.ConcurrencyCheck"
+    },
+    {
+      "id": "T:NativeWeave.Data.DatabaseCapabilityException",
+      "signature": "public sealed class NativeWeave.Data.DatabaseCapabilityException : NativeWeave.Data.DatabaseException",
+      "implicit_member": false,
+      "kind": "NamedType",
+      "type_kind": "Class",
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.DatabaseCapabilityException"
+    },
+    {
+      "id": "M:NativeWeave.Data.DatabaseCapabilityException.#ctor(System.String,System.String)",
+      "signature": "public NativeWeave.Data.DatabaseCapabilityException.DatabaseCapabilityException(string capability, string provider)",
+      "implicit_member": false,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [
+        {
+          "name": "capability",
+          "type": "string",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        },
+        {
+          "name": "provider",
+          "type": "string",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        }
+      ],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.DatabaseCapabilityException"
+    },
+    {
+      "id": "P:NativeWeave.Data.DatabaseCapabilityException.Capability",
+      "signature": "public string NativeWeave.Data.DatabaseCapabilityException.Capability { get; }",
+      "implicit_member": false,
+      "kind": "Property",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.DatabaseCapabilityException"
+    },
+    {
+      "id": "P:NativeWeave.Data.DatabaseCapabilityException.Provider",
+      "signature": "public string NativeWeave.Data.DatabaseCapabilityException.Provider { get; }",
+      "implicit_member": false,
+      "kind": "Property",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.DatabaseCapabilityException"
+    },
+    {
+      "id": "T:NativeWeave.Data.DatabaseErrorKind",
+      "signature": "public enum NativeWeave.Data.DatabaseErrorKind : int",
+      "implicit_member": false,
+      "kind": "NamedType",
+      "type_kind": "Enum",
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.DatabaseErrorKind"
+    },
+    {
+      "id": "F:NativeWeave.Data.DatabaseErrorKind.ConcurrentUse",
+      "signature": "NativeWeave.Data.DatabaseErrorKind.ConcurrentUse = 6",
+      "implicit_member": false,
+      "kind": "Field",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.DatabaseErrorKind"
+    },
+    {
+      "id": "F:NativeWeave.Data.DatabaseErrorKind.Constraint",
+      "signature": "NativeWeave.Data.DatabaseErrorKind.Constraint = 1",
+      "implicit_member": false,
+      "kind": "Field",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.DatabaseErrorKind"
+    },
+    {
+      "id": "F:NativeWeave.Data.DatabaseErrorKind.Conversion",
+      "signature": "NativeWeave.Data.DatabaseErrorKind.Conversion = 2",
+      "implicit_member": false,
+      "kind": "Field",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.DatabaseErrorKind"
+    },
+    {
+      "id": "F:NativeWeave.Data.DatabaseErrorKind.InvalidState",
+      "signature": "NativeWeave.Data.DatabaseErrorKind.InvalidState = 7",
+      "implicit_member": false,
+      "kind": "Field",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.DatabaseErrorKind"
+    },
+    {
+      "id": "F:NativeWeave.Data.DatabaseErrorKind.Provider",
+      "signature": "NativeWeave.Data.DatabaseErrorKind.Provider = 0",
+      "implicit_member": false,
+      "kind": "Field",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.DatabaseErrorKind"
+    },
+    {
+      "id": "F:NativeWeave.Data.DatabaseErrorKind.ResourceLimit",
+      "signature": "NativeWeave.Data.DatabaseErrorKind.ResourceLimit = 5",
+      "implicit_member": false,
+      "kind": "Field",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.DatabaseErrorKind"
+    },
+    {
+      "id": "F:NativeWeave.Data.DatabaseErrorKind.ShapeMismatch",
+      "signature": "NativeWeave.Data.DatabaseErrorKind.ShapeMismatch = 3",
+      "implicit_member": false,
+      "kind": "Field",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.DatabaseErrorKind"
+    },
+    {
+      "id": "F:NativeWeave.Data.DatabaseErrorKind.UnknownOutcome",
+      "signature": "NativeWeave.Data.DatabaseErrorKind.UnknownOutcome = 8",
+      "implicit_member": false,
+      "kind": "Field",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.DatabaseErrorKind"
+    },
+    {
+      "id": "F:NativeWeave.Data.DatabaseErrorKind.UnsupportedCapability",
+      "signature": "NativeWeave.Data.DatabaseErrorKind.UnsupportedCapability = 4",
+      "implicit_member": false,
+      "kind": "Field",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.DatabaseErrorKind"
+    },
+    {
+      "id": "M:NativeWeave.Data.DatabaseErrorKind.#ctor",
+      "signature": "public NativeWeave.Data.DatabaseErrorKind.DatabaseErrorKind()",
+      "implicit_member": true,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.DatabaseErrorKind"
+    },
+    {
+      "id": "T:NativeWeave.Data.DatabaseException",
+      "signature": "public class NativeWeave.Data.DatabaseException : System.Exception",
+      "implicit_member": false,
+      "kind": "NamedType",
+      "type_kind": "Class",
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.DatabaseException"
+    },
+    {
+      "id": "M:NativeWeave.Data.DatabaseException.#ctor(System.String,NativeWeave.Data.DatabaseErrorKind,System.String,System.UInt64,System.Exception)",
+      "signature": "public NativeWeave.Data.DatabaseException.DatabaseException(string message, NativeWeave.Data.DatabaseErrorKind kind, string? providerCode = null, ulong correlationId = 0, System.Exception? innerException = null)",
+      "implicit_member": false,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [
+        {
+          "name": "message",
+          "type": "string",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        },
+        {
+          "name": "kind",
+          "type": "NativeWeave.Data.DatabaseErrorKind",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        },
+        {
+          "name": "providerCode",
+          "type": "string?",
+          "nullable": "Annotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": true,
+          "params": false,
+          "has_explicit_default_value": true,
+          "default_value": ""
+        },
+        {
+          "name": "correlationId",
+          "type": "ulong",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": true,
+          "params": false,
+          "has_explicit_default_value": true,
+          "default_value": "0"
+        },
+        {
+          "name": "innerException",
+          "type": "System.Exception?",
+          "nullable": "Annotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": true,
+          "params": false,
+          "has_explicit_default_value": true,
+          "default_value": ""
+        }
+      ],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.DatabaseException"
+    },
+    {
+      "id": "P:NativeWeave.Data.DatabaseException.CorrelationId",
+      "signature": "public ulong NativeWeave.Data.DatabaseException.CorrelationId { get; }",
+      "implicit_member": false,
+      "kind": "Property",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.DatabaseException"
+    },
+    {
+      "id": "P:NativeWeave.Data.DatabaseException.IsTransient",
+      "signature": "public bool NativeWeave.Data.DatabaseException.IsTransient { get; }",
+      "implicit_member": false,
+      "kind": "Property",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.DatabaseException"
+    },
+    {
+      "id": "P:NativeWeave.Data.DatabaseException.Kind",
+      "signature": "public NativeWeave.Data.DatabaseErrorKind NativeWeave.Data.DatabaseException.Kind { get; }",
+      "implicit_member": false,
+      "kind": "Property",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.DatabaseException"
+    },
+    {
+      "id": "P:NativeWeave.Data.DatabaseException.ProviderCode",
+      "signature": "public string? NativeWeave.Data.DatabaseException.ProviderCode { get; }",
+      "implicit_member": false,
+      "kind": "Property",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.DatabaseException"
+    },
+    {
+      "id": "T:NativeWeave.Data.EntityKey`1",
+      "signature": "public sealed class NativeWeave.Data.EntityKey<TEntity> where TEntity : class",
+      "implicit_member": false,
+      "kind": "NamedType",
+      "type_kind": "Class",
+      "parameters": [],
+      "type_parameters": [
+        {
+          "name": "TEntity",
+          "ordinal": 0,
+          "variance": "None",
+          "attributes": [],
+          "has_reference_type_constraint": true,
+          "reference_type_constraint_nullable": "NotAnnotated",
+          "has_value_type_constraint": false,
+          "has_unmanaged_type_constraint": false,
+          "has_notnull_constraint": false,
+          "has_constructor_constraint": false,
+          "allows_ref_like_type": false,
+          "constraint_types": []
+        }
+      ],
+      "semantic_policy": "NativeWeave.Data.EntityKey"
+    },
+    {
+      "id": "M:NativeWeave.Data.EntityKey`1.And``1(NativeWeave.Data.Column{`0,``0},``0)",
+      "signature": "public NativeWeave.Data.EntityKey<TEntity> NativeWeave.Data.EntityKey<TEntity>.And<T>(NativeWeave.Data.Column<TEntity, T> column, T value)",
+      "implicit_member": false,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [
+        {
+          "name": "column",
+          "type": "NativeWeave.Data.Column<TEntity, T>",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        },
+        {
+          "name": "value",
+          "type": "T",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        }
+      ],
+      "type_parameters": [
+        {
+          "name": "T",
+          "ordinal": 0,
+          "variance": "None",
+          "attributes": [],
+          "has_reference_type_constraint": false,
+          "reference_type_constraint_nullable": "None",
+          "has_value_type_constraint": false,
+          "has_unmanaged_type_constraint": false,
+          "has_notnull_constraint": false,
+          "has_constructor_constraint": false,
+          "allows_ref_like_type": false,
+          "constraint_types": []
+        }
+      ],
+      "semantic_policy": "NativeWeave.Data.EntityKey"
+    },
+    {
+      "id": "T:NativeWeave.Data.EntityWriter`1",
+      "signature": "public delegate void NativeWeave.Data.EntityWriter<T>(NativeWeave.Data.RowWriter row, T value)",
+      "implicit_member": false,
+      "kind": "NamedType",
+      "type_kind": "Delegate",
+      "parameters": [
+        {
+          "name": "row",
+          "type": "NativeWeave.Data.RowWriter",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        },
+        {
+          "name": "value",
+          "type": "T",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        }
+      ],
+      "type_parameters": [
+        {
+          "name": "T",
+          "ordinal": 0,
+          "variance": "None",
+          "attributes": [],
+          "has_reference_type_constraint": false,
+          "reference_type_constraint_nullable": "None",
+          "has_value_type_constraint": false,
+          "has_unmanaged_type_constraint": false,
+          "has_notnull_constraint": false,
+          "has_constructor_constraint": false,
+          "allows_ref_like_type": false,
+          "constraint_types": []
+        }
+      ],
+      "semantic_policy": "NativeWeave.Data.EntityWriter"
+    },
+    {
+      "id": "M:NativeWeave.Data.EntityWriter`1.#ctor(System.Object,System.IntPtr)",
+      "signature": "public NativeWeave.Data.EntityWriter<T>.EntityWriter(object @object, nint method)",
+      "implicit_member": true,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [
+        {
+          "name": "object",
+          "type": "object",
+          "nullable": "None",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        },
+        {
+          "name": "method",
+          "type": "nint",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        }
+      ],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.EntityWriter"
+    },
+    {
+      "id": "M:NativeWeave.Data.EntityWriter`1.BeginInvoke(NativeWeave.Data.RowWriter,`0,System.AsyncCallback,System.Object)",
+      "signature": "public virtual System.IAsyncResult NativeWeave.Data.EntityWriter<T>.BeginInvoke(NativeWeave.Data.RowWriter row, T value, System.AsyncCallback callback, object @object)",
+      "implicit_member": true,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [
+        {
+          "name": "row",
+          "type": "NativeWeave.Data.RowWriter",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        },
+        {
+          "name": "value",
+          "type": "T",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        },
+        {
+          "name": "callback",
+          "type": "System.AsyncCallback",
+          "nullable": "None",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        },
+        {
+          "name": "object",
+          "type": "object",
+          "nullable": "None",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        }
+      ],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.EntityWriter"
+    },
+    {
+      "id": "M:NativeWeave.Data.EntityWriter`1.EndInvoke(System.IAsyncResult)",
+      "signature": "public virtual void NativeWeave.Data.EntityWriter<T>.EndInvoke(System.IAsyncResult result)",
+      "implicit_member": true,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [
+        {
+          "name": "result",
+          "type": "System.IAsyncResult",
+          "nullable": "None",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        }
+      ],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.EntityWriter"
+    },
+    {
+      "id": "M:NativeWeave.Data.EntityWriter`1.Invoke(NativeWeave.Data.RowWriter,`0)",
+      "signature": "public virtual void NativeWeave.Data.EntityWriter<T>.Invoke(NativeWeave.Data.RowWriter row, T value)",
+      "implicit_member": true,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [
+        {
+          "name": "row",
+          "type": "NativeWeave.Data.RowWriter",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        },
+        {
+          "name": "value",
+          "type": "T",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        }
+      ],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.EntityWriter"
+    },
+    {
+      "id": "T:NativeWeave.Data.Projection`1",
+      "signature": "public sealed class NativeWeave.Data.Projection<T>",
+      "implicit_member": false,
+      "kind": "NamedType",
+      "type_kind": "Class",
+      "parameters": [],
+      "type_parameters": [
+        {
+          "name": "T",
+          "ordinal": 0,
+          "variance": "None",
+          "attributes": [],
+          "has_reference_type_constraint": false,
+          "reference_type_constraint_nullable": "None",
+          "has_value_type_constraint": false,
+          "has_unmanaged_type_constraint": false,
+          "has_notnull_constraint": false,
+          "has_constructor_constraint": false,
+          "allows_ref_like_type": false,
+          "constraint_types": []
+        }
+      ],
+      "semantic_policy": "NativeWeave.Data.Projection"
+    },
+    {
+      "id": "M:NativeWeave.Data.Projection`1.Create(System.ReadOnlySpan{NativeWeave.Data.ResultField},NativeWeave.Data.RowMaterializer{`0})",
+      "signature": "public static NativeWeave.Data.Projection<T> NativeWeave.Data.Projection<T>.Create(System.ReadOnlySpan<NativeWeave.Data.ResultField> fields, NativeWeave.Data.RowMaterializer<T> materializer)",
+      "implicit_member": false,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [
+        {
+          "name": "fields",
+          "type": "System.ReadOnlySpan<NativeWeave.Data.ResultField>",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        },
+        {
+          "name": "materializer",
+          "type": "NativeWeave.Data.RowMaterializer<T>",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        }
+      ],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.Projection"
+    },
+    {
+      "id": "P:NativeWeave.Data.Projection`1.ShapeHash",
+      "signature": "public string NativeWeave.Data.Projection<T>.ShapeHash { get; }",
+      "implicit_member": false,
+      "kind": "Property",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.Projection"
+    },
+    {
+      "id": "T:NativeWeave.Data.Relation`2",
+      "signature": "public sealed class NativeWeave.Data.Relation<TParent, TChild> where TParent : class where TChild : class",
+      "implicit_member": false,
+      "kind": "NamedType",
+      "type_kind": "Class",
+      "parameters": [],
+      "type_parameters": [
+        {
+          "name": "TParent",
+          "ordinal": 0,
+          "variance": "None",
+          "attributes": [],
+          "has_reference_type_constraint": true,
+          "reference_type_constraint_nullable": "NotAnnotated",
+          "has_value_type_constraint": false,
+          "has_unmanaged_type_constraint": false,
+          "has_notnull_constraint": false,
+          "has_constructor_constraint": false,
+          "allows_ref_like_type": false,
+          "constraint_types": []
+        },
+        {
+          "name": "TChild",
+          "ordinal": 1,
+          "variance": "None",
+          "attributes": [],
+          "has_reference_type_constraint": true,
+          "reference_type_constraint_nullable": "NotAnnotated",
+          "has_value_type_constraint": false,
+          "has_unmanaged_type_constraint": false,
+          "has_notnull_constraint": false,
+          "has_constructor_constraint": false,
+          "allows_ref_like_type": false,
+          "constraint_types": []
+        }
+      ],
+      "semantic_policy": "NativeWeave.Data.Relation"
+    },
+    {
+      "id": "M:NativeWeave.Data.Relation`2.AndOptionalReference``1(NativeWeave.Data.Column{`0,``0},NativeWeave.Data.Column{`1,``0})",
+      "signature": "public NativeWeave.Data.Relation<TParent, TChild> NativeWeave.Data.Relation<TParent, TChild>.AndOptionalReference<T>(NativeWeave.Data.Column<TParent, T> parentKey, NativeWeave.Data.Column<TChild, T?> foreignKey) where T : class",
+      "implicit_member": false,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [
+        {
+          "name": "parentKey",
+          "type": "NativeWeave.Data.Column<TParent, T>",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        },
+        {
+          "name": "foreignKey",
+          "type": "NativeWeave.Data.Column<TChild, T?>",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        }
+      ],
+      "type_parameters": [
+        {
+          "name": "T",
+          "ordinal": 0,
+          "variance": "None",
+          "attributes": [],
+          "has_reference_type_constraint": true,
+          "reference_type_constraint_nullable": "NotAnnotated",
+          "has_value_type_constraint": false,
+          "has_unmanaged_type_constraint": false,
+          "has_notnull_constraint": false,
+          "has_constructor_constraint": false,
+          "allows_ref_like_type": false,
+          "constraint_types": []
+        }
+      ],
+      "semantic_policy": "NativeWeave.Data.Relation"
+    },
+    {
+      "id": "M:NativeWeave.Data.Relation`2.AndOptional``1(NativeWeave.Data.Column{`0,``0},NativeWeave.Data.Column{`1,System.Nullable{``0}})",
+      "signature": "public NativeWeave.Data.Relation<TParent, TChild> NativeWeave.Data.Relation<TParent, TChild>.AndOptional<T>(NativeWeave.Data.Column<TParent, T> parentKey, NativeWeave.Data.Column<TChild, T?> foreignKey) where T : struct",
+      "implicit_member": false,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [
+        {
+          "name": "parentKey",
+          "type": "NativeWeave.Data.Column<TParent, T>",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        },
+        {
+          "name": "foreignKey",
+          "type": "NativeWeave.Data.Column<TChild, T?>",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        }
+      ],
+      "type_parameters": [
+        {
+          "name": "T",
+          "ordinal": 0,
+          "variance": "None",
+          "attributes": [],
+          "has_reference_type_constraint": false,
+          "reference_type_constraint_nullable": "None",
+          "has_value_type_constraint": true,
+          "has_unmanaged_type_constraint": false,
+          "has_notnull_constraint": false,
+          "has_constructor_constraint": false,
+          "allows_ref_like_type": false,
+          "constraint_types": []
+        }
+      ],
+      "semantic_policy": "NativeWeave.Data.Relation"
+    },
+    {
+      "id": "M:NativeWeave.Data.Relation`2.And``1(NativeWeave.Data.Column{`0,``0},NativeWeave.Data.Column{`1,``0})",
+      "signature": "public NativeWeave.Data.Relation<TParent, TChild> NativeWeave.Data.Relation<TParent, TChild>.And<T>(NativeWeave.Data.Column<TParent, T> parentKey, NativeWeave.Data.Column<TChild, T> foreignKey)",
+      "implicit_member": false,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [
+        {
+          "name": "parentKey",
+          "type": "NativeWeave.Data.Column<TParent, T>",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        },
+        {
+          "name": "foreignKey",
+          "type": "NativeWeave.Data.Column<TChild, T>",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        }
+      ],
+      "type_parameters": [
+        {
+          "name": "T",
+          "ordinal": 0,
+          "variance": "None",
+          "attributes": [],
+          "has_reference_type_constraint": false,
+          "reference_type_constraint_nullable": "None",
+          "has_value_type_constraint": false,
+          "has_unmanaged_type_constraint": false,
+          "has_notnull_constraint": false,
+          "has_constructor_constraint": false,
+          "allows_ref_like_type": false,
+          "constraint_types": []
+        }
+      ],
+      "semantic_policy": "NativeWeave.Data.Relation"
+    },
+    {
+      "id": "M:NativeWeave.Data.Relation`2.CreateOptionalReference``1(NativeWeave.Data.Table{`0},NativeWeave.Data.Column{`0,``0},NativeWeave.Data.Table{`1},NativeWeave.Data.Column{`1,``0})",
+      "signature": "public static NativeWeave.Data.Relation<TParent, TChild> NativeWeave.Data.Relation<TParent, TChild>.CreateOptionalReference<T>(NativeWeave.Data.Table<TParent> parent, NativeWeave.Data.Column<TParent, T> parentKey, NativeWeave.Data.Table<TChild> child, NativeWeave.Data.Column<TChild, T?> foreignKey) where T : class",
+      "implicit_member": false,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [
+        {
+          "name": "parent",
+          "type": "NativeWeave.Data.Table<TParent>",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        },
+        {
+          "name": "parentKey",
+          "type": "NativeWeave.Data.Column<TParent, T>",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        },
+        {
+          "name": "child",
+          "type": "NativeWeave.Data.Table<TChild>",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        },
+        {
+          "name": "foreignKey",
+          "type": "NativeWeave.Data.Column<TChild, T?>",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        }
+      ],
+      "type_parameters": [
+        {
+          "name": "T",
+          "ordinal": 0,
+          "variance": "None",
+          "attributes": [],
+          "has_reference_type_constraint": true,
+          "reference_type_constraint_nullable": "NotAnnotated",
+          "has_value_type_constraint": false,
+          "has_unmanaged_type_constraint": false,
+          "has_notnull_constraint": false,
+          "has_constructor_constraint": false,
+          "allows_ref_like_type": false,
+          "constraint_types": []
+        }
+      ],
+      "semantic_policy": "NativeWeave.Data.Relation"
+    },
+    {
+      "id": "M:NativeWeave.Data.Relation`2.CreateOptional``1(NativeWeave.Data.Table{`0},NativeWeave.Data.Column{`0,``0},NativeWeave.Data.Table{`1},NativeWeave.Data.Column{`1,System.Nullable{``0}})",
+      "signature": "public static NativeWeave.Data.Relation<TParent, TChild> NativeWeave.Data.Relation<TParent, TChild>.CreateOptional<T>(NativeWeave.Data.Table<TParent> parent, NativeWeave.Data.Column<TParent, T> parentKey, NativeWeave.Data.Table<TChild> child, NativeWeave.Data.Column<TChild, T?> foreignKey) where T : struct",
+      "implicit_member": false,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [
+        {
+          "name": "parent",
+          "type": "NativeWeave.Data.Table<TParent>",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        },
+        {
+          "name": "parentKey",
+          "type": "NativeWeave.Data.Column<TParent, T>",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        },
+        {
+          "name": "child",
+          "type": "NativeWeave.Data.Table<TChild>",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        },
+        {
+          "name": "foreignKey",
+          "type": "NativeWeave.Data.Column<TChild, T?>",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        }
+      ],
+      "type_parameters": [
+        {
+          "name": "T",
+          "ordinal": 0,
+          "variance": "None",
+          "attributes": [],
+          "has_reference_type_constraint": false,
+          "reference_type_constraint_nullable": "None",
+          "has_value_type_constraint": true,
+          "has_unmanaged_type_constraint": false,
+          "has_notnull_constraint": false,
+          "has_constructor_constraint": false,
+          "allows_ref_like_type": false,
+          "constraint_types": []
+        }
+      ],
+      "semantic_policy": "NativeWeave.Data.Relation"
+    },
+    {
+      "id": "M:NativeWeave.Data.Relation`2.Create``1(NativeWeave.Data.Table{`0},NativeWeave.Data.Column{`0,``0},NativeWeave.Data.Table{`1},NativeWeave.Data.Column{`1,``0})",
+      "signature": "public static NativeWeave.Data.Relation<TParent, TChild> NativeWeave.Data.Relation<TParent, TChild>.Create<T>(NativeWeave.Data.Table<TParent> parent, NativeWeave.Data.Column<TParent, T> parentKey, NativeWeave.Data.Table<TChild> child, NativeWeave.Data.Column<TChild, T> foreignKey)",
+      "implicit_member": false,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [
+        {
+          "name": "parent",
+          "type": "NativeWeave.Data.Table<TParent>",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        },
+        {
+          "name": "parentKey",
+          "type": "NativeWeave.Data.Column<TParent, T>",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        },
+        {
+          "name": "child",
+          "type": "NativeWeave.Data.Table<TChild>",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        },
+        {
+          "name": "foreignKey",
+          "type": "NativeWeave.Data.Column<TChild, T>",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        }
+      ],
+      "type_parameters": [
+        {
+          "name": "T",
+          "ordinal": 0,
+          "variance": "None",
+          "attributes": [],
+          "has_reference_type_constraint": false,
+          "reference_type_constraint_nullable": "None",
+          "has_value_type_constraint": false,
+          "has_unmanaged_type_constraint": false,
+          "has_notnull_constraint": false,
+          "has_constructor_constraint": false,
+          "allows_ref_like_type": false,
+          "constraint_types": []
+        }
+      ],
+      "semantic_policy": "NativeWeave.Data.Relation"
+    },
+    {
+      "id": "T:NativeWeave.Data.ResultColumn`1",
+      "signature": "public readonly struct NativeWeave.Data.ResultColumn<T>",
+      "implicit_member": false,
+      "kind": "NamedType",
+      "type_kind": "Struct",
+      "parameters": [],
+      "type_parameters": [
+        {
+          "name": "T",
+          "ordinal": 0,
+          "variance": "None",
+          "attributes": [],
+          "has_reference_type_constraint": false,
+          "reference_type_constraint_nullable": "None",
+          "has_value_type_constraint": false,
+          "has_unmanaged_type_constraint": false,
+          "has_notnull_constraint": false,
+          "has_constructor_constraint": false,
+          "allows_ref_like_type": false,
+          "constraint_types": []
+        }
+      ],
+      "semantic_policy": "NativeWeave.Data.ResultColumn"
+    },
+    {
+      "id": "M:NativeWeave.Data.ResultColumn`1.#ctor",
+      "signature": "public NativeWeave.Data.ResultColumn<T>.ResultColumn()",
+      "implicit_member": true,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.ResultColumn"
+    },
+    {
+      "id": "P:NativeWeave.Data.ResultColumn`1.Name",
+      "signature": "public string NativeWeave.Data.ResultColumn<T>.Name { get; }",
+      "implicit_member": false,
+      "kind": "Property",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.ResultColumn"
+    },
+    {
+      "id": "P:NativeWeave.Data.ResultColumn`1.Ordinal",
+      "signature": "public int NativeWeave.Data.ResultColumn<T>.Ordinal { get; }",
+      "implicit_member": false,
+      "kind": "Property",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.ResultColumn"
+    },
+    {
+      "id": "T:NativeWeave.Data.ResultField",
+      "signature": "public sealed class NativeWeave.Data.ResultField",
+      "implicit_member": false,
+      "kind": "NamedType",
+      "type_kind": "Class",
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.ResultField"
+    },
+    {
+      "id": "M:NativeWeave.Data.ResultField.Create``1(System.String,NativeWeave.Data.ValueCodec{``0})",
+      "signature": "public static NativeWeave.Data.ResultField NativeWeave.Data.ResultField.Create<T>(string name, NativeWeave.Data.ValueCodec<T> codec)",
+      "implicit_member": false,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [
+        {
+          "name": "name",
+          "type": "string",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        },
+        {
+          "name": "codec",
+          "type": "NativeWeave.Data.ValueCodec<T>",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        }
+      ],
+      "type_parameters": [
+        {
+          "name": "T",
+          "ordinal": 0,
+          "variance": "None",
+          "attributes": [],
+          "has_reference_type_constraint": false,
+          "reference_type_constraint_nullable": "None",
+          "has_value_type_constraint": false,
+          "has_unmanaged_type_constraint": false,
+          "has_notnull_constraint": false,
+          "has_constructor_constraint": false,
+          "allows_ref_like_type": false,
+          "constraint_types": []
+        }
+      ],
+      "semantic_policy": "NativeWeave.Data.ResultField"
+    },
+    {
+      "id": "P:NativeWeave.Data.ResultField.CodecId",
+      "signature": "public uint NativeWeave.Data.ResultField.CodecId { get; }",
+      "implicit_member": false,
+      "kind": "Property",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.ResultField"
+    },
+    {
+      "id": "P:NativeWeave.Data.ResultField.IsNullable",
+      "signature": "public bool NativeWeave.Data.ResultField.IsNullable { get; }",
+      "implicit_member": false,
+      "kind": "Property",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.ResultField"
+    },
+    {
+      "id": "P:NativeWeave.Data.ResultField.Name",
+      "signature": "public string NativeWeave.Data.ResultField.Name { get; }",
+      "implicit_member": false,
+      "kind": "Property",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.ResultField"
+    },
+    {
+      "id": "T:NativeWeave.Data.RowMaterializer`1",
+      "signature": "public delegate T NativeWeave.Data.RowMaterializer<T>(NativeWeave.Data.RowReader row)",
+      "implicit_member": false,
+      "kind": "NamedType",
+      "type_kind": "Delegate",
+      "parameters": [
+        {
+          "name": "row",
+          "type": "NativeWeave.Data.RowReader",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        }
+      ],
+      "type_parameters": [
+        {
+          "name": "T",
+          "ordinal": 0,
+          "variance": "None",
+          "attributes": [],
+          "has_reference_type_constraint": false,
+          "reference_type_constraint_nullable": "None",
+          "has_value_type_constraint": false,
+          "has_unmanaged_type_constraint": false,
+          "has_notnull_constraint": false,
+          "has_constructor_constraint": false,
+          "allows_ref_like_type": false,
+          "constraint_types": []
+        }
+      ],
+      "semantic_policy": "NativeWeave.Data.RowMaterializer"
+    },
+    {
+      "id": "M:NativeWeave.Data.RowMaterializer`1.#ctor(System.Object,System.IntPtr)",
+      "signature": "public NativeWeave.Data.RowMaterializer<T>.RowMaterializer(object @object, nint method)",
+      "implicit_member": true,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [
+        {
+          "name": "object",
+          "type": "object",
+          "nullable": "None",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        },
+        {
+          "name": "method",
+          "type": "nint",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        }
+      ],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.RowMaterializer"
+    },
+    {
+      "id": "M:NativeWeave.Data.RowMaterializer`1.BeginInvoke(NativeWeave.Data.RowReader,System.AsyncCallback,System.Object)",
+      "signature": "public virtual System.IAsyncResult NativeWeave.Data.RowMaterializer<T>.BeginInvoke(NativeWeave.Data.RowReader row, System.AsyncCallback callback, object @object)",
+      "implicit_member": true,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [
+        {
+          "name": "row",
+          "type": "NativeWeave.Data.RowReader",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        },
+        {
+          "name": "callback",
+          "type": "System.AsyncCallback",
+          "nullable": "None",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        },
+        {
+          "name": "object",
+          "type": "object",
+          "nullable": "None",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        }
+      ],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.RowMaterializer"
+    },
+    {
+      "id": "M:NativeWeave.Data.RowMaterializer`1.EndInvoke(System.IAsyncResult)",
+      "signature": "public virtual T NativeWeave.Data.RowMaterializer<T>.EndInvoke(System.IAsyncResult result)",
+      "implicit_member": true,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [
+        {
+          "name": "result",
+          "type": "System.IAsyncResult",
+          "nullable": "None",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        }
+      ],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.RowMaterializer"
+    },
+    {
+      "id": "M:NativeWeave.Data.RowMaterializer`1.Invoke(NativeWeave.Data.RowReader)",
+      "signature": "public virtual T NativeWeave.Data.RowMaterializer<T>.Invoke(NativeWeave.Data.RowReader row)",
+      "implicit_member": true,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [
+        {
+          "name": "row",
+          "type": "NativeWeave.Data.RowReader",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        }
+      ],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.RowMaterializer"
+    },
+    {
+      "id": "T:NativeWeave.Data.RowReader",
+      "signature": "public readonly ref struct NativeWeave.Data.RowReader",
+      "implicit_member": false,
+      "kind": "NamedType",
+      "type_kind": "Struct",
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.RowReader"
+    },
+    {
+      "id": "M:NativeWeave.Data.RowReader.#ctor",
+      "signature": "public NativeWeave.Data.RowReader.RowReader()",
+      "implicit_member": true,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.RowReader"
+    },
+    {
+      "id": "M:NativeWeave.Data.RowReader.Get``1(NativeWeave.Data.ResultColumn{``0})",
+      "signature": "public T NativeWeave.Data.RowReader.Get<T>(NativeWeave.Data.ResultColumn<T> column)",
+      "implicit_member": false,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [
+        {
+          "name": "column",
+          "type": "NativeWeave.Data.ResultColumn<T>",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        }
+      ],
+      "type_parameters": [
+        {
+          "name": "T",
+          "ordinal": 0,
+          "variance": "None",
+          "attributes": [],
+          "has_reference_type_constraint": false,
+          "reference_type_constraint_nullable": "None",
+          "has_value_type_constraint": false,
+          "has_unmanaged_type_constraint": false,
+          "has_notnull_constraint": false,
+          "has_constructor_constraint": false,
+          "allows_ref_like_type": false,
+          "constraint_types": []
+        }
+      ],
+      "semantic_policy": "NativeWeave.Data.RowReader"
+    },
+    {
+      "id": "M:NativeWeave.Data.RowReader.Get``2(NativeWeave.Data.Column{``0,``1})",
+      "signature": "public T NativeWeave.Data.RowReader.Get<TEntity, T>(NativeWeave.Data.Column<TEntity, T> column) where TEntity : class",
+      "implicit_member": false,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [
+        {
+          "name": "column",
+          "type": "NativeWeave.Data.Column<TEntity, T>",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        }
+      ],
+      "type_parameters": [
+        {
+          "name": "TEntity",
+          "ordinal": 0,
+          "variance": "None",
+          "attributes": [],
+          "has_reference_type_constraint": true,
+          "reference_type_constraint_nullable": "NotAnnotated",
+          "has_value_type_constraint": false,
+          "has_unmanaged_type_constraint": false,
+          "has_notnull_constraint": false,
+          "has_constructor_constraint": false,
+          "allows_ref_like_type": false,
+          "constraint_types": []
+        },
+        {
+          "name": "T",
+          "ordinal": 1,
+          "variance": "None",
+          "attributes": [],
+          "has_reference_type_constraint": false,
+          "reference_type_constraint_nullable": "None",
+          "has_value_type_constraint": false,
+          "has_unmanaged_type_constraint": false,
+          "has_notnull_constraint": false,
+          "has_constructor_constraint": false,
+          "allows_ref_like_type": false,
+          "constraint_types": []
+        }
+      ],
+      "semantic_policy": "NativeWeave.Data.RowReader"
+    },
+    {
+      "id": "M:NativeWeave.Data.RowReader.IsNull(System.Int32)",
+      "signature": "public bool NativeWeave.Data.RowReader.IsNull(int ordinal)",
+      "implicit_member": false,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [
+        {
+          "name": "ordinal",
+          "type": "int",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        }
+      ],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.RowReader"
+    },
+    {
+      "id": "M:NativeWeave.Data.RowReader.Read``1(System.Int32,NativeWeave.Data.ValueCodec{``0})",
+      "signature": "public T NativeWeave.Data.RowReader.Read<T>(int ordinal, NativeWeave.Data.ValueCodec<T> codec)",
+      "implicit_member": false,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [
+        {
+          "name": "ordinal",
+          "type": "int",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        },
+        {
+          "name": "codec",
+          "type": "NativeWeave.Data.ValueCodec<T>",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        }
+      ],
+      "type_parameters": [
+        {
+          "name": "T",
+          "ordinal": 0,
+          "variance": "None",
+          "attributes": [],
+          "has_reference_type_constraint": false,
+          "reference_type_constraint_nullable": "None",
+          "has_value_type_constraint": false,
+          "has_unmanaged_type_constraint": false,
+          "has_notnull_constraint": false,
+          "has_constructor_constraint": false,
+          "allows_ref_like_type": false,
+          "constraint_types": []
+        }
+      ],
+      "semantic_policy": "NativeWeave.Data.RowReader"
+    },
+    {
+      "id": "T:NativeWeave.Data.RowWriter",
+      "signature": "public readonly ref struct NativeWeave.Data.RowWriter",
+      "implicit_member": false,
+      "kind": "NamedType",
+      "type_kind": "Struct",
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.RowWriter"
+    },
+    {
+      "id": "M:NativeWeave.Data.RowWriter.#ctor",
+      "signature": "public NativeWeave.Data.RowWriter.RowWriter()",
+      "implicit_member": true,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.RowWriter"
+    },
+    {
+      "id": "M:NativeWeave.Data.RowWriter.Set``2(NativeWeave.Data.Column{``0,``1},``1)",
+      "signature": "public void NativeWeave.Data.RowWriter.Set<TEntity, T>(NativeWeave.Data.Column<TEntity, T> column, T value) where TEntity : class",
+      "implicit_member": false,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [
+        {
+          "name": "column",
+          "type": "NativeWeave.Data.Column<TEntity, T>",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        },
+        {
+          "name": "value",
+          "type": "T",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        }
+      ],
+      "type_parameters": [
+        {
+          "name": "TEntity",
+          "ordinal": 0,
+          "variance": "None",
+          "attributes": [],
+          "has_reference_type_constraint": true,
+          "reference_type_constraint_nullable": "NotAnnotated",
+          "has_value_type_constraint": false,
+          "has_unmanaged_type_constraint": false,
+          "has_notnull_constraint": false,
+          "has_constructor_constraint": false,
+          "allows_ref_like_type": false,
+          "constraint_types": []
+        },
+        {
+          "name": "T",
+          "ordinal": 1,
+          "variance": "None",
+          "attributes": [],
+          "has_reference_type_constraint": false,
+          "reference_type_constraint_nullable": "None",
+          "has_value_type_constraint": false,
+          "has_unmanaged_type_constraint": false,
+          "has_notnull_constraint": false,
+          "has_constructor_constraint": false,
+          "allows_ref_like_type": false,
+          "constraint_types": []
+        }
+      ],
+      "semantic_policy": "NativeWeave.Data.RowWriter"
+    },
+    {
+      "id": "T:NativeWeave.Data.SqlCommand",
+      "signature": "public sealed class NativeWeave.Data.SqlCommand",
+      "implicit_member": false,
+      "kind": "NamedType",
+      "type_kind": "Class",
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.SqlCommand"
+    },
+    {
+      "id": "M:NativeWeave.Data.SqlCommand.Create(System.String,NativeWeave.Data.SqlParameters,NativeWeave.Data.SqlCommandKind,System.Nullable{System.TimeSpan})",
+      "signature": "public static NativeWeave.Data.SqlCommand NativeWeave.Data.SqlCommand.Create(string sql, NativeWeave.Data.SqlParameters? parameters = null, NativeWeave.Data.SqlCommandKind kind = NativeWeave.Data.SqlCommandKind.Query, System.TimeSpan? timeout = null)",
+      "implicit_member": false,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [
+        {
+          "name": "sql",
+          "type": "string",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        },
+        {
+          "name": "parameters",
+          "type": "NativeWeave.Data.SqlParameters?",
+          "nullable": "Annotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": true,
+          "params": false,
+          "has_explicit_default_value": true,
+          "default_value": ""
+        },
+        {
+          "name": "kind",
+          "type": "NativeWeave.Data.SqlCommandKind",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": true,
+          "params": false,
+          "has_explicit_default_value": true,
+          "default_value": "0"
+        },
+        {
+          "name": "timeout",
+          "type": "System.TimeSpan?",
+          "nullable": "Annotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": true,
+          "params": false,
+          "has_explicit_default_value": true,
+          "default_value": ""
+        }
+      ],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.SqlCommand"
+    },
+    {
+      "id": "M:NativeWeave.Data.SqlCommand.Parameterized(System.FormattableString,NativeWeave.Data.SqlCommandKind,System.Nullable{System.TimeSpan})",
+      "signature": "public static NativeWeave.Data.SqlCommand NativeWeave.Data.SqlCommand.Parameterized(System.FormattableString sql, NativeWeave.Data.SqlCommandKind kind = NativeWeave.Data.SqlCommandKind.Query, System.TimeSpan? timeout = null)",
+      "implicit_member": false,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [
+        {
+          "name": "sql",
+          "type": "System.FormattableString",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        },
+        {
+          "name": "kind",
+          "type": "NativeWeave.Data.SqlCommandKind",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": true,
+          "params": false,
+          "has_explicit_default_value": true,
+          "default_value": "0"
+        },
+        {
+          "name": "timeout",
+          "type": "System.TimeSpan?",
+          "nullable": "Annotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": true,
+          "params": false,
+          "has_explicit_default_value": true,
+          "default_value": ""
+        }
+      ],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.SqlCommand"
+    },
+    {
+      "id": "T:NativeWeave.Data.SqlCommandKind",
+      "signature": "public enum NativeWeave.Data.SqlCommandKind : int",
+      "implicit_member": false,
+      "kind": "NamedType",
+      "type_kind": "Enum",
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.SqlCommandKind"
+    },
+    {
+      "id": "F:NativeWeave.Data.SqlCommandKind.Mutation",
+      "signature": "NativeWeave.Data.SqlCommandKind.Mutation = 1",
+      "implicit_member": false,
+      "kind": "Field",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.SqlCommandKind"
+    },
+    {
+      "id": "F:NativeWeave.Data.SqlCommandKind.Query",
+      "signature": "NativeWeave.Data.SqlCommandKind.Query = 0",
+      "implicit_member": false,
+      "kind": "Field",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.SqlCommandKind"
+    },
+    {
+      "id": "F:NativeWeave.Data.SqlCommandKind.SessionMutating",
+      "signature": "NativeWeave.Data.SqlCommandKind.SessionMutating = 2",
+      "implicit_member": false,
+      "kind": "Field",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.SqlCommandKind"
+    },
+    {
+      "id": "M:NativeWeave.Data.SqlCommandKind.#ctor",
+      "signature": "public NativeWeave.Data.SqlCommandKind.SqlCommandKind()",
+      "implicit_member": true,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.SqlCommandKind"
+    },
+    {
+      "id": "T:NativeWeave.Data.SqlParameters",
+      "signature": "public sealed class NativeWeave.Data.SqlParameters",
+      "implicit_member": false,
+      "kind": "NamedType",
+      "type_kind": "Class",
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.SqlParameters"
+    },
+    {
+      "id": "M:NativeWeave.Data.SqlParameters.#ctor",
+      "signature": "public NativeWeave.Data.SqlParameters.SqlParameters()",
+      "implicit_member": false,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.SqlParameters"
+    },
+    {
+      "id": "M:NativeWeave.Data.SqlParameters.Add``1(System.String,``0,NativeWeave.Data.ValueCodec{``0})",
+      "signature": "public NativeWeave.Data.SqlParameters NativeWeave.Data.SqlParameters.Add<T>(string name, T value, NativeWeave.Data.ValueCodec<T> codec)",
+      "implicit_member": false,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [
+        {
+          "name": "name",
+          "type": "string",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        },
+        {
+          "name": "value",
+          "type": "T",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        },
+        {
+          "name": "codec",
+          "type": "NativeWeave.Data.ValueCodec<T>",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        }
+      ],
+      "type_parameters": [
+        {
+          "name": "T",
+          "ordinal": 0,
+          "variance": "None",
+          "attributes": [],
+          "has_reference_type_constraint": false,
+          "reference_type_constraint_nullable": "None",
+          "has_value_type_constraint": false,
+          "has_unmanaged_type_constraint": false,
+          "has_notnull_constraint": false,
+          "has_constructor_constraint": false,
+          "allows_ref_like_type": false,
+          "constraint_types": []
+        }
+      ],
+      "semantic_policy": "NativeWeave.Data.SqlParameters"
+    },
+    {
+      "id": "T:NativeWeave.Data.Table`1",
+      "signature": "public sealed class NativeWeave.Data.Table<TEntity> where TEntity : class",
+      "implicit_member": false,
+      "kind": "NamedType",
+      "type_kind": "Class",
+      "parameters": [],
+      "type_parameters": [
+        {
+          "name": "TEntity",
+          "ordinal": 0,
+          "variance": "None",
+          "attributes": [],
+          "has_reference_type_constraint": true,
+          "reference_type_constraint_nullable": "NotAnnotated",
+          "has_value_type_constraint": false,
+          "has_unmanaged_type_constraint": false,
+          "has_notnull_constraint": false,
+          "has_constructor_constraint": false,
+          "allows_ref_like_type": false,
+          "constraint_types": []
+        }
+      ],
+      "semantic_policy": "NativeWeave.Data.Table"
+    },
+    {
+      "id": "M:NativeWeave.Data.Table`1.Key``1(NativeWeave.Data.Column{`0,``0},``0)",
+      "signature": "public NativeWeave.Data.EntityKey<TEntity> NativeWeave.Data.Table<TEntity>.Key<T>(NativeWeave.Data.Column<TEntity, T> column, T value)",
+      "implicit_member": false,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [
+        {
+          "name": "column",
+          "type": "NativeWeave.Data.Column<TEntity, T>",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        },
+        {
+          "name": "value",
+          "type": "T",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        }
+      ],
+      "type_parameters": [
+        {
+          "name": "T",
+          "ordinal": 0,
+          "variance": "None",
+          "attributes": [],
+          "has_reference_type_constraint": false,
+          "reference_type_constraint_nullable": "None",
+          "has_value_type_constraint": false,
+          "has_unmanaged_type_constraint": false,
+          "has_notnull_constraint": false,
+          "has_constructor_constraint": false,
+          "allows_ref_like_type": false,
+          "constraint_types": []
+        }
+      ],
+      "semantic_policy": "NativeWeave.Data.Table"
+    },
+    {
+      "id": "M:NativeWeave.Data.Table`1.TryGetColumn``1(System.String,NativeWeave.Data.ValueCodec{``0},NativeWeave.Data.Column{`0,``0}@)",
+      "signature": "public bool NativeWeave.Data.Table<TEntity>.TryGetColumn<T>(string name, NativeWeave.Data.ValueCodec<T> codec, [System.Diagnostics.CodeAnalysis.NotNullWhenAttribute(true)] out NativeWeave.Data.Column<TEntity, T>? column)",
+      "implicit_member": false,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [
+        {
+          "name": "name",
+          "type": "string",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        },
+        {
+          "name": "codec",
+          "type": "NativeWeave.Data.ValueCodec<T>",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        },
+        {
+          "name": "column",
+          "type": "NativeWeave.Data.Column<TEntity, T>?",
+          "nullable": "Annotated",
+          "attributes": [
+            "System.Diagnostics.CodeAnalysis.NotNullWhenAttribute(true)"
+          ],
+          "ref_kind": "Out",
+          "scoped_kind": "ScopedRef",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        }
+      ],
+      "type_parameters": [
+        {
+          "name": "T",
+          "ordinal": 0,
+          "variance": "None",
+          "attributes": [],
+          "has_reference_type_constraint": false,
+          "reference_type_constraint_nullable": "None",
+          "has_value_type_constraint": false,
+          "has_unmanaged_type_constraint": false,
+          "has_notnull_constraint": false,
+          "has_constructor_constraint": false,
+          "allows_ref_like_type": false,
+          "constraint_types": []
+        }
+      ],
+      "semantic_policy": "NativeWeave.Data.Table"
+    },
+    {
+      "id": "P:NativeWeave.Data.Table`1.MetadataHash",
+      "signature": "public string NativeWeave.Data.Table<TEntity>.MetadataHash { get; }",
+      "implicit_member": false,
+      "kind": "Property",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.Table"
+    },
+    {
+      "id": "P:NativeWeave.Data.Table`1.Name",
+      "signature": "public string NativeWeave.Data.Table<TEntity>.Name { get; }",
+      "implicit_member": false,
+      "kind": "Property",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.Table"
+    },
+    {
+      "id": "P:NativeWeave.Data.Table`1.Row",
+      "signature": "public NativeWeave.Data.Projection<TEntity> NativeWeave.Data.Table<TEntity>.Row { get; }",
+      "implicit_member": false,
+      "kind": "Property",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.Table"
+    },
+    {
+      "id": "P:NativeWeave.Data.Table`1.Schema",
+      "signature": "public string? NativeWeave.Data.Table<TEntity>.Schema { get; }",
+      "implicit_member": false,
+      "kind": "Property",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.Table"
+    },
+    {
+      "id": "T:NativeWeave.Data.TableBuilder`1",
+      "signature": "public sealed class NativeWeave.Data.TableBuilder<TEntity> where TEntity : class",
+      "implicit_member": false,
+      "kind": "NamedType",
+      "type_kind": "Class",
+      "parameters": [],
+      "type_parameters": [
+        {
+          "name": "TEntity",
+          "ordinal": 0,
+          "variance": "None",
+          "attributes": [],
+          "has_reference_type_constraint": true,
+          "reference_type_constraint_nullable": "NotAnnotated",
+          "has_value_type_constraint": false,
+          "has_unmanaged_type_constraint": false,
+          "has_notnull_constraint": false,
+          "has_constructor_constraint": false,
+          "allows_ref_like_type": false,
+          "constraint_types": []
+        }
+      ],
+      "semantic_policy": "NativeWeave.Data.TableBuilder"
+    },
+    {
+      "id": "M:NativeWeave.Data.TableBuilder`1.#ctor(System.String,System.String)",
+      "signature": "public NativeWeave.Data.TableBuilder<TEntity>.TableBuilder(string tableName, string? schema = null)",
+      "implicit_member": false,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [
+        {
+          "name": "tableName",
+          "type": "string",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        },
+        {
+          "name": "schema",
+          "type": "string?",
+          "nullable": "Annotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": true,
+          "params": false,
+          "has_explicit_default_value": true,
+          "default_value": ""
+        }
+      ],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.TableBuilder"
+    },
+    {
+      "id": "M:NativeWeave.Data.TableBuilder`1.Build(NativeWeave.Data.RowMaterializer{`0},NativeWeave.Data.EntityWriter{`0})",
+      "signature": "public NativeWeave.Data.Table<TEntity> NativeWeave.Data.TableBuilder<TEntity>.Build(NativeWeave.Data.RowMaterializer<TEntity> materializer, NativeWeave.Data.EntityWriter<TEntity> writer)",
+      "implicit_member": false,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [
+        {
+          "name": "materializer",
+          "type": "NativeWeave.Data.RowMaterializer<TEntity>",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        },
+        {
+          "name": "writer",
+          "type": "NativeWeave.Data.EntityWriter<TEntity>",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        }
+      ],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.TableBuilder"
+    },
+    {
+      "id": "M:NativeWeave.Data.TableBuilder`1.Column``1(System.String,NativeWeave.Data.ValueCodec{``0},NativeWeave.Data.ColumnOptions)",
+      "signature": "public NativeWeave.Data.Column<TEntity, T> NativeWeave.Data.TableBuilder<TEntity>.Column<T>(string name, NativeWeave.Data.ValueCodec<T> codec, NativeWeave.Data.ColumnOptions? options = null)",
+      "implicit_member": false,
+      "kind": "Method",
+      "type_kind": null,
+      "parameters": [
+        {
+          "name": "name",
+          "type": "string",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        },
+        {
+          "name": "codec",
+          "type": "NativeWeave.Data.ValueCodec<T>",
+          "nullable": "NotAnnotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": false,
+          "params": false,
+          "has_explicit_default_value": false,
+          "default_value": null
+        },
+        {
+          "name": "options",
+          "type": "NativeWeave.Data.ColumnOptions?",
+          "nullable": "Annotated",
+          "attributes": [],
+          "ref_kind": "None",
+          "scoped_kind": "None",
+          "optional": true,
+          "params": false,
+          "has_explicit_default_value": true,
+          "default_value": ""
+        }
+      ],
+      "type_parameters": [
+        {
+          "name": "T",
+          "ordinal": 0,
+          "variance": "None",
+          "attributes": [],
+          "has_reference_type_constraint": false,
+          "reference_type_constraint_nullable": "None",
+          "has_value_type_constraint": false,
+          "has_unmanaged_type_constraint": false,
+          "has_notnull_constraint": false,
+          "has_constructor_constraint": false,
+          "allows_ref_like_type": false,
+          "constraint_types": []
+        }
+      ],
+      "semantic_policy": "NativeWeave.Data.TableBuilder"
+    },
+    {
+      "id": "T:NativeWeave.Data.ValueCodec`1",
+      "signature": "public sealed class NativeWeave.Data.ValueCodec<T>",
+      "implicit_member": false,
+      "kind": "NamedType",
+      "type_kind": "Class",
+      "parameters": [],
+      "type_parameters": [
+        {
+          "name": "T",
+          "ordinal": 0,
+          "variance": "None",
+          "attributes": [],
+          "has_reference_type_constraint": false,
+          "reference_type_constraint_nullable": "None",
+          "has_value_type_constraint": false,
+          "has_unmanaged_type_constraint": false,
+          "has_notnull_constraint": false,
+          "has_constructor_constraint": false,
+          "allows_ref_like_type": false,
+          "constraint_types": []
+        }
+      ],
+      "semantic_policy": "NativeWeave.Data.ValueCodec"
+    },
+    {
+      "id": "P:NativeWeave.Data.ValueCodec`1.Id",
+      "signature": "public uint NativeWeave.Data.ValueCodec<T>.Id { get; }",
+      "implicit_member": false,
+      "kind": "Property",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.ValueCodec"
+    },
+    {
+      "id": "P:NativeWeave.Data.ValueCodec`1.Name",
+      "signature": "public string NativeWeave.Data.ValueCodec<T>.Name { get; }",
+      "implicit_member": false,
+      "kind": "Property",
+      "type_kind": null,
+      "parameters": [],
+      "type_parameters": [],
+      "semantic_policy": "NativeWeave.Data.ValueCodec"
+    }
+  ]
+}

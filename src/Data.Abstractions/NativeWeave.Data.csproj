@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>NativeWeave.Data</AssemblyName>
+    <RootNamespace>NativeWeave.Data</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <IsAotCompatible>true</IsAotCompatible>
+    <IsPackable>true</IsPackable>
+    <PackageId>NativeWeave.Data</PackageId>
+    <Description>Strongly typed NativeWeave data descriptors and shared wire contracts. No database runtime is loaded.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="NativeWeave.Data.Tests" />
+    <InternalsVisibleTo Include="NativeWeave.Database" />
+    <Compile Remove="DatabaseContracts.cs" />
+  </ItemGroup>
+</Project>

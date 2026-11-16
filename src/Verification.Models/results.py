@@ -39,7 +39,7 @@ def successors(state, mutation):
             yield Transition("native.commit_" + outcome, "A07",
                              replace(s, native="terminal", outcome=outcome, commits=1,
                                      owner="native" if outcome == "success" else "none"))
-    if s.outcome != "pending" and not s.duplicate_terminal:
+    if s.native == "terminal" and not s.duplicate_terminal:
         yield Transition("native.reject_second_terminal_cas", "A07",
                          replace(s, duplicate_terminal=True, poisoned=True))
     if s.outcome != "pending" and s.notice == "absent":
@@ -48,7 +48,7 @@ def successors(state, mutation):
         yield Transition("callback.copy_and_release_publish_latch", "A07", replace(s, notice="received"))
         yield Transition("callback.copy_failure_latched_in_finally", "A07",
                          replace(s, notice="received", binding_failure=True))
-    if s.notice == "received" and not s.duplicate_notice:
+    if s.native == "terminal" and s.notice == "received" and not s.duplicate_notice:
         yield Transition("callback.duplicate_notice_does_not_overwrite_latch", "A07",
                          replace(s, duplicate_notice=True, poisoned=True))
     if s.native == "terminal" and s.notice == "received":
