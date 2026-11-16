@@ -48,6 +48,16 @@ two indirections for an output owner slot. Rust tuples, generics, references, st
 and a null owner on failure are separate concepts: output transfer is success-only;
 the generated implementation must initialize stored owner results to null on failure.
 The schema describes this rule; A05/A11 enforce generated export implementation.
+An owner annotation must match the physical pointer target. Transferred owners use
+an exact mutable pointer-to-owner output slot, and clone declarations borrow one
+source owner before transferring one same-kind result. A mutable inout input is
+still an asynchronous input: call-only storage cannot survive acceptance, and a
+retirement-borrowed buffer remains live until retirement. Callback close/drain
+exports borrow the notification owner; when it is a D06 operation, they must be
+that operation's cancel/try-retire authorities, not its result-taking function.
+Every D06 step except release reports a status, including start acceptance. D05
+notification pointer payloads are readonly callback-scoped borrows; they cannot
+transfer owners or retain payload storage until later operation retirement.
 
 The initial target layouts describe Linux GNU x64 and Windows x64 without OS-specific
 runtime code. Only Linux x64 is executed in Task-02; Windows is not certified here.

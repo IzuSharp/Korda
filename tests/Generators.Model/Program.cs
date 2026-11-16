@@ -140,6 +140,25 @@ BindingDescription AsyncRead(JsonNode n) => BindingReader.Read(Encoding.UTF8.Get
 Check(AsyncRead(asyncNode).Operations.Length == 1, "Explicit copied-input D06 profile accepted");
 var unsafePin = asyncNode.DeepClone(); unsafePin["exports"]!.AsArray().First(x => x!["symbol"]!.GetValue<string>() == "nw_start")!["parameters"]![1]!["copy_before_accept"] = false;
 Reject("NWASYNC001", () => AsyncRead(unsafePin), "async call-only pin");
+var unsafeInout = asyncNode.DeepClone();
+var inoutParameter = unsafeInout["exports"]!.AsArray().First(x => x!["symbol"]!.GetValue<string>() == "nw_start")!["parameters"]![1]!;
+inoutParameter["type"] = "mut:u8"; inoutParameter["direction"] = "inout"; inoutParameter["mutable"] = true; inoutParameter["copy_before_accept"] = false;
+Reject("NWASYNC001", () => AsyncRead(unsafeInout), "async inout call-only pin");
+var retiredInout = unsafeInout.DeepClone();
+retiredInout["operations"]![0]!["input_end"] = "retirement";
+retiredInout["exports"]!.AsArray().First(x => x!["symbol"]!.GetValue<string>() == "nw_start")!["parameters"]![1]!["borrow_end"] = "retirement";
+Check(AsyncRead(retiredInout).Operations.Length == 1, "Async mutable inout remains borrowed until retirement");
+var wrongOwnerPointee = asyncNode.DeepClone();
+wrongOwnerPointee["exports"]!.AsArray().First(x => x!["symbol"]!.GetValue<string>() == "nw_start")!["parameters"]![0]!["type"] = "mut:u8";
+Reject("NWOWN001", () => AsyncRead(wrongOwnerPointee), "owner label cannot replace its physical pointer type");
+var wrongOwnerOutput = asyncNode.DeepClone();
+wrongOwnerOutput["exports"]!.AsArray().First(x => x!["symbol"]!.GetValue<string>() == "nw_create")!["parameters"]![0]!["type"] = "mut:operation";
+Reject("NWOWN001", () => AsyncRead(wrongOwnerOutput), "owner output requires pointer indirection");
+var noCloneSource = asyncNode.DeepClone(); noCloneSource["owners"]![0]!["clone"] = "nw_create";
+Reject("NWOWN001", () => AsyncRead(noCloneSource), "clone requires a source owner");
+var validClone = asyncNode.DeepClone(); validClone["owners"]![0]!["clone"] = "nw_clone";
+validClone["exports"]!.AsArray().Add((JsonNode?)Export("nw_clone", new JsonArray(Param("source", "const:operation"), Param("output", "mut:mut:operation", "transfer-success", direction: "out"))));
+Check(AsyncRead(validClone).Owners[0].CloneExport == "nw_clone", "Clone borrows a source and transfers a same-kind owner");
 var wrongDestructor = asyncNode.DeepClone(); wrongDestructor["owners"]![0]!["release"] = "nw_take";
 Reject("NWOWN001", () => AsyncRead(wrongDestructor), "fallible/wrong destructor");
 var wrongModule = asyncNode.DeepClone(); wrongModule["owners"]![0]!["module"] = "other.module";
@@ -148,6 +167,13 @@ var cyclic = asyncNode.DeepClone(); cyclic["owners"]![0]!["parent"] = "operation
 Reject("NWOWN001", () => AsyncRead(cyclic), "cyclic parent");
 var wrongStep = asyncNode.DeepClone(); wrongStep["operations"]![0]!["try_retire"] = "nw_take";
 Reject("NWASYNC001", () => AsyncRead(wrongStep), "take is not retirement");
+foreach (var step in new[] { "nw_create", "nw_start", "nw_cancel", "nw_take", "nw_retire" })
+{
+    var missingStatus = asyncNode.DeepClone();
+    var export = missingStatus["exports"]!.AsArray().First(x => x!["symbol"]!.GetValue<string>() == step)!;
+    export["return"] = "void"; export["error"] = "cleanup-no-fail";
+    Reject("NWASYNC001", () => AsyncRead(missingStatus), "D06 step must report status: " + step);
+}
 
 var callbackNode = asyncNode.DeepClone();
 var cookie = new JsonObject { ["name"] = "cookie", ["type"] = "usize", ["direction"] = "in", ["nullable"] = false, ["borrow_end"] = "none", ["owner"] = "", ["mutable"] = false, ["copy_before_accept"] = false, ["maximum_bytes"] = 0 };
@@ -155,10 +181,29 @@ var callbackExport = Export("nw_notify", new JsonArray(cookie)); callbackExport[
 callbackNode["exports"]!.AsArray().Add((JsonNode?)callbackExport);
 callbackNode["callbacks"]!.AsArray().Add((JsonNode?)new JsonObject { ["symbol"] = "nw_notify", ["cookie_index"] = 0, ["notification_owner"] = "operation", ["reentrancy"] = "notification-only", ["close"] = "nw_cancel", ["drain"] = "nw_retire", ["profile"] = "D05-close-drain-v1" });
 Check(AsyncRead(callbackNode).Exports.Any(x => x.Symbol == "nw_notify"), "Blittable notification callback with retirement authority");
+var callbackPayload = callbackNode.DeepClone();
+callbackPayload["exports"]!.AsArray().First(x => x!["symbol"]!.GetValue<string>() == "nw_notify")!["parameters"]!.AsArray()
+    .Add((JsonNode?)Param("payload", "const:u8", "callback", owner: ""));
+Check(AsyncRead(callbackPayload).Exports.Any(x => x.Symbol == "nw_notify"), "Readonly callback-scoped notification payload");
+var retainedPayload = callbackPayload.DeepClone();
+retainedPayload["exports"]!.AsArray().First(x => x!["symbol"]!.GetValue<string>() == "nw_notify")!["parameters"]![1]!["borrow_end"] = "retirement";
+Reject("NWASYNC001", () => AsyncRead(retainedPayload), "notification payload cannot outlive its callback");
+var callbackOwnerOutput = callbackNode.DeepClone();
+callbackOwnerOutput["exports"]!.AsArray().First(x => x!["symbol"]!.GetValue<string>() == "nw_notify")!["parameters"]!.AsArray()
+    .Add((JsonNode?)Param("result", "mut:mut:operation", "transfer-success", direction: "out"));
+Reject("NWASYNC001", () => AsyncRead(callbackOwnerOutput), "notification cannot transfer owned results");
 var badCookie = callbackNode.DeepClone(); badCookie["callbacks"]![0]!["cookie_index"] = 1;
 Reject("NWABI001", () => AsyncRead(badCookie), "callback cookie mismatch");
 var missingDrain = callbackNode.DeepClone(); missingDrain["callbacks"]![0]!["drain"] = "nw_missing";
 Reject("NWABI002", () => AsyncRead(missingDrain), "callback missing drain");
+var unrelatedClose = callbackNode.DeepClone(); unrelatedClose["callbacks"]![0]!["close"] = "nw_model_validate_extent_v1";
+Reject("NWASYNC001", () => AsyncRead(unrelatedClose), "callback close must borrow its notification owner");
+var unrelatedDrain = callbackNode.DeepClone(); unrelatedDrain["callbacks"]![0]!["drain"] = "nw_model_get_abi_v1";
+Reject("NWASYNC001", () => AsyncRead(unrelatedDrain), "callback drain must borrow its notification owner");
+var wrongAuthority = callbackNode.DeepClone(); wrongAuthority["callbacks"]![0]!["drain"] = "nw_take";
+Reject("NWASYNC001", () => AsyncRead(wrongAuthority), "taking a result is not callback retirement authority");
+var sameAuthority = callbackNode.DeepClone(); sameAuthority["callbacks"]![0]!["drain"] = "nw_cancel";
+Reject("NWASYNC001", () => AsyncRead(sameAuthority), "callback close and drain remain distinct");
 var reentrant = callbackNode.DeepClone(); reentrant["callbacks"]![0]!["reentrancy"] = "user-code";
 Reject("NWASYNC001", () => AsyncRead(reentrant), "callback user-code reentrancy");
 
