@@ -99,7 +99,8 @@ internal sealed class DbWire
         key.RequireComplete();
         if (boundCodecs.Length != key.Values.Length) throw new ArgumentException("The parent key requires every bound codec.", nameof(boundCodecs));
         return new(PayloadKind.MutationValues, profile, Convert.FromHexString(key.Table.MetadataHash), key.Table.Identity.Id, 0,
-            key.Values.Select((v, i) => new WireDescriptor(v.Column.Definition.Id, v.Column.Definition.Codec, boundCodecs[i])).ToArray()) { ExactRows = 1 };
+            key.Values.Select((v, i) => new WireDescriptor(v.Column.Definition.Id, v.Column.Definition.Codec, boundCodecs[i])).ToArray())
+        { ExactRows = 1 };
     }
     internal ReadOnlyMemory<byte>? Cell(uint row, int column)
     {
@@ -147,7 +148,8 @@ internal sealed class DbWire
             case 16:
                 _ = Validation.Utf8.GetString(bytes);
                 if (bytes.StartsWith(new byte[] { 0xef, 0xbb, 0xbf })) Bad("JSON BOM.");
-                using (JsonDocument.Parse(bytes.ToArray(), new JsonDocumentOptions { MaxDepth = 64 })) { } break;
+                using (JsonDocument.Parse(bytes.ToArray(), new JsonDocumentOptions { MaxDepth = 64 })) { }
+                break;
         }
     }
     private static int RInt32(ReadOnlySpan<byte> b) => BinaryPrimitives.ReadInt32LittleEndian(b);
