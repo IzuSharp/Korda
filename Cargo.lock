@@ -864,6 +864,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "nativeweave-data-streaming"
+version = "0.1.0"
+dependencies = [
+ "futures-util",
+ "nativeweave-data-codecs",
+ "nativeweave-data-contracts",
+ "serde_json",
+ "sqlx",
+ "tokio",
+]
+
+[[package]]
 name = "nativeweave-data-transactions"
 version = "0.1.0"
 dependencies = [

@@ -246,3 +246,13 @@ The test ABI is not shipped as an application-facing provider surface. Linux x64
 component completion does not claim Windows acceptance, pristine full-package
 consumption, an assembled B04 host, long-running load results or performance gains.
 Independent review and final batch acceptance remain separate from these tests.
+
+### Transaction parent retirement
+
+The B05 provider retirement hook consumes its own Session lease before it returns.
+A retained driver value is inert afterward. An independent live Session may keep
+its clean lease; if no such owner remains or close has already been requested, the
+hook joins the actual pool-return or physical-close receipt. The last-owner check
+occurs after releasing the driver parent, avoiding a concurrent parent-drop window.
+The real-provider oracle checks both an already-dropped parent and a parent dropped
+after driver retirement while the driver value remains alive.

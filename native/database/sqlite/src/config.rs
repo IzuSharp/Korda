@@ -1,7 +1,10 @@
 use crate::{ErrorKind, ProviderError, Result};
 use nativeweave_data_contracts::MAX_BYTES;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous};
-use std::{path::Path, time::Duration};
+use std::{
+    path::Path,
+    time::{Duration, Instant},
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OpenMode {
@@ -90,6 +93,7 @@ impl Limits {
             || self.row_channel_capacity > 4096
             || self.statement_cache_capacity > 4096
             || self.acquire_timeout.is_zero()
+            || Instant::now().checked_add(self.acquire_timeout).is_none()
             || self.progress_operations < 1
         {
             return Err(ProviderError::new(

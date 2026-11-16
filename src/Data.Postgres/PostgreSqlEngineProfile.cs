@@ -3,6 +3,7 @@
 using NativeWeave.Interop;
 using NativeWeave.Interop.Extensibility;
 namespace NativeWeave.Database.PostgreSql;
+
 internal static class PostgreSqlEngineProfile
 {
     internal static readonly EngineDescriptor Descriptor = EnginePackage.CreateDescriptor(

@@ -289,7 +289,8 @@ impl Session {
     }
     pub fn transaction_driver(&self) -> crate::PostgresTransactionDriver {
         crate::PostgresTransactionDriver {
-            session: self.clone(),
+            session: Some(self.clone()),
+            session_id: self.backend_pid() as u64,
         }
     }
     pub async fn close(&self) -> SessionReceipt {

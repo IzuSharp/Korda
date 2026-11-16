@@ -93,7 +93,9 @@ second pool or silently acquire a replacement connection.
 Native `Admission` is shared by the engine. It reserves command count and input
 bytes before argument conversion or queued ownership. The finite component
 defaults are 32 active/queued commands, 4 MiB retained input reservations, a 64 KiB
-SQL limit, one adapter row slot, and 32 cached statements. B04 supplies the mapped
+SQL limit, one adapter row slot, and 32 cached statements. The host supplies the
+acquisition timeout; zero or a duration that overflows the monotonic deadline
+is rejected before configuring or opening the SQLx pool. B04 supplies the mapped
 host limits; these values do not redefine `DatabaseLimits`' public defaults.
 SQLx's native command buffer and row buffer are each explicitly one slot. A
 separate one-slot transaction-control admission remains available while business
@@ -107,8 +109,12 @@ logical owned-copy budget, not a process RSS ceiling. Metadata, allocator
 overhead, SQLx/SQLite driver buffers, prepared statements, worker stacks and the
 host's runtime are separate owners. B06 owns field and encoded-batch budgets.
 A huge SQLite value may already exist in the driver before a B06 field limit
-rejects it. `provider_rows_peak` reports adapter-held row objects (one queued and
-one pending sender at most with the one-row profile), separately from SQLx's own
+rejects it. `provider_rows_peak` reports adapter-held row objects. The producer
+reserves channel capacity before fetching each row: the queue and pending producer
+together retain at most one row, and the receiver may hold one more during delivery.
+The two-row bound therefore includes the handoff interval after channel capacity
+is freed but before the receiver accounts the ownership transfer. A counter guard
+also accounts rows dropped after a reserved send races receiver closure. This is separate from SQLx's own
 one-row channel and SQLite's current value allocations.
 
 ## Execution, cancellation and streams
@@ -165,6 +171,13 @@ confirmation. B05 retains an admitted commit through its own independent timeout
 Unknown remains Unknown after a late successful response or cleanup rollback.
 Connection reuse and local owner retirement are separate observations.
 
+Transaction retirement releases the driver's parent session lease before checking
+whether an independent parent remains. If that was the last parent, or close was
+already requested, B05 waits for the actor's physical-close acknowledgement before
+publishing local-resource release. The check occurs after the lease transfer;
+checking the owner count before dropping the lease would race a concurrent parent
+drop. A usable connection may remain owned by a live independent parent.
+
 `request_close` only stops admission and wakes the retained actor. `close` joins
 the SQLx physical-close future while its pool permit remains retained. The receipt
 records worker shutdown acknowledgement and physical lease release separately
@@ -178,7 +191,7 @@ future. This is a pool handoff, not worker destruction; subsequent reuse tests
 require a persistent TEMP-table marker. A rejected BEGIN is conservatively
 discarded by B05. A replacement worker is explicitly recorded as a replacement.
 If SQLx fails to establish a close acknowledgement, B05's retirement future does
-not claim safe release; it retains the transaction's parent owner/budget. Host
+not claim safe release; it retains the transaction's cleanup evidence/budget. Host
 shutdown must keep the runtime alive until its cleanup ledger is resolved.
 
 ## Actual component verification
@@ -196,13 +209,15 @@ It executes a test-only ABI fixture in JIT and an actual `linux-x64` Native AOT
 executable. The fixture explicitly creates one test runtime per suite; it is not a
 product synchronous host wrapper and is not distributed as a Database engine.
 
-The twelve scenario groups exercise actual pinned SQLite product paths: every
+The fourteen scenario groups exercise actual pinned SQLite product paths: every
 physical profile, private memory isolation, B07 typed parameters/NULL, FK failure
 and repeated savepoint recovery, progress cancellation/stale generations, empty
 metadata and early bounded-stream stop, rollback and physical-marker pool reuse,
 retained commit after waiter loss/Unknown, count/byte admission, file-backed WAL
 read/write contention and atomic same-key conflict, native migration checksum and
-failing transactional DDL, and read-only/isolation limits. Migration probes use
+failing transactional DDL, read-only/isolation limits, last-parent closure paused
+inside actual SQLx connection destruction, and 40,000 real rows crossing the
+bounded provider handoff. Migration probes use
 SQLx's public tracked `BEGIN IMMEDIATE` outer transaction; they do not implement or
 claim B08's migration administration API.
 

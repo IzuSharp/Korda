@@ -59,9 +59,9 @@ Check(info.Supports(new EngineCapability("db.sqlite.profile.v1")), "actual boots
 Check(!info.Supports(new EngineCapability("db.query.v1")), "component does not advertise B04 query host");
 Check(Native.RuntimeCount() == runtimes, "metadata/inspect starts no fixture runtime");
 Check(ReferenceEquals(descriptor, SqliteDataSource.Engine), "cached metadata descriptor");
-Check(Native.RunSuite(Path.Combine(root, "native-suite")) == 0, "actual SQLite/B05 twelve-scenario suite");
+Check(Native.RunSuite(Path.Combine(root, "native-suite")) == 0, "actual SQLite/B05 fourteen-scenario suite");
 Check(Native.RuntimeCount() == runtimes + 1, "one explicit test suite runtime");
-Console.WriteLine($"PASS B03 {assertions} assertions; actual SQLite 3.51.3; 12 native provider/B05 scenarios; NativeAOT={!RuntimeFeature.IsDynamicCodeSupported}.");
+Console.WriteLine($"PASS B03 {assertions} assertions; actual SQLite 3.51.3; 14 native provider/B05 scenarios; NativeAOT={!RuntimeFeature.IsDynamicCodeSupported}.");
 
 void Probe(string path, byte[] options, ulong expected)
 {

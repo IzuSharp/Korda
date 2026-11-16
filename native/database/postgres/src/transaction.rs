@@ -6,12 +6,13 @@ use nativeweave_data_transactions::{
 };
 use sqlx::{Executor, postgres::PgTransactionManager};
 use sqlx_core::{sql_str::SqlSafeStr, transaction::TransactionManager};
-use std::sync::atomic::Ordering;
+use std::sync::{Arc, atomic::Ordering};
 
 /// A same-session B05 adapter. Cloning the Session retains its single pool lease;
 /// transaction policy, admission/outcome and cleanup snapshots remain in B05.
 pub struct PostgresTransactionDriver {
-    pub(crate) session: Session,
+    pub(crate) session: Option<Session>,
+    pub(crate) session_id: u64,
 }
 fn failure(error: ProviderError) -> ProviderFailure {
     ProviderFailure {
@@ -26,8 +27,11 @@ impl PostgresTransactionDriver {
             "PostgreSQL transaction session retired",
         ))
     }
+    fn session(&self) -> std::result::Result<&Session, ProviderFailure> {
+        self.session.as_ref().ok_or_else(Self::unavailable)
+    }
     async fn tracked(&mut self, operation: u8) -> std::result::Result<(), ProviderFailure> {
-        let inner = &self.session.inner;
+        let inner = &self.session()?.inner;
         let _operation = inner.admit().map_err(failure)?;
         let mut guard = inner.conn.lock().await;
         let connection = guard.as_mut().ok_or_else(Self::unavailable)?;
@@ -65,13 +69,13 @@ impl TransactionDriver for PostgresTransactionDriver {
         }
     }
     fn session_id(&self) -> u64 {
-        self.session.backend_pid() as u64
+        self.session_id
     }
     async fn begin(&mut self, options: &Options) -> std::result::Result<(), ProviderFailure> {
         options
             .validate(self.capabilities())
             .map_err(|_| Self::unavailable())?;
-        let inner = &self.session.inner;
+        let inner = &self.session()?.inner;
         let _operation = inner.admit().map_err(failure)?;
         let mut guard = inner.conn.lock().await;
         let connection = guard.as_mut().ok_or_else(Self::unavailable)?;
@@ -103,7 +107,7 @@ impl TransactionDriver for PostgresTransactionDriver {
         Ok(())
     }
     async fn commit(&mut self) -> std::result::Result<Confirmation, ProviderFailure> {
-        let inner = &self.session.inner;
+        let inner = &self.session()?.inner;
         let _operation = inner.admit().map_err(failure)?;
         let mut guard = inner.conn.lock().await;
         let connection = guard.as_mut().ok_or_else(Self::unavailable)?;
@@ -143,7 +147,7 @@ impl TransactionDriver for PostgresTransactionDriver {
         Ok(Confirmation::Committed)
     }
     async fn rollback(&mut self) -> std::result::Result<ProtocolState, ProviderFailure> {
-        let inner = &self.session.inner;
+        let inner = &self.session()?.inner;
         // Cleanup remains possible after business admission closed/quarantined.
         let mut guard = inner.conn.lock().await;
         let connection = guard.as_mut().ok_or_else(Self::unavailable)?;
@@ -171,43 +175,49 @@ impl TransactionDriver for PostgresTransactionDriver {
         self.tracked(1).await
     }
     async fn recover(&mut self) -> std::result::Result<ProtocolState, ProviderFailure> {
-        if self.session.inner.untrusted.load(Ordering::Acquire) {
+        if self.session()?.inner.untrusted.load(Ordering::Acquire) {
             return Ok(ProtocolState::Untrusted);
         }
         if self
-            .session
+            .session()?
             .inner
             .transaction_active
             .load(Ordering::Acquire)
         {
             return self.rollback().await;
         }
-        let mut guard = self.session.inner.conn.lock().await;
+        let inner = &self.session()?.inner;
+        let mut guard = inner.conn.lock().await;
         let connection = guard.as_mut().ok_or_else(Self::unavailable)?;
-        self.session
-            .inner
-            .drain(connection)
-            .await
-            .map_err(failure)?;
+        inner.drain(connection).await.map_err(failure)?;
         Ok(ProtocolState::Clean)
     }
     async fn retire(&mut self, disposition: ConnectionDisposition) {
+        let Some(session) = self.session.take() else {
+            return;
+        };
+        // The control Arc observes retirement without retaining a public parent
+        // lease. Release this driver's lease before checking the last-owner case:
+        // a pre-release owners==1 check races another parent's concurrent Drop.
+        let inner = Arc::clone(&session.inner);
+        let control = session.control();
         if matches!(
             disposition,
             ConnectionDisposition::Quarantined | ConnectionDisposition::Discarded
         ) {
-            self.session.inner.untrusted.store(true, Ordering::Release);
-            self.session.close().await;
+            inner.untrusted.store(true, Ordering::Release);
+            control.request_close();
         }
-        if self.session.inner.owners.load(Ordering::Acquire) == 1
-            || self.session.inner.closing.load(Ordering::Acquire)
-        {
-            // If the parent public session was dropped, transaction retirement
-            // also joins its last physical lease instead of starting cleanup
-            // only from the driver's later Drop.
-            self.session.close().await;
+        drop(session);
+        // A last parent's decrement may precede its request_close store. Observing
+        // zero owners is sufficient to request the same idempotent close here.
+        if inner.owners.load(Ordering::Acquire) == 0 {
+            control.request_close();
         }
-        // Otherwise the live parent session still owns its clean lease; no
-        // transaction accessor remains. B04 later joins its close/pool closure.
+        if inner.closing.load(Ordering::Acquire) {
+            control.join().await;
+        }
+        // Otherwise an independent live parent owns the clean physical lease.
+        // This driver is already inert and cannot start another accessor.
     }
 }

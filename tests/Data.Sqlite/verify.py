@@ -42,7 +42,7 @@ def main():
                 "sourceCommit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
                 "sourceDirty": bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True).strip()),
                 "sourceSha256": initial, "commands": commands, "artifacts": {},
-                "realProviderComposition": "actual SQLite 3.51.3 through SQLx 0.9.0; B05 transaction seam exercised in twelve native scenario groups", "assembledHostAcceptance": False,
+                "realProviderComposition": "actual SQLite 3.51.3 through SQLx 0.9.0; B05 transaction seam exercised in fourteen native scenario groups", "assembledHostAcceptance": False,
                 "independentReview": False, "allPlatformAcceptance": False}
 
     def save():
@@ -97,7 +97,7 @@ def main():
         run("native-format", ["cargo", "fmt", "-p", "nativeweave-data-sqlite", "--", "--check"])
         run("native-clippy", ["cargo", "clippy", "-p", "nativeweave-data-sqlite", "--all-targets", "--locked", "--", "-D", "warnings"])
         native_tests = run("native-tests", ["cargo", "test", "-p", "nativeweave-data-sqlite", "--release", "--locked", "--", "--nocapture"])
-        assert all(f"PASS B03 native scenario {i}" in native_tests for i in range(1, 13))
+        assert all(f"PASS B03 native scenario {i}" in native_tests for i in range(1, 15))
         run("native-features", ["cargo", "tree", "-p", "nativeweave-data-sqlite", "-e", "features", "--locked"])
         product_build = run("provider-build", ["cargo", "build", "-p", "nativeweave-data-sqlite", "--release", "--locked", "--message-format=json"])
         products = [Path(f) for line in product_build.splitlines() if line.startswith("{") for event in [json.loads(line)] if event.get("reason") == "compiler-artifact" and event["target"]["name"] == "nativeweave_data_sqlite" for f in event["filenames"] if f.endswith(".so")]
@@ -137,14 +137,14 @@ def main():
         run("compiled-api-xml-reference", [dotnet, "tests/Data.Sqlite/ApiCheck/bin/Release/net11.0/NativeWeave.Sqlite.ApiCheck.dll", ROOT, sdk, assembly])
         execution_env["NATIVEWEAVE_B03_TEST_ROOT"] = str(output / "jit-data")
         jit_output = run("jit", [dotnet, "tests/Data.Sqlite/bin/Release/net11.0/NativeWeave.Data.Sqlite.Tests.dll"], execution_env)
-        assert "NativeAOT=False" in jit_output and all(f"PASS B03 native scenario {i}" in jit_output for i in range(1, 13))
+        assert "NativeAOT=False" in jit_output and all(f"PASS B03 native scenario {i}" in jit_output for i in range(1, 15))
         restore("aot-restore", ordinary[1], True)
         publish = output / "publish"
         run("aot-publish", [dotnet, "publish", ordinary[1], "-c", "Release", "-r", "linux-x64", "-p:PublishAot=true", "--no-restore", "-p:IlcTreatWarningsAsErrors=true", *build_flags, "-o", publish])
         executable = publish / "NativeWeave.Data.Sqlite.Tests"
         execution_env["NATIVEWEAVE_B03_TEST_ROOT"] = str(output / "aot-data")
         aot_output = run("aot-execution", [executable, "--aot"], execution_env)
-        assert "NativeAOT=True" in aot_output and all(f"PASS B03 native scenario {i}" in aot_output for i in range(1, 13))
+        assert "NativeAOT=True" in aot_output and all(f"PASS B03 native scenario {i}" in aot_output for i in range(1, 15))
         run("aot-elf-linker", ["readelf", "-p", ".comment", executable])
         for artifact in [product_native, native, assembly, executable]:
             manifest["artifacts"][str(artifact)] = sha(artifact)
@@ -161,7 +161,7 @@ def main():
             assert record["sha256"] == sha(product_native)
             assert sha(location / record["outputPath"]) == sha(product_native)
             manifest["artifacts"][str(record_path)] = sha(record_path)
-        manifest["nativeScenarioGroups"] = 12
+        manifest["nativeScenarioGroups"] = 14
         manifest["compiledComponentSymbols"] = 29
         manifest["downstreamB04Symbols"] = 3
         manifest["workerShutdownEvidence"] = "SQLx shutdown ACK and pool-return separately observed; OS thread join is never claimed"

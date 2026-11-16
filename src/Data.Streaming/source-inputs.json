@@ -1,0 +1,77 @@
+{
+  "scope": "Actually inspected pinned upstream files; no claim that upstream tests or a full source checkout were executed. B02/B03 own their provider cleanup proofs.",
+  "upstream": [
+    {
+      "package": "sqlx-postgres-0.9.0",
+      "registry_file": "src/connection/executor.rs",
+      "sha256": "721ead17743d912c625a56b5728669d8111c750797b6fee24e234226a5b6fbe6",
+      "vcs_metadata": {
+        "git": {
+          "sha1": "003b698e99e024f3621b8043a2426fde5b741171"
+        },
+        "path_in_vcs": "sqlx-postgres"
+      },
+      "read_ranges": [
+        [
+          245,
+          280
+        ]
+      ],
+      "finding": "Execute limit=0 requests unrestricted server rows; owned batch budgets are not protocol/RSS limits."
+    },
+    {
+      "package": "sqlx-postgres-0.9.0",
+      "registry_file": "src/row.rs",
+      "sha256": "a65585b8c6e585f9429e3af7867bdeca3d1a2363760b452df785eb12a60edadf",
+      "vcs_metadata": {
+        "git": {
+          "sha1": "003b698e99e024f3621b8043a2426fde5b741171"
+        },
+        "path_in_vcs": "sqlx-postgres"
+      },
+      "read_ranges": [
+        [
+          1,
+          60
+        ]
+      ],
+      "finding": "PgRow owns DataRow storage and metadata; checked borrowed values depend on row lifetime."
+    },
+    {
+      "package": "sqlx-sqlite-0.9.0",
+      "registry_file": "src/row.rs",
+      "sha256": "1efd553cc6242f7c3217dc296ecedadebf9cafc1e83f04f8f3746eae40263484",
+      "vcs_metadata": {
+        "git": {
+          "sha1": "003b698e99e024f3621b8043a2426fde5b741171"
+        },
+        "path_in_vcs": "sqlx-sqlite"
+      },
+      "read_ranges": [
+        [
+          1,
+          100
+        ]
+      ],
+      "finding": "SqliteRow duplicates SQLite values and owns columns; arbitrary large native values can predate B06 field checks."
+    },
+    {
+      "package": "sqlx-sqlite-0.9.0",
+      "registry_file": "src/connection/executor.rs",
+      "sha256": "290451e396a8337eb8d850757537b8830d834790e386ed9f3887c8257a567e08",
+      "vcs_metadata": {
+        "git": {
+          "sha1": "003b698e99e024f3621b8043a2426fde5b741171"
+        },
+        "path_in_vcs": "sqlx-sqlite"
+      },
+      "read_ranges": [
+        [
+          1,
+          110
+        ]
+      ],
+      "finding": "fetch uses configured row channel; prepare is available without macro offline feature; no drop-implies-worker-retired inference."
+    }
+  ]
+}
