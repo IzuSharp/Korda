@@ -7,6 +7,7 @@
     <Project Path="src/Data.Codecs/NativeWeave.Data.Codecs.csproj" />
     <Project Path="src/Data.Transactions/NativeWeave.Database.Transactions.csproj" />
     <Project Path="src/Data.Postgres/NativeWeave.Database.PostgreSql.csproj" />
+    <Project Path="src/Data.Sqlite/NativeWeave.Database.Sqlite.csproj" />
     <Project Path="src/Generators.Model/NativeWeave.Generators.Model.csproj" />
   </Folder>
   <Folder Name="/samples/">
@@ -20,6 +21,7 @@
     <Project Path="samples/api/data-codecs/DataCodecs.csproj" />
     <Project Path="samples/api/data-transactions/Data.Transactions.Sample.csproj" />
     <Project Path="samples/api/data-postgres/PostgresExample.csproj" />
+    <Project Path="samples/api/data-sqlite/Data.Sqlite.Sample.csproj" />
     <Project Path="samples/api/generators-model/Generators.Model.Sample.csproj" />
   </Folder>
   <Folder Name="/tests/">
@@ -31,6 +33,7 @@
     <Project Path="tests/Data.Codecs/NativeWeave.Data.Codecs.Tests.csproj" />
     <Project Path="tests/Data.Transactions/NativeWeave.Data.Transactions.Tests.csproj" />
     <Project Path="tests/Data.Postgres/NativeWeave.Database.PostgreSql.Tests.csproj" />
+    <Project Path="tests/Data.Sqlite/NativeWeave.Data.Sqlite.Tests.csproj" />
     <Project Path="tests/Generators.Model/NativeWeave.Generators.Model.Tests.csproj" />
     <Project Path="tests/Interop.Errors/InvalidUco/InvalidUco.csproj" />
   </Folder>
@@ -56,5 +59,8 @@
   </Folder>
   <Folder Name="/tools/B02/">
     <Project Path="tests/Data.Postgres/ApiCheck/ApiCheck.csproj" />
+  </Folder>
+  <Folder Name="/tools/B03/">
+    <Project Path="tests/Data.Sqlite/ApiCheck/ApiCheck.csproj" />
   </Folder>
 </Solution>

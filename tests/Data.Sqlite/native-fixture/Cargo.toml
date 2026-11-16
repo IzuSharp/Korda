@@ -1,0 +1,32 @@
+[package]
+name = "nativeweave-sqlite-fixture"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.100"
+license = "MIT"
+publish = false
+
+[workspace]
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+nativeweave-data-sqlite = { path = "../../../native/database/sqlite" }
+nativeweave-data-codecs = { path = "../../../native/database/codecs" }
+nativeweave-data-contracts = { path = "../../../native/database/interfaces" }
+nativeweave-data-transactions = { path = "../../../native/database/transactions" }
+sqlx = { version = "=0.9.0", default-features = false, features = ["runtime-tokio", "sqlite", "migrate"] }
+tokio = { version = "=1.54.1", default-features = false, features = ["rt-multi-thread", "macros", "sync", "time"] }
+futures-util = { version = "=0.3.34", default-features = false, features = ["std"] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+panic = "unwind"
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+
+[lints.clippy]
+undocumented_unsafe_blocks = "deny"

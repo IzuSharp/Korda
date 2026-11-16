@@ -603,9 +603,15 @@ impl Relation {
 /// Validate one canonical control envelope and borrow its fields for the call lifetime.
 /// The provider supplies the exact schema's ordered (field ID, wire type) inventory;
 /// field-specific widths and semantic values remain that schema owner's responsibility.
-pub fn control_fields<'a>(bytes: &'a [u8], kind: u16, fields: &[(u16, u16)]) -> Result<Vec<&'a [u8]>> {
+pub fn control_fields<'a>(
+    bytes: &'a [u8],
+    kind: u16,
+    fields: &[(u16, u16)],
+) -> Result<Vec<&'a [u8]>> {
     if fields.len() > MAX_NODES {
-        return Err(ContractError("control field count exceeds the finite limit"));
+        return Err(ContractError(
+            "control field count exceeds the finite limit",
+        ));
     }
     let start = 16 + fields.len() * 16;
     if bytes.len() < start

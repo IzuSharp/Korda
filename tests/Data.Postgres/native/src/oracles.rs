@@ -58,7 +58,7 @@ async fn rows(session: &Session, sql: &str) -> Result<Vec<sqlx::postgres::PgRow>
     }
     let receipt = control.join().await;
     assert!(receipt.retired && receipt.protocol_clean);
-    assert!(receipt.retained_rows_peak <= 1);
+    assert!(receipt.retained_rows_peak <= 2);
     Ok(rows)
 }
 async fn scalar_i64(session: &Session, sql: &str) -> Result<i64> {
@@ -138,7 +138,7 @@ async fn stream_and_admission() -> Result<Value> {
     drop(stream);
     let receipt = timeout(Duration::from_secs(10), control.join()).await?;
     assert!(receipt.retired && receipt.protocol_clean && receipt.stopped);
-    assert!(receipt.retained_rows_peak <= 1);
+    assert!(receipt.retained_rows_peak <= 2);
     assert_eq!(
         scalar_i64(&session, "SELECT pg_backend_pid()::bigint").await?,
         pid as i64

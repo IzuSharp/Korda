@@ -148,9 +148,13 @@ permission to reuse it.
 
 `Session::stream` returns a Rust-local `Stream<Item=Result<PgRow,ProviderError>>`
 with an independent cloneable stop/join control. The producer reserves its one-row
-channel slot **before** requesting the next SQLx row. The observed provider-owned
-retained-row peak is therefore at most one; B06 separately owns decoded rows,
-wire batches, byte budgets and result-shape validation. `Session::describe` uses
+channel slot **before** requesting the next SQLx row. The channel holds at most one
+row. Receiving releases that slot before the accounting handoff finishes, so one
+new queued row and the prior handoff can overlap; the conservative retained-row
+counter is bounded by **two**. A single receiver subtracts the previous charge
+before it can poll again. This distinction was observed in actual B06 composition.
+B06 separately owns decoded rows, wire batches, byte budgets and result-shape
+validation. `Session::describe` uses
 SQLx's public prepare/statement metadata API, so B06 can validate empty results.
 
 Dropping the business receiver or calling `request_stop` performs an atomic store

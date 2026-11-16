@@ -465,12 +465,36 @@ async fn pool_retirement(file: &Path) -> TestResult {
     let _ = waiter.await;
     assert!(s.return_to_pool().await?.pool_return_completed);
     drop(s);
-    let (next, _) = session(&pool, Options::default(), limits()).await?;
+    let (next, single) = session(
+        &pool,
+        Options::default(),
+        Limits {
+            max_commands: 1,
+            ..limits()
+        },
+    )
+    .await?;
     same(&next).await?;
     assert_eq!(scalar(&next, "SELECT count(*) FROM items").await?, 0);
+    for _ in 0..8 {
+        execute(&next, "SELECT 1").await?;
+        assert_eq!(
+            single.snapshot().active_commands,
+            0,
+            "one-slot reservation retires before sequential waiter resumes"
+        );
+        let transaction = transaction(&next, TransactionOptions::default()).await?;
+        transaction.rollback(&AdmissionToken::default()).await?;
+        assert!(transaction.join().await.local_resources_released);
+    }
     let pool_clone = pool.clone();
     let closing = tokio::spawn(async move { pool_clone.close().await });
-    tokio::task::yield_now().await;
+    tokio::time::timeout(WAIT, async {
+        while !pool.is_closed() {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await?;
     assert!(!closing.is_finished());
     assert!(pool.acquire().await.is_err());
     next.close().await?;

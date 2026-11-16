@@ -489,15 +489,16 @@ async fn run_actor(
             biased;
             _ = shared.close.notified() => {},
             item = control.recv() => if let Some(item) = item {
+                let Control { kind, result: sender, _capacity } = item;
                 shared.observation.send_modify(|s| s.active_operations = 1);
-                let result = run_control(&mut connection, &options, item.kind).await;
+                let result = run_control(&mut connection, &options, kind).await;
+                drop(_capacity);
                 shared.observation.send_modify(|s| s.active_operations = 0);
-                let _ = item.result.send(result);
+                let _ = sender.send(result);
             } else { break; },
             item = business.recv() => if let Some(item) = item {
                 shared.observation.send_modify(|s| s.active_operations = 1);
                 run_query(&mut connection, progress_operations, item, &shared).await;
-                shared.observation.send_modify(|s| s.active_operations = 0);
             } else { break; },
         }
     }
@@ -678,15 +679,7 @@ async fn run_query(
         shared.closing.store(true, Ordering::Release);
         shared.close.notify_one();
     }
-    if let Some(tx) = execute {
-        let _ = tx.send(operation_error.clone().map_or(Ok(affected), Err));
-    }
-    if let Some(tx) = describe {
-        let _ = tx.send(match operation_error.clone() {
-            Some(error) => Err(error),
-            None => description.ok_or_else(closed),
-        });
-    }
+    let primary_error = operation_error.clone();
     stopped |= operation_error.as_ref().is_some_and(|e| {
         matches!(
             e.kind,
@@ -705,6 +698,7 @@ async fn run_query(
         }
         drop(tx);
     }
+    shared.observation.send_modify(|s| s.active_operations = 0);
     finish(
         query,
         if clean {
@@ -716,6 +710,17 @@ async fn run_query(
         peak,
         stopped,
     );
+    // Release admission and publish actual native retirement before waking a
+    // sequential command waiter; otherwise a one-slot profile can race itself.
+    if let Some(tx) = execute {
+        let _ = tx.send(primary_error.clone().map_or(Ok(affected), Err));
+    }
+    if let Some(tx) = describe {
+        let _ = tx.send(match primary_error {
+            Some(error) => Err(error),
+            None => description.ok_or_else(closed),
+        });
+    }
 }
 fn finish(
     query: Query,
