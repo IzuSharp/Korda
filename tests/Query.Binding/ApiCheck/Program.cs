@@ -19,7 +19,22 @@ using var inventory = JsonDocument.Parse(File.ReadAllText(args[2]));
 var signatures = inventory.RootElement.GetProperty("signatures").EnumerateArray().Select(e => e.GetString()!).ToArray();
 var aliases = new Dictionary<string, string>(StringComparer.Ordinal)
 {
-    ["nw_status"] = "System.UInt32", ["void"] = "System.Void", ["nw_db_ref"] = "System.IntPtr", ["nw_db_ref*"] = "System.IntPtr*", ["nw_db_buffer*"] = "System.IntPtr", ["nw_db_buffer**"] = "System.IntPtr*", ["nw_db_token"] = "System.UInt64", ["nw_db_token*"] = "System.UInt64*", ["uint32_t"] = "System.UInt32", ["uint32_t*"] = "System.UInt32*", ["uint64_t"] = "System.UInt64", ["int64_t*"] = "System.Int64*", ["nw_bytes_view_v1"] = "NativeWeave.Interop.Abi.NwBytesViewV1", ["nw_bytes_view_v1*"] = "NativeWeave.Interop.Abi.NwBytesViewV1*", ["nw_error_info_v1*"] = "NativeWeave.Interop.Abi.NwErrorInfoV1*", ["const nw_operation_callbacks_v1*"] = "NativeWeave.Interop.Abi.NwOperationCallbacksV1*"
+    ["nw_status"] = "System.UInt32",
+    ["void"] = "System.Void",
+    ["nw_db_ref"] = "System.IntPtr",
+    ["nw_db_ref*"] = "System.IntPtr*",
+    ["nw_db_buffer*"] = "System.IntPtr",
+    ["nw_db_buffer**"] = "System.IntPtr*",
+    ["nw_db_token"] = "System.UInt64",
+    ["nw_db_token*"] = "System.UInt64*",
+    ["uint32_t"] = "System.UInt32",
+    ["uint32_t*"] = "System.UInt32*",
+    ["uint64_t"] = "System.UInt64",
+    ["int64_t*"] = "System.Int64*",
+    ["nw_bytes_view_v1"] = "NativeWeave.Interop.Abi.NwBytesViewV1",
+    ["nw_bytes_view_v1*"] = "NativeWeave.Interop.Abi.NwBytesViewV1*",
+    ["nw_error_info_v1*"] = "NativeWeave.Interop.Abi.NwErrorInfoV1*",
+    ["const nw_operation_callbacks_v1*"] = "NativeWeave.Interop.Abi.NwOperationCallbacksV1*"
 };
 foreach (var signature in signatures)
 {
