@@ -5,6 +5,32 @@ use nativeweave_data_contracts::{
 };
 use std::{collections::HashMap, sync::Arc};
 
+/// Engine-profile prerequisites for independent relation registration/loading.
+/// B04 derives these booleans from the admitted native capability snapshot.
+#[derive(Clone, Copy, Debug)]
+pub struct RelationCapabilities {
+    pub metadata: bool,
+    pub scalar_codecs: bool,
+    pub query: bool,
+    pub streaming: bool,
+    pub explicit_relationships: bool,
+}
+impl RelationCapabilities {
+    pub fn validate(self) -> Result<()> {
+        if self.metadata
+            && self.scalar_codecs
+            && self.query
+            && self.streaming
+            && self.explicit_relationships
+        {
+            Ok(())
+        } else {
+            Err(crate::unsupported(
+                "relation metadata/codecs/query/streaming/explicit-relationships capabilities",
+            ))
+        }
+    }
+}
 /// Source-bound B01 relation; it retains both immutable model/codec bindings.
 #[derive(Debug)]
 pub struct RelationBinding {
@@ -13,6 +39,7 @@ pub struct RelationBinding {
     pub parent: ModelBinding,
     pub child: ModelBinding,
     key_codecs: Vec<u32>,
+    capabilities: RelationCapabilities,
 }
 impl RelationBinding {
     pub fn register(
@@ -20,7 +47,9 @@ impl RelationBinding {
         parent: ModelBinding,
         child: ModelBinding,
         definition: &[u8],
+        capabilities: RelationCapabilities,
     ) -> Result<Self> {
+        capabilities.validate()?;
         parent.ensure_source(source)?;
         child.ensure_source(source)?;
         let relation = Relation::parse(
@@ -64,6 +93,7 @@ impl RelationBinding {
             parent,
             child,
             key_codecs,
+            capabilities,
         })
     }
     /// No SQL/provider work. Copies borrowed key bytes and retains every dependency
@@ -76,6 +106,7 @@ impl RelationBinding {
         limits: Limits,
         timeout_ns: u64,
     ) -> Result<RelationLoad> {
+        self.capabilities.validate()?;
         limits.validate()?;
         if session_source != self.source || projection.source != self.source {
             return Err(state("relation load source generation"));
@@ -124,9 +155,16 @@ pub struct RelationRegistry {
     bytes: usize,
     closed: bool,
     entries: HashMap<[u8; 32], Arc<RelationBinding>>,
+    capabilities: RelationCapabilities,
 }
 impl RelationRegistry {
-    pub fn new(source: SourceIdentity, max_entries: usize, max_bytes: usize) -> Result<Self> {
+    pub fn new(
+        source: SourceIdentity,
+        max_entries: usize,
+        max_bytes: usize,
+        capabilities: RelationCapabilities,
+    ) -> Result<Self> {
+        capabilities.validate()?;
         source.validate()?;
         if max_entries == 0 || max_entries > MAX_NODES || max_bytes == 0 || max_bytes > MAX_BYTES {
             return Err(invalid("relation registry bounds"));
@@ -138,6 +176,7 @@ impl RelationRegistry {
             bytes: 0,
             closed: false,
             entries: HashMap::new(),
+            capabilities,
         })
     }
     pub fn register(
@@ -149,7 +188,8 @@ impl RelationRegistry {
         if self.closed {
             return Err(state("relation source closed"));
         }
-        let candidate = RelationBinding::register(self.source, parent, child, definition)?;
+        let candidate =
+            RelationBinding::register(self.source, parent, child, definition, self.capabilities)?;
         let hash = candidate.relation.hash();
         if let Some(existing) = self.entries.get(&hash) {
             if existing.relation.bytes() != candidate.relation.bytes() {

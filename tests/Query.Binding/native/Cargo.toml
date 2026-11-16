@@ -1,0 +1,17 @@
+[workspace]
+[package]
+name = "nativeweave-query-binding-fixture"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.100"
+publish = false
+[lib]
+crate-type = ["cdylib", "rlib"]
+[dependencies]
+nativeweave-query-binding = { path = "../../../native/database/binding" }
+nativeweave-data-contracts = { path = "../../../native/database/interfaces" }
+nativeweave-interop-abi = { path = "../../../native/interop/abi" }
+serde_json = "=1.0.154"
+sha2 = "=0.10.9"
+[profile.release]
+panic = "unwind"

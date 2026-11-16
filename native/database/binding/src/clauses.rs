@@ -28,6 +28,9 @@ impl CteReference {
         if !body.capabilities.cte {
             return Err(unsupported("CTE capability"));
         }
+        if recursive == 1 && !body.capabilities.recursive_cte {
+            return Err(unsupported("recursive CTE capability"));
+        }
         declared.ensure_source(body.source())?;
         if declared.model.table_id() != table_id || recursive > 1 {
             return Err(invalid("CTE declaration/recursive flag"));
@@ -57,13 +60,10 @@ impl CteReference {
     }
 }
 impl QueryArena {
-    /// Clone selected metadata under the host's read admission. No source mutation;
+    /// Clone mutable metadata (including an optional selection) under host read admission. No source mutation;
     /// clone tokens have a fresh generation and cannot be used by the source.
     pub fn clone_selected(&self) -> Result<Self> {
         self.mutable(false)?;
-        if self.projection.is_none() {
-            return Err(invalid("selected source required for clone"));
-        }
         let generation = NEXT_ARENA
             .try_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_add(1))
             .map_err(|_| capacity("arena generation exhausted"))?;
@@ -74,9 +74,12 @@ impl QueryArena {
             limits: self.limits,
             capabilities: self.capabilities,
             state: QueryState::Mutable,
+            submitted: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             nodes: self.nodes.clone(),
             values: self.values.clone(),
             bytes: self.bytes,
+            retained_nodes: self.retained_nodes,
+            imported_depth: self.imported_depth,
             parameters: self.parameters.clone(),
             projection: self.projection.clone(),
             reserved: None,
@@ -86,6 +89,8 @@ impl QueryArena {
             has_join: self.has_join,
             has_group: self.has_group,
             has_paging: self.has_paging,
+            has_where: self.has_where,
+            advanced_mutation_shape: self.advanced_mutation_shape,
         })
     }
     pub fn import_cte(&mut self, cte: Arc<CteReference>) -> Result<u64> {
@@ -96,13 +101,17 @@ impl QueryArena {
         if cte.source != self.source() {
             return Err(state("CTE source generation"));
         }
-        self.quota(cte.body.owned_bytes, 0)?;
+        self.dependency_quota(cte.body.nodes, cte.body.owned_bytes, cte.body.depth)?;
         let mut parameters = self.parameters.clone();
         for parameter in cte.body.parameters.values() {
             merge_parameter(&mut parameters, parameter, self.limits.parameters)?;
         }
         let bytes = cte.body.owned_bytes;
+        let nodes = cte.body.nodes;
+        let depth = cte.body.depth;
         let token = self.append(Node::Cte(cte), bytes)?;
+        self.retained_nodes += nodes;
+        self.imported_depth = self.imported_depth.max(depth + 1);
         self.parameters = parameters;
         Ok(token)
     }
@@ -114,7 +123,7 @@ impl QueryArena {
         if !(1..=22).contains(&opcode) {
             return Err(unsupported("unknown required clause opcode"));
         }
-        self.mutable(matches!(opcode, 7 | 19))?;
+        self.mutable(matches!(opcode, 7 | 13..=16 | 19..=21))?;
         if opcode != 19 {
             self.quota(borrowed.len(), 0)?;
         }
@@ -129,7 +138,11 @@ impl QueryArena {
                 if opcode == 1 && info.aggregate {
                     return Err(invalid("aggregate not allowed in WHERE"));
                 }
-                self.marker(borrowed.len())
+                self.marker(borrowed.len())?;
+                if opcode == 1 {
+                    self.has_where = true;
+                }
+                Ok(0)
             }
             3 => {
                 let f = parse(&[(1, 2, true), (2, 1, true), (3, 1, true), (4, 1, true)])?;
@@ -218,6 +231,9 @@ impl QueryArena {
                 self.marker(borrowed.len())
             }
             9 => {
+                if !self.capabilities.set_operations {
+                    return Err(unsupported("set-operation capability"));
+                }
                 let f = parse(&[(1, 2, true), (2, 1, true)])?;
                 if f.u32(2)? > 3 {
                     return Err(unsupported("set operation"));
@@ -241,7 +257,9 @@ impl QueryArena {
                 {
                     return Err(invalid("set result shape"));
                 }
-                self.marker(borrowed.len())
+                self.marker(borrowed.len())?;
+                self.advanced_mutation_shape = true;
+                Ok(0)
             }
             10 => {
                 let f = parse(&[(1, 2, true)])?;
@@ -254,6 +272,7 @@ impl QueryArena {
                 let name = cte.name.clone();
                 self.marker(borrowed.len())?;
                 self.cte_names.insert(name);
+                self.advanced_mutation_shape = true;
                 Ok(0)
             }
             11 => self.window_clause(borrowed),
@@ -275,10 +294,10 @@ impl QueryArena {
                     .projection
                     .as_ref()
                     .ok_or_else(|| invalid("subquery projection"))?;
-                let (nullable, dependencies, depth) = match f.u32(2)? {
+                let (nullable, dependencies, depth, aggregate) = match f.u32(2)? {
                     0 => {
                         f.require_set(&[1, 2])?;
-                        (false, BTreeSet::new(), 1)
+                        (false, BTreeSet::new(), plan.depth + 1, false)
                     }
                     1 => {
                         f.require_set(&[1, 2, 3])?;
@@ -293,7 +312,8 @@ impl QueryArena {
                         (
                             lhs.codec.nullable || projection.projection.fields()[0].codec.nullable,
                             lhs.dependencies,
-                            lhs.depth + 1,
+                            lhs.depth.max(plan.depth) + 1,
+                            lhs.aggregate,
                         )
                     }
                     _ => return Err(unsupported("subquery operation")),
@@ -303,7 +323,8 @@ impl QueryArena {
                         codec: boolean(nullable),
                         bound_codec: 4,
                         depth,
-                        aggregate: false,
+                        aggregate,
+                        windowable: false,
                         dependencies,
                     },
                     borrowed.len(),
@@ -331,6 +352,7 @@ impl QueryArena {
                         bound_codec: a.bound_codec,
                         depth: condition.depth.max(a.depth).max(b.depth) + 1,
                         aggregate: condition.aggregate || a.aggregate || b.aggregate,
+                        windowable: false,
                         dependencies,
                     },
                     borrowed.len(),
@@ -357,6 +379,9 @@ impl QueryArena {
                 Ok(0)
             }
             18 => {
+                if !self.capabilities.explicit_relationships {
+                    return Err(unsupported("explicit relationship capability"));
+                }
                 let f = parse(&[(1, 2, true), (2, 1, true), (3, 4, true), (4, 1, true)])?;
                 let Node::Model(model) = self.node(f.u64(1)?)? else {
                     return Err(invalid("JOIN imported model token"));
@@ -415,6 +440,7 @@ impl QueryArena {
                         bound_codec: 4,
                         depth: 1,
                         aggregate: false,
+                        windowable: false,
                         dependencies: BTreeSet::from([index as u32 + 1]),
                     },
                     borrowed.len(),
@@ -423,11 +449,12 @@ impl QueryArena {
             21 => {
                 let f = parse(&[(1, 2, true), (2, 2, true)])?;
                 let mut expression = self.expression_type(f.u64(1)?)?;
-                if !expression.aggregate {
+                if !expression.windowable {
                     return Err(invalid("OVER requires native aggregate/window expression"));
                 }
                 self.window(f.u64(2)?)?;
-                expression.depth += 1; // B11 snapshots the corresponding native window now, not at render.
+                expression.depth += 1;
+                expression.windowable = false; // B11 snapshots the corresponding native window now, not at render.
                 self.expression(expression, borrowed.len())
             }
             22 => {
@@ -504,14 +531,16 @@ impl QueryArena {
         let action = f.u32(1)?;
         if action == 0 {
             f.require_set(&[1])?;
-            return self.append(
+            let token = self.append(
                 Node::Window {
                     partition_count: 0,
                     order_count: 0,
                     frame: None,
                 },
                 bytes.len(),
-            );
+            )?;
+            self.advanced_mutation_shape = true;
+            return Ok(token);
         }
         let index = self.index(f.u64(2)?)?;
         let Node::Window {
@@ -600,8 +629,27 @@ impl QueryArena {
             if input.aggregate {
                 return Err(invalid("nested aggregate requires a subquery"));
             }
-            if matches!(function, 2 | 3) && (!numeric(input.codec.id) || !numeric(codec.id)) {
-                return Err(unsupported("numeric aggregate codec"));
+            if matches!(function, 2 | 3) {
+                if !numeric(input.codec.id) {
+                    return Err(unsupported("numeric aggregate codec"));
+                }
+                let expected = match input.codec.id {
+                    1..=3 => {
+                        if function == 2 {
+                            3
+                        } else {
+                            11
+                        }
+                    }
+                    11 | 12 => 11,
+                    13 | 15 => input.codec.id,
+                    _ => return Err(unsupported("numeric aggregate codec")),
+                };
+                if codec.id != expected
+                    || matches!(expected, 13 | 15) && !codec.same_scalar(&input.codec)
+                {
+                    return Err(invalid("aggregate result widening/configuration"));
+                }
             }
             if matches!(function, 4 | 5) && !codec.same_scalar(&input.codec) {
                 return Err(invalid("min/max result codec"));
@@ -615,6 +663,7 @@ impl QueryArena {
                 bound_codec: f.u32(5)?,
                 depth,
                 aggregate: true,
+                windowable: f.get(4).is_none(),
                 dependencies,
             },
             bytes.len(),
@@ -665,6 +714,7 @@ impl QueryArena {
             input.bound_codec = 4;
         }
         input.depth += 1;
+        input.windowable = false;
         let snapshot = Arc::<[u8]>::from(f.bytes(3)?);
         let token = self.expression(input, bytes.len())?;
         self.values.push(snapshot);

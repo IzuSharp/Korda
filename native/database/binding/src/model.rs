@@ -57,6 +57,11 @@ impl Limits {
 /// Provider capabilities admitted by the engine profile; no name implies support.
 #[derive(Clone, Copy, Debug)]
 pub struct Capabilities {
+    pub metadata: bool,
+    pub scalar_codecs: bool,
+    pub explicit_relationships: bool,
+    pub recursive_cte: bool,
+    pub set_operations: bool,
     pub query: bool,
     pub null_safe_equal: bool,
     pub windows: bool,
@@ -65,15 +70,26 @@ pub struct Capabilities {
     pub prepared: bool,
 }
 impl Capabilities {
-    pub fn ordinary(profile: Profile) -> Self {
-        Self {
-            query: true,
-            null_safe_equal: true,
-            windows: true,
-            cte: true,
-            row_lock: profile == Profile::PostgreSql,
-            prepared: true,
+    /// Exact engine-local bits from pinned database.md section9.3. The host passes
+    /// its admitted package/provider/version/profile intersection, not guessed support.
+    pub fn from_mask(mask: u64, profile: Profile) -> Result<Self> {
+        if mask >> 25 != 0 {
+            return Err(invalid("reserved database capability bits"));
         }
+        let has = |bit: u32| mask & (1u64 << bit) != 0u64;
+        Ok(Self {
+            metadata: has(0),
+            query: has(1),
+            scalar_codecs: has(23),
+            explicit_relationships: has(17),
+            recursive_cte: has(21),
+            set_operations: has(22),
+            null_safe_equal: has(12),
+            windows: has(10),
+            cte: has(9),
+            row_lock: has(11) && profile == Profile::PostgreSql,
+            prepared: has(18),
+        })
     }
 }
 /// The source's existing codec registrations, copied as immutable binding identity.

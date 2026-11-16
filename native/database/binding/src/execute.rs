@@ -52,6 +52,9 @@ impl PlanReference {
         limits: Limits,
     ) -> Result<ExecutionArguments> {
         limits.validate()?;
+        if self.terminal == 8 && !self.prepared_supported {
+            return Err(crate::unsupported("prepared-shape capability"));
+        }
         if self.source != session {
             return Err(state("plan/session source mismatch"));
         }
@@ -59,9 +62,23 @@ impl PlanReference {
             return Err(capacity("execution parameter bound"));
         }
         Batch::parse(borrowed, self.parameter_expectation())?;
+        let parameters = Arc::from(borrowed);
+        if self.terminal != 8
+            && self
+                .submitted
+                .compare_exchange(
+                    false,
+                    true,
+                    std::sync::atomic::Ordering::AcqRel,
+                    std::sync::atomic::Ordering::Acquire,
+                )
+                .is_err()
+        {
+            return Err(state("ordinary plan already submitted"));
+        }
         Ok(ExecutionArguments {
             plan: Arc::clone(self),
-            parameters: Arc::from(borrowed),
+            parameters,
         })
     }
     /// Observable retained references for ownership tests; no native SQL tree is exposed.

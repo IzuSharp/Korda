@@ -7,7 +7,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     sync::{
         Arc,
-        atomic::{AtomicU32, Ordering},
+        atomic::{AtomicBool, AtomicU32, Ordering},
     },
 };
 pub(crate) static NEXT_ARENA: AtomicU32 = AtomicU32::new(1);
@@ -25,6 +25,7 @@ pub struct ExpressionType {
     pub bound_codec: u32,
     pub depth: u32,
     pub aggregate: bool,
+    pub windowable: bool,
     pub dependencies: BTreeSet<u32>,
 }
 #[derive(Clone, Debug)]
@@ -51,11 +52,15 @@ pub(crate) enum Node {
 #[derive(Clone, Debug)]
 pub struct PlanReference {
     pub source: SourceIdentity,
+    pub root: ModelBinding,
+    pub(crate) submitted: Arc<AtomicBool>,
     pub terminal: u32,
+    pub prepared_supported: bool,
     pub parameters: BTreeMap<u32, ParameterIdentity>,
     pub projection: Option<ProjectionBinding>,
     pub timeout_ns: u64,
     pub nodes: usize,
+    pub depth: u32,
     pub owned_bytes: usize,
     pub(crate) dependencies: Vec<Node>,
     pub(crate) values: Vec<Arc<[u8]>>,
@@ -70,9 +75,12 @@ pub struct QueryArena {
     pub(crate) limits: Limits,
     pub(crate) capabilities: Capabilities,
     pub(crate) state: QueryState,
+    pub(crate) submitted: Arc<AtomicBool>,
     pub(crate) nodes: Vec<Option<Node>>,
     pub(crate) values: Vec<Arc<[u8]>>,
     pub(crate) bytes: usize,
+    pub(crate) retained_nodes: usize,
+    pub(crate) imported_depth: u32,
     pub(crate) parameters: BTreeMap<u32, ParameterIdentity>,
     pub(crate) projection: Option<ProjectionBinding>,
     pub(crate) reserved: Option<u32>,
@@ -82,6 +90,8 @@ pub struct QueryArena {
     pub(crate) has_join: bool,
     pub(crate) has_group: bool,
     pub(crate) has_paging: bool,
+    pub(crate) has_where: bool,
+    pub(crate) advanced_mutation_shape: bool,
 }
 impl QueryArena {
     pub fn new(
@@ -97,7 +107,7 @@ impl QueryArena {
         if root.model.table_id() != table_id || registry.source != root.source || timeout_ns == 0 {
             return Err(invalid("query identity/default timeout mismatch"));
         }
-        if !capabilities.query {
+        if !capabilities.query || !capabilities.metadata || !capabilities.scalar_codecs {
             return Err(unsupported("db.query.v1 required"));
         }
         let generation = NEXT_ARENA
@@ -110,9 +120,12 @@ impl QueryArena {
             limits,
             capabilities,
             state: QueryState::Mutable,
+            submitted: Arc::new(AtomicBool::new(false)),
             nodes: Vec::new(),
             values: Vec::new(),
             bytes: 0,
+            retained_nodes: 0,
+            imported_depth: 0,
             parameters: BTreeMap::new(),
             projection: None,
             reserved: None,
@@ -122,13 +135,19 @@ impl QueryArena {
             has_join: false,
             has_group: false,
             has_paging: false,
+            has_where: false,
+            advanced_mutation_shape: false,
         })
     }
     pub fn state(&self) -> QueryState {
-        self.state
+        if self.state == QueryState::Sealed && self.submitted.load(Ordering::Acquire) {
+            QueryState::Submitted
+        } else {
+            self.state
+        }
     }
     pub fn counts(&self) -> (usize, usize) {
-        (self.nodes.len(), self.bytes)
+        (self.nodes.len() + self.retained_nodes, self.bytes)
     }
     pub fn source(&self) -> SourceIdentity {
         self.root.source
@@ -146,6 +165,8 @@ impl QueryArena {
         self.projection = None;
         self.reserved = None;
         self.bytes = 0;
+        self.retained_nodes = 0;
+        self.imported_depth = 0;
     }
     pub(crate) fn mutable(&self, expression: bool) -> Result<()> {
         if self.state == QueryState::Poisoned {
@@ -162,7 +183,7 @@ impl QueryArena {
         Ok(())
     }
     pub(crate) fn quota(&self, bytes: usize, depth: u32) -> Result<()> {
-        if self.nodes.len() >= self.limits.nodes
+        if self.nodes.len() + self.retained_nodes >= self.limits.nodes
             || bytes > self.limits.bytes.saturating_sub(self.bytes)
             || depth > self.limits.depth
         {
@@ -170,6 +191,18 @@ impl QueryArena {
         } else {
             Ok(())
         }
+    }
+    pub(crate) fn dependency_quota(&self, nodes: usize, bytes: usize, depth: u32) -> Result<()> {
+        self.quota(bytes, depth.saturating_add(1))?;
+        if nodes
+            >= self
+                .limits
+                .nodes
+                .saturating_sub(self.nodes.len() + self.retained_nodes)
+        {
+            return Err(capacity("imported dependency node bound"));
+        }
+        Ok(())
     }
     pub(crate) fn append(&mut self, node: Node, bytes: usize) -> Result<u64> {
         self.quota(bytes, 0)?;
@@ -218,7 +251,7 @@ impl QueryArena {
                     provisional,
                     ..
                 } => {
-                    let index = self.index(alias)? as u32;
+                    let index = self.index(alias)? as u32 + 1;
                     if *provisional && self.reserved != Some(index) {
                         return Err(state("inactive provisional alias"));
                     }
@@ -238,6 +271,7 @@ impl QueryArena {
                 bound_codec,
                 depth: 1,
                 aggregate: false,
+                windowable: false,
                 dependencies,
             },
             0,
@@ -287,6 +321,7 @@ impl QueryArena {
                 bound_codec,
                 depth: 1,
                 aggregate: false,
+                windowable: false,
                 dependencies: BTreeSet::new(),
             },
             borrowed.len(),
@@ -307,6 +342,7 @@ impl QueryArena {
                 bound_codec: identity.bound_codec,
                 depth: 1,
                 aggregate: false,
+                windowable: false,
                 dependencies: BTreeSet::new(),
             },
             identity.name.len(),
@@ -351,6 +387,7 @@ impl QueryArena {
                 bound_codec,
                 depth,
                 aggregate: a.aggregate || b.aggregate,
+                windowable: false,
                 dependencies,
             },
             0,
@@ -377,6 +414,9 @@ impl QueryArena {
             }
             _ => return Err(unsupported("unknown required unary opcode")),
         }
+        if opcode != 4 {
+            info.windowable = false;
+        }
         info.depth = info
             .depth
             .checked_add(1)
@@ -402,7 +442,8 @@ impl QueryArena {
                 codec: boolean(nullable),
                 bound_codec: 4,
                 depth: input.depth + 1,
-                aggregate: false,
+                aggregate: input.aggregate,
+                windowable: false,
                 dependencies: input.dependencies,
             },
             borrowed.len(),
@@ -420,13 +461,17 @@ impl QueryArena {
         if plan.source != self.root.source {
             return Err(state("imported plan from another source"));
         }
-        self.quota(plan.owned_bytes, 0)?;
+        self.dependency_quota(plan.nodes, plan.owned_bytes, plan.depth)?;
         let mut parameters = self.parameters.clone();
         for parameter in plan.parameters.values() {
             merge_parameter(&mut parameters, parameter, self.limits.parameters)?;
         }
         let bytes = plan.owned_bytes;
+        let nodes = plan.nodes;
+        let depth = plan.depth;
         let token = self.append(Node::Plan(plan), bytes)?;
+        self.retained_nodes += nodes;
+        self.imported_depth = self.imported_depth.max(depth + 1);
         self.parameters = parameters;
         Ok(token)
     }
@@ -438,7 +483,13 @@ impl QueryArena {
         if matches!(terminal, 0..=3 | 8) && self.projection.is_none() {
             return Err(invalid("selected projection required"));
         }
-        if matches!(terminal, 6 | 7) && (self.has_join || self.has_group || self.has_paging) {
+        if matches!(terminal, 6 | 7)
+            && (!self.has_where
+                || self.has_join
+                || self.has_group
+                || self.has_paging
+                || self.advanced_mutation_shape)
+        {
             return Err(unsupported("set mutation requires root-only filter"));
         }
         if terminal == 6 && self.assignments.is_empty() {
@@ -446,24 +497,34 @@ impl QueryArena {
         }
         let plan = Arc::new(PlanReference {
             source: self.root.source,
+            root: self.root.clone(),
+            submitted: Arc::clone(&self.submitted),
             terminal,
+            prepared_supported: self.capabilities.prepared,
             parameters: self.parameters.clone(),
             projection: self.projection.clone(),
             timeout_ns: self.timeout_ns,
-            nodes: self.nodes.len(),
+            nodes: self.nodes.len() + self.retained_nodes,
+            depth: self
+                .nodes
+                .iter()
+                .flatten()
+                .filter_map(|n| {
+                    if let Node::Expression(e) = n {
+                        Some(e.depth)
+                    } else {
+                        None
+                    }
+                })
+                .max()
+                .unwrap_or(1)
+                .max(self.imported_depth),
             owned_bytes: self.bytes,
             dependencies: self.nodes.iter().flatten().cloned().collect(),
             values: self.values.clone(),
         });
         self.state = QueryState::Sealed;
         Ok(plan)
-    }
-    pub fn mark_submitted(&mut self) -> Result<()> {
-        if self.state != QueryState::Sealed {
-            return Err(state("only sealed query may submit"));
-        }
-        self.state = QueryState::Submitted;
-        Ok(())
     }
 }
 pub(crate) fn boolean(nullable: bool) -> Codec {

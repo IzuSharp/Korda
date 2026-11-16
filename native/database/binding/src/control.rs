@@ -161,6 +161,7 @@ pub fn projection_record(
         return Err(invalid("inline projection arity"));
     }
     let mut canonical = Vec::with_capacity(records.len());
+    let mut scalar = false;
     for (ordinal, record) in records.iter().enumerate() {
         let field = Fields::parse(
             record,
@@ -183,11 +184,23 @@ pub fn projection_record(
         } else if field.get(5).is_some() {
             return Err(invalid("registered projection contains query token"));
         }
+        if records.len() == 1 && field.text(2)?.is_empty() {
+            scalar = true;
+        }
         let codec = codecs.get(field.u32(3)?, field.flag(4)?)?;
         canonical.push(format!("{{\"ordinal\":{ordinal},\"name\":{},\"codec\":{},\"codec_config\":{},\"nullable\":{}}}",quote(field.text(2)?),codec.id,codec.configuration.as_deref().unwrap_or("null"),codec.nullable));
     }
     let text = format!("{{\"version\":1,\"fields\":[{}]}}", canonical.join(","));
-    let projection = Projection::parse(text.as_bytes(), source.profile)?;
+    if scalar && inline_tokens.is_some() {
+        return Err(invalid(
+            "empty alias is reserved for registered scalar projections",
+        ));
+    }
+    let projection = if scalar {
+        Projection::parse_scalar(text.as_bytes(), source.profile)?
+    } else {
+        Projection::parse(text.as_bytes(), source.profile)?
+    };
     if fields.bytes(2)? != projection.hash() {
         return Err(invalid("projection logical hash"));
     }
