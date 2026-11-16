@@ -10,7 +10,5 @@
   <ItemGroup>
     <InternalsVisibleTo Include="NativeWeave.Interop.Abi.Tests" />
     <InternalsVisibleTo Include="NativeWeave.Interop.Abi.Sample" />
-    <InternalsVisibleTo Include="NativeWeave.Core" />
-    <InternalsVisibleTo Include="NativeWeave.Interop.Errors.Tests" />
   </ItemGroup>
 </Project>
