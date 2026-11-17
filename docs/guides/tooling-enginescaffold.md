@@ -18,7 +18,7 @@ inventories and unsupported targets before publishing a partial tree.
 
 ```sh
 python3 src/Tooling.EngineScaffold/scaffold.py engine-descriptor.json \
-  artifacts/generated-engine --root .
+  artifacts/generated-engine --root . --sdk-revision <exact-published-SDK-commit>
 python3 artifacts/generated-engine/eng/verify.py \
   --feed /absolute/reviewed-feed --sdk-root /absolute/pinned/NativeWeave
 ```
@@ -51,6 +51,11 @@ retirement requirements from the original adapter; the scaffold adds none.
 
 The scaffold verifier checks compiled signatures/XML against the supplied reviewed
 baseline and executes an outside-tree package consumer in JIT and Native AOT.
+The generated A10 owner helpers currently use Core's internal lifetime seam.
+These profiles therefore retain their already registered maintainer assembly
+identities and Core friend grants. An arbitrary new assembly identity requires
+that explicit integration prerequisite; this tool does not establish unrestricted
+third-party assembly access from a Core package alone or add a new public bridge.
 Adding a managed DTO then rebuilding must preserve the native hash. A Rust invocation
 trap verifies the build mechanism; this is explicitly not pristine-machine evidence.
 A16 owns the clean no-Rust and final release-closure gate. Windows/static/mobile/WASM
@@ -59,3 +64,38 @@ and unavailable GPU/device certification are not asserted by this Linux scaffold
 The initial workflow template installs the same conformance command in a new
 repository. Its reviewed package feed and pinned SDK source are explicit maintainer
 inputs, not application dependencies or automatic release authorization.
+
+The SDK revision is checked against every conformance tool input used from that
+checkout. The generated workflow pins this exact published commit. Its manual
+inputs select the prior workflow run and reviewed feed artifact in the generated
+repository; it downloads that artifact and runs the same installed verifier.
+It does not assume an undeclared feed directory is already present on a fresh
+runner. Generation records exact binding-tool sources, output logs, template
+hashes and generated files. The consumer calls the generated descriptor's real
+preflight, checks threading and requires every declared capability before testing
+the copied typed facade. Build and publish native locations come from A16's actual
+SDK-selected asset records; their layouts need not be identical.
+
+## Reusing accepted real-engine inputs
+
+For the synchronous profile, `tests/Tooling.EngineScaffold/prepare_sync.py` accepts
+`--engine-root`, the accepted A17 `--evidence` directory and a fresh `--output`
+inside the maintainer checkout. It verifies the original source/native/package
+hashes, stages read-only copies and uses the current A16 packaging task. It does
+not repeat the accepted A17 component suite. The staged `descriptor.json` and
+`feed/` are then inputs to:
+
+```sh
+python3 tests/Tooling.EngineScaffold/verify.py \
+  --descriptor artifacts/sync-inputs/descriptor.json \
+  --feed artifacts/sync-inputs/feed --output artifacts/sync-scaffold \
+  --sdk-revision <exact-published-SDK-commit>
+```
+
+Run this entrypoint separately for the A18 descriptor and its reviewed package
+feed. Each result retains deliberate unsupported schema/component and contradictory
+native-layout rejection, generation logs, actual facade API/XML checks, independent
+JIT/AOT package execution, separate normal/AOT locks and unchanged shared Core
+source hashes. A passing synchronous result alone does not accept A24's required
+heterogeneous pair. The template deliberately leaves `accepted=false`; acceptance
+belongs to the independently reviewed execution receipts.

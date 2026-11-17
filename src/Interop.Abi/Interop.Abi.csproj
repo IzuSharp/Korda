@@ -11,6 +11,7 @@
     <InternalsVisibleTo Include="NativeWeave.Interop.Abi.Tests" />
     <InternalsVisibleTo Include="NativeWeave.Interop.Abi.Sample" />
     <InternalsVisibleTo Include="NativeWeave.Core" />
+    <InternalsVisibleTo Include="NativeWeave.Engines.AsyncProof" />
     <InternalsVisibleTo Include="NativeWeave.Verification.ExtensionProof" />
     <InternalsVisibleTo Include="NativeWeave.Interop.Errors.Tests" />
     <InternalsVisibleTo Include="NativeWeave.Query.Binding" />
@@ -18,6 +19,8 @@
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="NativeWeave.Interop.Async.Tests" />
+    <InternalsVisibleTo Include="NativeWeave.Interop.Execution.Tests" />
+    <InternalsVisibleTo Include="NativeWeave.Interop.Execution.Sample" />
     <InternalsVisibleTo Include="NativeWeave.Interop.Async.Sample" />
     <InternalsVisibleTo Include="NativeWeave.Interop.Callbacks.Tests" />
     <InternalsVisibleTo Include="NativeWeave.Interop.Callbacks.Sample" />

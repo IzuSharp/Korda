@@ -17,6 +17,7 @@
     <Project Path="src/Analyzers/NativeWeave.Analyzers.csproj" />
   </Folder>
   <Folder Name="/samples/">
+    <Project Path="samples/api/interop-execution/Interop.Execution.Sample.csproj" />
     <Project Path="samples/HelloWorld/HelloWorld.csproj" />
     <Project Path="samples/api/interop-abi/Interop.Abi.Sample.csproj" />
     <Project Path="samples/api/benchmarks-harness/Managed/Managed.csproj" />
@@ -40,6 +41,8 @@
     <Project Path="samples/api/verification-compatibility/CompatibilitySample.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Interop.Execution/Interop.Execution.Tests.csproj" />
+    <Project Path="tests/Interop.Execution/ApiCheck/ApiCheck.csproj" />
     <Project Path="tests/NativeWeave.HelloWorld.Tests/NativeWeave.HelloWorld.Tests.csproj" />
     <Project Path="tests/Interop.Abi/Interop.Abi.Tests.csproj" />
     <Project Path="tests/Data.Abstractions/NativeWeave.Data.Tests.csproj" />

@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "generator": "NativeWeave.Generators.Rust",
+  "generator_version": "0.1.0",
+  "Module": "nativeweave.engines.asyncproof",
+  "schema_sha256": "c8e8fbd26b984fb2a3b69be1b35e617dc69cddc66652e1ffce8f5463f393be53",
+  "adapter_sha256": "fb872873210426c94f063fb72bb39e7e865857e0d4a322df21d9b414bf6efce1",
+  "parsed_inventory_sha256": "3006df8992bf67cffb4a57acb28c0426bfcb6af04c047122a6d76ed9ef9b269f",
+  "header_sha256": "d6ee0f56e6f45248966c7de6d4bf43b4f01141b96a7008106779dca08185344f",
+  "assertions_sha256": "e2f219ada1e1901c021540e081b81df89c2534dfbad472276b87b75df98f3d51",
+  "symbols": [
+    "nw_asyncproof_chunk_release_v1",
+    "nw_asyncproof_counters_v1",
+    "nw_asyncproof_get_abi_v1",
+    "nw_asyncproof_get_create_v1",
+    "nw_asyncproof_handler_ack_v1",
+    "nw_asyncproof_handler_claim_v1",
+    "nw_asyncproof_handler_reply_v1",
+    "nw_asyncproof_host_create_v1",
+    "nw_asyncproof_host_port_v1",
+    "nw_asyncproof_host_release_v1",
+    "nw_asyncproof_host_retire_v1",
+    "nw_asyncproof_host_start_v1",
+    "nw_asyncproof_host_stop_v1",
+    "nw_asyncproof_operation_cancel_v1",
+    "nw_asyncproof_operation_poison_v1",
+    "nw_asyncproof_operation_release_v1",
+    "nw_asyncproof_operation_retire_v1",
+    "nw_asyncproof_operation_start_v1",
+    "nw_asyncproof_read_create_v1",
+    "nw_asyncproof_response_release_v1",
+    "nw_asyncproof_take_chunk_v1",
+    "nw_asyncproof_take_response_v1"
+  ],
+  "target": "x86_64-unknown-linux-gnu",
+  "upstream": [
+    {
+      "commit": "7f67699ce32d717081deb7018b4da7d679277ac0",
+      "features": [
+        "client",
+        "http1",
+        "server"
+      ],
+      "repository": "https://github.com/hyperium/hyper"
+    },
+    {
+      "commit": "23a868965964c1d6bb1b94f30ba4c420a4bebe7c",
+      "features": [
+        "tokio"
+      ],
+      "repository": "https://github.com/hyperium/hyper-util"
+    },
+    {
+      "commit": "76c0fbb54ed4336caf9d2311658a2f4a5627c21d",
+      "features": [
+        "std"
+      ],
+      "repository": "https://github.com/tokio-rs/bytes"
+    },
+    {
+      "commit": "b53b2001ed2ccfd9b87e32a0c6da1a1eebdc80b8",
+      "features": [
+        "io-util",
+        "macros",
+        "net",
+        "rt",
+        "sync",
+        "time"
+      ],
+      "repository": "https://github.com/tokio-rs/tokio"
+    }
+  ]
+}

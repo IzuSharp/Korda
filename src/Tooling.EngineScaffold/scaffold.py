@@ -201,7 +201,8 @@ def generate(root, descriptor, output, sdk_revision=None):
         adoption["scope"] = "This generated Engine explicitly adopts the exact standard. Product/platform acceptance requires actual conformance."
         (staging / "public-api-standard.json").write_text(json.dumps(adoption, indent=2) + "\n")
         templates = Path(__file__).parent / "templates"
-        for path in ("AGENTS.md", "eng/verify.py", ".github/workflows/conformance.yml"):
+        template_paths = ("AGENTS.md", "eng/verify.py", ".github/workflows/conformance.yml")
+        for path in template_paths:
             target = staging / path
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(templates / path, target)
@@ -307,8 +308,8 @@ internal static class AotGuard
             "src/Generators.Rust", "Directory.Build.props", "Directory.Build.targets", "global.json"], cwd=root, text=True).splitlines()
         manifest["generation_tool_sha256"] = {name: digest(root / name) for name in tool_names}
         manifest["generation_log_sha256"] = {file.name: digest(file) for file in logs.iterdir() if file.is_file()}
-        for file in sorted(templates.rglob("*")):
-            if file.is_file(): manifest["template_sha256"][file.relative_to(templates).as_posix()] = digest(file)
+        for path in template_paths:
+            manifest["template_sha256"][path] = digest(templates / path)
         for file in sorted(staging.rglob("*")):
             if file.is_file() and not file.is_relative_to(staging / "artifacts"):
                 manifest["files"][file.relative_to(staging).as_posix()] = digest(file)
