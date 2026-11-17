@@ -11,14 +11,15 @@ internal sealed class HostTransactionTransport : ITransactionTransport
     private readonly DataSource _source;
     private readonly DatabaseOwner _owner;
     private readonly CloseController _close;
+    private readonly string? _recoveryKey;
     private readonly object _gate = new();
     private readonly Dictionary<SavepointId, DatabaseOwner> _savepoints = [];
     private TransactionSnapshot _last;
     private ulong _sequence;
     private bool _closed;
-    internal HostTransactionTransport(DataSource source, DatabaseOwner owner)
+    internal HostTransactionTransport(DataSource source, DatabaseOwner owner, string? recoveryKey)
     {
-        _source = source; _owner = owner; _last = NativeHost.Snapshot(owner);
+        _source = source; _owner = owner; _recoveryKey = recoveryKey; _last = NativeHost.Snapshot(owner);
         _close = new(source, owner, () => { lock (_gate) { _last = NativeHost.Snapshot(_owner); foreach (var savepoint in _savepoints.Values) savepoint.Dispose(); _savepoints.Clear(); _owner.Dispose(); } });
     }
     public TransactionSnapshot Snapshot
@@ -41,6 +42,7 @@ internal sealed class HostTransactionTransport : ITransactionTransport
     private async Task Finish(uint action, CancellationToken token)
     {
         try { await _source.Start(() => FinishCreate(_owner, action), ReadSnapshot, token).ConfigureAwait(false); }
+        catch (CommitOutcomeUnknownException failure) { throw new CommitOutcomeUnknownException(failure.Message, _recoveryKey, failure.ProviderCode, failure.CorrelationId); }
         catch (DatabaseException failure) when (action == 1) { throw new DatabaseCleanupException("The native rollback was not confirmed.", Snapshot.Cleanup) { Data = { ["NativeWeave.Database.Primary.v1"] = failure } }; }
         finally { lock (_gate) if (!_owner.IsClosed) _last = NativeHost.Snapshot(_owner); }
     }

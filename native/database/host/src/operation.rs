@@ -226,6 +226,9 @@ impl DbOperation {
         };
         // SAFETY: the caller holds the corresponding Core WorkLease and registered callback root.
         let _ = unsafe { self.core.complete(status, value, fields) };
+        if self.core.snapshot().5 {
+            self.source.poisoned.store(true, Ordering::Release);
+        }
     }
 }
 impl Drop for DbOperation {

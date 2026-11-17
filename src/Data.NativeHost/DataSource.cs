@@ -21,6 +21,10 @@ public sealed partial class DataSource : IDisposable, IAsyncDisposable
     private bool _closing, _poisoned;
     internal SourceBinding Binding { get; }
     internal DatabaseOwner Owner { get; }
+    internal Action<AsyncBoundary>? TestBoundary { get; set; }
+    internal Action? TestAfterErrorTake { get; set; }
+    internal Action? TestAfterOwnerTake { get; set; }
+    internal Action<AsyncSnapshot>? TestRetirement { get; set; }
     private DataSource(SourceBinding binding, DatabaseOwner owner, DatabaseProvider provider, string name, DatabaseLimits limits, EngineInfo info)
     {
         Binding = binding; Owner = owner; Provider = provider; Name = name; Limits = limits; Capabilities = new(provider, info);
@@ -65,15 +69,15 @@ public sealed partial class DataSource : IDisposable, IAsyncDisposable
         try
         {
             handle = new(Binding, create()); resource = new(handle, this);
-            var operation = new AsyncOperation<T>(resource, _async, _resources.Coordinator, take, token);
+            var operation = new AsyncOperation<T>(resource, _async, _resources.Coordinator, take, token, testBoundary: TestBoundary);
             return Complete(operation, operation.Start());
         }
         catch { if (resource is not null) resource.Dispose(); else handle?.Dispose(); throw; }
     }
-    private static async Task<T> Complete<T>(AsyncOperation<T> operation, Task<T> result)
+    private async Task<T> Complete<T>(AsyncOperation<T> operation, Task<T> result)
     {
         try { return await result.ConfigureAwait(false); }
-        finally { await operation.Retirement.ConfigureAwait(false); }
+        finally { await operation.Retirement.ConfigureAwait(false); TestRetirement?.Invoke(operation.Snapshot); }
     }
     /// <summary>Acquires an independent physical session through bounded native pool admission.</summary>
     /// <param name="cancellationToken">Cancels admission or requests accepted native work to stop.</param>
@@ -87,7 +91,7 @@ public sealed partial class DataSource : IDisposable, IAsyncDisposable
         return Start(() => NativeHost.Open(this), operation =>
         {
             var owner = NativeHost.TakeOwner(Binding, operation, 1, DatabaseOwnerKind.Session);
-            try { return new DataSession(this, owner); } catch { owner.Dispose(); throw; }
+            try { TestAfterOwnerTake?.Invoke(); return new DataSession(this, owner); } catch { owner.Dispose(); throw; }
         }, cancellationToken);
     }
     /// <summary>Opens and closes a real session, returning false only for provider connection failures.</summary>
@@ -175,6 +179,8 @@ internal sealed class CloseController(DataSource source, DatabaseOwner owner, Ac
         lock (_gate)
         {
             if (_task is not null) return;
+            var observed = NativeHost.Snapshot(owner).Cleanup;
+            if (observed.LocalResourcesReleased) { _last = observed; _task = Task.FromResult(observed); release(); return; }
             _last = _last with { Status = CleanupStatus.Pending };
             try { _task = Finish(source.Start(() => NativeHost.Close(owner), operation => { using var buffer = NativeHost.TakeBuffer(source.Binding, operation); return HostEncoding.Snapshot(buffer.Copy()).Cleanup; }, control: true)); }
             catch (Exception failure) { _task = Task.FromException<DatabaseCloseResult>(failure); _last = _last with { Status = CleanupStatus.Failed }; }

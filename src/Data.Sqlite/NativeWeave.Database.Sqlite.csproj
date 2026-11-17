@@ -11,6 +11,7 @@
     <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifier)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifier).aot.lock.json</NuGetLockFilePath>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="../Query.Generator/NativeWeave.Query.Generator.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="../Data.Abstractions/NativeWeave.Data.csproj" />
     <ProjectReference Include="../NativeWeave.Core/NativeWeave.Core.csproj" />
     <InternalsVisibleTo Include="NativeWeave.Database" />

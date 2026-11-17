@@ -11,6 +11,8 @@
     <Description>Strongly typed NativeWeave data descriptors and shared wire contracts. No database runtime is loaded.</Description>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../Query.Generator/Runtime/**/*.cs" />
+    <InternalsVisibleTo Include="NativeWeave.Query.Generator.Tests" />
     <InternalsVisibleTo Include="NativeWeave.Data.Tests" />
     <InternalsVisibleTo Include="NativeWeave.Database" />
     <InternalsVisibleTo Include="NativeWeave.Data.Streaming" />

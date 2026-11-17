@@ -12,6 +12,7 @@
     <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifier)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifier).aot.lock.json</NuGetLockFilePath>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="../Query.Generator/NativeWeave.Query.Generator.csproj" ReferenceOutputAssembly="false" />
     <Compile Include="$(IntermediateOutputPath)PostgreSqlAssetIdentity.g.cs" />
     <None Include="$(NativeWeavePostgresAssetPath)" Link="runtimes/$(NativeWeavePostgresRuntimeIdentifier)/native/$(NativeWeavePostgresAssetName)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Pack="true" PackagePath="%(Link)" />
     <None Include="$(IntermediateOutputPath)NativeWeave.database.postgresql.assets.json" Link="NativeWeave.database.postgresql.assets.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Pack="true" PackagePath="%(Link)" />

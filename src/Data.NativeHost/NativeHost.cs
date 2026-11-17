@@ -63,6 +63,7 @@ internal sealed unsafe class HostAsyncCalls(DataSource source) : AsyncNativeCall
             if (taken == NativeStatus.Ok)
             {
                 using var owner = new NativeBuffer(source.Binding, pointer);
+                source.TestAfterErrorTake?.Invoke();
                 var fields = HostEncoding.ReadControl(owner.Copy(), 7);
                 if (fields.TryGetValue(9, out var code)) provider = HostEncoding.Utf8.GetString(code);
             }

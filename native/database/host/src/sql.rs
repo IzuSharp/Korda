@@ -127,9 +127,14 @@ impl SqlPlan {
         };
         Batch::parse(parameters, expectation.clone())?;
         let sql = match f.u32(6)? {
-            0 => std::str::from_utf8(template)
-                .map_err(|_| Error::invalid("SQL UTF8"))?
-                .to_owned(),
+            0 => {
+                if template.contains(&1) || template.contains(&2) {
+                    return Err(Error::invalid("reserved SQL template marker"));
+                }
+                std::str::from_utf8(template)
+                    .map_err(|_| Error::invalid("SQL UTF8"))?
+                    .to_owned()
+            }
             1 => interpolated(template)?,
             _ => return Err(Error::invalid("SQL template kind")),
         };
@@ -224,15 +229,20 @@ fn interpolated(bytes: &[u8]) -> Result<String> {
             .ok_or_else(|| Error::invalid("interpolation range"))?;
         at = end;
         match kind {
-            0 => output.push_str(
-                std::str::from_utf8(data).map_err(|_| Error::invalid("interpolation UTF8"))?,
-            ),
+            0 => {
+                if data.contains(&1) || data.contains(&2) {
+                    return Err(Error::invalid("reserved interpolation marker"));
+                }
+                output.push_str(
+                    std::str::from_utf8(data).map_err(|_| Error::invalid("interpolation UTF8"))?,
+                );
+            }
             1 if len == 4 => {
                 let id = u32::from_le_bytes(data.try_into().unwrap());
                 if id == 0 {
                     return Err(Error::invalid("interpolation ID"));
                 }
-                output.push_str(&format!("@p{}", id - 1));
+                output.push_str(&format!("\u{1}@p{}\u{2}", id - 1));
             }
             _ => return Err(Error::invalid("interpolation segment kind")),
         }
@@ -270,6 +280,11 @@ fn render(
             while i < bytes.len() && bytes[i] != b'\n' {
                 i += 1;
             }
+            if bytes[start..i].contains(&1) || bytes[start..i].contains(&2) {
+                return Err(Error::invalid(
+                    "interpolation inside SQL quotation or comment",
+                ));
+            }
             output.extend_from_slice(&bytes[start..i]);
             continue;
         }
@@ -293,6 +308,11 @@ fn render(
             }
             if depth != 0 {
                 return Err(Error::invalid("unterminated SQL comment"));
+            }
+            if bytes[start..i].contains(&1) || bytes[start..i].contains(&2) {
+                return Err(Error::invalid(
+                    "interpolation inside SQL quotation or comment",
+                ));
             }
             output.extend_from_slice(&bytes[start..i]);
             continue;
@@ -331,6 +351,11 @@ fn render(
             if !closed {
                 return Err(Error::invalid("unterminated SQL quotation"));
             }
+            if bytes[start..i].contains(&1) || bytes[start..i].contains(&2) {
+                return Err(Error::invalid(
+                    "interpolation inside SQL quotation or comment",
+                ));
+            }
             output.extend_from_slice(&bytes[start..i]);
             continue;
         }
@@ -355,12 +380,49 @@ fn render(
                 if !found {
                     return Err(Error::invalid("unterminated dollar quote"));
                 }
+                if bytes[start..i].contains(&1) || bytes[start..i].contains(&2) {
+                    return Err(Error::invalid(
+                        "interpolation inside SQL quotation or comment",
+                    ));
+                }
                 output.extend_from_slice(&bytes[start..i]);
                 continue;
             }
             return Err(Error::invalid(
                 "provider positional parameter is not a named template",
             ));
+        }
+        if b == 1 {
+            let end = bytes[i + 1..]
+                .iter()
+                .position(|b| *b == 2)
+                .map(|n| i + 1 + n)
+                .ok_or_else(|| Error::invalid("interpolation marker"))?;
+            if bytes.get(i + 1) != Some(&b'@') {
+                return Err(Error::invalid("interpolation parameter"));
+            }
+            let name = std::str::from_utf8(&bytes[i + 2..end])
+                .map_err(|_| Error::invalid("interpolation name"))?;
+            let id = *names
+                .get(name)
+                .ok_or_else(|| Error::invalid("missing interpolation parameter"))?;
+            used.insert(id);
+            output.extend_from_slice(
+                format!(
+                    "{}{id}",
+                    if profile == Profile::PostgreSql {
+                        '$'
+                    } else {
+                        '?'
+                    }
+                )
+                .as_bytes(),
+            );
+            i = end + 1;
+            continue;
+        }
+        if b == 2 {
+            return Err(Error::invalid("unmatched interpolation marker"));
         }
         if b == b'@' {
             let start = i + 1;
@@ -401,6 +463,11 @@ fn render(
                     .unwrap()
                     .to_ascii_uppercase(),
             );
+            if bytes[start..i].contains(&1) || bytes[start..i].contains(&2) {
+                return Err(Error::invalid(
+                    "interpolation inside SQL quotation or comment",
+                ));
+            }
             output.extend_from_slice(&bytes[start..i]);
             continue;
         }
@@ -442,7 +509,7 @@ fn render(
     if kind != 0 && matches!(first.as_str(), "SELECT" | "VALUES" | "SHOW" | "EXPLAIN") {
         return Err(Error::invalid("affected-count command has rows"));
     }
-    Ok(String::from_utf8(output).map_err(|_| Error::invalid("SQL UTF8"))?)
+    String::from_utf8(output).map_err(|_| Error::invalid("SQL UTF8"))
 }
 #[cfg(test)]
 mod tests {
@@ -463,5 +530,32 @@ mod tests {
         assert!(render("select '@value'", &map, Profile::Sqlite, 0).is_err());
         assert!(render("select @value; delete from t", &map, Profile::Sqlite, 0).is_err());
         assert!(render("BEGIN", &HashMap::new(), Profile::Sqlite, 2).is_err());
+    }
+    #[test]
+    fn interpolation_holes_cannot_be_hidden_by_quotes_or_comments() {
+        let map = HashMap::from([("p0".into(), 1)]);
+        let marker = "\u{1}@p0\u{2}";
+        assert_eq!(
+            render(
+                &format!("SELECT {marker}, {marker}"),
+                &map,
+                Profile::PostgreSql,
+                0
+            )
+            .unwrap(),
+            "SELECT $1, $1"
+        );
+        for statement in [
+            format!("SELECT {marker}, '{marker}'"),
+            format!("SELECT {marker} -- {marker}"),
+            format!("SELECT {marker} /* {marker} */"),
+            format!("SELECT {marker}, \"{marker}\""),
+            format!("SELECT {marker}, $tag${marker}$tag$"),
+        ] {
+            assert!(
+                render(&statement, &map, Profile::PostgreSql, 0).is_err(),
+                "{statement:?}"
+            );
+        }
     }
 }

@@ -1,0 +1,80 @@
+{
+  "assembly": "NativeWeave.Database.PostgreSql, Version=0.1.0.0, Culture=neutral, PublicKeyToken=null",
+  "symbols": [
+    {
+      "id": "F:NativeWeave.Database.PostgreSql.PostgreSqlTlsMode.DisableForLocalDevelopment",
+      "signature": "NativeWeave.Database.PostgreSql.PostgreSqlTlsMode.DisableForLocalDevelopment = 1",
+      "implicit_member": false
+    },
+    {
+      "id": "F:NativeWeave.Database.PostgreSql.PostgreSqlTlsMode.VerifyFull",
+      "signature": "NativeWeave.Database.PostgreSql.PostgreSqlTlsMode.VerifyFull = 0",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Database.PostgreSql.PostgreSqlDataSource.Create(System.String,System.Action{NativeWeave.Database.PostgreSql.PostgreSqlOptions})",
+      "signature": "public static NativeWeave.Database.DataSource NativeWeave.Database.PostgreSql.PostgreSqlDataSource.Create(string connectionString, System.Action\u003CNativeWeave.Database.PostgreSql.PostgreSqlOptions\u003E? configure = null)",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Database.PostgreSql.PostgreSqlDataSourceBuilderExtensions.UsePostgreSql(NativeWeave.Database.DataSourceBuilder,System.String,System.Action{NativeWeave.Database.PostgreSql.PostgreSqlOptions})",
+      "signature": "public static NativeWeave.Database.DataSourceBuilder NativeWeave.Database.PostgreSql.PostgreSqlDataSourceBuilderExtensions.UsePostgreSql(this NativeWeave.Database.DataSourceBuilder builder, string connectionString, System.Action\u003CNativeWeave.Database.PostgreSql.PostgreSqlOptions\u003E? configure = null)",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Database.PostgreSql.PostgreSqlOptions.#ctor",
+      "signature": "public NativeWeave.Database.PostgreSql.PostgreSqlOptions.PostgreSqlOptions()",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Database.PostgreSql.PostgreSqlTlsMode.#ctor",
+      "signature": "public NativeWeave.Database.PostgreSql.PostgreSqlTlsMode.PostgreSqlTlsMode()",
+      "implicit_member": true
+    },
+    {
+      "id": "P:NativeWeave.Database.PostgreSql.PostgreSqlDataSource.Engine",
+      "signature": "public static NativeWeave.Interop.EngineDescriptor NativeWeave.Database.PostgreSql.PostgreSqlDataSource.Engine { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Database.PostgreSql.PostgreSqlOptions.ApplicationName",
+      "signature": "public string NativeWeave.Database.PostgreSql.PostgreSqlOptions.ApplicationName { get; set; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Database.PostgreSql.PostgreSqlOptions.ConnectTimeout",
+      "signature": "public System.TimeSpan NativeWeave.Database.PostgreSql.PostgreSqlOptions.ConnectTimeout { get; set; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Database.PostgreSql.PostgreSqlOptions.RootCertificatePath",
+      "signature": "public string? NativeWeave.Database.PostgreSql.PostgreSqlOptions.RootCertificatePath { get; set; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Database.PostgreSql.PostgreSqlOptions.TlsMode",
+      "signature": "public NativeWeave.Database.PostgreSql.PostgreSqlTlsMode NativeWeave.Database.PostgreSql.PostgreSqlOptions.TlsMode { get; set; }",
+      "implicit_member": false
+    },
+    {
+      "id": "T:NativeWeave.Database.PostgreSql.PostgreSqlDataSource",
+      "signature": "public static class NativeWeave.Database.PostgreSql.PostgreSqlDataSource",
+      "implicit_member": false
+    },
+    {
+      "id": "T:NativeWeave.Database.PostgreSql.PostgreSqlDataSourceBuilderExtensions",
+      "signature": "public static class NativeWeave.Database.PostgreSql.PostgreSqlDataSourceBuilderExtensions",
+      "implicit_member": false
+    },
+    {
+      "id": "T:NativeWeave.Database.PostgreSql.PostgreSqlOptions",
+      "signature": "public sealed class NativeWeave.Database.PostgreSql.PostgreSqlOptions",
+      "implicit_member": false
+    },
+    {
+      "id": "T:NativeWeave.Database.PostgreSql.PostgreSqlTlsMode",
+      "signature": "public enum NativeWeave.Database.PostgreSql.PostgreSqlTlsMode : int",
+      "implicit_member": false
+    }
+  ]
+}

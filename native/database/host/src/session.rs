@@ -27,11 +27,20 @@ pub enum ProviderSession {
     #[cfg(feature = "sqlite")]
     Sqlite(nativeweave_data_sqlite::Session),
 }
+/// Provider-observed local retirement; remote cleanup success is a separate fact.
+#[derive(Clone, Debug)]
+pub struct SessionCleanup {
+    pub status: u32,
+    pub disposition: ConnectionDisposition,
+    pub local_released: bool,
+    pub provider_code: Option<String>,
+}
 pub struct Session {
     pub source: Arc<Source>,
     pub provider: ProviderSession,
     pub closing: AtomicBool,
     pub retired: AtomicBool,
+    pub cleanup: Mutex<Option<SessionCleanup>>,
     active: AtomicBool,
     discard: AtomicBool,
     changed: Notify,
@@ -97,6 +106,7 @@ impl Session {
             provider,
             closing: AtomicBool::new(false),
             retired: AtomicBool::new(false),
+            cleanup: Mutex::new(None),
             active: AtomicBool::new(false),
             discard: AtomicBool::new(false),
             changed: Notify::new(),
@@ -137,21 +147,19 @@ impl Session {
         if self.closing.load(Ordering::Acquire) || self.source.closing.load(Ordering::Acquire) {
             return Err(Error::closed());
         }
-        if !transaction_control {
-            if let Some(tx) = self
+        if !transaction_control
+            && let Some(tx) = self
                 .transaction
                 .lock()
                 .unwrap_or_else(|e| e.into_inner())
                 .as_ref()
                 .and_then(Weak::upgrade)
-            {
-                if !tx.transaction.snapshot().local_resources_released {
-                    gate.transaction = Some(
-                        tx.transaction
-                            .admit_command(false, &AdmissionToken::default())?,
-                    );
-                }
-            }
+            && !tx.transaction.snapshot().local_resources_released
+        {
+            gate.transaction = Some(
+                tx.transaction
+                    .admit_command(false, &AdmissionToken::default())?,
+            );
         }
         Ok(gate)
     }
@@ -198,25 +206,58 @@ impl Session {
             if let Some(tx) = tx {
                 tx.transaction.join().await;
             }
-            match &session.provider {
+            let cleanup = match &session.provider {
                 #[cfg(feature = "postgres")]
                 ProviderSession::Postgres(value) => {
-                    value.close().await;
+                    let receipt = value.close().await;
+                    SessionCleanup {
+                        status: if receipt.returned_to_pool || receipt.close_confirmed {
+                            2
+                        } else {
+                            4
+                        },
+                        disposition: if receipt.returned_to_pool {
+                            ConnectionDisposition::Usable
+                        } else if receipt.physical_closed {
+                            ConnectionDisposition::Discarded
+                        } else {
+                            ConnectionDisposition::Quarantined
+                        },
+                        local_released: receipt.retired,
+                        provider_code: None,
+                    }
                 }
                 #[cfg(feature = "sqlite")]
                 ProviderSession::Sqlite(value) => {
+                    let observer = value.observer();
                     if session.discard.load(Ordering::Acquire) {
                         let _ = value.close().await;
                     } else {
                         let _ = value.return_to_pool().await;
                     }
+                    let receipt = observer.snapshot();
+                    SessionCleanup {
+                        status: if receipt.close_error.is_none() { 2 } else { 4 },
+                        disposition: if receipt.pool_return_completed {
+                            ConnectionDisposition::Usable
+                        } else if receipt.physical_lease_released {
+                            ConnectionDisposition::Discarded
+                        } else {
+                            ConnectionDisposition::Quarantined
+                        },
+                        local_released: receipt.physical_lease_released,
+                        provider_code: receipt.close_error.and_then(|error| error.provider_code),
+                    }
                 }
+            };
+            if cleanup.local_released {
+                session
+                    .permit
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .take();
             }
-            session
-                .permit
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .take();
+            *session.cleanup.lock().unwrap_or_else(|e| e.into_inner()) = Some(cleanup);
             session.retired.store(true, Ordering::Release);
             session.changed.notify_waiters();
             session.source.changed.notify_waiters();
@@ -447,10 +488,10 @@ impl CommandGate {
 }
 impl Drop for CommandGate {
     fn drop(&mut self) {
-        if let Some(lease) = self.transaction.take() {
-            if !self.dispatched {
-                lease.complete(false, ProtocolState::Clean);
-            }
+        if let Some(lease) = self.transaction.take()
+            && !self.dispatched
+        {
+            lease.complete(false, ProtocolState::Clean);
         }
         self.session.active.store(false, Ordering::Release);
         self.session.changed.notify_waiters();
@@ -558,10 +599,10 @@ impl CursorOwner {
                     session.source.config.limits.codec(),
                 )?;
                 let columns = provider
-                    .describe(nativeweave_data_postgres::Command::generated(
-                        plan.sql.clone(),
-                        None,
-                    ))
+                    .describe_typed(
+                        nativeweave_data_postgres::Command::generated(plan.sql.clone(), None),
+                        parameters.postgres_types()?,
+                    )
                     .await?
                     .into_iter()
                     .map(|c| ColumnMetadata {

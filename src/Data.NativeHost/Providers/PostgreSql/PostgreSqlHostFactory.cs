@@ -3,7 +3,7 @@ namespace NativeWeave.Database.PostgreSql;
 
 public static partial class PostgreSqlDataSource
 {
-    internal static EngineDescriptor HostEngine { get; } = DatabaseEngineProfile.Create("nativeweave.database.postgresql", "NativeWeave.Database.PostgreSql", "linux-x64", "runtimes/linux-x64/native/libnativeweave_database_postgres_host.so", PostgreSqlAssetIdentity.Sha256, typeof(PostgreSqlDataSource).Assembly);
+    internal static EngineDescriptor HostEngine { get; } = DatabaseEngineProfile.Create("database.postgresql", "NativeWeave.Database.PostgreSql", PostgreSqlAssetIdentity.RuntimeIdentifier, PostgreSqlAssetIdentity.RelativePath, PostgreSqlAssetIdentity.Sha256, typeof(PostgreSqlDataSource).Assembly);
     /// <summary>Creates one independently owned lazy SQLx PostgreSQL data source.</summary>
     /// <param name="connectionString">An explicit TCP PostgreSQL URI; ambient connection policy is rejected.</param>
     /// <param name="configure">An optional synchronous options callback, snapshotted before native admission.</param>
@@ -14,6 +14,7 @@ public static partial class PostgreSqlDataSource
     public static DataSource Create(string connectionString, Action<PostgreSqlOptions>? configure = null) => new DataSourceBuilder().UsePostgreSql(connectionString, configure).Build();
 }
 /// <summary>Configures the independently packaged SQLx PostgreSQL engine.</summary>
+/// <remarks>The builder remains single-writer. Configuration snapshots managed values without I/O; Build negotiates the separately packaged native engine and creates the source owner.</remarks>
 public static class PostgreSqlDataSourceBuilderExtensions
 {
     /// <summary>Snapshots explicit connection and TLS policy without opening a connection.</summary>

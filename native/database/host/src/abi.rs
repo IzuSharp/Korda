@@ -28,7 +28,10 @@ pub enum OwnerValue {
     Savepoint(Arc<SavepointOwner>),
     Model(Arc<Source>, ModelBinding),
     SqlPlan(Arc<SqlPlan>),
-    Query(Arc<Source>, Mutex<nativeweave_query_native::NativeQuery>),
+    Query(
+        Arc<Source>,
+        Box<Mutex<nativeweave_query_native::NativeQuery>>,
+    ),
     Plan(Arc<Source>, Arc<nativeweave_query_native::NativePlan>),
     Cte(Arc<Source>, Arc<nativeweave_query_native::NativeCte>),
 }
@@ -204,7 +207,7 @@ impl Drop for Buffer {
         BUFFERS.fetch_sub(1, Ordering::Relaxed);
     }
 }
-pub fn run(error: *mut NwErrorInfoV1, action: impl FnOnce() -> Result<()>) -> u32 {
+pub(crate) fn run(error: *mut NwErrorInfoV1, action: impl FnOnce() -> Result<()>) -> u32 {
     let result = catch_unwind(AssertUnwindSafe(action));
     let failure = match result {
         Ok(Ok(())) => return NW_OK,
@@ -240,6 +243,10 @@ pub(crate) unsafe fn clear(out: *mut *mut c_void) -> Result<()> {
     unsafe { out.write(std::ptr::null_mut()) };
     Ok(())
 }
+#[allow(
+    clippy::too_many_arguments,
+    reason = "Exact ordered kind7 snapshot fields are shared by source/session/transaction/cursor ABI records"
+)]
 pub fn snapshot(
     state: u32,
     outcome: u32,
@@ -287,23 +294,26 @@ pub fn source_snapshot(source: &Source) -> Vec<u8> {
     )
 }
 fn session_snapshot(session: &Session) -> Vec<u8> {
-    let closed = session.retired.load(Ordering::Acquire);
+    let cleanup = session.cleanup.lock().unwrap_or_else(|e| e.into_inner());
     snapshot(
         0,
         0,
         false,
-        if closed {
-            2
-        } else if session.closing.load(Ordering::Acquire) {
-            1
-        } else {
-            0
-        },
-        if closed { 3 } else { 0 },
-        closed,
+        cleanup.as_ref().map_or_else(
+            || {
+                if session.closing.load(Ordering::Acquire) {
+                    1
+                } else {
+                    0
+                }
+            },
+            |c| c.status,
+        ),
+        cleanup.as_ref().map_or(0, |c| c.disposition as u32),
+        cleanup.as_ref().is_some_and(|c| c.local_released),
         false,
         0,
-        None,
+        cleanup.as_ref().and_then(|c| c.provider_code.as_deref()),
     )
 }
 fn tx_snapshot(tx: &TransactionOwner) -> Vec<u8> {
@@ -333,6 +343,32 @@ pub unsafe extern "C" fn nw_database_get_abi_v1(
     let mask = crate::query::capability_mask();
     // SAFETY: exact forwarding to the canonical ABI writer.
     unsafe { write_abi_v1(major, capacity, output, 0, mask) }
+}
+/// Provider-specific stateless bootstrap of the independent SQLite Host asset.
+/// # Safety
+/// Output obeys the canonical bootstrap capacity and writable-range contract.
+#[cfg(feature = "sqlite")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nw_database_sqlite_get_abi_v1(
+    major: u32,
+    capacity: u32,
+    output: *mut NwAbiInfoV1,
+) -> u32 {
+    // SAFETY: identical checked bootstrap output contract.
+    unsafe { nw_database_get_abi_v1(major, capacity, output) }
+}
+/// Provider-specific stateless bootstrap of the independent PostgreSQL Host asset.
+/// # Safety
+/// Output obeys the canonical bootstrap capacity and writable-range contract.
+#[cfg(feature = "postgres")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn nw_database_postgresql_get_abi_v1(
+    major: u32,
+    capacity: u32,
+    output: *mut NwAbiInfoV1,
+) -> u32 {
+    // SAFETY: identical checked bootstrap output contract.
+    unsafe { nw_database_get_abi_v1(major, capacity, output) }
 }
 /// # Safety
 /// All views/output records obey the canonical ABI borrowing contract.

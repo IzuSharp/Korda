@@ -37,7 +37,7 @@ internal static class OperandEncoding
     }
     internal static byte[] Value<T>(uint profile, ValueCodec<T> codec, uint boundCodec, T value)
     {
-        var bytes = codec.Encode(value); ReadOnlyMemory<byte>? cell = bytes is null ? null : bytes;
+        var bytes = codec.Encode(value); ReadOnlyMemory<byte>? cell = bytes is null ? (ReadOnlyMemory<byte>?)null : new ReadOnlyMemory<byte>(bytes);
         return DbWire.Encode(new(PayloadKind.ExpressionValues, profile, new byte[32], 0, 0, [new(1, codec.Descriptor, boundCodec)]) { ExactRows = 1 }, 1, [cell]);
     }
 }

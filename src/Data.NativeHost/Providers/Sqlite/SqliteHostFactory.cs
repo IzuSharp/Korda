@@ -3,7 +3,7 @@ namespace NativeWeave.Database.Sqlite;
 
 public static partial class SqliteDataSource
 {
-    internal static EngineDescriptor HostEngine { get; } = DatabaseEngineProfile.Create("nativeweave.database.sqlite", "NativeWeave.Database.Sqlite", GeneratedEngineProfile.RuntimeIdentifier, GeneratedEngineProfile.RelativePath, GeneratedEngineProfile.Sha256, typeof(SqliteDataSource).Assembly);
+    internal static EngineDescriptor HostEngine { get; } = DatabaseEngineProfile.Create("database.sqlite", "NativeWeave.Database.Sqlite", GeneratedEngineProfile.RuntimeIdentifier, GeneratedEngineProfile.RelativePath, GeneratedEngineProfile.Sha256, typeof(SqliteDataSource).Assembly);
     /// <summary>Creates one independently owned lazy native SQLite data source.</summary>
     /// <param name="path">The nonempty database path; no connection is opened during construction.</param>
     /// <param name="configure">An optional synchronous options callback whose values are immediately snapshotted.</param>
@@ -14,6 +14,7 @@ public static partial class SqliteDataSource
     public static DataSource Create(string path, Action<SqliteOptions>? configure = null) => new DataSourceBuilder().UseSqlite(path, configure).Build();
 }
 /// <summary>Configures the explicitly selected independently packaged SQLite engine.</summary>
+/// <remarks>The builder remains single-writer. Configuration snapshots managed values without I/O; Build negotiates the separately packaged native engine and creates the source owner.</remarks>
 public static class SqliteDataSourceBuilderExtensions
 {
     /// <summary>Snapshots SQLite configuration without loading a module or opening a database.</summary>

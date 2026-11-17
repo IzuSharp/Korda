@@ -119,7 +119,7 @@ public sealed partial class DataSession : IDisposable, IAsyncDisposable
     private async Task<DataTransaction> BeginCore(byte[] record, string? recovery, CancellationToken token)
     {
         var owner = await Source.Start(() => HostTransactionTransport.Begin(Owner, record), operation => NativeHost.TakeOwner(Source.Binding, operation, 3, HostTransactionTransport.TransactionKind), token).ConfigureAwait(false);
-        try { var transaction = new DataTransaction(new HostTransactionTransport(Source, owner), recovery); Volatile.Write(ref _transaction, transaction); return transaction; }
+        try { var transaction = new DataTransaction(new HostTransactionTransport(Source, owner, recovery), recovery); Volatile.Write(ref _transaction, transaction); return transaction; }
         catch { owner.Dispose(); throw; }
     }
     /// <summary>Starts closure, then waits within an independent finite caller budget.</summary>

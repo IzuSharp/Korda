@@ -24,6 +24,7 @@ pub fn capability_mask() -> u64 {
         | (1 << 12)
         | (1 << 13)
         | (1 << 16)
+        | (1 << 17)
         | (1 << 18)
         | (1 << 20)
         | (1 << 21)
@@ -130,7 +131,7 @@ pub unsafe extern "C" fn nw_db_query_create_v1(
         unsafe {
             out.write(abi::publish_owner(OwnerValue::Query(
                 source.clone(),
-                Mutex::new(query),
+                Box::new(Mutex::new(query)),
             ))?);
         }
         Ok(())
@@ -398,7 +399,7 @@ pub unsafe extern "C" fn nw_db_query_clone_v1(
         let value = with_query(raw, |s, q| {
             Ok(OwnerValue::Query(
                 s.clone(),
-                Mutex::new(q.clone_selected()?),
+                Box::new(Mutex::new(q.clone_selected()?)),
             ))
         })?;
         // SAFETY: independent snapshot owner transfer.

@@ -14,3 +14,6 @@ pub mod sql;
 pub use error::{Error, Result};
 
 pub mod query;
+
+#[cfg(test)]
+mod tests;
