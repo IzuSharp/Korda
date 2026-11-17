@@ -15,4 +15,9 @@
     <InternalsVisibleTo Include="NativeWeave.Query.Binding" />
     <InternalsVisibleTo Include="NativeWeave.Query.Binding.Tests" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="NativeWeave.Verification.ExtensionProof" />
+    <InternalsVisibleTo Include="NativeWeave.Interop.Callbacks.Tests" />
+    <InternalsVisibleTo Include="NativeWeave.Interop.Callbacks.Sample" />
+  </ItemGroup>
 </Project>
