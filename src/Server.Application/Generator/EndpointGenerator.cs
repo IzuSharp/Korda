@@ -178,7 +178,25 @@ public sealed class EndpointGenerator : IIncrementalGenerator
     {
         if (!parameter.HasExplicitDefaultValue || parameter.ExplicitDefaultValue is null) return "default(" + Type(parameter.Type) + ")";
         object value = parameter.ExplicitDefaultValue;
-        string literal = value is string s ? Literal(s) : value is char c ? SymbolDisplay.FormatLiteral(c, true) : value is bool b ? (b ? "true" : "false") : Convert.ToString(value, CultureInfo.InvariantCulture)!;
+        string literal = value switch
+        {
+            string text => Literal(text),
+            char character => SymbolDisplay.FormatLiteral(character, true),
+            bool boolean => boolean ? "true" : "false",
+            decimal number => number.ToString(CultureInfo.InvariantCulture) + "M",
+            float number when float.IsNaN(number) => "global::System.Single.NaN",
+            float number when float.IsPositiveInfinity(number) => "global::System.Single.PositiveInfinity",
+            float number when float.IsNegativeInfinity(number) => "global::System.Single.NegativeInfinity",
+            float number => number.ToString("R", CultureInfo.InvariantCulture) + "F",
+            double number when double.IsNaN(number) => "global::System.Double.NaN",
+            double number when double.IsPositiveInfinity(number) => "global::System.Double.PositiveInfinity",
+            double number when double.IsNegativeInfinity(number) => "global::System.Double.NegativeInfinity",
+            double number => number.ToString("R", CultureInfo.InvariantCulture) + "D",
+            ulong number => number.ToString(CultureInfo.InvariantCulture) + "UL",
+            long number => number.ToString(CultureInfo.InvariantCulture) + "L",
+            uint number => number.ToString(CultureInfo.InvariantCulture) + "U",
+            _ => Convert.ToString(value, CultureInfo.InvariantCulture)!
+        };
         return "(" + Type(parameter.Type) + ")(" + literal + ")";
     }
     private static void Report(SourceProductionContext output, DiagnosticDescriptor descriptor, ISymbol symbol, params object[] args)

@@ -38,7 +38,7 @@ internal sealed class NativeRequest : HostRequest
             request._routeId = checked((long)info.handler_id); request._kind = checked((int)info.kind);
             request._method = NativeCodec.Text(info.method, 256); request._scheme = NativeCodec.Text(info.scheme, 16); request.HostName = NativeCodec.Text(info.authority, 16_384);
             request._path = NativeCodec.Text(info.path, 16_384); request._queryString = NativeCodec.Text(info.raw_query, 16_385); request._protocol = info.protocol switch { 1 => "HTTP/1.1", 2 => "HTTP/2", _ => throw new InvalidOperationException("Invalid native protocol.") };
-            request._headers = NativeCodec.Decode(info.headers, host.Configuration.Options.MaxHeaderBytes); request._routeValues = NativeCodec.Decode(info.route_values, 1_048_576); request._query = NativeCodec.Decode(info.query_values, 1_048_576);
+            request._headers = NativeCodec.Decode(info.headers, host.Configuration.Options.MaxHeaderBytes); request._routeValues = NativeCodec.Decode(info.route_values, 1_048_576, false); request._query = NativeCodec.Decode(info.query_values, 1_048_576, false);
             request._remoteEndPoint = info.peer_family switch { 0 => null, 4 => new IPEndPoint(new IPAddress(new ReadOnlySpan<byte>(info.peer_address, 4)), checked((int)info.peer_port)), 6 => new IPEndPoint(new IPAddress(new ReadOnlySpan<byte>(info.peer_address, 16)), checked((int)info.peer_port)), _ => throw new InvalidOperationException("Invalid native peer family.") };
             request._traceIdentifier = ticket.ToString("x16", System.Globalization.CultureInfo.InvariantCulture);
             request._remaining = TimeSpan.FromTicks(checked((long)(info.remaining_timeout_ns / 100))); request._observed = Stopwatch.GetTimestamp();

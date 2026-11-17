@@ -52,6 +52,12 @@
           "Microsoft.Extensions.Logging": "[11.0.0, )",
           "NativeWeave.Core": "[0.1.0-preview.1, )"
         }
+      },
+      "nativeweave.server.hosting": {
+        "type": "Project",
+        "dependencies": {
+          "NativeWeave.Server": "[0.1.0-preview.1, )"
+        }
       }
     }
   }

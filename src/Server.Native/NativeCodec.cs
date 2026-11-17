@@ -48,7 +48,7 @@ internal static class ServerError
         6 => new NotSupportedException("The native Server asset does not implement this protocol capability."),
         7 => new ArgumentException("The native Server output capacity is too small."),
         12 => new TimeoutException("The native whole-request deadline expired."),
-        13 => new ServerException(error.Code switch { 1 => "resource_limit", 2 => "body_limit_exceeded", 3 => "listener_bind_failed", 5 => "tls_configuration_failed", 6 => "content_length_mismatch", _ => "transport_failed" }, "The native Server operation failed."),
+        13 when error.Domain == 0x53525652 && error.Code is >= 1 and <= 6 => new ServerException(error.Code switch { 1 => "resource_limit", 2 => "body_limit_exceeded", 3 => "listener_bind_failed", 5 => "tls_configuration_failed", 6 => "content_length_mismatch", _ => "transport_failed" }, "The native Server operation failed."),
         _ => new NativeEngineException("server", "operation", status, error.Domain, error.Code, error.CorrelationId, "The native Server failed; cleanup remains required.")
     };
 }
@@ -82,12 +82,13 @@ internal static unsafe class NativeCodec
     }
     internal static byte[] Headers(IReadOnlyDictionary<string, IReadOnlyList<string>> values, int maximum) =>
         Encode(values.SelectMany(pair => pair.Value.Select(value => new KeyValuePair<string, string>(pair.Key, value))), maximum);
-    internal static IReadOnlyDictionary<string, IReadOnlyList<string>> Decode(NwBytesViewV1 view, int maximum = 1_048_576)
+    internal static IReadOnlyDictionary<string, IReadOnlyList<string>> Decode(NwBytesViewV1 view, int maximum = 1_048_576, bool caseInsensitive = true)
     {
         if (view.Length > (ulong)maximum || view.Length < 4 || view.Data == null) throw new InvalidOperationException("Invalid native metadata list.");
         var bytes = new ReadOnlySpan<byte>(view.Data, checked((int)view.Length));
         uint count = BinaryPrimitives.ReadUInt32LittleEndian(bytes); if (count > 16_384) throw new InvalidOperationException("Invalid native entry count.");
-        var values = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase); int offset = 4;
+        StringComparer comparer = caseInsensitive ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+        var values = new Dictionary<string, List<string>>(comparer); int offset = 4;
         for (uint i = 0; i < count; i++)
         {
             if (offset > bytes.Length - 8) throw new InvalidOperationException("Truncated native metadata entry.");
@@ -100,7 +101,7 @@ internal static unsafe class NativeCodec
             entries.Add(text);
         }
         if (offset != bytes.Length) throw new InvalidOperationException("Trailing native metadata bytes.");
-        return values.ToDictionary(x => x.Key, x => (IReadOnlyList<string>)x.Value.AsReadOnly(), StringComparer.OrdinalIgnoreCase);
+        return values.ToDictionary(x => x.Key, x => (IReadOnlyList<string>)x.Value.AsReadOnly(), comparer);
     }
 }
 

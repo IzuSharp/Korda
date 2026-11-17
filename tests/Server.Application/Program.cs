@@ -6,6 +6,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using NativeWeave.Server;
 
+if (args.Contains("--real")) { await RealApplicationAcceptance.RunAsync(); return; }
+
 int checks = 0;
 void Check(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); checks++; }
 void Throws<T>(Action action) where T : Exception

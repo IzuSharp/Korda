@@ -469,6 +469,24 @@ impl BodySender {
         let payload = self.request.reserve_payload(capacity)?;
         Ok(WriteReservation { permit, payload })
     }
+    /// Acknowledges local Body queue progress after all preceding queued frames
+    /// have been taken. It reserves metadata only and never waits for byte credit
+    /// or claims that a downstream transport/peer has consumed retained Bytes.
+    pub async fn flush(&self, cancel: &Cancellation) -> Result<(), StreamError> {
+        if self.request.is_closed() || self.finished.load(Ordering::Acquire) {
+            return Err(StreamError::Closed);
+        }
+        let permits = tokio::select! {
+            biased;
+            () = cancel.cancelled() => return Err(StreamError::Canceled),
+            result = self.sender.reserve_many(self.sender.max_capacity()) => result.map_err(|_| StreamError::Closed)?,
+        };
+        drop(permits);
+        if cancel.is_canceled() {
+            return Err(StreamError::Canceled);
+        }
+        Ok(())
+    }
     /// Ends production after optional native-validated bounded trailer metadata.
     /// This needs no payload grant, including when taken input fills the request cap.
     pub async fn finish(

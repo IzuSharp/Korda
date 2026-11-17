@@ -201,6 +201,8 @@ pub unsafe extern "C" fn nw_server_routes_set(
         let mut copy = Vec::with_capacity(count as usize);
         let mut keys = HashSet::new();
         let mut ids = HashSet::new();
+        let mut native_paths = matchit::Router::new();
+        let mut unique_paths = HashSet::new();
         for i in 0..count as usize {
             // SAFETY: i is inside the caller-provided bounded route array.
             let route = unsafe { config::route(routes.add(i))? };
@@ -219,6 +221,13 @@ pub unsafe extern "C" fn nw_server_routes_set(
                 if !keys.insert((route.canonical.clone(), method.clone())) {
                     return Err(invalid());
                 }
+            }
+            if unique_paths.insert(route.canonical.clone()) {
+                // Matchit is Axum's pinned public route parser. Validate before
+                // freezing the registration table; conflicts never panic at start.
+                native_paths
+                    .insert(route.canonical.clone(), ())
+                    .map_err(|_| invalid())?;
             }
             copy.push(route);
         }
@@ -1507,3 +1516,5 @@ pub unsafe extern "C" fn nw_server_metadata_grpc_headers(
         Err(ApiError::status(NW_NOT_SUPPORTED))
     })
 }
+
+include!("../generated/layout_assertions.rs");

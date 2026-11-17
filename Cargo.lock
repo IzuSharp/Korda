@@ -1197,6 +1197,7 @@ dependencies = [
  "http-body-util",
  "hyper",
  "hyper-util",
+ "matchit",
  "nativeweave-interop-abi",
  "nativeweave-interop-async",
  "nativeweave-interop-errors",

@@ -9,7 +9,7 @@ using System.Xml.Linq;
 string root = Path.GetFullPath(args[0]), design = Path.GetFullPath(args[1]), sdk = Path.GetFullPath(args[2]);
 string output = Path.Combine(root, "src/Server.Application/bin/Release/net11.0");
 var files = Directory.GetFiles(Path.Combine(sdk, "packs/Microsoft.NETCore.App.Ref/11.0.0/ref/net11.0"), "*.dll").ToDictionary(x => Path.GetFileName(x)!, StringComparer.OrdinalIgnoreCase);
-foreach (string path in Directory.GetFiles(Path.Combine(root, "tests/Server.Application/bin/Release/net11.0"), "*.dll")) if (Path.GetFileName(path) != "NativeWeave.Server.dll") files[Path.GetFileName(path)] = path;
+foreach (string path in Directory.GetFiles(Path.Combine(root, "tests/Server.Application/bin/Release/net11.0"), "*.dll")) if (Path.GetFileName(path) is not ("NativeWeave.Server.dll" or "NativeWeave.Server.Hosting.dll")) files[Path.GetFileName(path)] = path;
 string hosted = Path.Combine(root, "src/Server.Application/Hosting/bin/Release/net11.0/NativeWeave.Server.Hosting.dll");
 var references = files.Values.Select(x => MetadataReference.CreateFromFile(x)).ToList();
 var options = new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable, metadataImportOptions: MetadataImportOptions.All);
@@ -102,6 +102,8 @@ string Generate(CSharpCompilation input, out ImmutableArray<Diagnostic> diagnost
 string emitted = Generate(Input(positive), out var positiveDiagnostics);
 if (positiveDiagnostics.Any(x => x.Severity == DiagnosticSeverity.Error)) throw new Exception(string.Join("\n", positiveDiagnostics));
 if (emitted != Generate(Input(positive), out _) || emitted.Contains("object[]", StringComparison.Ordinal) || emitted.Contains("DynamicInvoke", StringComparison.Ordinal)) throw new Exception("Generator nondeterminism or dynamic argument binding.");
+var numeric = Generate(Input(prefix + "[ServerEndpoints] public static partial class E { [ServerRoute(\"GET\",\"/defaults\")] static ServerResult Defaults([QueryParameter] decimal precise = 1.2345678901234567890123456789m, [QueryParameter] float single = float.NaN, [QueryParameter] double negative = double.NegativeInfinity, [QueryParameter] double positive = double.PositiveInfinity, [QueryParameter] ulong large = ulong.MaxValue) => Results.NoContent(); }"), out var numericDiagnostics);
+if (numericDiagnostics.Any(x => x.Severity == DiagnosticSeverity.Error) || !numeric.Contains("1.2345678901234567890123456789M", StringComparison.Ordinal) || !numeric.Contains("global::System.Single.NaN", StringComparison.Ordinal) || !numeric.Contains("18446744073709551615UL", StringComparison.Ordinal)) throw new Exception("Typed numeric defaults changed or failed compilation: " + string.Join("\n", numericDiagnostics));
 var negatives = new (string Id, string Method)[] {
     ("NWAPI-S003", "static ServerResult F(int value)=>Results.NoContent();"),
     ("NWAPI-S002", "static ServerResult F(ref int value)=>Results.NoContent();"),

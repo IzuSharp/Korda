@@ -12,7 +12,7 @@ use axum::{
     routing::any,
 };
 use bytes::Bytes;
-use futures_util::FutureExt;
+use futures_util::{FutureExt, task::AtomicWaker};
 use http::{HeaderMap, Method, Request, Response, StatusCode};
 use http_body::{Body, Frame, SizeHint};
 use hyper::service::service_fn;
@@ -202,6 +202,8 @@ impl Host {
             })
             .map_err(|_| {
                 self.state.store(5, Ordering::Release);
+                self.worker_exited.store(true, Ordering::Release);
+                self.native_joined.store(true, Ordering::Release);
                 ApiError::domain(3)
             })?;
         *lock(&self.worker) = Some(worker);
@@ -303,6 +305,7 @@ impl Host {
                 biased;()=self.stop.cancelled()=>break,
                 result=listener.accept()=>{
                     let Ok((stream,peer))=result else{self.fault(NW_DOMAIN_ERROR);break;};
+                    if stream.set_nodelay(true).is_err() { drop(stream); continue; }
                     let Ok(permit)=self.connections.clone().try_acquire_owned()else{self.rejected.fetch_add(1,Ordering::Relaxed);drop(stream);continue;};
                     let tls=self.config.listeners[index].tls.read().unwrap_or_else(|p|p.into_inner()).clone();let host=self.clone();let router=router.clone();
                     connections.spawn(async move{
@@ -535,11 +538,13 @@ impl Host {
             }),
             cancel: Cancellation::default(),
             input_cancel: Cancellation::default(),
+            output_waker: AtomicWaker::new(),
             finished: Arc::new(Cancellation::default()),
             dispatch_done: AtomicBool::new(false),
             taken: AtomicBool::new(false),
             retired: AtomicBool::new(false),
             body_done: AtomicBool::new(false),
+            connection_done: AtomicBool::new(false),
             read_active: Arc::new(AtomicBool::new(false)),
             write_active: Arc::new(AtomicBool::new(false)),
             live_ops: AtomicUsize::new(0),
@@ -555,7 +560,7 @@ impl Host {
             request.mark_dispatch_done();
             request.retired.store(true, Ordering::Release);
             request.cancel.cancel();
-            request.body_done.store(true, Ordering::Release);
+            request.body_ended();
             self.reap();
             return simple(StatusCode::INTERNAL_SERVER_ERROR);
         }
@@ -571,7 +576,7 @@ impl Host {
         };
         let head = tokio::select! {result=rx=>result.ok(),()=request.cancel.cancelled()=>None};
         let Some((status, headers)) = head else {
-            request.body_done.store(true, Ordering::Release);
+            request.body_ended();
             return simple(
                 if request.head.cancellation.load(Ordering::Acquire) == NW_TIMEOUT {
                     StatusCode::REQUEST_TIMEOUT
@@ -687,7 +692,7 @@ impl Drop for Waiting {
     fn drop(&mut self) {
         if !self.committed {
             self.request.abort(NW_CANCELED);
-            self.request.body_done.store(true, Ordering::Release);
+            self.request.body_ended();
         }
     }
 }
@@ -701,11 +706,13 @@ pub struct RequestState {
     pub response: Mutex<ResponseState>,
     pub cancel: Cancellation,
     pub input_cancel: Cancellation,
+    output_waker: AtomicWaker,
     pub finished: Arc<Cancellation>,
     pub dispatch_done: AtomicBool,
     pub taken: AtomicBool,
     pub retired: AtomicBool,
     pub body_done: AtomicBool,
+    connection_done: AtomicBool,
     pub read_active: Arc<AtomicBool>,
     pub write_active: Arc<AtomicBool>,
     pub live_ops: AtomicUsize,
@@ -766,9 +773,18 @@ impl RequestState {
         }
         self.cancel.cancel();
         self.input_cancel.cancel();
+        self.output_waker.wake();
+    }
+    fn release_connection(&self) {
+        if !self.connection_done.swap(true, Ordering::AcqRel) {
+            self.life.active.fetch_sub(1, Ordering::AcqRel);
+            *lock(&self.life.last) = Instant::now();
+            self.life.changed.notify_waiters();
+        }
     }
     pub fn body_ended(&self) {
         self.body_done.store(true, Ordering::Release);
+        self.release_connection();
         if self.dispatch_done.load(Ordering::Acquire) {
             self.finished.cancel();
         }
@@ -822,9 +838,7 @@ impl Drop for RequestState {
         {
             host.retiring.fetch_sub(1, Ordering::AcqRel);
         }
-        self.life.active.fetch_sub(1, Ordering::AcqRel);
-        *lock(&self.life.last) = Instant::now();
-        self.life.changed.notify_waiters();
+        self.release_connection();
     }
 }
 struct InputDiscard(Arc<RequestState>);
@@ -1117,6 +1131,7 @@ impl OpState {
                     if lock(&request.response).phase != 1 {
                         return Err(ApiError::status(NW_INVALID_STATE));
                     }
+                    request.sender.flush(&request.cancel).await?;
                     Ok(OpResult::Void)
                 }
                 Job::Finish(request, trailers, _side) => {
@@ -1250,6 +1265,7 @@ impl OutputBody {
     fn end(&mut self) {
         if !self.ended {
             self.ended = true;
+            self.request.output_waker.take();
             self.request.body_ended();
             if let Some(host) = self.request.host.upgrade() {
                 host.reap();
@@ -1267,6 +1283,9 @@ impl Body for OutputBody {
         if self.ended {
             return Poll::Ready(None);
         }
+        // Register before checking the sticky flag: abort must wake a pending
+        // empty Body queue, including failure after headers have been committed.
+        self.request.output_waker.register(cx.waker());
         if self.request.cancel.is_canceled() {
             self.end();
             return Poll::Ready(Some(Err(StreamError::Canceled)));

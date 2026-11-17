@@ -5,6 +5,15 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using NativeWeave.Server;
 
+ExactLayout.Verify();
+CheckMetadataNames();
+static unsafe void CheckMetadataNames()
+{
+    using var input = new NativeWeave.Server.Native.NativeInputs();
+    var view = input.Bytes(NativeWeave.Server.Native.NativeCodec.Encode([new("a", "one"), new("A", "two")]));
+    var values = NativeWeave.Server.Native.NativeCodec.Decode(view, 128, false);
+    if (values.Count != 2 || values["a"][0] != "one" || values["A"][0] != "two") throw new InvalidOperationException("Query/route name case was lost.");
+}
 int checks = 0;
 void Check(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); checks++; }
 async Task ThrowsAsync<T>(Func<Task> work) where T : Exception
@@ -29,7 +38,7 @@ var tls = ServerTlsOptions.FromPemFiles(certFile, keyFile);
     options ??= new() { RequestTimeout = TimeSpan.FromSeconds(2), ShutdownTimeout = TimeSpan.FromMilliseconds(100) };
     var config = new ServerConfiguration(ServerConfiguration.Snapshot(options), [new(IPAddress.Loopback, 0, "test", protocol, tlsOptions is null ? null : TlsSnapshot.Create(tlsOptions))], [], null, null);
     var host = new NativeHost(config); var group = new GroupPolicy(null, "");
-    var routes = new[] { new RouteDefinition(1, group, "/hello/{name}", ["GET"], null, null), new RouteDefinition(2, group, "/echo", ["POST"], null, null), new RouteDefinition(3, group, "/status/{code}", ["GET"], null, null), new RouteDefinition(4, group, "/hold", ["POST"], null, null), new RouteDefinition(5, group, "/deadline", ["GET"], null, null), new RouteDefinition(6, group, "/quota", ["POST"], null, null), new RouteDefinition(7, group, "/unread", ["POST"], null, null), new RouteDefinition(8, group, "/sse", ["GET"], null, null) };
+    var routes = new[] { new RouteDefinition(1, group, "/hello/{name}", ["GET"], null, null), new RouteDefinition(2, group, "/echo", ["POST"], null, null), new RouteDefinition(3, group, "/status/{code}", ["GET"], null, null), new RouteDefinition(4, group, "/hold", ["POST"], null, null), new RouteDefinition(5, group, "/deadline", ["GET"], null, null), new RouteDefinition(6, group, "/quota", ["POST"], null, null), new RouteDefinition(7, group, "/unread", ["POST"], null, null), new RouteDefinition(8, group, "/sse", ["GET"], null, null), new RouteDefinition(9, group, "/after", ["GET"], null, null) };
     foreach (var route in routes) route.Validate(config);
     return (host, routes);
 }
@@ -81,6 +90,11 @@ async Task Dispatch(HostRequest request)
             }
             finally { foreach (var chunk in chunks) chunk.Dispose(); }
             request.Abort(); break;
+        case 9:
+            await request.CommitHeadersAsync(200, empty, request.RequestAborted);
+            await request.Body.WriteAsync("prefix"u8.ToArray(), request.RequestAborted);
+            await request.Body.FlushAsync(request.RequestAborted);
+            throw new InvalidOperationException("Failure after commitment.");
         case 8:
             await request.CommitHeadersAsync(200, new Dictionary<string, IReadOnlyList<string>> { ["content-type"] = new[] { "text/event-stream" } }, request.RequestAborted);
             await request.WriteServerEventAsync(new ServerEvent("one\ntwo", "update", "7", TimeSpan.FromMilliseconds(5)), request.RequestAborted);
@@ -104,6 +118,8 @@ foreach (var row in new[] { (ServerProtocols.Http1, (ServerTlsOptions?)null, Htt
         Check(response.Version == row.Item3 && await response.Content.ReadAsStringAsync() == "Hello Linux", "Real HTTP version and static managed dispatch.");
         using var head = await client.SendAsync(new HttpRequestMessage(HttpMethod.Head, "hello/Linux") { Version = row.Item3, VersionPolicy = HttpVersionPolicy.RequestVersionExact });
         Check(head.StatusCode == HttpStatusCode.OK && (await head.Content.ReadAsByteArrayAsync()).Length == 0, "HEAD body suppression.");
+        int admitted = dispatches;
+        using (var malformed = await client.GetAsync("hello/blocked?q=%FF")) Check(malformed.StatusCode == HttpStatusCode.BadRequest && admitted == dispatches, "Native metadata gate rejects malformed UTF-8 before ticket publication.");
         using var missing = await client.GetAsync("missing"); Check(missing.StatusCode == HttpStatusCode.NotFound, "Native Axum 404.");
         using var method = await client.PostAsync("hello/Linux", new ByteArrayContent([])); Check(method.StatusCode == HttpStatusCode.MethodNotAllowed && method.Content.Headers.Allow.Contains("GET"), "Native method/Allow gate.");
         byte[] payload = Enumerable.Range(0, 100_000).Select(i => (byte)i).ToArray();
@@ -118,14 +134,39 @@ foreach (var row in new[] { (ServerProtocols.Http1, (ServerTlsOptions?)null, Htt
         {
             using var untrusted = Client(host, row.Item3, false);
             await ThrowsAsync<HttpRequestException>(async () => await untrusted.GetAsync("hello/trust"));
+            string invalidCert = Path.Combine(output, "invalid-cert.pem"); File.WriteAllText(invalidCert, "not a certificate");
+            try { await host.ReloadTlsAsync("test", TlsSnapshot.Create(ServerTlsOptions.FromPemFiles(invalidCert, keyFile)), default); throw new Exception("Invalid TLS reload accepted."); } catch (ServerException error) { Check(error.Code == "tls_configuration_failed", "Invalid full TLS snapshot rejected before publication."); }
+            using (var fresh = Client(host, row.Item3)) Check(await fresh.GetStringAsync("hello/old-certificate") == "Hello old-certificate", "Failed TLS reload preserves old certificate for new handshakes.");
             await host.ReloadTlsAsync("test", TlsSnapshot.Create(tls), default);
             Check(await client.GetStringAsync("hello/reloaded") == "Hello reloaded", "Existing TLS connection survives atomic snapshot reload.");
         }
         await Until(() => { var snap = host.Snapshot(); return snap.active_requests == 0 && snap.retiring_requests == 0 && snap.retained_native_bytes == 0 && snap.retained_managed_bytes == 0; });
+        try
+        {
+            using var committedFailure = await client.GetAsync("after", HttpCompletionOption.ResponseHeadersRead);
+            await committedFailure.Content.ReadAsByteArrayAsync().WaitAsync(TimeSpan.FromSeconds(3));
+            throw new InvalidOperationException("Post-commit failure did not reset the response.");
+        }
+        catch (HttpRequestException) { checks++; }
+        await Until(() => host.Snapshot().retiring_requests == 0 && host.Snapshot().retained_native_bytes == 0);
         var close = await host.CloseAsync(TimeSpan.FromSeconds(1), default).WaitAsync(TimeSpan.FromSeconds(5));
         Check(close.Status == ServerCloseStatus.Completed && close.RetainedNativeBytes == 0, "Close joins HTTP work, callbacks, payload and runtime worker.");
     }
     Console.WriteLine("PASS transport " + row.Item1 + " TLS=" + (row.Item2 is not null) + " HTTP=" + row.Item3);
+}
+
+// Native validation occurs before worker admission; a failed multi-listener bind
+// must close every listener already opened and join the failed worker.
+var invalidConfig = new ServerConfiguration(ServerConfiguration.Snapshot(new ServerOptions()), [new(IPAddress.Loopback, 0, "bad", ServerProtocols.Http1AndHttp2, null)], [], null, null);
+try { var invalid = new NativeHost(invalidConfig); invalid.ReleaseUnstarted(); throw new Exception("Native invalid protocol accepted."); } catch (ArgumentException) { checks++; }
+using (var busy = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0))
+{
+    busy.Start(); int busyPort = ((IPEndPoint)busy.LocalEndpoint).Port;
+    using var first = new System.Net.Sockets.TcpListener(IPAddress.Loopback, 0); first.Start(); int firstPort = ((IPEndPoint)first.LocalEndpoint).Port; first.Stop();
+    var options = ServerConfiguration.Snapshot(new ServerOptions());
+    var failed = new NativeHost(new(options, [new(IPAddress.Loopback, firstPort, "first", ServerProtocols.Http1, null), new(IPAddress.Loopback, busyPort, "busy", ServerProtocols.Http1, null)], [], null, null));
+    try { await failed.StartAsync([], Dispatch, default); throw new Exception("Occupied port accepted."); } catch (ServerException error) { Check(error.Code == "listener_bind_failed", "Native bind domain survives the shared async terminal bridge."); }
+    await failed.DisposeAsync(); first.Start(); Check(failed.BoundAddresses.Count == 0, "Partial bind failure publishes no addresses and releases earlier ports."); first.Stop();
 }
 
 var heldOptions = new ServerOptions { RequestTimeout = TimeSpan.FromSeconds(3), ShutdownTimeout = TimeSpan.FromMilliseconds(20) };
@@ -178,4 +219,5 @@ await using (var app = builder.Build())
     await app.StartAsync(); using var client = new HttpClient { BaseAddress = app.BoundAddresses[0] };
     Check(await client.GetStringAsync("hello/application") == "Hello application", "B15/B17 composed native host.");
 }
+Check(System.Runtime.InteropServices.Marshal.SizeOf<NativeWeave.Server.Native.Generated.NwServerSnapshotV1>() == System.Runtime.InteropServices.Marshal.SizeOf<NativeWeave.Server.Native.NwServerSnapshotV1>(), "A10 lifecycle projection matches exact snapshot layout.");
 Console.WriteLine("PASS B17 checks=" + checks + " dispatches=" + dispatches + " dynamic=" + System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported);

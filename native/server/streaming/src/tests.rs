@@ -510,3 +510,57 @@ fn core_operation_cancel_never_started_untaken_and_taken_results() {
     drop(taken);
     assert_eq!(global.snapshot(), (0, 0));
 }
+
+#[tokio::test(flavor = "current_thread")]
+async fn flush_waits_for_queue_progress_without_releasing_retained_credit() {
+    let (global, request) = request(32);
+    let (sender, mut body) = body_channel(request, 32, 1).unwrap();
+    let cancel = Cancellation::default();
+    sender
+        .reserve(32, &cancel)
+        .await
+        .unwrap()
+        .commit(b"retained")
+        .unwrap();
+    let mut flushing = Box::pin(sender.flush(&cancel));
+    assert!(
+        tokio::time::timeout(Duration::from_millis(1), &mut flushing)
+            .await
+            .is_err()
+    );
+    assert_eq!(global.snapshot(), (32, 0));
+    let retained = frame(&mut body)
+        .await
+        .unwrap()
+        .unwrap()
+        .into_data()
+        .unwrap();
+    flushing.await.unwrap();
+    assert_eq!(global.snapshot(), (32, 0));
+    assert_eq!(sender.queue_capacity(), 1);
+    drop(retained);
+    assert_eq!(global.snapshot(), (0, 0));
+}
+#[tokio::test(flavor = "current_thread")]
+async fn flush_cancellation_rolls_back_metadata_wait_only() {
+    let (global, request) = request(32);
+    let (sender, mut body) = body_channel(request, 32, 1).unwrap();
+    let cancel = Cancellation::default();
+    sender
+        .reserve(32, &cancel)
+        .await
+        .unwrap()
+        .commit(b"retained")
+        .unwrap();
+    let mut flushing = Box::pin(sender.flush(&cancel));
+    assert!(
+        tokio::time::timeout(Duration::from_millis(1), &mut flushing)
+            .await
+            .is_err()
+    );
+    cancel.cancel();
+    assert!(matches!(flushing.await, Err(StreamError::Canceled)));
+    assert_eq!(global.snapshot(), (32, 0));
+    drop(frame(&mut body).await);
+    assert_eq!(global.snapshot(), (0, 0));
+}

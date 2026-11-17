@@ -1,0 +1,474 @@
+{
+  "adapter_sha256": "d962b9b5361fb7db29b43b4cd22f7ed85e2f6ee698a8fbe8ea12b30513aa576c",
+  "exports": [
+    {
+      "calling_convention": "C",
+      "column": 26,
+      "file": "tests/Server.Native/Bindings/adapter-projection.rs",
+      "generic": false,
+      "line": 482,
+      "parameters": [
+        "* mut NwServerRequest",
+        "u32",
+        "* mut * mut NwServerOperation",
+        "* mut NwErrorInfoV1"
+      ],
+      "return_type": "u32",
+      "symbol": "nw_server_body_read_create"
+    },
+    {
+      "calling_convention": "C",
+      "column": 26,
+      "file": "tests/Server.Native/Bindings/adapter-projection.rs",
+      "generic": false,
+      "line": 53,
+      "parameters": [
+        "* mut NwServer",
+        "* mut * mut NwServerMetadata",
+        "* mut NwErrorInfoV1"
+      ],
+      "return_type": "u32",
+      "symbol": "nw_server_bound_addresses"
+    },
+    {
+      "calling_convention": "C",
+      "column": 26,
+      "file": "tests/Server.Native/Bindings/adapter-projection.rs",
+      "generic": false,
+      "line": 593,
+      "parameters": [
+        "* mut NwServerBuffer",
+        "* mut u8",
+        "u64",
+        "* mut u64",
+        "* mut NwErrorInfoV1"
+      ],
+      "return_type": "u32",
+      "symbol": "nw_server_buffer_copy"
+    },
+    {
+      "calling_convention": "C",
+      "column": 26,
+      "file": "tests/Server.Native/Bindings/adapter-projection.rs",
+      "generic": false,
+      "line": 571,
+      "parameters": [
+        "* mut NwServerBuffer",
+        "* mut u64",
+        "* mut NwErrorInfoV1"
+      ],
+      "return_type": "u32",
+      "symbol": "nw_server_buffer_length"
+    },
+    {
+      "calling_convention": "C",
+      "column": 26,
+      "file": "tests/Server.Native/Bindings/adapter-projection.rs",
+      "generic": false,
+      "line": 627,
+      "parameters": [
+        "* mut NwServerBuffer",
+        "u64",
+        "* mut * mut NwServerManagedCredit",
+        "* mut NwErrorInfoV1"
+      ],
+      "return_type": "u32",
+      "symbol": "nw_server_buffer_managed_credit_acquire"
+    },
+    {
+      "calling_convention": "C",
+      "column": 26,
+      "file": "tests/Server.Native/Bindings/adapter-projection.rs",
+      "generic": false,
+      "line": 656,
+      "parameters": [
+        "* mut NwServerBuffer"
+      ],
+      "return_type": "()",
+      "symbol": "nw_server_buffer_release"
+    },
+    {
+      "calling_convention": "C",
+      "column": 26,
+      "file": "tests/Server.Native/Bindings/adapter-projection.rs",
+      "generic": false,
+      "line": 113,
+      "parameters": [
+        "* mut NwServer",
+        "u64",
+        "* mut * mut NwServerOperation",
+        "* mut NwErrorInfoV1"
+      ],
+      "return_type": "u32",
+      "symbol": "nw_server_close_create"
+    },
+    {
+      "calling_convention": "C",
+      "column": 26,
+      "file": "tests/Server.Native/Bindings/adapter-projection.rs",
+      "generic": false,
+      "line": 329,
+      "parameters": [
+        "* mut NwServerRequest",
+        "u32",
+        "* mut NwErrorInfoV1"
+      ],
+      "return_type": "u32",
+      "symbol": "nw_server_dispatch_complete"
+    },
+    {
+      "calling_convention": "C",
+      "column": 26,
+      "file": "tests/Server.Native/Bindings/adapter-projection.rs",
+      "generic": false,
+      "line": 3,
+      "parameters": [
+        "u32",
+        "u32",
+        "* mut NwAbiInfoV1"
+      ],
+      "return_type": "u32",
+      "symbol": "nw_server_get_abi_v1"
+    },
+    {
+      "calling_convention": "C",
+      "column": 26,
+      "file": "tests/Server.Native/Bindings/adapter-projection.rs",
+      "generic": false,
+      "line": 79,
+      "parameters": [
+        "* mut NwServer",
+        "* mut NwServerSnapshotV1",
+        "* mut NwErrorInfoV1"
+      ],
+      "return_type": "u32",
+      "symbol": "nw_server_get_snapshot"
+    },
+    {
+      "calling_convention": "C",
+      "column": 26,
+      "file": "tests/Server.Native/Bindings/adapter-projection.rs",
+      "generic": false,
+      "line": 682,
+      "parameters": [
+        "* mut NwServerRequest",
+        "* mut * mut NwServerOperation",
+        "* mut NwErrorInfoV1"
+      ],
+      "return_type": "u32",
+      "symbol": "nw_server_grpc_read_create"
+    },
+    {
+      "calling_convention": "C",
+      "column": 26,
+      "file": "tests/Server.Native/Bindings/adapter-projection.rs",
+      "generic": false,
+      "line": 401,
+      "parameters": [
+        "* mut NwServerRequest",
+        "u64",
+        "* mut * mut NwServerManagedCredit",
+        "* mut NwErrorInfoV1"
+      ],
+      "return_type": "u32",
+      "symbol": "nw_server_managed_credit_acquire"
+    },
+    {
+      "calling_convention": "C",
+      "column": 26,
+      "file": "tests/Server.Native/Bindings/adapter-projection.rs",
+      "generic": false,
+      "line": 425,
+      "parameters": [
+        "* mut NwServerManagedCredit"
+      ],
+      "return_type": "()",
+      "symbol": "nw_server_managed_credit_release"
+    },
+    {
+      "calling_convention": "C",
+      "column": 26,
+      "file": "tests/Server.Native/Bindings/adapter-projection.rs",
+      "generic": false,
+      "line": 709,
+      "parameters": [
+        "* mut NwServerRequest",
+        "* mut u32",
+        "* mut * mut NwServerBuffer",
+        "* mut NwErrorInfoV1"
+      ],
+      "return_type": "u32",
+      "symbol": "nw_server_mcp_call_take"
+    },
+    {
+      "calling_convention": "C",
+      "column": 26,
+      "file": "tests/Server.Native/Bindings/adapter-projection.rs",
+      "generic": false,
+      "line": 695,
+      "parameters": [
+        "* mut NwServerRequest",
+        "u32",
+        "* mut * mut NwServerOperation",
+        "* mut NwErrorInfoV1"
+      ],
+      "return_type": "u32",
+      "symbol": "nw_server_mcp_gate_resume_create"
+    },
+    {
+      "calling_convention": "C",
+      "column": 26,
+      "file": "tests/Server.Native/Bindings/adapter-projection.rs",
+      "generic": false,
+      "line": 386,
+      "parameters": [
+        "* mut NwServerMetadata"
+      ],
+      "return_type": "()",
+      "symbol": "nw_server_metadata_release"
+    },
+    {
+      "calling_convention": "C",
+      "column": 26,
+      "file": "tests/Server.Native/Bindings/adapter-projection.rs",
+      "generic": false,
+      "line": 273,
+      "parameters": [
+        "* mut NwServerOperation"
+      ],
+      "return_type": "()",
+      "symbol": "nw_server_operation_release"
+    },
+    {
+      "calling_convention": "C",
+      "column": 26,
+      "file": "tests/Server.Native/Bindings/adapter-projection.rs",
+      "generic": false,
+      "line": 185,
+      "parameters": [
+        "* mut NwServerOperation"
+      ],
+      "return_type": "u32",
+      "symbol": "nw_server_operation_request_cancel"
+    },
+    {
+      "calling_convention": "C",
+      "column": 26,
+      "file": "tests/Server.Native/Bindings/adapter-projection.rs",
+      "generic": false,
+      "line": 160,
+      "parameters": [
+        "* mut NwServerOperation",
+        "* const NwOperationCallbacksV1",
+        "* mut NwErrorInfoV1"
+      ],
+      "return_type": "u32",
+      "symbol": "nw_server_operation_start"
+    },
+    {
+      "calling_convention": "C",
+      "column": 26,
+      "file": "tests/Server.Native/Bindings/adapter-projection.rs",
+      "generic": false,
+      "line": 513,
+      "parameters": [
+        "* mut NwServerOperation",
+        "* mut u32",
+        "* mut * mut NwServerBuffer",
+        "* mut * mut NwServerMetadata",
+        "* mut NwErrorInfoV1"
+      ],
+      "return_type": "u32",
+      "symbol": "nw_server_operation_take_chunk"
+    },
+    {
+      "calling_convention": "C",
+      "column": 26,
+      "file": "tests/Server.Native/Bindings/adapter-projection.rs",
+      "generic": false,
+      "line": 241,
+      "parameters": [
+        "* mut NwServerOperation",
+        "* mut NwServerCloseResultV1",
+        "* mut NwErrorInfoV1"
+      ],
+      "return_type": "u32",
+      "symbol": "nw_server_operation_take_close"
+    },
+    {
+      "calling_convention": "C",
+      "column": 26,
+      "file": "tests/Server.Native/Bindings/adapter-projection.rs",
+      "generic": false,
+      "line": 197,
+      "parameters": [
+        "* mut NwServerOperation",
+        "* mut NwErrorInfoV1"
+      ],
+      "return_type": "u32",
+      "symbol": "nw_server_operation_take_void"
+    },
+    {
+      "calling_convention": "C",
+      "column": 26,
+      "file": "tests/Server.Native/Bindings/adapter-projection.rs",
+      "generic": false,
+      "line": 216,
+      "parameters": [
+        "* mut NwServerOperation",
+        "* mut * mut NwServerWriteReservation",
+        "* mut NwErrorInfoV1"
+      ],
+      "return_type": "u32",
+      "symbol": "nw_server_operation_take_write_reservation"
+    },
+    {
+      "calling_convention": "C",
+      "column": 26,
+      "file": "tests/Server.Native/Bindings/adapter-projection.rs",
+      "generic": false,
+      "line": 264,
+      "parameters": [
+        "* mut NwServerOperation"
+      ],
+      "return_type": "u32",
+      "symbol": "nw_server_operation_try_retire"
+    },
+    {
+      "calling_convention": "C",
+      "column": 26,
+      "file": "tests/Server.Native/Bindings/adapter-projection.rs",
+      "generic": false,
+      "line": 151,
+      "parameters": [
+        "* mut NwServer"
+      ],
+      "return_type": "()",
+      "symbol": "nw_server_release"
+    },
+    {
+      "calling_convention": "C",
+      "column": 26,
+      "file": "tests/Server.Native/Bindings/adapter-projection.rs",
+      "generic": false,
+      "line": 359,
+      "parameters": [
+        "* mut NwServerRequest"
+      ],
+      "return_type": "u32",
+      "symbol": "nw_server_request_abort"
+    },
+    {
+      "calling_convention": "C",
+      "column": 26,
+      "file": "tests/Server.Native/Bindings/adapter-projection.rs",
+      "generic": false,
+      "line": 392,
+      "parameters": [
+        "* mut NwServerRequest"
+      ],
+      "return_type": "()",
+      "symbol": "nw_server_request_release"
+    },
+    {
+      "calling_convention": "C",
+      "column": 26,
+      "file": "tests/Server.Native/Bindings/adapter-projection.rs",
+      "generic": false,
+      "line": 284,
+      "parameters": [
+        "* mut NwServer",
+        "u64",
+        "* mut * mut NwServerRequest",
+        "* mut * mut NwServerMetadata",
+        "* mut NwErrorInfoV1"
+      ],
+      "return_type": "u32",
+      "symbol": "nw_server_request_take"
+    },
+    {
+      "calling_convention": "C",
+      "column": 26,
+      "file": "tests/Server.Native/Bindings/adapter-projection.rs",
+      "generic": false,
+      "line": 371,
+      "parameters": [
+        "* mut NwServerRequest"
+      ],
+      "return_type": "u32",
+      "symbol": "nw_server_request_try_retire"
+    },
+    {
+      "calling_convention": "C",
+      "column": 26,
+      "file": "tests/Server.Native/Bindings/adapter-projection.rs",
+      "generic": false,
+      "line": 662,
+      "parameters": [
+        "* mut NwServerRequest",
+        "* mut * mut NwServerOperation",
+        "* mut NwErrorInfoV1"
+      ],
+      "return_type": "u32",
+      "symbol": "nw_server_response_flush_create"
+    },
+    {
+      "calling_convention": "C",
+      "column": 26,
+      "file": "tests/Server.Native/Bindings/adapter-projection.rs",
+      "generic": false,
+      "line": 32,
+      "parameters": [
+        "* mut NwServer",
+        "* mut * mut NwServerOperation",
+        "* mut NwErrorInfoV1"
+      ],
+      "return_type": "u32",
+      "symbol": "nw_server_start_create"
+    },
+    {
+      "calling_convention": "C",
+      "column": 26,
+      "file": "tests/Server.Native/Bindings/adapter-projection.rs",
+      "generic": false,
+      "line": 133,
+      "parameters": [
+        "* mut NwServer"
+      ],
+      "return_type": "u32",
+      "symbol": "nw_server_try_retire"
+    },
+    {
+      "calling_convention": "C",
+      "column": 26,
+      "file": "tests/Server.Native/Bindings/adapter-projection.rs",
+      "generic": false,
+      "line": 474,
+      "parameters": [
+        "* mut NwServerWriteReservation"
+      ],
+      "return_type": "()",
+      "symbol": "nw_server_write_reservation_release"
+    },
+    {
+      "calling_convention": "C",
+      "column": 26,
+      "file": "tests/Server.Native/Bindings/adapter-projection.rs",
+      "generic": false,
+      "line": 431,
+      "parameters": [
+        "* mut NwServerRequest",
+        "u32",
+        "u64",
+        "* mut * mut NwServerOperation",
+        "* mut NwErrorInfoV1"
+      ],
+      "return_type": "u32",
+      "symbol": "nw_server_write_reserve_create"
+    }
+  ],
+  "parser": "syn-2.0.119",
+  "schema_version": 1,
+  "tool": "nativeweave-binding-inventory",
+  "tool_version": "0.1.0"
+}

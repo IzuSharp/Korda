@@ -7,5 +7,6 @@
     <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifier)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifier).aot.lock.json</NuGetLockFilePath>
     <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifiers)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifiers).aot.lock.json</NuGetLockFilePath>
   </PropertyGroup>
+  <ItemGroup><Compile Remove="Benchmarks/**/*.cs" /></ItemGroup>
   <ItemGroup><ProjectReference Include="../../src/Server.Application/NativeWeave.Server.csproj" /></ItemGroup>
 </Project>
