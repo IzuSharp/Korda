@@ -5,6 +5,9 @@
     <Project Path="src/Server.Application/Generator/NativeWeave.Server.Generator.csproj" />
     <Project Path="src/Protocols.Grpc/NativeWeave.Server.Grpc.csproj" />
     <Project Path="src/Protocols.Mcp/NativeWeave.Server.Mcp.csproj" />
+    <Project Path="src/Data.NativeHost/NativeWeave.Database.csproj" />
+    <Project Path="src/Data.NativeHost/DependencyInjection/NativeWeave.Database.DependencyInjection.csproj" />
+    <Project Path="src/Query.Generator/NativeWeave.Query.Generator.csproj" />
     <Project Path="src/Engines.SyncProof/NativeWeave.Engines.SyncProof.csproj" />
     <Project Path="src/Engines.AsyncProof/NativeWeave.Engines.AsyncProof.csproj" />
     <Project Path="src/Verification.ExtensionProof/NativeWeave.Verification.ExtensionProof.csproj" />
@@ -60,6 +63,13 @@
     <Project Path="tests/Protocols.Grpc/NativeWeave.Server.Grpc.Tests.csproj" />
     <Project Path="tests/Protocols.Mcp/Protocols.Mcp.Tests.csproj" />
     <Project Path="tests/Server.Diagnostics/Server.Diagnostics.Tests.csproj" />
+    <Project Path="tests/Data.NativeHost/NativeWeave.Data.NativeHost.Tests.csproj" />
+    <Project Path="tests/Data.Migrations/NativeWeave.Data.Migrations.Tests.csproj" />
+    <Project Path="tests/Query.Native/NativeWeave.Query.Native.Tests.csproj" />
+    <Project Path="tests/Data.Materialization/NativeWeave.Data.Materialization.Tests.csproj" />
+    <Project Path="tests/Query.Generator/Query.Generator.Tests.csproj" />
+    <Project Path="tests/Query.Fluent/NativeWeave.Query.Fluent.Tests.csproj" />
+    <Project Path="tests/Orm.Relations/NativeWeave.Orm.Relations.Tests.csproj" />
     <Project Path="tests/Interop.Callbacks/Interop.Callbacks.Tests.csproj" />
     <Project Path="tests/Interop.Async/Interop.Async.Tests.csproj" />
     <Project Path="tests/Engines.SyncProof/NativeWeave.Engines.SyncProof.Tests.csproj" />
@@ -161,5 +171,11 @@
   </Folder>
   <Folder Name="/benchmarks/B17/">
     <Project Path="tests/Server.Native/Benchmarks/Benchmarks.csproj" />
+  </Folder>
+  <Folder Name="/tools/B10/">
+    <Project Path="tests/Query.Generator/ApiCheck/ApiCheck.csproj" />
+  </Folder>
+  <Folder Name="/tools/B13/">
+    <Project Path="tests/Query.Fluent/ApiCheck/ApiCheck.csproj" />
   </Folder>
 </Solution>

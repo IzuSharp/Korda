@@ -63,6 +63,17 @@ def native():
         # provider projects consume their already implemented task-owned assets
         # from target/release. Only HelloWorld enters this release's package.
         run(["cargo", "build", "--workspace", "--release", "--locked"], "native-workspace")
+        # The two Database facades use independently selected provider profiles.
+        # Stage their maintainer-built inputs before the shared managed solution;
+        # this does not add either module to the HelloWorld release candidate.
+        if (ROOT / "native/database/host/Cargo.toml").exists():
+            for feature, provider in (("sqlite", "sqlite"), ("postgres", "postgresql")):
+                staged = ROOT / "target/release" / f"libnw_database_{provider}.so"
+                staged.unlink(missing_ok=True)
+                run(["cargo", "build", "-p", "nativeweave-database-host", "--release",
+                     "--locked", "--no-default-features", "--features", feature],
+                    f"database-{provider}-profile")
+                shutil.copy2(ROOT / "target/release/libnativeweave_database_host.so", staged)
         profile = ROOT / "src/Build.Integration/profiles/hello-world-linux.json"
         builder = ROOT / "src/Build.Integration/build_native.py"
         output = run([sys.executable, builder, "build", "--root", ROOT, "--profile", profile], "native-build")

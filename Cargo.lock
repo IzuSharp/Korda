@@ -1092,6 +1092,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "nativeweave-data-migrations"
+version = "0.1.0"
+dependencies = [
+ "futures-util",
+ "nativeweave-data-contracts",
+ "sha2 0.10.9",
+ "sqlx",
+ "tokio",
+]
+
+[[package]]
 name = "nativeweave-data-postgres"
 version = "0.1.0"
 dependencies = [
@@ -1104,6 +1115,19 @@ dependencies = [
  "sqlx-core",
  "tokio",
  "url",
+]
+
+[[package]]
+name = "nativeweave-data-relations"
+version = "0.1.0"
+dependencies = [
+ "nativeweave-data-contracts",
+ "nativeweave-interop-abi",
+ "nativeweave-query-binding",
+ "nativeweave-query-native",
+ "sea-query",
+ "serde_json",
+ "sha2 0.10.9",
 ]
 
 [[package]]
@@ -1139,6 +1163,30 @@ name = "nativeweave-data-transactions"
 version = "0.1.0"
 dependencies = [
  "nativeweave-data-contracts",
+ "tokio",
+]
+
+[[package]]
+name = "nativeweave-database-host"
+version = "0.1.0"
+dependencies = [
+ "futures-util",
+ "nativeweave-data-codecs",
+ "nativeweave-data-contracts",
+ "nativeweave-data-migrations",
+ "nativeweave-data-postgres",
+ "nativeweave-data-relations",
+ "nativeweave-data-sqlite",
+ "nativeweave-data-streaming",
+ "nativeweave-data-transactions",
+ "nativeweave-interop-abi",
+ "nativeweave-interop-async",
+ "nativeweave-interop-errors",
+ "nativeweave-query-binding",
+ "nativeweave-query-native",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx",
  "tokio",
 ]
 
@@ -1340,6 +1388,18 @@ dependencies = [
  "nativeweave-interop-async",
  "nativeweave-interop-errors",
  "tokio",
+]
+
+[[package]]
+name = "nativeweave-query-native"
+version = "0.1.0"
+dependencies = [
+ "nativeweave-data-contracts",
+ "nativeweave-interop-abi",
+ "nativeweave-query-binding",
+ "sea-query",
+ "serde_json",
+ "sha2 0.10.9",
 ]
 
 [[package]]

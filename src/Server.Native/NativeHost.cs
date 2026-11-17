@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using NativeWeave.Interop.Abi;
@@ -162,20 +163,32 @@ internal sealed partial class NativeHost : ServerHost
     {
         cancellationToken.ThrowIfCancellationRequested(); ServerValidation.Duration(timeout, true, nameof(timeout));
         lock (_gate) if (_released) return Task.FromResult(new ServerCloseResult(ServerCloseStatus.Completed, 0, 0, 0));
-        return CloseCoreAsync(CreateClose(timeout), cancellationToken);
+        long started = Stopwatch.GetTimestamp();
+        return CloseCoreAsync(CreateClose(timeout), timeout, started, cancellationToken);
     }
     private unsafe nint CreateClose(TimeSpan timeout) => Create(Owner, (nint pointer, nint* output, NwErrorInfoV1* error) => Native.nw_server_close_create(pointer, NativeCodec.Nanoseconds(timeout), output, error));
-    private async Task<ServerCloseResult> CloseCoreAsync(nint pointer, CancellationToken token)
+    private async Task<ServerCloseResult> CloseCoreAsync(nint pointer, TimeSpan timeout, long started, CancellationToken token)
     {
         var operation = Begin(pointer, TakeClose, token);
         ServerCloseResult result = await operation.Task.ConfigureAwait(false);
         await operation.Retirement.ConfigureAwait(false);
-        lock (_gate)
+        while (result.Status == ServerCloseStatus.Completed)
         {
-            if (result.Status == ServerCloseStatus.Completed && (_tickets.Count != 0 || _operations.Count > 1))
-                result = result with { Status = ServerCloseStatus.Pending, PendingRequests = Math.Max(result.PendingRequests, _tickets.Count) };
+            int pending; bool managed;
+            lock (_gate)
+            {
+                pending = _tickets.Count;
+                managed = pending != 0 || _operations.Count > (_operations.Contains(operation) ? 1 : 0);
+            }
+            if (!managed) { _lifetime.TrySetResult(); return result; }
+            TimeSpan remaining = timeout - Stopwatch.GetElapsedTime(started);
+            if (remaining <= TimeSpan.Zero)
+                return result with { Status = ServerCloseStatus.Pending, PendingRequests = Math.Max(result.PendingRequests, pending) };
+            // The native terminal remains authoritative for cancellation. Its
+            // Completed observation can precede the last managed ticket removal;
+            // join that tail within the same original finite public wait.
+            await Task.Delay(remaining < TimeSpan.FromMilliseconds(2) ? remaining : TimeSpan.FromMilliseconds(2)).ConfigureAwait(false);
         }
-        if (result.Status == ServerCloseStatus.Completed) _lifetime.TrySetResult();
         return result;
     }
     private unsafe ServerCloseResult TakeClose(nint pointer)
@@ -296,7 +309,7 @@ internal sealed partial class NativeHost : ServerHost
     private void Cancel(ulong id, uint status)
     { HostTicket? ticket; lock (_gate) _tickets.TryGetValue(id, out ticket); ticket?.Cancel(status); }
     private void Remove(HostTicket ticket)
-    { lock (_gate) _tickets.Remove(ticket.Id); _coordinator.Release(ticket.Slot, ticket); }
+    { _coordinator.Release(ticket.Slot, ticket); lock (_gate) _tickets.Remove(ticket.Id); }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static uint OnRequest(nuint cookie, ulong id, ulong handler, uint kind)

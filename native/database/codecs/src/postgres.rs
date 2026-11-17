@@ -18,6 +18,34 @@ where
         .map_err(|_| error(ErrorKind::Encoding, "PostgreSQL argument encoding failed"))
 }
 
+// Keep prepare metadata aligned with the actual static SQLx encoder types below.
+// No OID constants, inferred database metadata or second value conversion is used.
+pub(crate) fn type_info(codec: &Codec) -> Result<PgTypeInfo> {
+    check_profile(codec, Profile::PostgreSql)?;
+    Ok(match codec.id {
+        1 => <i16 as Type<Postgres>>::type_info(),
+        2 | 17 => <i32 as Type<Postgres>>::type_info(),
+        3 | 15 => <i64 as Type<Postgres>>::type_info(),
+        4 => <bool as Type<Postgres>>::type_info(),
+        5 => <String as Type<Postgres>>::type_info(),
+        6 => <Vec<u8> as Type<Postgres>>::type_info(),
+        7 => <Uuid as Type<Postgres>>::type_info(),
+        8 => <NaiveDate as Type<Postgres>>::type_info(),
+        9 => <NaiveTime as Type<Postgres>>::type_info(),
+        10 => <DateTime<Utc> as Type<Postgres>>::type_info(),
+        11 => <f64 as Type<Postgres>>::type_info(),
+        12 => <f32 as Type<Postgres>>::type_info(),
+        13 => <Decimal as Type<Postgres>>::type_info(),
+        16 => <Json<Box<RawValue>> as Type<Postgres>>::type_info(),
+        _ => {
+            return Err(error(
+                ErrorKind::Capability,
+                "unsupported PostgreSQL logical codec",
+            ));
+        }
+    })
+}
+
 pub(crate) fn push(args: &mut PgArguments, codec: &Codec, bytes: Option<&[u8]>) -> Result<()> {
     check_profile(codec, Profile::PostgreSql)?;
     macro_rules! add {

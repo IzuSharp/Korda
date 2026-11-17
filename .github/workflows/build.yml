@@ -18,6 +18,19 @@ jobs:
     name: Build, package and Native AOT
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    services:
+      postgres:
+        image: postgres:18.0@sha256:41fc5342eefba6cc2ccda736aaf034bbbb7c3df0fdb81516eba1ba33f360162c
+        env:
+          POSTGRES_USER: nativeweave
+          POSTGRES_DB: postgres
+          # Isolated test database: the permission oracle creates its own login role.
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - "127.0.0.1:5432:5432"
+        options: >-
+          --health-cmd "pg_isready -U nativeweave -d postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 12
     outputs:
       artifact: nativeweave-linux-${{ github.run_id }}-${{ github.run_attempt }}
     env:
@@ -25,6 +38,7 @@ jobs:
       DOTNET_NOLOGO: "true"
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
       PACKAGE_VERSION: ${{ inputs.version }}
+      NW_TEST_POSTGRES: postgresql://nativeweave@127.0.0.1:5432/postgres
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:

@@ -22,14 +22,16 @@ internal delegate T ScalarDecoder<T>(ReadOnlySpan<byte> bytes);
 /// No native runtime is loaded; provider conversions and capability enforcement belong to B07.</remarks>
 public sealed class ValueCodec<T>
 {
-    internal ValueCodec(CodecDescriptor descriptor, Func<T, byte[]> encode, ScalarDecoder<T> decode)
+    internal ValueCodec(CodecDescriptor descriptor, Func<T, byte[]> encode, ScalarDecoder<T> decode, Func<T, int, byte[]>? boundedEncode = null)
     {
         Descriptor = descriptor;
         _encode = encode;
         _decode = decode;
+        _boundedEncode = boundedEncode;
     }
     private readonly Func<T, byte[]> _encode;
     private readonly ScalarDecoder<T> _decode;
+    private readonly Func<T, int, byte[]>? _boundedEncode;
     internal CodecDescriptor Descriptor { get; }
     /// <summary>Gets the logical db-wire scalar ID, independent of source-bound configured IDs.</summary>
     public uint Id => Descriptor.Id;
@@ -44,6 +46,30 @@ public sealed class ValueCodec<T>
         }
         return _encode(value);
     }
+    // B14 requests a finite snapshot before allocating/copying each value.
+    // Keep Encode unchanged for existing B01 callers.
+    internal byte[]? EncodeBounded(T value, int maximumBytes)
+    {
+        if (maximumBytes < 0 || maximumBytes > DbWire.MaxEncodedBytes) throw Capacity();
+        if (value is null && (Descriptor.Nullable || Id != 16)) return Encode(value);
+        if (_boundedEncode is not null) return _boundedEncode(value, maximumBytes);
+        var width = Id switch
+        {
+            1 => 2,
+            2 or 8 or 12 or 17 => 4,
+            3 or 9 or 10 or 11 or 15 => 8,
+            4 => 1,
+            7 or 13 or 14 => 16,
+            5 => Validation.Utf8.GetByteCount((string)(object)value!),
+            6 => ((byte[])(object)value!).Length,
+            _ => throw new InvalidOperationException("The selected codec has no bounded snapshot encoder.")
+        };
+        if (width > maximumBytes) throw Capacity();
+        var bytes = _encode(value);
+        if (bytes.Length > maximumBytes) throw Capacity();
+        return bytes;
+    }
+    internal static DatabaseException Capacity() => new("The value exceeds the finite snapshot byte budget.", DatabaseErrorKind.ResourceLimit);
     internal T DecodeScalar(ReadOnlySpan<byte> bytes) => _decode(bytes);
     internal T Decode(ReadOnlyMemory<byte>? value)
     {
@@ -122,7 +148,7 @@ public static class Codecs
     public static ValueCodec<T?> Nullable<T>(ValueCodec<T> codec) where T : struct
     {
         ArgumentNullException.ThrowIfNull(codec);
-        return new(codec.Descriptor with { Nullable = true }, v => codec.Encode(v!.Value)!, b => codec.DecodeScalar(b));
+        return new(codec.Descriptor with { Nullable = true }, v => codec.Encode(v!.Value)!, b => codec.DecodeScalar(b), (v, maximum) => codec.EncodeBounded(v!.Value, maximum)!);
     }
     /// <summary>Adds SQL NULL support to a reference codec while preserving its logical scalar identity.</summary>
     /// <typeparam name="T">The reference type.</typeparam>
@@ -132,7 +158,7 @@ public static class Codecs
     public static ValueCodec<T?> NullableReference<T>(ValueCodec<T> codec) where T : class
     {
         ArgumentNullException.ThrowIfNull(codec);
-        return new(codec.Descriptor with { Nullable = true }, v => codec.Encode(v!)!, b => codec.DecodeScalar(b));
+        return new(codec.Descriptor with { Nullable = true }, v => codec.Encode(v!)!, b => codec.DecodeScalar(b), (v, maximum) => codec.EncodeBounded(v!, maximum)!);
     }
     /// <summary>Selects JSON serialization using explicit static metadata; JSON null is distinct from SQL NULL.</summary>
     /// <typeparam name="T">The statically serializable value.</typeparam>
@@ -142,7 +168,7 @@ public static class Codecs
     public static ValueCodec<T> Json<T>(JsonTypeInfo<T> typeInfo)
     {
         ArgumentNullException.ThrowIfNull(typeInfo);
-        return Make<T>(16, "Json", v => JsonSerializer.SerializeToUtf8Bytes(v, typeInfo), b => JsonSerializer.Deserialize(b, typeInfo)!);
+        return new(new(16, "Json", null, false), v => JsonSerializer.SerializeToUtf8Bytes(v, typeInfo), b => JsonSerializer.Deserialize(b, typeInfo)!, (v, maximum) => BoundedJsonEncoding.Encode(v, typeInfo, maximum));
     }
     /// <summary>Selects a checked signed Int32 enum representation, preserving undefined numeric values.</summary>
     /// <typeparam name="TEnum">A statically known CLR enum.</typeparam>

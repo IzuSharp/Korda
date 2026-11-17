@@ -8,6 +8,64 @@ using NativeWeave.Interop.Async;
 
 internal static class LifecycleFixtures
 {
+    internal static async Task ManagedTailAsync(Action<bool, string> check)
+    {
+        foreach (var version in new[] { HttpVersion.Version11, HttpVersion.Version20 })
+        {
+            var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var cancellationEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var cancellationRelease = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            CancellationTokenRegistration registration = default;
+            int cancellationExpired = 0;
+            NativeHost? engine = null;
+            var builder = NativeServer.CreateBuilder();
+            builder.Listen(IPAddress.Loopback, 0, o => o.Protocols = version == HttpVersion.Version20 ? ServerProtocols.Http2 : ServerProtocols.Http1);
+            builder.Options.RequestTimeout = TimeSpan.FromSeconds(10);
+            await using var app = builder.Build();
+            app.Use(async (context, next, token) =>
+            {
+                engine = ((NativeRequest)context.Native).Engine;
+                // CancelAsync runs this application callback outside the native
+                // callback. Holding it does not prevent native retirement, but
+                // the managed ticket must join it before claiming completion.
+                registration = context.RequestAborted.Register(() =>
+                {
+                    cancellationEntered.TrySetResult();
+                    if (!cancellationRelease.Task.Wait(TimeSpan.FromSeconds(10))) Interlocked.Exchange(ref cancellationExpired, 1);
+                });
+                await next(context, token);
+            });
+            app.MapMcp("/mcp", new McpRegistry().AddTool("hold", "Managed cancellation tail", Json.Default.Input, Json.Default.Output, async (input, _) =>
+            {
+                entered.TrySetResult(); await release.Task;
+                return McpToolResult<Output>.Success(new(input.Text));
+            }));
+            try
+            {
+                await app.StartAsync();
+                using var client = new HttpClient { BaseAddress = app.BoundAddresses.Single(), Timeout = TimeSpan.FromSeconds(12) };
+                using var cts = new CancellationTokenSource(); using var request = Request(version);
+                Task<HttpResponseMessage> sending = client.SendAsync(request, cts.Token);
+                await entered.Task.WaitAsync(TimeSpan.FromSeconds(5)); cts.Cancel();
+                try { using var response = await sending; } catch (OperationCanceledException) { }
+                await cancellationEntered.Task.WaitAsync(TimeSpan.FromSeconds(5)); release.TrySetResult();
+                long started = System.Diagnostics.Stopwatch.GetTimestamp();
+                var pending = await app.CloseAsync(TimeSpan.FromMilliseconds(100));
+                var elapsed = System.Diagnostics.Stopwatch.GetElapsedTime(started);
+                var snapshot = engine!.Snapshot();
+                check(snapshot.state == 4 && snapshot.active_requests == 0 && snapshot.retained_native_bytes == 0 && snapshot.retained_managed_bytes == 0, "Managed-tail fixture independently observes native completion: HTTP/" + version);
+                check(pending.Status == ServerCloseStatus.Pending && pending.PendingRequests == 1 && pending.RetainedNativeBytes == 0 && pending.RetainedManagedBytes == 0 && elapsed >= TimeSpan.FromMilliseconds(80), "Real managed cancellation tail retains Pending until the finite close wait expires");
+                Task<ServerCloseResult> closing = app.CloseAsync(TimeSpan.FromSeconds(5));
+                await Task.WhenAny(closing, Task.Delay(25));
+                check(!closing.IsCompleted, "Native completion does not truncate the remaining managed close wait");
+                cancellationRelease.TrySetResult();
+                var closed = await closing;
+                check(closed.Status == ServerCloseStatus.Completed && closed.PendingRequests == 0 && closed.RetainedNativeBytes == 0 && closed.RetainedManagedBytes == 0 && cancellationExpired == 0, "Releasing the final managed cancellation callback completes the original close wait");
+            }
+            finally { release.TrySetResult(); cancellationRelease.TrySetResult(); registration.Dispose(); }
+        }
+    }
     internal static async Task RunAsync(Action<bool, string> check)
     {
         foreach (var version in new[] { HttpVersion.Version11, HttpVersion.Version20 })
@@ -86,7 +144,17 @@ internal static class LifecycleFixtures
                     check(pending.RetainedNativeBytes > 0 && pending.RetainedManagedBytes > 0, "Cancel does not release live native/managed overlap credits");
                     release.TrySetResult();
                 }
+                long closeStart = System.Diagnostics.Stopwatch.GetTimestamp();
                 var closed = await app.CloseAsync(TimeSpan.FromSeconds(5));
+                if (closed.Status != ServerCloseStatus.Completed || closed.PendingRequests != 0 || closed.RetainedNativeBytes != 0 || closed.RetainedManagedBytes != 0)
+                {
+                    Console.WriteLine($"Lifecycle failure HTTP/{version} cancel={cancel}, close={closed}, elapsed={System.Diagnostics.Stopwatch.GetElapsedTime(closeStart)}, business={business}, completed={completed}, retired={retired}, scopes={ScopeProbe.Created - created}/{ScopeProbe.Disposed - disposed}, failures=[{string.Join(';', failures)}]");
+                    if (engine is not null)
+                    {
+                        var snapshot = engine.Snapshot();
+                        Console.WriteLine($"Native snapshot state={snapshot.state}, active={snapshot.active_requests}, retiring={snapshot.retiring_requests}, native={snapshot.retained_native_bytes}, managed={snapshot.retained_managed_bytes}");
+                    }
+                }
                 check(closed.Status == ServerCloseStatus.Completed && closed.PendingRequests == 0 && closed.RetainedNativeBytes == 0 && closed.RetainedManagedBytes == 0, "Global-pressure/cancel terminal drains both native and managed credits");
                 check(retired > 0 && failures.IsEmpty && ScopeProbe.Created - created == completed && ScopeProbe.Disposed - disposed == completed, "Managed A07 retirement and same-scope completion independently drain");
                 check(engine is not null, "Lifecycle fixture used actual native Host");

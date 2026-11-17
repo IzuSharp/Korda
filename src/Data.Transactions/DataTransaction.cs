@@ -10,6 +10,40 @@ namespace NativeWeave.Database;
 public sealed class DataTransaction : IDisposable, IAsyncDisposable
 {
     private readonly ITransactionTransport _transport;
+    private readonly object _bulkGate = new();
+    private BulkLease? _bulkLease;
+
+    // A compound bulk operation keeps its transaction exclusive while awaiting
+    // application input. The explicit lease never flows through ambient context.
+    internal BulkLease ReserveBulk()
+    {
+        lock (_bulkGate)
+        {
+            if (_bulkLease is not null) throw new DatabaseException("A bulk operation owns this transaction.", DatabaseErrorKind.ConcurrentUse);
+            if (State != TransactionState.Active) throw new DatabaseException("The transaction is not active.", DatabaseErrorKind.InvalidState);
+            return _bulkLease = new(this);
+        }
+    }
+    private T Dispatch<T>(Func<T> action, BulkLease? lease = null)
+    {
+        lock (_bulkGate)
+        {
+            if (!ReferenceEquals(_bulkLease, lease) || lease is not null && !ReferenceEquals(lease.Owner, this))
+                throw new DatabaseException("A bulk operation owns this transaction.", DatabaseErrorKind.ConcurrentUse);
+            // Keep the token check and synchronous native Created admission atomic.
+            return action();
+        }
+    }
+    internal sealed class BulkLease : IDisposable
+    {
+        internal DataTransaction? Owner { get; private set; }
+        internal BulkLease(DataTransaction owner) => Owner = owner;
+        public void Dispose()
+        {
+            var owner = Owner; if (owner is null) return;
+            lock (owner._bulkGate) { if (ReferenceEquals(owner._bulkLease, this)) owner._bulkLease = null; Owner = null; }
+        }
+    }
 
     internal DataTransaction(ITransactionTransport transport, string? recoveryKey)
     {
@@ -36,7 +70,8 @@ public sealed class DataTransaction : IDisposable, IAsyncDisposable
     /// <exception cref="DatabaseException">The scope is failed, busy or closed, or the provider confirmed a failed transaction.</exception>
     /// <remarks>After admission, the independent commit deadline applies. The engine retains an in-flight call
     /// after deadline expiration; request cancellation never converts a possible commit into cancellation.</remarks>
-    public Task CommitAsync(CancellationToken admissionToken = default) => _transport.CommitAsync(admissionToken);
+    public Task CommitAsync(CancellationToken admissionToken = default) => Dispatch(() => _transport.CommitAsync(admissionToken));
+    internal Task BulkCommitAsync(BulkLease lease, CancellationToken token) => Dispatch(() => _transport.CommitAsync(token), lease);
 
     /// <summary>Requests rollback on the original native session using independent cleanup policy.</summary>
     /// <param name="admissionToken">Cancellation observed only before rollback admission.</param>
@@ -44,7 +79,8 @@ public sealed class DataTransaction : IDisposable, IAsyncDisposable
     /// <exception cref="OperationCanceledException">The token canceled before native rollback admission.</exception>
     /// <exception cref="DatabaseCleanupException">Rollback was unconfirmed or its explicit cleanup failed.</exception>
     /// <exception cref="DatabaseException">The scope is busy, closed or invalid for rollback.</exception>
-    public Task RollbackAsync(CancellationToken admissionToken = default) => _transport.RollbackAsync(admissionToken);
+    public Task RollbackAsync(CancellationToken admissionToken = default) => Dispatch(() => _transport.RollbackAsync(admissionToken));
+    internal Task BulkRollbackAsync(BulkLease lease, CancellationToken token) => Dispatch(() => _transport.RollbackAsync(token), lease);
 
     /// <summary>Creates a tracked native savepoint on this transaction's physical session.</summary>
     /// <param name="cancellationToken">Cancellation observed before savepoint admission.</param>
@@ -53,8 +89,11 @@ public sealed class DataTransaction : IDisposable, IAsyncDisposable
     /// <exception cref="DatabaseException">The scope is busy, failed, closed or the native operation failed.</exception>
     /// <remarks>Savepoints are LIFO. Creation allocates one managed wrapper and one bounded native stack entry;
     /// it never starts or commits a separate outer transaction.</remarks>
-    public async Task<Savepoint> CreateSavepointAsync(CancellationToken cancellationToken = default)
-        => new(this, await _transport.CreateSavepointAsync(cancellationToken).ConfigureAwait(false));
+    public Task<Savepoint> CreateSavepointAsync(CancellationToken cancellationToken = default)
+        => Dispatch(() => CreateSavepointCore(cancellationToken));
+    internal Task<Savepoint> BulkCreateSavepointAsync(BulkLease lease, CancellationToken token) => Dispatch(() => CreateSavepointCore(token), lease);
+    private async Task<Savepoint> CreateSavepointCore(CancellationToken token)
+        => new(this, await _transport.CreateSavepointAsync(token).ConfigureAwait(false));
 
     /// <summary>Closes admission and waits for at most the supplied budget while the engine retains cleanup ownership.</summary>
     /// <param name="waitBudget">A finite nonnegative wait; zero requests closure and returns a current snapshot.</param>
@@ -84,9 +123,12 @@ public sealed class DataTransaction : IDisposable, IAsyncDisposable
         return _transport.JoinAsync();
     }
 
-    internal Task RollbackSavepointAsync(SavepointId id, CancellationToken token) => _transport.RollbackSavepointAsync(id, token);
-    internal Task ReleaseSavepointAsync(SavepointId id, CancellationToken token) => _transport.ReleaseSavepointAsync(id, token);
-    internal ValueTask DisposeSavepointAsync(SavepointId id) => _transport.DisposeSavepointAsync(id);
+    internal Task RollbackSavepointAsync(SavepointId id, CancellationToken token) => Dispatch(() => _transport.RollbackSavepointAsync(id, token));
+    internal Task BulkRollbackSavepointAsync(SavepointId id, BulkLease lease, CancellationToken token) => Dispatch(() => _transport.RollbackSavepointAsync(id, token), lease);
+    internal Task ReleaseSavepointAsync(SavepointId id, CancellationToken token) => Dispatch(() => _transport.ReleaseSavepointAsync(id, token));
+    internal Task BulkReleaseSavepointAsync(SavepointId id, BulkLease lease, CancellationToken token) => Dispatch(() => _transport.ReleaseSavepointAsync(id, token), lease);
+    internal ValueTask DisposeSavepointAsync(SavepointId id) => Dispatch(() => _transport.DisposeSavepointAsync(id));
+    internal ValueTask BulkDisposeSavepointAsync(SavepointId id, BulkLease lease) => Dispatch(() => _transport.DisposeSavepointAsync(id), lease);
 }
 
 /// <summary>A transaction-generation-bound native savepoint; only the current top may execute an action.</summary>
@@ -118,4 +160,7 @@ public sealed class Savepoint : IAsyncDisposable
     /// <remarks>Non-top disposal records invalid-state cleanup and closes outer admission without reordering SQL.
     /// It never touches a subsequently reused connection or implicitly commits post-savepoint changes.</remarks>
     public ValueTask DisposeAsync() => _owner.DisposeSavepointAsync(_id);
+    internal Task BulkRollbackAsync(DataTransaction.BulkLease lease, CancellationToken token) => _owner.BulkRollbackSavepointAsync(_id, lease, token);
+    internal Task BulkReleaseAsync(DataTransaction.BulkLease lease, CancellationToken token) => _owner.BulkReleaseSavepointAsync(_id, lease, token);
+    internal ValueTask BulkDisposeAsync(DataTransaction.BulkLease lease) => _owner.BulkDisposeSavepointAsync(_id, lease);
 }

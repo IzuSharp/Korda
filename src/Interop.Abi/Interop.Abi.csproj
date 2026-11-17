@@ -18,6 +18,8 @@
     <InternalsVisibleTo Include="NativeWeave.Interop.Errors.Tests" />
     <InternalsVisibleTo Include="NativeWeave.Query.Binding" />
     <InternalsVisibleTo Include="NativeWeave.Query.Binding.Tests" />
+    <InternalsVisibleTo Include="NativeWeave.Query.Native.Tests" />
+    <InternalsVisibleTo Include="NativeWeave.Data.Materialization.Tests" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="NativeWeave.Interop.Async.Tests" />
@@ -34,5 +36,9 @@
     <InternalsVisibleTo Include="NativeWeave.Server.Streaming.Tests" />
     <InternalsVisibleTo Include="NativeWeave.Server.Application.Tests" />
     <InternalsVisibleTo Include="NativeWeave.Server.Native.Tests" />
+    <InternalsVisibleTo Include="NativeWeave.Database" />
+    <InternalsVisibleTo Include="NativeWeave.Data.NativeHost.Tests" />
+    <InternalsVisibleTo Include="NativeWeave.Data.Migrations.Tests" />
+    <InternalsVisibleTo Include="NativeWeave.Orm.Relations.Tests" />
   </ItemGroup>
 </Project>

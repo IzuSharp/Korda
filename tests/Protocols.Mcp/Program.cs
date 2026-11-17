@@ -11,6 +11,20 @@ using NativeWeave.Server.Mcp;
 int assertions = 0, calls = 0, middleware = 0, completed = 0;
 void Check(bool value, string name) { if (!value) throw new InvalidOperationException(name); Interlocked.Increment(ref assertions); Console.WriteLine("PASS " + name); }
 void Throws<T>(Action action) where T : Exception { try { action(); } catch (T) { Interlocked.Increment(ref assertions); return; } throw new InvalidOperationException("Expected " + typeof(T).Name); }
+if (args.Contains("--managed-tail-only"))
+{
+    await LifecycleFixtures.ManagedTailAsync(Check);
+    Console.WriteLine($"Managed-tail assertions: {assertions}");
+    return;
+}
+if (args.Contains("--lifecycle-only"))
+{
+    await LifecycleFixtures.RunAsync(Check);
+    await LifecycleFixtures.UndecidedAsync(Check);
+    await LifecycleFixtures.ManagedTailAsync(Check);
+    Console.WriteLine($"Lifecycle assertions: {assertions}");
+    return;
+}
 var uniqueResources = new McpRegistry().AddResource("nativeweave:first", "same", "text/plain", static _ => Task.FromResult(new McpTextResource("nativeweave:first", "x")));
 Throws<ArgumentException>(() => uniqueResources.AddResource("nativeweave:second", "same", "text/plain", static _ => Task.FromResult(new McpTextResource("nativeweave:second", "x"))));
 uniqueResources.AddResource("nativeweave:second", "distinct", "text/plain", static _ => Task.FromResult(new McpTextResource("nativeweave:second", "x")));
@@ -151,6 +165,7 @@ foreach (var context in escaped) Throws<ObjectDisposedException>(() => _ = conte
 Check(retirements > 0 && retirementFailures.IsEmpty, "Separate managed A07 root/control/input retirement witnesses");
 await LifecycleFixtures.RunAsync(Check);
 await LifecycleFixtures.UndecidedAsync(Check);
+await LifecycleFixtures.ManagedTailAsync(Check);
 Console.WriteLine($"B19 actual Host assertions={assertions}, managed_retirements={retirements}, dynamic={System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported}");
 
 

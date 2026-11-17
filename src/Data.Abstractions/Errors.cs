@@ -57,9 +57,14 @@ public class DatabaseException : Exception
 
     internal DatabaseException(string message, DatabaseErrorKind kind, string? providerCode, ulong correlationId, bool transient)
         : this(message, kind, providerCode, correlationId) => _isTransient = transient;
+
+    internal DatabaseException(string message, DatabaseErrorKind kind, string? providerCode, ulong correlationId, bool transient, Exception innerException)
+        : this(message, kind, providerCode, correlationId, innerException) => _isTransient = transient;
 }
 
 /// <summary>Identifies a required capability missing from an engine or provider profile.</summary>
+/// <remarks>The owned exception retains validated managed identity strings and no native handle.
+/// Constructing or reading it performs no provider call; capability admission rejects before business dispatch.</remarks>
 public sealed class DatabaseCapabilityException : DatabaseException
 {
     /// <summary>Creates a failure that must be reported before a native business side effect.</summary>

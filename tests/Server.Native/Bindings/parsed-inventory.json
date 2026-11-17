@@ -1,12 +1,12 @@
 {
-  "adapter_sha256": "e6fb6e1ed3f3367ba2ec740cc97cd11fa836d8488a419050aec6b0ae7387d70d",
+  "adapter_sha256": "c154a5848d7b9074b67ba36c7c0f00a35b211e53cfc149154600880aa27f5d4f",
   "exports": [
     {
       "calling_convention": "C",
       "column": 26,
       "file": "tests/Server.Native/Bindings/adapter-projection.rs",
       "generic": false,
-      "line": 482,
+      "line": 496,
       "parameters": [
         "* mut NwServerRequest",
         "u32",
@@ -35,7 +35,7 @@
       "column": 26,
       "file": "tests/Server.Native/Bindings/adapter-projection.rs",
       "generic": false,
-      "line": 593,
+      "line": 615,
       "parameters": [
         "* mut NwServerBuffer",
         "* mut u8",
@@ -51,7 +51,7 @@
       "column": 26,
       "file": "tests/Server.Native/Bindings/adapter-projection.rs",
       "generic": false,
-      "line": 571,
+      "line": 593,
       "parameters": [
         "* mut NwServerBuffer",
         "* mut u64",
@@ -65,7 +65,7 @@
       "column": 26,
       "file": "tests/Server.Native/Bindings/adapter-projection.rs",
       "generic": false,
-      "line": 627,
+      "line": 652,
       "parameters": [
         "* mut NwServerBuffer",
         "u64",
@@ -80,7 +80,7 @@
       "column": 26,
       "file": "tests/Server.Native/Bindings/adapter-projection.rs",
       "generic": false,
-      "line": 656,
+      "line": 681,
       "parameters": [
         "* mut NwServerBuffer"
       ],
@@ -107,7 +107,7 @@
       "column": 26,
       "file": "tests/Server.Native/Bindings/adapter-projection.rs",
       "generic": false,
-      "line": 329,
+      "line": 330,
       "parameters": [
         "* mut NwServerRequest",
         "u32",
@@ -149,7 +149,7 @@
       "column": 26,
       "file": "tests/Server.Native/Bindings/adapter-projection.rs",
       "generic": false,
-      "line": 682,
+      "line": 710,
       "parameters": [
         "* mut NwServerRequest",
         "* mut * mut NwServerOperation",
@@ -163,7 +163,7 @@
       "column": 26,
       "file": "tests/Server.Native/Bindings/adapter-projection.rs",
       "generic": false,
-      "line": 401,
+      "line": 402,
       "parameters": [
         "* mut NwServerRequest",
         "u64",
@@ -178,7 +178,7 @@
       "column": 26,
       "file": "tests/Server.Native/Bindings/adapter-projection.rs",
       "generic": false,
-      "line": 425,
+      "line": 426,
       "parameters": [
         "* mut NwServerManagedCredit"
       ],
@@ -190,7 +190,7 @@
       "column": 26,
       "file": "tests/Server.Native/Bindings/adapter-projection.rs",
       "generic": false,
-      "line": 709,
+      "line": 749,
       "parameters": [
         "* mut NwServerRequest",
         "* mut u32",
@@ -205,7 +205,7 @@
       "column": 26,
       "file": "tests/Server.Native/Bindings/adapter-projection.rs",
       "generic": false,
-      "line": 695,
+      "line": 720,
       "parameters": [
         "* mut NwServerRequest",
         "u32",
@@ -220,7 +220,7 @@
       "column": 26,
       "file": "tests/Server.Native/Bindings/adapter-projection.rs",
       "generic": false,
-      "line": 386,
+      "line": 387,
       "parameters": [
         "* mut NwServerMetadata"
       ],
@@ -232,7 +232,7 @@
       "column": 26,
       "file": "tests/Server.Native/Bindings/adapter-projection.rs",
       "generic": false,
-      "line": 273,
+      "line": 274,
       "parameters": [
         "* mut NwServerOperation"
       ],
@@ -270,7 +270,7 @@
       "column": 26,
       "file": "tests/Server.Native/Bindings/adapter-projection.rs",
       "generic": false,
-      "line": 513,
+      "line": 527,
       "parameters": [
         "* mut NwServerOperation",
         "* mut u32",
@@ -286,7 +286,7 @@
       "column": 26,
       "file": "tests/Server.Native/Bindings/adapter-projection.rs",
       "generic": false,
-      "line": 241,
+      "line": 242,
       "parameters": [
         "* mut NwServerOperation",
         "* mut NwServerCloseResultV1",
@@ -300,7 +300,7 @@
       "column": 26,
       "file": "tests/Server.Native/Bindings/adapter-projection.rs",
       "generic": false,
-      "line": 197,
+      "line": 198,
       "parameters": [
         "* mut NwServerOperation",
         "* mut NwErrorInfoV1"
@@ -313,7 +313,7 @@
       "column": 26,
       "file": "tests/Server.Native/Bindings/adapter-projection.rs",
       "generic": false,
-      "line": 216,
+      "line": 217,
       "parameters": [
         "* mut NwServerOperation",
         "* mut * mut NwServerWriteReservation",
@@ -327,7 +327,7 @@
       "column": 26,
       "file": "tests/Server.Native/Bindings/adapter-projection.rs",
       "generic": false,
-      "line": 264,
+      "line": 265,
       "parameters": [
         "* mut NwServerOperation"
       ],
@@ -351,7 +351,7 @@
       "column": 26,
       "file": "tests/Server.Native/Bindings/adapter-projection.rs",
       "generic": false,
-      "line": 359,
+      "line": 360,
       "parameters": [
         "* mut NwServerRequest"
       ],
@@ -363,7 +363,7 @@
       "column": 26,
       "file": "tests/Server.Native/Bindings/adapter-projection.rs",
       "generic": false,
-      "line": 392,
+      "line": 393,
       "parameters": [
         "* mut NwServerRequest"
       ],
@@ -375,7 +375,7 @@
       "column": 26,
       "file": "tests/Server.Native/Bindings/adapter-projection.rs",
       "generic": false,
-      "line": 284,
+      "line": 285,
       "parameters": [
         "* mut NwServer",
         "u64",
@@ -391,7 +391,7 @@
       "column": 26,
       "file": "tests/Server.Native/Bindings/adapter-projection.rs",
       "generic": false,
-      "line": 371,
+      "line": 372,
       "parameters": [
         "* mut NwServerRequest"
       ],
@@ -403,7 +403,7 @@
       "column": 26,
       "file": "tests/Server.Native/Bindings/adapter-projection.rs",
       "generic": false,
-      "line": 662,
+      "line": 687,
       "parameters": [
         "* mut NwServerRequest",
         "* mut * mut NwServerOperation",
@@ -443,7 +443,7 @@
       "column": 26,
       "file": "tests/Server.Native/Bindings/adapter-projection.rs",
       "generic": false,
-      "line": 474,
+      "line": 488,
       "parameters": [
         "* mut NwServerWriteReservation"
       ],
@@ -455,7 +455,7 @@
       "column": 26,
       "file": "tests/Server.Native/Bindings/adapter-projection.rs",
       "generic": false,
-      "line": 431,
+      "line": 432,
       "parameters": [
         "* mut NwServerRequest",
         "u32",

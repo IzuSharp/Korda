@@ -3,6 +3,7 @@
     <AssemblyName>NativeWeave.Data</AssemblyName>
     <RootNamespace>NativeWeave.Data</RootNamespace>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <IsAotCompatible>true</IsAotCompatible>
     <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifiers)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifiers).aot.lock.json</NuGetLockFilePath>
     <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifier)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifier).aot.lock.json</NuGetLockFilePath>
@@ -11,6 +12,10 @@
     <Description>Strongly typed NativeWeave data descriptors and shared wire contracts. No database runtime is loaded.</Description>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../Query.Generator/Runtime/**/*.cs" />
+    <Compile Include="../Orm.Relations/ConcurrencyConflictException.cs" />
+    <InternalsVisibleTo Include="NativeWeave.Orm.Relations.Tests" />
+    <InternalsVisibleTo Include="NativeWeave.Query.Generator.Tests" />
     <InternalsVisibleTo Include="NativeWeave.Data.Tests" />
     <InternalsVisibleTo Include="NativeWeave.Database" />
     <InternalsVisibleTo Include="NativeWeave.Data.Streaming" />
@@ -23,5 +28,7 @@
     <InternalsVisibleTo Include="NativeWeave.Query.Binding" />
     <InternalsVisibleTo Include="NativeWeave.Query.Binding.Tests" />
     <InternalsVisibleTo Include="NativeWeave.Query.Binding.Sample" />
+    <InternalsVisibleTo Include="NativeWeave.Query.Native.Tests" />
+    <InternalsVisibleTo Include="NativeWeave.Data.Materialization.Tests" />
   </ItemGroup>
 </Project>

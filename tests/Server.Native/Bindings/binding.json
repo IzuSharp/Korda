@@ -9,7 +9,7 @@
     "pointer_width_bits": 64
   },
   "provenance": {
-    "adapter_sha256": "74d80eeef7c41906b50b40c4152a8814e7b05dce55ff7e71567bf7588ba0eae6",
+    "adapter_sha256": "c154a5848d7b9074b67ba36c7c0f00a35b211e53cfc149154600880aa27f5d4f",
     "tool": "nativeweave-binding-inventory",
     "tool_version": "0.1.0",
     "upstream": [

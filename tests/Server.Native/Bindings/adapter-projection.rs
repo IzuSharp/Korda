@@ -570,7 +570,10 @@ pub unsafe extern "C" fn nw_server_operation_take_chunk(
             crate::engine::ChunkResult::GrpcData(value) => {
                 buffer.buffer = Some(value.into());
                 // SAFETY: complete protobuf message, including zero length, transfers as a kind0 owner.
-                unsafe { out_frame_kind.write(0); out_buffer.write(Box::into_raw(buffer)); }
+                unsafe {
+                    out_frame_kind.write(0);
+                    out_buffer.write(Box::into_raw(buffer));
+                }
             }
             crate::engine::ChunkResult::End(trailers) => {
                 if let Some(trailers) = trailers {
@@ -630,7 +633,9 @@ pub unsafe extern "C" fn nw_server_buffer_copy(
         if capacity < buffer.len() as u64 {
             return Err(ApiError::status(NW_BUFFER_TOO_SMALL));
         }
-        if buffer.len() == 0 { return Ok(()); }
+        if buffer.len() == 0 {
+            return Ok(());
+        }
         if destination.is_null() {
             return Err(invalid());
         }
@@ -689,7 +694,9 @@ pub unsafe extern "C" fn nw_server_response_flush_create(
         unsafe { output(out_op)? };
         // SAFETY: The caller leases the creator-owned handle and supplies live synchronous input/output storage; this entry preserves its typed owner contract.
         let request = unsafe { request(request_ptr)? };
-        if !crate::engine::mcp::raw_output(&request) { return Err(ApiError::status(NW_INVALID_STATE)); }
+        if !crate::engine::mcp::raw_output(&request) {
+            return Err(ApiError::status(NW_INVALID_STATE));
+        }
         let host = request.host()?;
         let side = SideGuard::acquire(&request.write_active)?;
         let op = OpState::new(host, Some(request.clone()), Job::Flush(request, side))?;

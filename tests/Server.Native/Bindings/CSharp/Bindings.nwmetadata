@@ -1,9 +1,9 @@
 nativeweave-metadata-v1
 module	nativeweave.server
-digest	267fd2fad8bc8aff78b8560f35fc3de3649ffb54e6ab0ab6fbab130802b92d5d
+digest	a9c2276f29282c73d4c96cfcc83b83c966a9111bdb9061eff67ad8d7abaae5e3
 namespace	NativeWeave.Server.Native.Generated
 library	nativeweave_server
-source_sha256	b56105dc46f270b10c580241732e8981efcdd61fced62fc2f39b2d2807bbacfc
+source_sha256	25eb40ae0f1fb9da367b728385cb32ceb4a81ade92d3a31640a9d7d77ec64475
 record	NwAbiInfoV1	32	8
 field	NwAbiInfoV1	struct_size	u32	0
 field	NwAbiInfoV1	abi_major	u32	4
@@ -103,13 +103,13 @@ parameter	nw_server_managed_credit_acquire	error	mut:NwErrorInfoV1	inout	call		1
 export	nw_server_managed_credit_release	void	nint
 parameter	nw_server_managed_credit_release	credit	mut:NwServerManagedCredit	in	call	NwServerManagedCredit	1	0	8
 export	nw_server_mcp_call_take	uint	nint,uint*,nint*,@NwErrorInfoV1*
-parameter	nw_server_mcp_call_take	_request	mut:NwServerRequest	in	call	NwServerRequest	1	0	8
+parameter	nw_server_mcp_call_take	request_ptr	mut:NwServerRequest	in	call	NwServerRequest	1	0	8
 parameter	nw_server_mcp_call_take	out_call_kind	mut:u32	out	call		1	0	4
 parameter	nw_server_mcp_call_take	out_arguments	mut:mut:NwServerBuffer	out	transfer-success	NwServerBuffer	1	0	8
 parameter	nw_server_mcp_call_take	error	mut:NwErrorInfoV1	inout	call		1	0	24
 export	nw_server_mcp_gate_resume_create	uint	nint,uint,nint*,@NwErrorInfoV1*
-parameter	nw_server_mcp_gate_resume_create	_request	mut:NwServerRequest	in	call	NwServerRequest	1	0	8
-parameter	nw_server_mcp_gate_resume_create	_decision	u32	in	none		0	0	0
+parameter	nw_server_mcp_gate_resume_create	request_ptr	mut:NwServerRequest	in	call	NwServerRequest	1	0	8
+parameter	nw_server_mcp_gate_resume_create	decision	u32	in	none		0	0	0
 parameter	nw_server_mcp_gate_resume_create	out_op	mut:mut:NwServerOperation	out	transfer-success	NwServerOperation	1	0	8
 parameter	nw_server_mcp_gate_resume_create	error	mut:NwErrorInfoV1	inout	call		1	0	24
 export	nw_server_metadata_release	void	nint

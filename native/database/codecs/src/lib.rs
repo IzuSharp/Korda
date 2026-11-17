@@ -14,7 +14,11 @@ pub use sqlite::{append_sqlite, read_sqlite};
 
 use nativeweave_data_contracts::wire::{Batch, Expectation};
 use nativeweave_data_contracts::{Codec, ContractError, MAX_BYTES, MAX_NODES, Profile};
-use sqlx::{Arguments, postgres::PgArguments, sqlite::SqliteArguments};
+use sqlx::{
+    Arguments,
+    postgres::{PgArguments, PgTypeInfo},
+    sqlite::SqliteArguments,
+};
 
 /// Stable adapter-local classification; no parameter value enters diagnostics.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -158,6 +162,19 @@ impl Parameters {
     /// Whether the admitted command has no parameters.
     pub fn is_empty(&self) -> bool {
         self.fields.is_empty()
+    }
+    /// Returns exact PostgreSQL parameter type hints from the same admitted codecs as binding.
+    /// SQLx prepare/describe must receive these hints even when a typed literal appears
+    /// only in SELECT, CASE or COALESCE and cannot be inferred from a table column.
+    /// Values are not re-encoded, and typed SQL NULLs retain their selected scalar type.
+    pub fn postgres_types(&self) -> Result<Vec<PgTypeInfo>> {
+        if self.profile != Profile::PostgreSql {
+            return Err(error(ErrorKind::Capability, "PostgreSQL profile required"));
+        }
+        self.fields
+            .iter()
+            .map(|(codec, _)| postgres::type_info(codec))
+            .collect()
     }
     /// Builds PostgreSQL arguments, propagating every SQLx `Arguments::add` error.
     pub fn postgres(&self) -> Result<PgArguments> {

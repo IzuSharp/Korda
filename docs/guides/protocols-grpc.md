@@ -235,5 +235,16 @@ hashes, and checks a managed `.proto`/handler edit against the same native bytes
 This is scoped component package consumption, not a claim of the final pristine
 machine/release gates. This task's actual validation is Linux x64 only.
 
+`tests/Protocols.Grpc/verify.py` creates the assembled component receipt. Supply
+`--native`, `--expected-native-sha256` and `--native-source-commit` for the exact
+reviewed build, plus `--native-component-receipt`, `--design`, `--sdk` and a fresh
+`--output` directory. It freezes the native file, checks all 48 exports and the
+pinned layout, verifies the compiled public API/XML and negative consumers, then
+runs the actual transport tests in JIT and NativeAOT. The native component receipt
+is reused without rebuilding Rust. An optional `--package-summary` reuses the
+ordinary-consumer proof only after checking unchanged producer/sample inputs,
+native identity, command logs and retained artifacts. The receipt distinguishes
+the managed source commit from the commit that produced the native binary.
+
 The fixed design is [server API §7](https://github.com/IzuSharp/NativeWeave-Design/blob/c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9/docs/api/server.md)
 and [the protocol contract](https://github.com/IzuSharp/NativeWeave-Design/blob/c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9/docs/server/protocols-and-observability.md).
