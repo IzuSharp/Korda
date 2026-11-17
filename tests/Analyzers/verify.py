@@ -91,6 +91,12 @@ def main():
         run("source-sample-build", ["dotnet", "build", source_project, "--no-restore", "-c", "Release", native_property, *common])
         sample = ROOT / "samples/api/analyzers/bin/Release/net11.0/NativeWeave.Analyzers.Sample.dll"
         run("source-sample-jit", ["dotnet", sample])
+        run("source-sample-aot-restore", ["dotnet", "restore", source_project, "-r", "linux-x64", "-p:PublishAot=true", *restore, *common])
+        source_publish = out / "source-published"
+        run("source-sample-aot-publish", ["dotnet", "publish", source_project, "--no-restore", "-c", "Release", "-r", "linux-x64",
+            "-p:PublishAot=true", "-o", source_publish, native_property, *common])
+        run("source-sample-aot-execute", [source_publish / "NativeWeave.Analyzers.Sample", "--require-aot"])
+        assert not list(source_publish.rglob("NativeWeave.Analyzers.dll")), "source analyzer leaked into AOT output"
         package_dir = out / "packages"
         run("package", ["dotnet", "pack", "src/Analyzers/NativeWeave.Analyzers.csproj", "--no-restore", "-c", "Release", "-o", package_dir, "-p:PackageVersion=" + VERSION, *common])
         package = package_dir / ("NativeWeave.Analyzers." + VERSION + ".nupkg")
@@ -146,6 +152,7 @@ def main():
         run("framework-aot-warning-negative", ["dotnet", "publish", "AnalyzersSample.csproj", "--no-restore", "-c", "Release", "-r", "linux-x64", "-p:PublishAot=true", "-p:NativeWeaveAotNegative=true", "-o", consumer / "negative-publish", *properties], cwd=consumer, environment=consumer_env, expected=None, contains=("IL2026", "IL3050"))
         assert not (consumer / "rust-invoked.txt").exists(), "ordinary managed consumption invoked Rust"
         for path in [native, package, ROOT / "src/Analyzers/bin/Release/netstandard2.0/NativeWeave.Analyzers.dll", test, sample, executable,
+                     source_publish / "NativeWeave.Analyzers.Sample",
                      consumer / "packages.lock.json", consumer / "packages.linux-x64.aot.lock.json"]:
             artifacts[str(path)] = sha(path)
         shutil.copytree(consumer, out / "consumer-inputs", ignore=shutil.ignore_patterns("bin", "obj", "packages", "published", "negative-publish", "rust-traps", "*.so"))

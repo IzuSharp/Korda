@@ -1,5 +1,5 @@
 [workspace]
-members = ["native/hello-world", "native/interop/memory", "native/interop/lifetime", "native/interop/abi", "native/database/interfaces", "native/interop/errors", "tests/Interop.Errors/native", "native/database/codecs", "native/database/transactions", "native/database/postgres", "native/database/sqlite", "native/database/streaming", "native/database/binding"]
+members = ["native/hello-world", "native/interop/exports", "native/interop/memory", "native/interop/lifetime", "native/interop/abi", "native/database/interfaces", "native/interop/errors", "tests/Interop.Errors/native", "native/database/codecs", "native/database/transactions", "native/database/postgres", "native/database/sqlite", "native/database/streaming", "native/database/binding"]
 resolver = "3"
 
 [workspace.package]

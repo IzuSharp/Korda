@@ -13,4 +13,5 @@
     <Error Condition="'@(_LocalNative)' == ''"
            Text="Build the maintainer native asset first: python3 eng/build.py native" />
   </Target>
+  <Import Project="src/Build.Integration/NativeWeave.Build.targets" />
 </Project>

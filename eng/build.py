@@ -51,6 +51,34 @@ def host():
 
 def native():
     rid, extension = host()
+    if rid == "linux-x64":
+        # Explicit maintainer build only. Clear the package input before invoking
+        # Cargo, so a failed/cancelled build cannot package a previous success.
+        destination = ARTIFACTS / "native"
+        if destination.exists():
+            shutil.rmtree(destination)
+        provenance = ARTIFACTS / "native-build-manifest.json"
+        provenance.unlink(missing_ok=True)
+        # Preserve the existing explicit workspace build: source-only managed
+        # provider projects consume their already implemented task-owned assets
+        # from target/release. Only HelloWorld enters this release's package.
+        run(["cargo", "build", "--workspace", "--release", "--locked"], "native-workspace")
+        profile = ROOT / "src/Build.Integration/profiles/hello-world-linux.json"
+        builder = ROOT / "src/Build.Integration/build_native.py"
+        output = run([sys.executable, builder, "build", "--root", ROOT, "--profile", profile], "native-build")
+        receipt = json.loads(output.strip().splitlines()[-1])
+        manifest = Path(receipt["manifest"])
+        if digest(manifest) != receipt["sha256"]:
+            raise RuntimeError("Build provenance changed before staging")
+        run([sys.executable, builder, "verify", "--root", ROOT, "--profile", profile,
+             "--manifest", manifest], "native-provenance")
+        metadata = json.loads(manifest.read_text())
+        item = metadata["files"][0]
+        target = destination / Path(item["path"]).relative_to("runtimes")
+        target.parent.mkdir(parents=True)
+        shutil.copy2(manifest.parent / item["path"], target)
+        shutil.copy2(manifest, provenance)
+        return target
     output = run(["cargo", "build", "--release", "--locked", "--message-format=json-render-diagnostics"], "native-build")
     libraries = []
     for line in output.splitlines():
@@ -85,6 +113,11 @@ def pack(version, library):
         "dotnetSdk": run(["dotnet", "--version"], "dotnet").strip(),
         "os": platform.platform(), "features": [], "thirdPartyCargoDependencies": [],
     }
+    if host()[0] == "linux-x64":
+        provenance = json.loads((ARTIFACTS / "native-build-manifest.json").read_text())
+        if provenance["files"][0]["sha256"] != metadata["nativeSha256"]:
+            raise RuntimeError("Package native bytes differ from the maintainer build provenance")
+        metadata["maintainerBuild"] = provenance
     (ARTIFACTS / "manifest.json").write_text(json.dumps(metadata, indent=2) + "\n", encoding="utf-8")
     packages = ARTIFACTS / "packages"
     if packages.exists():
@@ -214,6 +247,12 @@ def verify(version, write_docs=False):
     if write_docs:
         docs.append("--write")
     run(docs, "api-docs")
+    # Compile the implemented Core surface, then gate exact symbols/XML and
+    # build its pinned DocFX reference. Publication remains a separate task.
+    for component in ("core", "analyzers", "metadata"):
+        run([sys.executable, "src/Build.Integration/compose_docs.py", "--config",
+             f"src/Build.Integration/api/{component}.json", "--output", f"artifacts/docs/{component}-site"],
+            component + "-api-docs")
     package = pack(version, library)
     consume(version, package.parent)
     run(["git", "diff", "--check"], "diff-check")

@@ -66,9 +66,27 @@ internal sealed class Harness
             "\nnamespace\tNativeWeave.Tests\nlibrary\tnativeweave_fixture\nsource_sha256\t" + Sha(clean) +
             "\nexport\tCall\tuint\tbyte*\nparameter\tCall\tinput\tmut:u8\tin\t" + borrow + "\t\t0\t" + (copies ? "1" : "0") + "\t256\n";
         await Case("complete schema parity", source, files: new[] { new TextFile("fixture.nwmetadata", Metadata(source, "call", false)) });
+        foreach (var (label, metadata) in new[]
+        {
+            ("unknown direction", Metadata(source, "call", false).Replace("\tin\tcall\t", "\tsideways\tcall\t", StringComparison.Ordinal)),
+            ("unknown borrow end", Metadata(source, "until-future-undefined", false))
+        })
+        {
+            var rejected = await Analyze(source, new[] { new TextFile("fixture.nwmetadata", metadata) });
+            int start = metadata.IndexOf("parameter\t", StringComparison.Ordinal);
+            int end = metadata.IndexOf('\n', start);
+            Check(rejected.Length == 1 && rejected[0].Id == "NWABI002", label + ": fail-closed ID");
+            Check(rejected[0].Severity == DiagnosticSeverity.Error && rejected[0].Location.GetLineSpan().Path == "fixture.nwmetadata"
+                && rejected[0].Location.SourceSpan == TextSpan.FromBounds(start, end), label + ": exact metadata row span and severity");
+            cases++;
+        }
+        var executorMetadata = Metadata(source, "call", false) + "owner\tFixtureOwner\tCall\t\tunknown-future-executor\n";
+        var executor = await Analyze(source, new[] { new TextFile("fixture.nwmetadata", executorMetadata) });
+        Check(executor.Length == 1 && executor[0].Id == "NWOWN001" && executor[0].GetMessage().Contains("release executor"), "unknown finite owner executor");
+        cases++;
         var retained = source.Replace("Call(p)", "Call([|p|])");
         await Case("retained fixed input", retained, "NWASYNC001", new[] { new TextFile("fixture.nwmetadata", Metadata(source, "retirement", false)) });
-        await Case("copied fixed input", source, files: new[] { new TextFile("fixture.nwmetadata", Metadata(source, "retirement", true)) });
+        await Case("copied fixed input", source, files: new[] { new TextFile("fixture.nwmetadata", Metadata(source, "call", true)) });
         var signature = source.Replace("uint Call", "uint [|Call|]");
         await Case("changed declaration", signature, "NWABI002", new[] { new TextFile("fixture.nwmetadata", Metadata(source, "call", false).Replace("export\tCall\tuint", "export\tCall\tvoid")) });
         await Case("stale source bytes", signature, "NWGEN001", new[] { new TextFile("fixture.nwmetadata", Metadata(source + "\n", "call", false)) });
