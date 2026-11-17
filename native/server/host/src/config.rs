@@ -51,6 +51,7 @@ pub struct Route {
     pub max_request_bytes: u64,
     pub max_json_bytes: u32,
     pub mcp: Option<Arc<nativeweave_protocol_mcp::profile::Profile>>,
+    pub grpc: Option<Arc<nativeweave_protocols_grpc::Descriptor>>,
 }
 
 /// Caller guarantees live ABI storage. Bounds are checked before forming slices.
@@ -344,11 +345,23 @@ pub fn encode<'a>(values: impl IntoIterator<Item = (&'a str, &'a str)>) -> Vec<u
     bytes
 }
 pub fn encode_headers(headers: &HeaderMap) -> Result<Vec<u8>> {
-    let mut fields = Vec::with_capacity(headers.len());
+    // Preflight and request the exact complete wire block once. In particular,
+    // B18 reserves MaxHeaderBytes for this block before metadata admission;
+    // geometric Vec growth must not allocate an uncharged larger backing.
+    let count = u32::try_from(headers.len()).map_err(|_| invalid())?;
+    let size = headers.iter().try_fold(4usize, |n, (name, value)| {
+        value.to_str().map_err(|_| invalid())?;
+        n.checked_add(8 + name.as_str().len() + value.as_bytes().len()).ok_or(invalid())
+    })?;
+    let mut bytes = Vec::with_capacity(size);
+    bytes.extend_from_slice(&count.to_le_bytes());
     for (name, value) in headers {
-        fields.push((name.as_str(), value.to_str().map_err(|_| invalid())?));
+        bytes.extend_from_slice(&(name.as_str().len() as u32).to_le_bytes());
+        bytes.extend_from_slice(&(value.as_bytes().len() as u32).to_le_bytes());
+        bytes.extend_from_slice(name.as_str().as_bytes());
+        bytes.extend_from_slice(value.as_bytes());
     }
-    Ok(encode(fields))
+    Ok(bytes)
 }
 pub fn headers(data: &[u8], maximum: usize, trailers: bool) -> Result<HeaderMap> {
     if data.len() > maximum {
@@ -382,7 +395,7 @@ pub unsafe fn route(value: *const NwServerRouteV1) -> Result<Route> {
     if v.version != 1 || v.reserved != 0 || v.flags & !1 != 0 || v.handler_id == 0 {
         return Err(invalid());
     }
-    if v.kind != 0 && v.kind != 2 {
+    if v.kind > 2 {
         return Err(ApiError::status(nativeweave_interop_abi::NW_NOT_SUPPORTED));
     }
     // SAFETY: bounded registration text is copied while borrowed.
@@ -452,6 +465,14 @@ pub unsafe fn route(value: *const NwServerRouteV1) -> Result<Route> {
     {
         return Err(invalid());
     }
+    let grpc = if v.kind == 1 {
+        if !parameters.is_empty() || parsed != [Method::POST] || v.max_json_bytes != 0 { return Err(invalid()); }
+        // SAFETY: the bounded exact-schema descriptor is consumed during synchronous registration.
+        let descriptor = nativeweave_protocols_grpc::Descriptor::parse(
+            unsafe { bytes(v.protocol_descriptor, 16_384)? }, &pattern, v.handler_id,
+            duration(v.timeout_ns, false)?, v.max_request_bytes).map_err(|_| invalid())?;
+        Some(Arc::new(descriptor))
+    } else { None };
     let mcp = if v.kind == 2 {
         if !parameters.is_empty() || parsed != [Method::POST] || v.max_json_bytes != 0 {
             return Err(invalid());
@@ -479,5 +500,6 @@ pub unsafe fn route(value: *const NwServerRouteV1) -> Result<Route> {
         max_request_bytes: v.max_request_bytes,
         max_json_bytes: v.max_json_bytes,
         mcp,
+        grpc,
     })
 }

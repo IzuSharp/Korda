@@ -15,20 +15,22 @@ type Result<T> = std::result::Result<T, ApiError>;
 struct ApiError {
     status: u32,
     code: i32,
+    error_domain: u32,
 }
 impl ApiError {
     const fn status(status: u32) -> Self {
-        Self { status, code: 0 }
+        Self { status, code: 0, error_domain: 0x53525652 }
     }
     const fn domain(code: i32) -> Self {
         Self {
             status: NW_DOMAIN_ERROR,
             code,
+            error_domain: 0x53525652,
         }
     }
     fn fields(self) -> ErrorFields {
         ErrorFields {
-            domain: 0x53525652,
+            domain: self.error_domain,
             code: self.code,
             correlation_id: 0,
         }

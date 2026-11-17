@@ -4,6 +4,7 @@
     <RootNamespace>NativeWeave.Server.Mcp</RootNamespace>
     <IsAotCompatible>true</IsAotCompatible>
     <IsPackable>true</IsPackable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifiers)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifiers).aot.lock.json</NuGetLockFilePath>
     <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifier)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifier).aot.lock.json</NuGetLockFilePath>

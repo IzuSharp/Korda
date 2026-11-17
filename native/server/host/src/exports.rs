@@ -8,11 +8,14 @@ use crate::{
 };
 use nativeweave_interop_abi::*;
 use nativeweave_interop_errors::{EngineBoundary, Failure, write_error};
-use nativeweave_server_streaming::{Credit, OwnedBuffer, Side};
+use nativeweave_server_streaming::{Credit, Side};
 use std::{
     collections::HashSet,
     sync::{Arc, Weak, atomic::Ordering},
 };
+
+#[path = "../../../protocols/grpc/exports.rs"]
+mod grpc;
 
 static BOUNDARY: EngineBoundary = EngineBoundary::new();
 pub struct NwServer {
@@ -28,7 +31,7 @@ pub struct NwServerMetadata {
     inner: Metadata,
 }
 pub struct NwServerBuffer {
-    buffer: Option<OwnedBuffer>,
+    buffer: Option<crate::engine::grpc::Buffer>,
     host: Weak<Host>,
 }
 pub struct NwServerManagedCredit {
@@ -141,7 +144,7 @@ pub unsafe extern "C" fn nw_server_get_abi_v1(
             abi_major: 1,
             abi_minor: 0,
             pointer_width_bits: 64,
-            capabilities: 111,
+            capabilities: 127,
             reserved: 0,
         })
     };
@@ -206,6 +209,7 @@ pub unsafe extern "C" fn nw_server_routes_set(
         for i in 0..count as usize {
             // SAFETY: i is inside the caller-provided bounded route array.
             let route = unsafe { config::route(routes.add(i))? };
+            crate::engine::grpc::validate_route(server, &route)?;
             if !ids.insert(route.id) {
                 return Err(invalid());
             }
@@ -477,6 +481,7 @@ pub unsafe extern "C" fn nw_server_operation_request_cancel(
     let Ok(op) = (unsafe { owner(operation) }) else {
         return NW_INVALID_ARGUMENT;
     };
+    crate::engine::grpc::cancel_read(&op.inner);
     op.inner.cancel.cancel();
     op.inner.operation.request_cancel()
 }
@@ -795,6 +800,10 @@ pub unsafe extern "C" fn nw_server_write_reserve_create(
         // SAFETY: The caller leases the creator-owned handle and supplies live synchronous input/output storage; this entry preserves its typed owner contract.
         let request = unsafe { request(request_ptr)? };
         let host = request.host()?;
+        if kind == 1 {
+            // SAFETY: output was initialized above; the gRPC reservation is request-kind checked independently.
+            return unsafe { grpc::reserve(request, native_capacity, out_op) };
+        }
         if kind != 0 && kind != 2 && kind != 3 {
             return Err(ApiError::status(NW_NOT_SUPPORTED));
         }
@@ -918,12 +927,17 @@ pub unsafe extern "C" fn nw_server_operation_take_chunk(
         };
         match frame {
             crate::engine::ChunkResult::Data(value) => {
-                buffer.buffer = Some(value);
+                buffer.buffer = Some(value.into());
                 // SAFETY: move prepared data wrapper and discriminator together after successful typed take.
                 unsafe {
                     out_frame_kind.write(0);
                     out_buffer.write(Box::into_raw(buffer))
                 };
+            }
+            crate::engine::ChunkResult::GrpcData(value) => {
+                buffer.buffer = Some(value.into());
+                // SAFETY: complete protobuf message, including zero length, transfers as a kind0 owner.
+                unsafe { out_frame_kind.write(0); out_buffer.write(Box::into_raw(buffer)); }
             }
             crate::engine::ChunkResult::End(trailers) => {
                 if let Some(trailers) = trailers {
@@ -989,6 +1003,7 @@ pub unsafe extern "C" fn nw_server_buffer_copy(
         if capacity < buffer.len() as u64 {
             return Err(ApiError::status(NW_BUFFER_TOO_SMALL));
         }
+        if buffer.len() == 0 { return Ok(()); }
         if destination.is_null() {
             return Err(invalid());
         }
@@ -1058,6 +1073,7 @@ pub unsafe extern "C" fn nw_server_response_begin_create(
         unsafe { output(out_op)? };
         // SAFETY: The caller leases the creator-owned handle and supplies live synchronous input/output storage; this entry preserves its typed owner contract.
         let request = unsafe { request(request_ptr)? };
+        if !crate::engine::mcp::raw_output(&request) { return Err(ApiError::status(NW_INVALID_STATE)); }
         let host = request.host()?;
         if !(200..=599).contains(&http_status) {
             return Err(invalid());
@@ -1099,6 +1115,7 @@ pub unsafe extern "C" fn nw_server_response_write_create(
         unsafe { output(out_op)? };
         // SAFETY: The caller leases the creator-owned handle and supplies live synchronous input/output storage; this entry preserves its typed owner contract.
         let request = unsafe { request(request_ptr)? };
+        if !crate::engine::mcp::raw_output(&request) { return Err(ApiError::status(NW_INVALID_STATE)); }
         let host = request.host()?;
         // SAFETY: The ABI caller retains this creator-owned handle and synchronous view/output borrows; the surrounding validation and owner protocol authorize this access.
         let token = unsafe { owner(reservation)? }
@@ -1154,6 +1171,7 @@ pub unsafe extern "C" fn nw_server_response_flush_create(
         unsafe { output(out_op)? };
         // SAFETY: The caller leases the creator-owned handle and supplies live synchronous input/output storage; this entry preserves its typed owner contract.
         let request = unsafe { request(request_ptr)? };
+        if !crate::engine::mcp::raw_output(&request) { return Err(ApiError::status(NW_INVALID_STATE)); }
         let host = request.host()?;
         let side = SideGuard::acquire(&request.write_active)?;
         let op = OpState::new(host, Some(request.clone()), Job::Flush(request, side))?;
@@ -1178,6 +1196,7 @@ pub unsafe extern "C" fn nw_server_response_finish_create(
         unsafe { output(out_op)? };
         // SAFETY: The caller leases the creator-owned handle and supplies live synchronous input/output storage; this entry preserves its typed owner contract.
         let request = unsafe { request(request_ptr)? };
+        if !crate::engine::mcp::raw_output(&request) { return Err(ApiError::status(NW_INVALID_STATE)); }
         let host = request.host()?;
         let trailers = config::headers(
             // SAFETY: The ABI caller retains this creator-owned handle and synchronous view/output borrows; the surrounding validation and owner protocol authorize this access.
@@ -1250,6 +1269,7 @@ pub unsafe extern "C" fn nw_server_sse_write_create(
         unsafe { output(out_op)? };
         // SAFETY: The ABI caller retains this creator-owned handle and synchronous view/output borrows; the surrounding validation and owner protocol authorize this access.
         let request = unsafe { request(request_ptr)? };
+        if !crate::engine::mcp::raw_output(&request) { return Err(ApiError::status(NW_INVALID_STATE)); }
         let host = request.host()?;
         // SAFETY: The ABI caller retains this creator-owned handle and synchronous view/output borrows; the surrounding validation and owner protocol authorize this access.
         let event = unsafe { config::record(event)? };
@@ -1384,11 +1404,8 @@ pub unsafe extern "C" fn nw_server_grpc_read_create(
     out_op: *mut *mut NwServerOperation,
     error: *mut NwErrorInfoV1,
 ) -> u32 {
-    ffi(error, || {
-        // SAFETY: unsupported optional protocols transfer no owner and always initialize the output.
-        unsafe { output(out_op)? };
-        Err(ApiError::status(NW_NOT_SUPPORTED))
-    })
+    // SAFETY: the exact borrowed-input/typed-owner ABI contract is forwarded unchanged.
+    unsafe { grpc::read(_request, out_op, error) }
 }
 
 /// Exact Server ABI entry `nw_server_grpc_write_create`.
@@ -1403,11 +1420,8 @@ pub unsafe extern "C" fn nw_server_grpc_write_create(
     out_op: *mut *mut NwServerOperation,
     error: *mut NwErrorInfoV1,
 ) -> u32 {
-    ffi(error, || {
-        // SAFETY: unsupported optional protocols transfer no owner and always initialize the output.
-        unsafe { output(out_op)? };
-        Err(ApiError::status(NW_NOT_SUPPORTED))
-    })
+    // SAFETY: the exact borrowed-input/typed-owner ABI contract is forwarded unchanged.
+    unsafe { grpc::write(_request, _reservation, _message, out_op, error) }
 }
 
 /// Exact Server ABI entry `nw_server_grpc_headers_create`.
@@ -1421,11 +1435,8 @@ pub unsafe extern "C" fn nw_server_grpc_headers_create(
     out_op: *mut *mut NwServerOperation,
     error: *mut NwErrorInfoV1,
 ) -> u32 {
-    ffi(error, || {
-        // SAFETY: unsupported optional protocols transfer no owner and always initialize the output.
-        unsafe { output(out_op)? };
-        Err(ApiError::status(NW_NOT_SUPPORTED))
-    })
+    // SAFETY: the exact borrowed-input/typed-owner ABI contract is forwarded unchanged.
+    unsafe { grpc::headers(_request, _metadata, out_op, error) }
 }
 
 /// Exact Server ABI entry `nw_server_grpc_status_create`.
@@ -1441,11 +1452,8 @@ pub unsafe extern "C" fn nw_server_grpc_status_create(
     out_op: *mut *mut NwServerOperation,
     error: *mut NwErrorInfoV1,
 ) -> u32 {
-    ffi(error, || {
-        // SAFETY: unsupported optional protocols transfer no owner and always initialize the output.
-        unsafe { output(out_op)? };
-        Err(ApiError::status(NW_NOT_SUPPORTED))
-    })
+    // SAFETY: the exact borrowed-input/typed-owner ABI contract is forwarded unchanged.
+    unsafe { grpc::status(_request, _grpc_status, _detail, _trailers, out_op, error) }
 }
 
 /// Exact Server ABI entry `nw_server_mcp_gate_resume_create`.
@@ -1527,7 +1535,7 @@ pub unsafe extern "C" fn nw_server_mcp_reply_create(
         let op = OpState::with_slot(
             host,
             Some(request.clone()),
-            Job::McpReply(request, reply_kind, value, token.reservation, token.side),
+            Job::McpReply(request, reply_kind, value, token.reservation.into_body(), token.side),
             slot,
         );
         // SAFETY: operation owns the native value and full reservation until start/release.
@@ -1557,7 +1565,7 @@ pub unsafe extern "C" fn nw_server_mcp_call_take(
         let request = unsafe { request(request_ptr)? };
         let (kind, buffer) = crate::engine::mcp::state(&request)?.take()?;
         let buffer = Box::new(NwServerBuffer {
-            buffer: Some(buffer),
+            buffer: Some(buffer.into()),
             host: request.host.clone(),
         });
         // SAFETY: exact-once ownership transfer follows all fallible checks.
@@ -1578,14 +1586,8 @@ pub unsafe extern "C" fn nw_server_metadata_grpc_headers(
     out_metadata: *mut NwBytesViewV1,
     error: *mut NwErrorInfoV1,
 ) -> u32 {
-    ffi(error, || {
-        if out_metadata.is_null() || !out_metadata.is_aligned() {
-            return Err(invalid());
-        }
-        // SAFETY: unavailable optional decoded metadata is always a null/zero view.
-        unsafe { out_metadata.write(view(&[])) };
-        Err(ApiError::status(NW_NOT_SUPPORTED))
-    })
+    // SAFETY: the exact borrowed-input/typed-owner ABI contract is forwarded unchanged.
+    unsafe { grpc::metadata(_metadata, out_metadata, error) }
 }
 
 include!("../generated/layout_assertions.rs");

@@ -21,9 +21,11 @@ public static class McpEndpointExtensions
     {
         ArgumentNullException.ThrowIfNull(routes); ArgumentNullException.ThrowIfNull(registry); ArgumentNullException.ThrowIfNull(pattern);
         if ((routes.Group.Prefix + pattern).IndexOfAny(['{', '}', '*']) >= 0) throw new ArgumentException("MCP requires a literal mount path.", nameof(pattern));
-        var descriptor = new McpDescriptor(registry.Freeze(), options ?? new());
+        routes.Registry.Mutable();
+        var descriptor = new McpDescriptor(registry.Snapshot(), options ?? new());
+        descriptor.Register(routes.Registry.Routes.Count + 1L);
         var definition = routes.Registry.Add(routes.Group, pattern, ["POST"], null, descriptor.AllowAsync);
-        definition.Kind = 2; definition.ProtocolDescriptor = descriptor; descriptor.Register(definition);
+        definition.Kind = 2; definition.ProtocolDescriptor = descriptor; registry.Freeze();
         return new(routes.Registry, definition);
     }
 }
@@ -44,28 +46,36 @@ internal sealed class McpDescriptor : INativeServerProtocolDescriptor
         foreach (var host in _hosts)
         {
             McpValidation.Text(host, 1024, nameof(options));
-            if (!Uri.TryCreate("http://" + host, UriKind.Absolute, out var uri) || uri.Authority != host || !ExplicitPort(host) || host.IndexOfAny(['*', '@', '/', '?', '#']) >= 0) throw new ArgumentException("An allowed host must be an exact authority with an explicit port.");
+            if (!Authority(host)) throw new ArgumentException("An allowed host must be an exact authority with an explicit port.");
         }
         foreach (var origin in _origins)
         {
             McpValidation.Text(origin, 2048, nameof(options));
-            if (!Uri.TryCreate(origin, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https") || origin != uri.GetLeftPart(UriPartial.Authority) || !ExplicitPort(origin[(origin.IndexOf("://", StringComparison.Ordinal) + 3)..]) || origin.IndexOfAny(['*', '@', '?', '#']) >= 0) throw new ArgumentException("An allowed origin must be an exact HTTP(S) scheme/host/explicit port.");
+            int separator = origin.IndexOf("://", StringComparison.Ordinal);
+            if (separator < 0 || origin[..separator] is not ("http" or "https") || !Authority(origin[(separator + 3)..])) throw new ArgumentException("An allowed origin must be an exact HTTP(S) scheme/host/explicit port.");
         }
     }
-    private static bool ExplicitPort(string authority) => int.TryParse(authority[(authority.LastIndexOf(':') + 1)..], out int port) && port is > 0 and <= 65535;
-    internal void Register(RouteDefinition route)
+    private static bool Authority(string authority)
+    {
+        int separator = authority.LastIndexOf(':');
+        return separator > 0 && authority[(separator + 1)..].All(char.IsAsciiDigit)
+            && int.TryParse(authority[(separator + 1)..], out int port) && port is > 0 and <= 65535
+            && authority.IndexOfAny(['*', '@', '/', '?', '#', '\\']) < 0 && !authority.Any(char.IsWhiteSpace)
+            && Uri.TryCreate("http://" + authority, UriKind.Absolute, out var uri) && uri.Host.Length > 0 && uri.Port == port;
+    }
+    internal void Register(long routeId)
     {
         using var buffer = new BoundedJsonBuffer(4 * 1024 * 1024);
         using (var writer = new Utf8JsonWriter(buffer))
         {
-            writer.WriteStartObject(); writer.WriteNumber("version", 1); writer.WriteString("kind", "mcp"); writer.WriteNumber("handler_id", route.Id); writer.WriteString("protocol_version", "2026-07-28"); writer.WriteBoolean("legacy_sessions", false); writer.WriteBoolean("event_store", false); writer.WriteBoolean("strict_metadata", true);
+            writer.WriteStartObject(); writer.WriteNumber("version", 1); writer.WriteString("kind", "mcp"); writer.WriteNumber("handler_id", routeId); writer.WriteString("protocol_version", "2026-07-28"); writer.WriteBoolean("legacy_sessions", false); writer.WriteBoolean("event_store", false); writer.WriteBoolean("strict_metadata", true);
             writer.WriteStartArray("allowed_hosts"); foreach (var host in _hosts) writer.WriteStringValue(host); writer.WriteEndArray(); writer.WriteStartArray("allowed_origins"); foreach (var origin in _origins) writer.WriteStringValue(origin); writer.WriteEndArray();
             writer.WriteNumber("max_request_bytes", _wire); writer.WriteNumber("max_json_depth", _depth); writer.WriteNumber("max_json_nodes", _nodes); writer.WriteNumber("max_json_string_bytes", _strings);
             string[] names = ["tools", "resources", "prompts"]; ulong index = 0;
             for (uint kind = 0; kind < 3; kind++)
             {
                 writer.WriteStartArray(names[kind]);
-                foreach (var entry in _entries.Where(e => e.Kind == kind)) { ulong id = checked(((ulong)route.Id << 32) + ++index); _handlers.Add(id, entry); entry.Metadata(writer, id); }
+                foreach (var entry in _entries.Where(e => e.Kind == kind)) { ulong id = checked(((ulong)routeId << 32) + ++index); _handlers.Add(id, entry); entry.Metadata(writer, id); }
                 writer.WriteEndArray();
             }
             writer.WriteEndObject();
@@ -135,14 +145,26 @@ internal sealed class McpDescriptor : INativeServerProtocolDescriptor
             // charged through SDK conversion and response production, independently
             // of the short reply operation's terminal notification.
             using var reservation = await native.ReserveProtocolWriteAsync(3 * 1024 * 1024, 3, context.RequestAborted).ConfigureAwait(false);
-            using var credit = native.AcquireProtocolManagedCredit(2 * 1024 * 1024);
+            // The full2MiB managed output overlap is already held by native
+            // preflight before SDK parsing, and survives any canceled gate until
+            // this nested invocation and the shared request have actually retired.
             byte[] bytes;
             try { bytes = reply.Encode(); }
             catch
             {
                 reply = entry.Kind == 0 ? McpReply.ToolError("Tool output failed") : McpReply.Error(-32603, "Application output failed"); bytes = reply.Encode();
             }
-            var operation = native.Engine.Begin(CreateReply(reservation, reply.Kind, bytes), native.Engine.TakeVoid, context.RequestAborted, native);
+            nint pointer;
+            try { pointer = CreateReply(reservation, reply.Kind, bytes); }
+            catch (ArgumentException)
+            {
+                // Native finite-schema validation can reject an otherwise valid
+                // JSON result (for example a null non-nullable member). Failed
+                // create leaves this exact reservation owned by the caller.
+                reply = entry.Kind == 0 ? McpReply.ToolError("Tool output failed") : McpReply.Error(-32603, "Application output failed");
+                pointer = CreateReply(reservation, reply.Kind, reply.Encode());
+            }
+            var operation = native.Engine.Begin(pointer, native.Engine.TakeVoid, context.RequestAborted, native);
             try { await operation.Task.ConfigureAwait(false); }
             finally { await operation.Retirement.ConfigureAwait(false); }
         }

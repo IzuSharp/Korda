@@ -119,6 +119,8 @@ fn make(state: &Notifications) -> Arc<Host> {
         timeout: Duration::from_millis(40),
         max_request_bytes: 1024,
         max_json_bytes: 64,
+        mcp: None,
+        grpc: None,
     }]);
     host
 }

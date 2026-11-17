@@ -16,6 +16,7 @@ nativeweave-interop-errors = { path = "../../interop/errors" }
 nativeweave-server-streaming = { path = "../streaming" }
 nativeweave-server-diagnostics = { path = "../diagnostics" }
 nativeweave-protocol-mcp = { path = "../../protocols/mcp" }
+nativeweave-protocols-grpc = { path = "../../protocols/grpc" }
 bytes = "=1.12.1"
 http = "=1.5.0"
 http-body = "=1.1.0"

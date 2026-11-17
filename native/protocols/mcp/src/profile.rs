@@ -238,9 +238,15 @@ impl Profile {
                 Some(value)
             }
         };
-        let host = singleton("host")
-            .or(original_authority)
-            .ok_or(StatusCode::BAD_REQUEST)?;
+        let host = if headers.contains_key("host") {
+            singleton("host")
+        } else {
+            original_authority
+        }
+        .ok_or(StatusCode::BAD_REQUEST)?;
+        if original_authority.is_some_and(|authority| !authority.eq_ignore_ascii_case(host)) {
+            return Err(StatusCode::BAD_REQUEST);
+        }
         if headers.get_all("host").iter().count() > 1 {
             return Err(StatusCode::BAD_REQUEST);
         }
@@ -349,9 +355,24 @@ fn schema_node(
                 | "minimum"
                 | "maximum"
                 | "pattern"
+                | "deprecated"
         ) {
             return Err("unsupported static schema keyword");
         }
+    }
+    // The pinned BCL string-enum exporter emits only `enum` (without `type`).
+    // Preserve its exact descriptor and admit the finite scalar choice set.
+    if !obj.contains_key("type") {
+        return match obj.get("enum").and_then(Value::as_array) {
+            Some(values)
+                if !values.is_empty()
+                    && values.len() <= 256
+                    && values.iter().all(|v| !v.is_array() && !v.is_object()) =>
+            {
+                Ok(())
+            }
+            _ => Err("open schema type"),
+        };
     }
     let types: Vec<&str> = match obj.get("type") {
         Some(Value::String(v)) => vec![v],
@@ -372,10 +393,11 @@ fn schema_node(
         return Err("unsupported schema type");
     }
     if types.contains(&"object") {
-        let props = obj
-            .get("properties")
-            .and_then(Value::as_object)
-            .ok_or("open object schema")?;
+        let empty = Map::new();
+        let props = match obj.get("properties") {
+            None => &empty,
+            Some(value) => value.as_object().ok_or("invalid object properties")?,
+        };
         if props.len() > 256
             || obj
                 .get("additionalProperties")
@@ -452,6 +474,12 @@ fn conforms_node(
         "integer" => value.as_i64().is_some() || value.as_u64().is_some(),
         _ => false,
     };
+    if !s.contains_key("type") {
+        return s
+            .get("enum")
+            .and_then(Value::as_array)
+            .is_some_and(|values| values.contains(value));
+    }
     if !match s.get("type") {
         Some(Value::String(v)) => matches(v),
         Some(Value::Array(v)) => v.iter().any(|v| v.as_str().is_some_and(matches)),
@@ -466,9 +494,11 @@ fn conforms_node(
         return false;
     }
     if let Some(obj) = value.as_object() {
-        let Some(props) = s.get("properties").and_then(Value::as_object) else {
-            return false;
-        };
+        let empty = Map::new();
+        let props = s
+            .get("properties")
+            .and_then(Value::as_object)
+            .unwrap_or(&empty);
         if s.get("required")
             .and_then(Value::as_array)
             .is_some_and(|names| {

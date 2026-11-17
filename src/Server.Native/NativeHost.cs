@@ -216,7 +216,7 @@ internal sealed partial class NativeHost : ServerHost
         NativeResourceOwner owner = OperationOwner(pointer); AsyncOperation<T>? operation = null;
         try
         {
-            operation = new AsyncOperation<T>(owner, new OperationCalls(this), _coordinator, take, token);
+            operation = new AsyncOperation<T>(owner, new OperationCalls(this), _coordinator, take, token, testBoundary: TestBoundary);
             lock (_gate) _operations.Add(operation);
             _ = ObserveRetirementAsync(operation, request);
             request?.Track(operation);
@@ -231,10 +231,16 @@ internal sealed partial class NativeHost : ServerHost
         var handle = new ServerHandle(pointer, release);
         try { return new(handle); } catch { handle.Dispose(); throw; }
     }
+    internal Action<AsyncSnapshot>? TestRetirement { get; set; }
+    internal Action<AsyncBoundary>? TestBoundary { get; set; }
     private async Task ObserveRetirementAsync(AsyncOperation operation, NativeRequest? request)
     {
-        await operation.Retirement.ConfigureAwait(false);
-        request?.Untrack(operation); lock (_gate) _operations.Remove(operation);
+        try
+        {
+            await operation.Retirement.ConfigureAwait(false);
+            TestRetirement?.Invoke(operation.Snapshot);
+        }
+        finally { request?.Untrack(operation); lock (_gate) _operations.Remove(operation); }
     }
     internal unsafe int TakeVoid(nint operation)
     { var error = new NwErrorInfoV1 { StructSize = 24 }; ServerError.Check(Native.nw_server_operation_take_void(operation, &error), in error); return 0; }

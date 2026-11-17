@@ -2,6 +2,7 @@
 use nativeweave_server_streaming::{Credit, RequestBudget, Side, StreamError};
 use serde::de::{self, DeserializeSeed, MapAccess, SeqAccess, Visitor};
 use std::sync::Arc;
+use std::{borrow::Cow, collections::HashSet};
 use std::{fmt, time::Instant};
 
 /// Separate native/managed credits are acquired atomically per side, never by a
@@ -132,13 +133,14 @@ impl<'de> Visitor<'de> for ValueSeed<'_> {
     }
     fn visit_map<A: MapAccess<'de>>(self, mut fields: A) -> Result<(), A::Error> {
         self.scan.check(self.depth, 0, false)?;
-        while fields
-            .next_key_seed(KeySeed {
-                scan: self.scan,
-                depth: self.depth + 1,
-            })?
-            .is_some()
-        {
+        let mut keys = HashSet::new();
+        while let Some(key) = fields.next_key_seed(KeySeed {
+            scan: self.scan,
+            depth: self.depth + 1,
+        })? {
+            if !keys.insert(key) {
+                return Err(de::Error::custom("duplicate JSON property"));
+            }
             fields.next_value_seed(ValueSeed {
                 scan: self.scan,
                 depth: self.depth + 1,
@@ -152,18 +154,23 @@ struct KeySeed<'a> {
     depth: usize,
 }
 impl<'de> DeserializeSeed<'de> for KeySeed<'_> {
-    type Value = ();
-    fn deserialize<D: de::Deserializer<'de>>(self, d: D) -> Result<(), D::Error> {
+    type Value = Cow<'de, str>;
+    fn deserialize<D: de::Deserializer<'de>>(self, d: D) -> Result<Self::Value, D::Error> {
         d.deserialize_str(self)
     }
 }
-impl Visitor<'_> for KeySeed<'_> {
-    type Value = ();
+impl<'de> Visitor<'de> for KeySeed<'_> {
+    type Value = Cow<'de, str>;
     fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("bounded JSON key")
     }
-    fn visit_str<E: de::Error>(self, value: &str) -> Result<(), E> {
-        self.scan.check(self.depth, value.len(), true)
+    fn visit_str<E: de::Error>(self, value: &str) -> Result<Self::Value, E> {
+        self.scan.check(self.depth, value.len(), true)?;
+        Ok(Cow::Owned(value.to_owned()))
+    }
+    fn visit_borrowed_str<E: de::Error>(self, value: &'de str) -> Result<Self::Value, E> {
+        self.scan.check(self.depth, value.len(), true)?;
+        Ok(Cow::Borrowed(value))
     }
 }
 
@@ -200,6 +207,7 @@ pub fn scan(bytes: &[u8], limits: Limits, deadline: Instant) -> Result<Shape, Er
 pub fn scan_scratch(wire_capacity: usize, depth: usize) -> Option<u64> {
     wire_capacity
         .checked_mul(2)?
+        .checked_add(128 * 4096)?
         .checked_add(depth.checked_mul(1024)?)?
         .checked_add(4096)
         .map(|n| n as u64)
@@ -220,7 +228,9 @@ pub fn native_peak(wire_capacity: usize, shape: Shape) -> Option<u64> {
 pub fn managed_peak(wire_length: usize, shape: Shape) -> Option<u64> {
     wire_length
         .checked_mul(3)?
-        .checked_add(shape.nodes.checked_mul(512)?)?
+        // A sparse JSON object can instantiate a static DTO with 256 fields.
+        // Charge its declared storage even when most values are absent/null.
+        .checked_add(shape.nodes.checked_mul(4096)?)?
         .checked_add(shape.strings.checked_mul(8)?)?
         .checked_add(65_536)
         .map(|n| n as u64)
@@ -263,7 +273,12 @@ mod tests {
             scan(escaped.as_bytes(), small, end),
             Err(Error::ResourceLimit)
         );
-        for bytes in [b"{\"x\":".as_slice(), b"{}{}", b"[NaN]"] {
+        for bytes in [
+            b"{\"x\":".as_slice(),
+            b"{}{}",
+            b"[NaN]",
+            br#"{"x":1,"x":2}"#,
+        ] {
             assert_eq!(scan(bytes, limits(), end), Err(Error::InvalidJson));
         }
         assert_eq!(scan(b"{}", limits(), Instant::now()), Err(Error::Timeout));

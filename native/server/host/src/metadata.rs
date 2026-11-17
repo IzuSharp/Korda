@@ -28,6 +28,7 @@ pub struct Head {
     pub path: String,
     pub query: String,
     pub headers: Vec<u8>,
+    pub grpc: Option<nativeweave_protocols_grpc::RequestMetadata>,
     pub routes: Vec<u8>,
     pub queries: Vec<u8>,
     pub trace: Vec<u8>,
@@ -148,7 +149,7 @@ pub fn head<B>(
         ),
         None => None,
     };
-    if content_length.is_some_and(|n| n > route.max_request_bytes) {
+    if route.kind != 1 && content_length.is_some_and(|n| n > route.max_request_bytes) {
         return Err(ApiError::domain(2));
     }
     let original_authority = request
@@ -218,6 +219,7 @@ pub fn head<B>(
             format!("?{raw}")
         },
         headers: config::encode_headers(request.headers())?,
+        grpc: None,
         routes: config::encode(params.iter().map(|(a, b)| (a.as_str(), b.as_str()))),
         queries: config::encode(pairs.iter().map(|(a, b)| (a.as_str(), b.as_str()))),
         trace: Vec::new(),

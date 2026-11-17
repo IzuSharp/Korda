@@ -12,6 +12,7 @@ public sealed class McpRegistry
     private bool _frozen;
     private int _metadata;
     /// <summary>Creates an empty registry without opening native resources.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.Mcp.McpRegistry" path="/member/remarks" />
     public McpRegistry() { }
     /// <summary>Registers one typed tool using explicit source-generated input/output JSON metadata.</summary>
     /// <typeparam name="TInput">A non-null statically mapped object input DTO.</typeparam>
@@ -76,7 +77,8 @@ public sealed class McpRegistry
         if (names.Count == 1024 || names.Contains(entry.Identity) || bytes > 4 * 1024 * 1024 - _metadata) throw new ArgumentException("Duplicate MCP identity or finite registry metadata limit.");
         names.Add(entry.Identity); _entries.Add(entry); _metadata += bytes; return this;
     }
-    internal McpEntry[] Freeze() { _frozen = true; return [.. _entries]; }
+    internal McpEntry[] Snapshot() => [.. _entries];
+    internal void Freeze() => _frozen = true;
 }
 
 internal abstract class McpEntry(uint kind, string identity, string name, string? description)
@@ -162,6 +164,7 @@ internal sealed class McpReply(uint kind, Action<Utf8JsonWriter> write)
     internal static McpReply ToolError(string message) => new(1, writer => { writer.WriteStartObject(); writer.WriteStartArray("content"); Text(writer, message); writer.WriteEndArray(); writer.WriteBoolean("isError", true); writer.WriteEndObject(); });
     internal static McpReply Tool<T>(T value, JsonTypeInfo<T> info) => new(0, writer =>
     {
+        StaticSchema.CheckOutput(value, info);
         using var dto = new BoundedJsonBuffer(MaximumBytes); using (var json = new Utf8JsonWriter(dto)) JsonSerializer.Serialize(json, value, info);
         if (dto.WrittenMemory.Span.IsEmpty || dto.WrittenMemory.Span[0] != (byte)'{') throw new JsonException("Static tool output must remain an object.");
         writer.WriteStartObject(); writer.WritePropertyName("structuredContent"); writer.WriteRawValue(dto.WrittenMemory.Span); writer.WriteStartArray("content"); writer.WriteStartObject(); writer.WriteString("type", "text"); writer.WritePropertyName("text"); writer.WriteStringValue(dto.WrittenMemory.Span); writer.WriteEndObject(); writer.WriteEndArray(); writer.WriteBoolean("isError", false); writer.WriteEndObject();

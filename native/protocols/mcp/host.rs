@@ -13,6 +13,8 @@ use nativeweave_server_streaming::Side;
 use std::future::Future;
 
 pub struct State {
+    #[cfg(test)]
+    sdk_admissions: AtomicUsize,
     profile: Arc<Profile>,
     parts: Mutex<Option<http::request::Parts>>,
     decision: AtomicU32,
@@ -29,10 +31,13 @@ struct Pending {
 struct Peak {
     _admission: preflight::Admission,
     reply: Mutex<Option<WriteReservation>>,
+    output: Mutex<Option<WriteReservation>>,
 }
 impl State {
     pub fn new(profile: Arc<Profile>, parts: http::request::Parts) -> Self {
         Self {
+            #[cfg(test)]
+            sdk_admissions: AtomicUsize::new(0),
             profile,
             parts: Mutex::new(Some(parts)),
             decision: AtomicU32::new(0),
@@ -82,6 +87,18 @@ pub fn state(request: &RequestState) -> Result<&State> {
 }
 pub fn raw_output(request: &RequestState) -> bool {
     request.head.kind == 0 || request.mcp.as_ref().is_some_and(State::denied)
+}
+pub fn reserve(request: &RequestState, capacity: usize) -> Result<WriteReservation> {
+    let s = state(request)?;
+    if !s.can_reply() || capacity != 3 * 1024 * 1024 {
+        return Err(ApiError::status(NW_INVALID_STATE));
+    }
+    let peak = lock(&s.peak)
+        .clone()
+        .ok_or(ApiError::status(NW_INVALID_STATE))?;
+    lock(&peak.output)
+        .take()
+        .ok_or(ApiError::status(NW_INVALID_STATE))
 }
 pub fn bound_hosts(host: &Host) -> Vec<String> {
     lock(&host.addresses)
@@ -198,7 +215,7 @@ impl Drop for GateGuard {
 
 pub fn commit(request: &Arc<RequestState>, decision: u32) -> Result<()> {
     request.business()?;
-    let s = state(&request)?;
+    let s = state(request)?;
     if decision > 1 {
         return Err(invalid());
     }
@@ -295,7 +312,14 @@ async fn allowed(request: Arc<RequestState>) -> Result<OpResult> {
     };
     drop(scratch);
     let native_peak = preflight::native_peak(input.backing_capacity(), shape).ok_or(invalid())?;
-    let managed_peak = preflight::managed_peak(input.len(), shape).ok_or(invalid())?;
+    let business = parts
+        .headers
+        .get("mcp-method")
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|m| matches!(m, "tools/call" | "resources/read" | "prompts/get"));
+    let managed_peak = preflight::managed_peak(input.len(), shape)
+        .and_then(|n| n.checked_add(if business { 2 * 1024 * 1024 } else { 0 }))
+        .ok_or(invalid())?;
     let automatic = if parts
         .headers
         .get("mcp-method")
@@ -322,9 +346,22 @@ async fn allowed(request: Arc<RequestState>) -> Result<OpResult> {
         Ok(value) => value,
         Err(_) => return response_error(&request, StatusCode::SERVICE_UNAVAILABLE).await,
     };
+    let output = if business {
+        match request
+            .sender
+            .reserve(3 * 1024 * 1024, &request.cancel)
+            .await
+        {
+            Ok(reservation) => Some(reservation),
+            Err(_) => return response_error(&request, StatusCode::SERVICE_UNAVAILABLE).await,
+        }
+    } else {
+        None
+    };
     let peak = Arc::new(Peak {
         _admission: admission,
         reply: Mutex::new(None),
+        output: Mutex::new(output),
     });
     *lock(&s.peak) = Some(peak.clone());
     let bridge = Bridge::new(request.clone(), peak.clone());
@@ -335,6 +372,8 @@ async fn allowed(request: Arc<RequestState>) -> Result<OpResult> {
     } else {
         s.profile.descriptor.allowed_hosts.clone()
     };
+    #[cfg(test)]
+    s.sdk_admissions.fetch_add(1, Ordering::AcqRel);
     let call = runtime::serve(
         s.profile.clone(),
         hosts,
@@ -348,7 +387,9 @@ async fn allowed(request: Arc<RequestState>) -> Result<OpResult> {
         Ok(body) => body.to_bytes(),
         Err(never) => match never {},
     };
-    let reservation = lock(&peak.reply).take();
+    let reservation = lock(&peak.reply)
+        .take()
+        .or_else(|| lock(&peak.output).take());
     send_response(
         &request,
         parts.status.as_u16(),
@@ -444,7 +485,7 @@ pub fn validate_reply(
             || !object
                 .get("code")
                 .and_then(Value::as_i64)
-                .is_some_and(|c| matches!(c, -32602 | -32603 | -32601))
+                .is_some_and(|c| matches!(c, -32603..=-32601))
             || !object
                 .get("message")
                 .and_then(Value::as_str)
@@ -574,3 +615,7 @@ pub fn reply(
 fn rmcp_code(code: i32) -> nativeweave_protocol_mcp::rmcp::model::ErrorCode {
     nativeweave_protocol_mcp::rmcp::model::ErrorCode(code)
 }
+
+#[cfg(test)]
+#[path = "host_tests.rs"]
+mod tests;

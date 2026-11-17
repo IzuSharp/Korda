@@ -65,9 +65,9 @@ impl ServerHandler for ForeignMcp {
         if request.is_some_and(|r| r.cursor.is_some()) {
             return Err(invalid());
         }
-        let mut result = ListToolsResult::default();
-        result.tools = self.profile.tool_models.clone();
-        Ok(result)
+        Ok(ListToolsResult::with_all_items(
+            self.profile.tool_models.clone(),
+        ))
     }
     async fn list_resources(
         &self,
@@ -77,9 +77,9 @@ impl ServerHandler for ForeignMcp {
         if request.is_some_and(|r| r.cursor.is_some()) {
             return Err(invalid());
         }
-        let mut result = ListResourcesResult::default();
-        result.resources = self.profile.resource_models.clone();
-        Ok(result)
+        Ok(ListResourcesResult::with_all_items(
+            self.profile.resource_models.clone(),
+        ))
     }
     async fn list_prompts(
         &self,
@@ -89,9 +89,9 @@ impl ServerHandler for ForeignMcp {
         if request.is_some_and(|r| r.cursor.is_some()) {
             return Err(invalid());
         }
-        let mut result = ListPromptsResult::default();
-        result.prompts = self.profile.prompt_models.clone();
-        Ok(result)
+        Ok(ListPromptsResult::with_all_items(
+            self.profile.prompt_models.clone(),
+        ))
     }
     async fn call_tool(
         &self,

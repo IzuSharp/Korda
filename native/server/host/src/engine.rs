@@ -48,6 +48,8 @@ use tokio::{
 };
 use tower::ServiceExt;
 
+#[path = "../../../protocols/grpc/host.rs"]
+pub mod grpc;
 #[path = "../../../protocols/mcp/host.rs"]
 pub mod mcp;
 
@@ -308,7 +310,7 @@ impl Host {
                 }),
             );
         }
-        Ok(router)
+        Ok(router.fallback(grpc::fallback))
     }
     async fn accept(self: Arc<Self>, index: usize, listener: TcpListener, router: Router) {
         let mut connections = JoinSet::new();
@@ -454,6 +456,9 @@ impl Host {
             }
             return response;
         };
+        if route.kind == 1 {
+            return grpc::dispatch(self, route.clone(), parameters, request).await;
+        }
         let deadline = Instant::now() + route.timeout;
         if let Some(profile) = &route.mcp
             && let Err(status) = mcp::headers(&self, profile, &request)
@@ -594,6 +599,7 @@ impl Host {
             _active: active,
             life: peer.life,
             mcp,
+            grpc: None,
         });
         lock(&self.requests).insert(id, request.clone());
         if request
@@ -747,6 +753,7 @@ impl Drop for Waiting {
 }
 pub struct RequestState {
     pub mcp: Option<mcp::State>,
+    pub grpc: Option<Arc<nativeweave_protocols_grpc::Call>>,
     pub diagnostics: RequestTrace,
     body_limit: Arc<AtomicBool>,
     pub host: Weak<Host>,
@@ -781,6 +788,10 @@ impl RequestState {
         if self.dispatch_done.swap(true, Ordering::AcqRel) {
             return false;
         }
+        if let Some(call) = &self.grpc {
+            call.stop_input();
+        }
+        grpc::release_metadata_if_done(self);
         if let Some(mcp) = &self.mcp {
             mcp.close();
         }
@@ -838,12 +849,17 @@ impl RequestState {
     }
     pub fn body_ended(&self) {
         self.body_done.store(true, Ordering::Release);
+        grpc::release_metadata_if_done(self);
         self.release_connection();
         if self.dispatch_done.load(Ordering::Acquire) {
             self.finished.cancel();
         }
     }
     pub fn discard_input(self: &Arc<Self>) {
+        if self.grpc.is_some() {
+            grpc::discard(self);
+            return;
+        }
         self.input_cancel.cancel();
         if let Ok(mut reader) = self.reader.try_lock() {
             reader.take();
@@ -877,7 +893,8 @@ impl RequestState {
         self.retired.load(Ordering::Acquire)
             && self.body_done.load(Ordering::Acquire)
             && self.live_ops.load(Ordering::Acquire) == 0
-            && self.budget.snapshot() == (0, 0)
+            && self.budget.snapshot() == (grpc::remaining_anchor(self), 0)
+            && grpc::metadata_released(self)
     }
     pub fn host(&self) -> Result<Arc<Host>> {
         self.host
@@ -937,7 +954,7 @@ impl Drop for SideGuard {
 pub struct Reservation {
     pub request: Arc<RequestState>,
     pub kind: u32,
-    pub reservation: WriteReservation,
+    pub reservation: grpc::WriteToken,
     pub side: SideGuard,
 }
 pub enum OpResult {
@@ -948,9 +965,28 @@ pub enum OpResult {
 }
 pub enum ChunkResult {
     Data(OwnedBuffer),
+    GrpcData(nativeweave_protocols_grpc::MessageBuffer),
     End(Option<Vec<u8>>),
 }
 pub enum Job {
+    GrpcRead(Arc<RequestState>, SideGuard),
+    GrpcReserve(Arc<RequestState>, usize, SideGuard),
+    GrpcWrite(
+        Arc<RequestState>,
+        nativeweave_protocols_grpc::Prepared,
+        SideGuard,
+    ),
+    GrpcHeaders(
+        Arc<RequestState>,
+        nativeweave_protocols_grpc::ResponseMetadata,
+        SideGuard,
+    ),
+    GrpcStatus(
+        Arc<RequestState>,
+        nativeweave_protocols_grpc::tonic::Status,
+        nativeweave_protocols_grpc::ResponseMetadata,
+        SideGuard,
+    ),
     Start,
     Close(Duration),
     Reload(usize, Arc<TlsSnapshot>),
@@ -995,8 +1031,8 @@ impl OpState {
     ) -> Arc<Self> {
         let result_kind = match &job {
             Job::Close(_) => 1,
-            Job::Read(..) => 2,
-            Job::Reserve(..) => 3,
+            Job::Read(..) | Job::GrpcRead(..) => 2,
+            Job::Reserve(..) | Job::GrpcReserve(..) => 3,
             _ => 0,
         };
         host.live_ops.fetch_add(1, Ordering::AcqRel);
@@ -1098,6 +1134,15 @@ impl OpState {
         }
         let work = async {
             match job {
+                Job::GrpcRead(request, side) => grpc::read(request, side).await,
+                Job::GrpcReserve(request, capacity, side) => {
+                    grpc::reserve(request, capacity, side).await
+                }
+                Job::GrpcWrite(request, prepared, side) => grpc::write(request, prepared, side),
+                Job::GrpcHeaders(request, metadata, side) => grpc::headers(request, metadata, side),
+                Job::GrpcStatus(request, status, metadata, side) => {
+                    grpc::status(request, status, metadata, side).await
+                }
                 Job::McpGate(request, decision) => mcp::gate(request, decision).await,
                 Job::McpReply(request, kind, value, reservation, _side) => {
                     mcp::reply(&request, kind, value, reservation)
@@ -1139,18 +1184,22 @@ impl OpState {
                 }
                 Job::Reserve(request, kind, capacity, side) => {
                     request.business()?;
-                    let reservation = request
-                        .sender
-                        .reserve(capacity, &request.cancel)
-                        .await
-                        .map_err(|error| {
-                            request.abort(NW_CANCELED);
-                            ApiError::from(error)
-                        })?;
+                    let reservation = if kind == 3 {
+                        mcp::reserve(&request, capacity)?
+                    } else {
+                        request
+                            .sender
+                            .reserve(capacity, &request.cancel)
+                            .await
+                            .map_err(|error| {
+                                request.abort(NW_CANCELED);
+                                ApiError::from(error)
+                            })?
+                    };
                     Ok(OpResult::Reservation(Reservation {
                         request,
                         kind,
-                        reservation,
+                        reservation: grpc::WriteToken::Body(reservation),
                         side,
                     }))
                 }

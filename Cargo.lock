@@ -1265,6 +1265,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "nativeweave-protocols-grpc"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "futures-core",
+ "http",
+ "http-body",
+ "http-body-util",
+ "nativeweave-server-streaming",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tonic",
+ "tower",
+]
+
+[[package]]
 name = "nativeweave-query-binding"
 version = "0.1.0"
 dependencies = [
@@ -1292,6 +1309,7 @@ dependencies = [
  "nativeweave-interop-async",
  "nativeweave-interop-errors",
  "nativeweave-protocol-mcp",
+ "nativeweave-protocols-grpc",
  "nativeweave-server-diagnostics",
  "nativeweave-server-streaming",
  "percent-encoding",
@@ -1394,6 +1412,26 @@ name = "percent-encoding"
 version = "2.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
+
+[[package]]
+name = "pin-project"
+version = "1.1.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2466b2336ed02bcdca6b294417127b90ec92038d1d5c4fbeac971a922e0e0924"
+dependencies = [
+ "pin-project-internal",
+]
+
+[[package]]
+name = "pin-project-internal"
+version = "1.1.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c96395f0a926bc13b1c17622aaddda1ecb55d49c8f1bf9777e4d877800a43f8b"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
 
 [[package]]
 name = "pin-project-lite"
@@ -2343,6 +2381,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "baa693a8032d7e1cada7d0041e96126df243179ff061456783ac7f12bda4744c"
 dependencies = [
  "winnow",
+]
+
+[[package]]
+name = "tonic"
+version = "0.14.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e2cdfc673aabd30fe8fee92e65837b644c37c5d47f0f97ae6d5e0f1237d15e1b"
+dependencies = [
+ "async-trait",
+ "base64 0.22.1",
+ "bytes",
+ "http",
+ "http-body",
+ "http-body-util",
+ "percent-encoding",
+ "pin-project",
+ "sync_wrapper",
+ "tokio-stream",
+ "tokio-util",
+ "tower-layer",
+ "tower-service",
+ "tracing",
 ]
 
 [[package]]
