@@ -16,6 +16,20 @@ internal static class EngineModuleLoader
     private static readonly ConcurrentDictionary<string, LoadSlot> Slots = new(StringComparer.Ordinal);
     private static readonly ConditionalWeakTable<Assembly, AssemblyResolver> Resolvers = new();
 
+    // Domain operation tables bind only exports of the already validated resident
+    // module. This does not create another load path or transfer unloading ownership.
+    internal static nint ResolveExport(EngineDescriptor descriptor, string symbol)
+    {
+        ArgumentNullException.ThrowIfNull(descriptor);
+        ArgumentException.ThrowIfNullOrWhiteSpace(symbol);
+        Inspect(descriptor, null);
+        LoadSlot slot = Slots[descriptor.EngineId];
+        nint handle;
+        lock (slot.Gate)
+            handle = slot.Module!.Handle;
+        return NativeLibrary.TryGetExport(handle, symbol, out nint address) ? address : 0;
+    }
+
     internal static EngineInfo Inspect(EngineDescriptor descriptor, EngineLoadOptions? options)
     {
         OptionsSnapshot snapshot = OptionsSnapshot.Create(options);

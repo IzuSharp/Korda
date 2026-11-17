@@ -330,6 +330,21 @@ pub struct WriteReservation {
     permit: mpsc::OwnedPermit<Message>,
     payload: PayloadReservation,
 }
+/// A copied input plus its original queue and byte grants. Creating this value
+/// performs no queue send; an operation may own it before start, then either
+/// commit it or drop it without publishing network work.
+pub struct PreparedWrite {
+    permit: mpsc::OwnedPermit<Message>,
+    buffer: OwnedBuffer,
+}
+impl PreparedWrite {
+    /// Transfers the admitted allocation without another copy. This is local
+    /// enqueue only and does not certify peer consumption.
+    pub fn commit(self) {
+        self.permit
+            .send(Message::Data(Frame::data(self.buffer.into_bytes())));
+    }
+}
 impl WriteReservation {
     pub const fn capacity(&self) -> usize {
         self.payload.capacity()
@@ -337,10 +352,17 @@ impl WriteReservation {
     /// Performs one bounded copy and transfers the queue and allocation ownership.
     /// The sender's completion is local enqueue, not proof of remote consumption.
     pub fn commit(self, data: &[u8]) -> Result<(), StreamError> {
-        let buffer = self.payload.copy(data)?;
-        self.permit
-            .send(Message::Data(Frame::data(buffer.into_bytes())));
+        self.prepare(data)?.commit();
         Ok(())
+    }
+    /// Copies an ABI input before create returns, retaining its pre-reserved
+    /// queue slot and whole backing capacity until start or unstarted release.
+    pub fn prepare(self, data: &[u8]) -> Result<PreparedWrite, StreamError> {
+        let buffer = self.payload.copy(data)?;
+        Ok(PreparedWrite {
+            permit: self.permit,
+            buffer,
+        })
     }
 }
 

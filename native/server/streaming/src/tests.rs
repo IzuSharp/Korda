@@ -14,6 +14,58 @@ async fn frame(body: &mut BoundedBody) -> Option<Result<Frame<Bytes>, StreamErro
     poll_fn(|cx| Pin::new(&mut *body).poll_frame(cx)).await
 }
 
+#[tokio::test(flavor = "current_thread")]
+async fn prepared_write_unstarted_drop_rolls_back_queue_and_payload() {
+    let (global, request) = request(64);
+    let (sender, mut body) = body_channel(request, 32, 1).unwrap();
+    let cancel = Cancellation::default();
+    let prepared = sender
+        .reserve(32, &cancel)
+        .await
+        .unwrap()
+        .prepare(b"copied")
+        .unwrap();
+    assert_eq!(sender.queue_capacity(), 0);
+    assert_eq!(global.snapshot(), (32, 0));
+    assert!(
+        tokio::time::timeout(Duration::from_millis(2), frame(&mut body))
+            .await
+            .is_err()
+    );
+    drop(prepared);
+    assert_eq!(sender.queue_capacity(), 1);
+    assert_eq!(global.snapshot(), (0, 0));
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn prepared_write_survives_close_and_preserves_owned_input() {
+    let (global, request) = request(64);
+    let (sender, mut body) = body_channel(request.clone(), 32, 1).unwrap();
+    let cancel = Cancellation::default();
+    let mut caller = b"copied".to_vec();
+    let prepared = sender
+        .reserve(32, &cancel)
+        .await
+        .unwrap()
+        .prepare(&caller)
+        .unwrap();
+    caller.fill(b'x');
+    request.close();
+    body.close();
+    prepared.commit();
+    let retained = frame(&mut body)
+        .await
+        .unwrap()
+        .unwrap()
+        .into_data()
+        .unwrap();
+    assert_eq!(&retained[..], b"copied");
+    drop(body);
+    assert_eq!(global.snapshot(), (32, 0));
+    drop(retained);
+    assert_eq!(global.snapshot(), (0, 0));
+}
+
 #[test]
 fn all_or_none_across_two_requests_and_sides() {
     let budget = Budget::new(16, 12).unwrap();
