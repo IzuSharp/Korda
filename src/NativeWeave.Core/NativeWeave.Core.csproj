@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
+    <IsPackable>true</IsPackable>
     <AssemblyName>NativeWeave.Core</AssemblyName>
     <RootNamespace>NativeWeave.Interop</RootNamespace>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>

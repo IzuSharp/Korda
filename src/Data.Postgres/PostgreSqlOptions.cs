@@ -32,11 +32,11 @@ public sealed class PostgreSqlOptions
     public TimeSpan ConnectTimeout { get; set; } = TimeSpan.FromSeconds(15);
 }
 
-/// <summary>Exposes the stateless PostgreSQL provider component descriptor.</summary>
-/// <remarks>The current component assembly publishes Engine preflight plus exact standalone options. The downstream B04 host composes the pinned Create and UsePostgreSql factories with the actual datasource/session owners. This component does not advertise host operation exports. Reading Engine is thread-safe and performs no file access, native call, executor creation or connection opening; Inspect hashes and loads the exact maintainer-built component and starts no runtime.</remarks>
+/// <summary>Creates PostgreSQL datasources backed by the maintainer-built Rust Database Host.</summary>
+/// <remarks>Reading Engine is pure metadata. Inspect verifies the asset and starts no runtime or connection. Create snapshots typed options before native admission.</remarks>
 public static partial class PostgreSqlDataSource
 {
-    /// <summary>Gets the immutable descriptor for the maintainer-built PostgreSQL component.</summary>
-    /// <remarks>Only postgres.component.v1 is advertised. Native adapter operations are Rust-local hooks for B04, not callable datasource exports. The native asset stays resident after Inspect; the descriptor has no disposal operation. Missing or mismatched assets are reported by Inspect using EngineLoadException.</remarks>
-    public static EngineDescriptor Engine => PostgreSqlEngineProfile.Descriptor;
+    /// <summary>Gets the immutable descriptor of the complete PostgreSQL Database Host asset.</summary>
+    /// <remarks>The canonical database bootstrap reports only implemented capabilities. The inspected module remains resident; datasource disposal joins its runtime rather than unloading code.</remarks>
+    public static EngineDescriptor Engine => HostEngine;
 }

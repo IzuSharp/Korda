@@ -25,6 +25,7 @@ nativeweave-data-sqlite = { path = "../sqlite", optional = true }
 nativeweave-data-transactions = { path = "../transactions" }
 nativeweave-data-streaming = { path = "../streaming" }
 nativeweave-query-binding = { path = "../binding" }
+nativeweave-query-native = { path = "../query" }
 sqlx = { version = "=0.9.0", default-features = false, features = ["runtime-tokio", "postgres", "sqlite", "migrate"] }
 tokio = { version = "=1.54.1", features = ["rt-multi-thread", "macros", "sync", "time", "net"] }
 futures-util = { version = "=0.3.34", default-features = false, features = ["std", "async-await"] }

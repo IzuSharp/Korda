@@ -1,5 +1,5 @@
 use crate::*;
-use nativeweave_data_contracts::{MAX_BYTES, MAX_NODES, wire::Expectation};
+use nativeweave_data_contracts::{MAX_NODES, wire::Expectation};
 use sha2::{Digest, Sha256};
 use std::collections::VecDeque;
 
@@ -40,7 +40,7 @@ pub struct ShapeCache {
 impl ShapeCache {
     /// Finite limits are required even when a source has few application models.
     pub fn new(max_entries: usize, max_bytes: usize, abi: [u8; 32]) -> Result<Self> {
-        if max_entries == 0 || max_entries > MAX_NODES || max_bytes == 0 || max_bytes > MAX_BYTES {
+        if max_entries == 0 || max_entries > MAX_NODES || max_bytes == 0 || max_bytes > (1 << 30) {
             return Err(invalid("compiled shape cache bounds"));
         }
         if abi == [0; 32] {

@@ -24,5 +24,6 @@
     <InternalsVisibleTo Include="NativeWeave.Query.Binding.Tests" />
     <InternalsVisibleTo Include="NativeWeave.Query.Binding.Sample" />
     <InternalsVisibleTo Include="NativeWeave.Query.Native.Tests" />
+    <InternalsVisibleTo Include="NativeWeave.Data.Materialization.Tests" />
   </ItemGroup>
 </Project>

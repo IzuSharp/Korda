@@ -126,6 +126,8 @@ pub struct Source {
     pub sessions: Arc<Semaphore>,
     pub waiting: AtomicUsize,
     pub pending: AtomicUsize,
+    pub close_waiters: AtomicUsize,
+    dispatch_stopped: Mutex<bool>,
     pub changed: Notify,
     pub closing: AtomicBool,
     pub retired: AtomicBool,
@@ -133,6 +135,7 @@ pub struct Source {
     children: Mutex<Vec<Weak<crate::session::Session>>>,
     registry: Mutex<Registry>,
     pub parameters: Arc<ParameterRegistry>,
+    pub shapes: Mutex<nativeweave_query_native::ShapeCache>,
     pub stream_budget: nativeweave_data_streaming::Budget,
 }
 impl Source {
@@ -162,7 +165,7 @@ impl Source {
             .try_update(Ordering::AcqRel, Ordering::Acquire, |x| x.checked_add(1))
             .map_err(|_| Error::capacity())?;
         let identity = SourceIdentity {
-            engine: 1,
+            engine: crate::abi::module_identity(),
             source: id,
             generation: 1,
             profile: config.profile,
@@ -179,6 +182,14 @@ impl Source {
             stream_bytes,
         )?;
         let sessions = Arc::new(Semaphore::new(config.limits.connections as usize));
+        use sha2::{Digest, Sha256};
+        let fingerprint: [u8; 32] =
+            Sha256::digest(include_bytes!("../../binding/signatures-v1.json")).into();
+        let shapes = Mutex::new(nativeweave_query_native::ShapeCache::new(
+            config.limits.prepared_plans,
+            config.limits.prepared_bytes,
+            fingerprint,
+        )?);
         let value = Arc::new(Self {
             config,
             identity,
@@ -187,6 +198,8 @@ impl Source {
             sessions,
             waiting: AtomicUsize::new(0),
             pending: AtomicUsize::new(0),
+            close_waiters: AtomicUsize::new(0),
+            dispatch_stopped: Mutex::new(false),
             changed: Notify::new(),
             closing: AtomicBool::new(false),
             retired: AtomicBool::new(false),
@@ -200,6 +213,7 @@ impl Source {
                 next_projection: 1,
             }),
             parameters,
+            shapes,
             stream_budget,
         });
         SOURCES.fetch_add(1, Ordering::Relaxed);
@@ -218,9 +232,22 @@ impl Source {
             Ok(())
         }
     }
-    pub fn reserve_operation(&self, control: bool) -> Result<()> {
+    // The stop decision and new work reservation share a gate. Cleanup after the runtime
+    // stopped is permitted only as an already-completed, synchronously polled control.
+    pub fn reserve_operation(&self, control: bool) -> Result<bool> {
+        let stopped = self
+            .dispatch_stopped
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
         if !control {
             self.admit()?;
+        }
+        if *stopped {
+            return if control {
+                Ok(false)
+            } else {
+                Err(Error::closed())
+            };
         }
         let max = self.config.limits.nodes
             + self.config.limits.connections as usize
@@ -230,7 +257,7 @@ impl Source {
                 (n < max).then_some(n + 1)
             })
             .map_err(|_| Error::capacity())?;
-        Ok(())
+        Ok(true)
     }
     pub fn release_operation(&self) {
         self.pending.fetch_sub(1, Ordering::AcqRel);
@@ -238,7 +265,10 @@ impl Source {
     }
     pub fn add_session(&self, session: &Arc<crate::session::Session>) {
         let mut children = self.children.lock().unwrap_or_else(|e| e.into_inner());
-        children.retain(|s| s.strong_count() > 0);
+        children.retain(|s| {
+            s.upgrade()
+                .is_some_and(|s| !s.retired.load(Ordering::Acquire))
+        });
         children.push(Arc::downgrade(session));
     }
     pub fn request_close(self: &Arc<Self>) {
@@ -246,6 +276,10 @@ impl Source {
             return;
         }
         self.sessions.close();
+        self.shapes
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clear();
         {
             let mut registry = self.registry.lock().unwrap_or_else(|e| e.into_inner());
             registry.models.clear();
@@ -275,8 +309,15 @@ impl Source {
                 let notified = source.changed.notified();
                 tokio::pin!(notified);
                 notified.as_mut().enable();
-                if source.pending.load(Ordering::Acquire) == 0 {
-                    break;
+                {
+                    let mut stopped = source
+                        .dispatch_stopped
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner());
+                    if source.pending.load(Ordering::Acquire) == 0 {
+                        *stopped = true;
+                        break;
+                    }
                 }
                 notified.await;
             }
@@ -304,6 +345,7 @@ impl Source {
             return Ok(id);
         }
         let mut registry = self.registry.lock().unwrap_or_else(|e| e.into_inner());
+        self.admit()?;
         if let Some((id, _)) = registry
             .configured
             .iter()
@@ -337,6 +379,7 @@ impl Source {
         let parsed = Arc::new(Model::parse(canonical, self.config.profile)?);
         let codecs = self.codecs()?;
         let mut registry = self.registry.lock().unwrap_or_else(|e| e.into_inner());
+        self.admit()?;
         if let Some(model) = registry.models.get(&hash) {
             if model.bytes() != canonical {
                 return Err(Error::invalid("metadata hash collision"));
@@ -365,6 +408,7 @@ impl Source {
         self.admit()?;
         let codecs = self.codecs()?;
         let mut registry = self.registry.lock().unwrap_or_else(|e| e.into_inner());
+        self.admit()?;
         let value = nativeweave_query_binding::projection_record(
             bytes,
             self.identity,
@@ -390,6 +434,41 @@ impl Source {
             .checked_add(1)
             .ok_or_else(Error::capacity)?;
         registry.bytes += bytes.len();
+        registry.projections.insert(hash, value.clone());
+        Ok(value)
+    }
+    pub fn resolve_projection(&self, binding: ProjectionBinding) -> Result<ProjectionBinding> {
+        self.admit()?;
+        if binding.source != self.identity {
+            return Err(Error::state("mixed projection source"));
+        }
+        let mut registry = self.registry.lock().unwrap_or_else(|e| e.into_inner());
+        self.admit()?;
+        let hash = binding.projection.hash();
+        if let Some(previous) = registry.projections.get(&hash) {
+            if previous.projection.bytes() != binding.projection.bytes() {
+                return Err(Error::invalid("projection hash collision"));
+            }
+            return Ok(previous.clone());
+        }
+        let bytes = binding.projection.bytes().len();
+        if registry.models.len() + registry.projections.len() + registry.configured.len()
+            >= self.config.limits.nodes
+            || registry.bytes + bytes > self.config.limits.parameter_bytes
+        {
+            return Err(Error::capacity());
+        }
+        let value = ProjectionBinding::new(
+            self.identity,
+            registry.next_projection,
+            binding.projection,
+            binding.codecs,
+        )?;
+        registry.next_projection = registry
+            .next_projection
+            .checked_add(1)
+            .ok_or_else(Error::capacity)?;
+        registry.bytes += bytes;
         registry.projections.insert(hash, value.clone());
         Ok(value)
     }

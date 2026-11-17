@@ -27,6 +27,7 @@ pub struct SqlPlan {
     pub projection: Option<ProjectionBinding>,
     pub kind: u32,
     pub result_kind: u32,
+    pub scalar_count: bool,
     pub timeout: Duration,
     submitted: AtomicBool,
 }
@@ -146,8 +147,48 @@ impl SqlPlan {
             projection,
             kind,
             result_kind,
+            scalar_count: false,
             timeout,
             submitted: AtomicBool::new(false),
+        })
+    }
+    pub fn from_rendered(
+        source: Arc<Source>,
+        rendered: nativeweave_query_native::RenderedQuery,
+    ) -> Result<Self> {
+        let scalar_count = matches!(rendered.terminal, 4 | 5);
+        let result_kind = if matches!(rendered.terminal, 6 | 7) {
+            0
+        } else if scalar_count {
+            1
+        } else {
+            3
+        };
+        let projection = if scalar_count {
+            let projection = Arc::new(nativeweave_data_contracts::Projection::parse_scalar(br#"{"version":1,"fields":[{"ordinal":0,"name":"","codec":3,"codec_config":null,"nullable":false}]}"#,source.config.profile)?);
+            Some(source.resolve_projection(ProjectionBinding::new(
+                source.identity,
+                1,
+                projection,
+                source.codecs()?,
+            )?)?)
+        } else {
+            rendered
+                .projection
+                .map(|p| source.resolve_projection(p))
+                .transpose()?
+        };
+        Ok(Self {
+            source,
+            sql: rendered.sql,
+            parameters: rendered.parameter_bytes,
+            expectation: rendered.parameter_expectation,
+            projection,
+            kind: if result_kind == 0 { 1 } else { 0 },
+            result_kind,
+            scalar_count,
+            timeout: Duration::from_nanos(rendered.timeout_ns),
+            submitted: AtomicBool::new(true),
         })
     }
     pub fn submit(&self, source: &Source) -> Result<()> {

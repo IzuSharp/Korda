@@ -2,7 +2,8 @@ use crate::*;
 use nativeweave_data_contracts::wire::{Batch, Descriptor, Expectation};
 use nativeweave_query_binding::{CteReference, PlanReference, ProjectionBinding, SourceIdentity};
 use sea_query::{
-    Alias as SqlAlias, Func, PostgresQueryBuilder, Query, SqliteQueryBuilder, Value, Values,
+    Alias as SqlAlias, ExprTrait, Func, PostgresQueryBuilder, Query, SqliteQueryBuilder, Value,
+    Values,
 };
 use sha2::{Digest, Sha256};
 use std::sync::OnceLock;
@@ -64,7 +65,16 @@ impl NativeCte {
                         .filter(|a| is_declared(&a.model))
                         .count()
             };
-            let anchor_refs = usize::from(is_declared(&body.root))
+            let nested_refs = |data: &NativeState| {
+                data.subqueries
+                    .iter()
+                    .map(|plan| {
+                        recursive_references(&plan.binding.root, &plan.data, declared.model.hash())
+                    })
+                    .sum::<usize>()
+            };
+            let anchor_refs = nested_refs(&body.data)
+                + usize::from(is_declared(&body.root))
                 + body
                     .data
                     .aliases
@@ -78,6 +88,7 @@ impl NativeCte {
                 || body.data.set_operations.len() != 1
                 || *operation > 1
                 || refs(member) != 1
+                || nested_refs(&member.data) != 0
                 || !member.data.set_operations.is_empty()
                 || !member.data.ctes.is_empty()
                 || member.data.grouped
@@ -99,6 +110,12 @@ impl NativeCte {
     }
 }
 impl NativePlan {
+    /// B04 must reject row-lock execution without its live explicit transaction,
+    /// before admission/render or dispatch. The requirement follows nested plans.
+    pub fn requires_transaction(&self) -> bool {
+        self.data.requires_transaction
+    }
+
     /// Validates and snapshots one execution before provider dispatch. Ordinary plans submit once;
     /// prepared shapes use a fresh owned snapshot every time. Native compilation is cached per plan.
     pub fn render(
@@ -329,13 +346,19 @@ impl NativePlan {
                     statement.expr(Expr::Constant(Value::Int(Some(1))));
                 }
                 let mut outer = Query::select();
-                outer.expr(
-                    Expr::case(
-                        Expr::exists(statement),
-                        Expr::Constant(Value::BigInt(Some(1))),
-                    )
-                    .finally(Expr::Constant(Value::BigInt(Some(0)))),
-                );
+                let value: Expr = Expr::case(
+                    Expr::exists(statement),
+                    Expr::Constant(Value::BigInt(Some(1))),
+                )
+                .finally(Expr::Constant(Value::BigInt(Some(0))))
+                .into();
+                outer.expr(if profile == Profile::PostgreSql {
+                    // PostgreSQL otherwise infers integer for the fixed CASE literals;
+                    // B06/B07 correctly require the declared Int64 scalar metadata.
+                    value.cast_as(SqlAlias::new("bigint"))
+                } else {
+                    value
+                });
                 Ok(render_select(&outer))
             }
             6 => {
@@ -389,4 +412,28 @@ pub(crate) fn scalar(id: u32, nullable: bool) -> Codec {
 fn append(target: &mut Vec<u8>, bytes: &[u8]) {
     target.extend_from_slice(&(bytes.len() as u64).to_le_bytes());
     target.extend_from_slice(bytes);
+}
+
+fn recursive_references(root: &ModelBinding, data: &NativeState, hash: [u8; 32]) -> usize {
+    usize::from(root.model.hash() == hash)
+        + data
+            .aliases
+            .values()
+            .filter(|a| a.model.model.hash() == hash)
+            .count()
+        + data
+            .subqueries
+            .iter()
+            .map(|p| recursive_references(&p.binding.root, &p.data, hash))
+            .sum::<usize>()
+        + data
+            .set_operations
+            .iter()
+            .map(|(_, p)| recursive_references(&p.binding.root, &p.data, hash))
+            .sum::<usize>()
+        + data
+            .ctes
+            .values()
+            .map(|c| recursive_references(&c.body.binding.root, &c.body.data, hash))
+            .sum::<usize>()
 }

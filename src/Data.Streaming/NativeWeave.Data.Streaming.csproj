@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
+    <IsPackable>true</IsPackable>
     <AssemblyName>NativeWeave.Data.Streaming</AssemblyName>
     <RootNamespace>NativeWeave.Database.Internal</RootNamespace>
     <IsAotCompatible>true</IsAotCompatible>
@@ -11,5 +12,6 @@
     <InternalsVisibleTo Include="NativeWeave.Data.Streaming.Tests" />
     <InternalsVisibleTo Include="NativeWeave.Data.Streaming.Sample" />
     <InternalsVisibleTo Include="NativeWeave.Database" />
+    <InternalsVisibleTo Include="NativeWeave.Data.Materialization.Tests" />
   </ItemGroup>
 </Project>

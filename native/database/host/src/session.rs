@@ -17,7 +17,7 @@ use std::{
         Arc, Mutex, Weak,
         atomic::{AtomicBool, Ordering},
     },
-    time::{Duration, Instant},
+    time::Instant,
 };
 use tokio::sync::{Mutex as AsyncMutex, Notify, OwnedSemaphorePermit};
 
@@ -33,6 +33,7 @@ pub struct Session {
     pub closing: AtomicBool,
     pub retired: AtomicBool,
     active: AtomicBool,
+    discard: AtomicBool,
     changed: Notify,
     permit: Mutex<Option<OwnedSemaphorePermit>>,
     pub transaction: Mutex<Option<Weak<TransactionOwner>>>,
@@ -71,7 +72,7 @@ impl Session {
                     lease,
                     nativeweave_data_postgres::SessionConfig {
                         statement_timeout: source.config.limits.command,
-                        cleanup_timeout: Duration::from_secs(5),
+                        cleanup_timeout: std::time::Duration::from_secs(5),
                         max_sql_bytes: source.config.limits.parameter_bytes,
                     },
                 )
@@ -97,6 +98,7 @@ impl Session {
             closing: AtomicBool::new(false),
             retired: AtomicBool::new(false),
             active: AtomicBool::new(false),
+            discard: AtomicBool::new(false),
             changed: Notify::new(),
             permit: Mutex::new(Some(permit)),
             transaction: Mutex::new(None),
@@ -130,7 +132,7 @@ impl Session {
         let mut gate = CommandGate {
             session: self.clone(),
             transaction: None,
-            completed: false,
+            dispatched: false,
         };
         if self.closing.load(Ordering::Acquire) || self.source.closing.load(Ordering::Acquire) {
             return Err(Error::closed());
@@ -203,7 +205,11 @@ impl Session {
                 }
                 #[cfg(feature = "sqlite")]
                 ProviderSession::Sqlite(value) => {
-                    let _ = value.return_to_pool().await;
+                    if session.discard.load(Ordering::Acquire) {
+                        let _ = value.close().await;
+                    } else {
+                        let _ = value.return_to_pool().await;
+                    }
                 }
             }
             session
@@ -231,7 +237,7 @@ impl Session {
         self: &Arc<Self>,
         plan: Arc<SqlPlan>,
         cancel: Arc<crate::operation::Cancel>,
-        gate: CommandGate,
+        mut gate: CommandGate,
     ) -> Result<crate::operation::Value> {
         if cancel.requested() {
             return Err(Error::canceled());
@@ -246,22 +252,94 @@ impl Session {
         let deadline = Instant::now()
             .checked_add(plan.timeout)
             .ok_or_else(|| Error::invalid("command deadline"))?;
+        gate.dispatched = true;
+        if plan.kind == 2 {
+            self.discard.store(true, Ordering::Release);
+        }
         if plan.result_kind == 0 {
-            let result = self.execute_count(&plan, cancel).await;
+            let work = self.execute_count(&plan, cancel.clone());
+            tokio::pin!(work);
+            let mut timed_out = false;
+            let result = tokio::select! { biased; value = &mut work => value, _ = tokio::time::sleep_until(tokio::time::Instant::from_std(deadline)) => { timed_out = true; cancel.request(); work.await } };
             gate.complete(result.is_err());
             if plan.kind == 2 {
                 self.request_close();
                 self.join().await;
             }
+            if timed_out {
+                return Err(Error::new(
+                    nativeweave_interop_abi::NW_TIMEOUT,
+                    8,
+                    "command total deadline expired",
+                ));
+            }
             Ok(crate::operation::Value::Count(
                 i64::try_from(result?).map_err(|_| Error::capacity())?,
             ))
         } else {
-            let cursor = CursorOwner::open(self.clone(), plan, cancel, gate, deadline).await?;
-            self.cursors
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .push(Arc::downgrade(&cursor));
+            let scalar_count = plan.scalar_count;
+            let cursor =
+                CursorOwner::open(self.clone(), plan.clone(), cancel.clone(), gate, deadline)
+                    .await?;
+            {
+                let mut children = self.cursors.lock().unwrap_or_else(|e| e.into_inner());
+                children.retain(|c| {
+                    c.upgrade()
+                        .is_some_and(|c| !c.retired.load(Ordering::Acquire))
+                });
+                children.push(Arc::downgrade(&cursor));
+            }
+            if self.closing.load(Ordering::Acquire) || self.source.closing.load(Ordering::Acquire) {
+                cursor.request_close();
+                cursor.join().await;
+                return Err(Error::closed());
+            }
+            if scalar_count {
+                let fetched = cursor
+                    .fetch(cancel, 2, self.source.config.limits.batch_bytes)
+                    .await;
+                let result = fetched.and_then(|buffer| {
+                    let projection = plan
+                        .projection
+                        .as_ref()
+                        .ok_or_else(|| Error::state("scalar projection missing"))?;
+                    let bound = projection
+                        .projection
+                        .fields()
+                        .iter()
+                        .map(|f| projection.codecs.bound(&f.codec))
+                        .collect::<std::result::Result<Vec<_>, _>>()?;
+                    let shape = Shape::parse(
+                        projection.projection.bytes(),
+                        self.source.config.profile,
+                        projection.id,
+                        &bound,
+                        true,
+                    )?;
+                    let batch = nativeweave_data_contracts::wire::Batch::parse(
+                        buffer.view(),
+                        shape.expectation().clone(),
+                    )?;
+                    if batch.rows() != 1 {
+                        return Err(Error::new(
+                            nativeweave_interop_abi::NW_DOMAIN_ERROR,
+                            4,
+                            "count cardinality",
+                        ));
+                    }
+                    let value = batch
+                        .cell(0, 0)?
+                        .ok_or_else(|| Error::state("null native count"))?;
+                    Ok(i64::from_le_bytes(
+                        value
+                            .try_into()
+                            .map_err(|_| Error::state("count scalar width"))?,
+                    ))
+                });
+                cursor.request_close();
+                cursor.join().await;
+                return Ok(crate::operation::Value::Count(result?));
+            }
             Ok(crate::operation::Value::Owner(
                 crate::abi::OwnerValue::Cursor(cursor),
             ))
@@ -358,19 +436,22 @@ impl Drop for Session {
 pub struct CommandGate {
     session: Arc<Session>,
     transaction: Option<CommandLease<Driver>>,
-    completed: bool,
+    dispatched: bool,
 }
 impl CommandGate {
     pub fn complete(mut self, failed: bool) {
         if let Some(lease) = self.transaction.take() {
             lease.complete(failed, ProtocolState::Clean);
         }
-        self.completed = true;
     }
 }
 impl Drop for CommandGate {
     fn drop(&mut self) {
-        self.transaction.take();
+        if let Some(lease) = self.transaction.take() {
+            if !self.dispatched {
+                lease.complete(false, ProtocolState::Clean);
+            }
+        }
         self.session.active.store(false, Ordering::Release);
         self.session.changed.notify_waiters();
     }
@@ -383,16 +464,20 @@ pub enum NativeCursor {
     Sqlite(Cursor<sqlx::sqlite::SqliteRow>),
 }
 impl NativeCursor {
-    async fn fetch(&mut self) -> nativeweave_data_streaming::Result<OwnedBatch> {
+    async fn fetch(
+        &mut self,
+        rows: usize,
+        bytes: usize,
+    ) -> nativeweave_data_streaming::Result<OwnedBatch> {
         match self {
             #[cfg(feature = "postgres")]
             Self::Postgres(c) => {
-                c.fetch().await?;
+                c.fetch_bounded(rows, bytes).await?;
                 c.take_batch()
             }
             #[cfg(feature = "sqlite")]
             Self::Sqlite(c) => {
-                c.fetch().await?;
+                c.fetch_bounded(rows, bytes).await?;
                 c.take_batch()
             }
         }
@@ -418,6 +503,10 @@ pub struct CursorOwner {
     pub last_end: AtomicBool,
     pub deadline: Instant,
     pub projection_id: u32,
+    pub batch_live: AtomicBool,
+    end_wire: Vec<u8>,
+    end_sent: AtomicBool,
+    retirement: Mutex<Option<nativeweave_data_streaming::Result<Retirement>>>,
 }
 fn stream_error(_: impl std::fmt::Display) -> nativeweave_data_streaming::StreamError {
     nativeweave_data_streaming::StreamError {
@@ -450,6 +539,8 @@ impl CursorOwner {
             &bound,
             plan.result_kind == 1,
         )?;
+        let end_wire =
+            nativeweave_data_contracts::wire::Batch::encode(shape.expectation(), 0, &[])?;
         let limits = session.source.config.limits.stream(
             if plan.result_kind == 1 {
                 2
@@ -581,12 +672,18 @@ impl CursorOwner {
             last_end: AtomicBool::new(false),
             deadline,
             projection_id: projection.id,
+            batch_live: AtomicBool::new(false),
+            end_wire,
+            end_sent: AtomicBool::new(false),
+            retirement: Mutex::new(None),
         }))
     }
     pub async fn fetch(
         self: &Arc<Self>,
         cancel: Arc<crate::operation::Cancel>,
-    ) -> Result<OwnedBatch> {
+        rows: usize,
+        bytes: usize,
+    ) -> Result<crate::abi::Buffer> {
         if self.closing.load(Ordering::Acquire) {
             return Err(Error::closed());
         }
@@ -604,21 +701,93 @@ impl CursorOwner {
             }
         }
         let _active = Active(self.clone());
-        cancel.install(self.stop.clone());
-        if cancel.requested() || Instant::now() >= self.deadline {
-            (self.stop)();
+        if self.batch_live.swap(true, Ordering::AcqRel) {
+            return Err(Error::state("release the previous batch before fetching"));
         }
-        let result = self.cursor.lock().await.fetch().await;
+        struct BatchClaim(Arc<CursorOwner>, bool);
+        impl Drop for BatchClaim {
+            fn drop(&mut self) {
+                if !self.1 {
+                    self.0.batch_live.store(false, Ordering::Release);
+                }
+            }
+        }
+        let mut claim = BatchClaim(self.clone(), false);
+        if self.last_end.load(Ordering::Acquire) {
+            if self.end_sent.swap(true, Ordering::AcqRel) {
+                return Err(Error::state("cursor end was already transferred"));
+            }
+            claim.1 = true;
+            return Ok(crate::abi::Buffer::cursor_end(
+                self.clone(),
+                self.end_wire.clone(),
+            ));
+        }
+        cancel.install(self.stop.clone());
+        let (result, stopped, timed_out) = {
+            let mut cursor = self.cursor.lock().await;
+            let work = cursor.fetch(rows, bytes);
+            tokio::pin!(work);
+            let mut stopped = false;
+            let mut timed_out = false;
+            let result = tokio::select! {
+                biased;
+                _ = cancel.notified() => { stopped = true; (self.stop)(); work.await },
+                _ = tokio::time::sleep_until(tokio::time::Instant::from_std(self.deadline)) => { timed_out = true; (self.stop)(); work.await },
+                value = &mut work => value,
+            };
+            (result, stopped, timed_out)
+        };
+        if stopped || timed_out {
+            drop(result);
+            self.request_close();
+            self.join().await;
+            return Err(if timed_out {
+                Error::new(
+                    nativeweave_interop_abi::NW_TIMEOUT,
+                    8,
+                    "query total deadline expired",
+                )
+            } else {
+                Error::canceled()
+            });
+        }
         match result {
             Ok(batch) => {
                 self.last_end.store(batch.end(), Ordering::Release);
-                Ok(batch)
+                if batch.rows() == 0 {
+                    self.end_sent.store(true, Ordering::Release);
+                }
+                claim.1 = true;
+                Ok(crate::abi::Buffer::cursor_batch(self.clone(), batch))
             }
-            Err(e) => {
+            Err(error) => {
                 self.request_close();
-                Err(e.into())
+                self.join().await;
+                Err(error.into())
             }
         }
+    }
+    pub fn snapshot(&self) -> Vec<u8> {
+        let state = self.retirement.lock().unwrap_or_else(|e| e.into_inner());
+        let (cleanup, disposition, safe) = match state.as_ref() {
+            Some(Ok(receipt)) => (
+                if receipt.native_retired { 2 } else { 1 },
+                receipt.disposition as u32,
+                receipt.native_retired,
+            ),
+            Some(Err(_)) => (4, ConnectionDisposition::Quarantined as u32, false),
+            None => (
+                if self.closing.load(Ordering::Acquire) {
+                    1
+                } else {
+                    0
+                },
+                0,
+                false,
+            ),
+        };
+        crate::abi::snapshot(0, 0, false, cleanup, disposition, safe, false, 0, None)
     }
     pub fn request_close(self: &Arc<Self>) {
         if self.closing.swap(true, Ordering::AcqRel) {
@@ -632,6 +801,7 @@ impl CursorOwner {
             if let Some(gate) = gate {
                 gate.complete(result.is_err());
             }
+            *cursor.retirement.lock().unwrap_or_else(|e| e.into_inner()) = Some(result);
             cursor.retired.store(true, Ordering::Release);
             cursor.changed.notify_waiters();
         });

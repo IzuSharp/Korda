@@ -985,6 +985,7 @@ dependencies = [
  "nativeweave-interop-async",
  "nativeweave-interop-errors",
  "nativeweave-query-binding",
+ "nativeweave-query-native",
  "serde_json",
  "sha2 0.10.9",
  "sqlx",

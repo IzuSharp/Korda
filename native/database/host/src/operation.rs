@@ -36,6 +36,9 @@ impl Cancel {
             hook();
         }
     }
+    pub fn detach(&self) {
+        self.hook.lock().unwrap_or_else(|e| e.into_inner()).take();
+    }
     pub fn requested(&self) -> bool {
         self.requested.load(Ordering::Acquire)
     }
@@ -65,6 +68,7 @@ pub enum Value {
 pub type Action = Box<dyn FnOnce(Arc<Cancel>) -> BoxFuture<'static, Result<Value>> + Send>;
 enum Work {
     Async(Action),
+    Immediate(Action),
     SourceClose,
 }
 /// An exact Core operation; setup/callback and worker sources retire independently.
@@ -77,6 +81,7 @@ pub struct DbOperation {
     pub error_taken: AtomicBool,
     pub result_kind: u32,
     counted: bool,
+    source_close: bool,
 }
 impl DbOperation {
     pub fn create(
@@ -85,21 +90,32 @@ impl DbOperation {
         control: bool,
         action: Action,
     ) -> Result<Arc<Self>> {
-        source.reserve_operation(control)?;
+        let counted = source.reserve_operation(control)?;
         OPERATIONS.fetch_add(1, Ordering::Relaxed);
         Ok(Arc::new(Self {
             source,
             core: Arc::new(Operation::new()),
             cancel: Arc::new(Cancel::new()),
-            work: Mutex::new(Some(Work::Async(action))),
+            work: Mutex::new(Some(if counted {
+                Work::Async(action)
+            } else {
+                Work::Immediate(action)
+            })),
             error: Mutex::new(None),
             error_taken: AtomicBool::new(false),
             result_kind,
-            counted: true,
+            counted,
+            source_close: false,
         }))
     }
     pub fn close_source(source: Arc<Source>) -> Result<Arc<Self>> {
-        // Closure reserves no runtime work: the waiter joins the owner thread after all ordinary work.
+        // A distinct finite cleanup reserve avoids waiting on the runtime that is being joined.
+        source
+            .close_waiters
+            .try_update(Ordering::AcqRel, Ordering::Acquire, |n| {
+                (n < source.config.limits.connections as usize + 1).then_some(n + 1)
+            })
+            .map_err(|_| Error::capacity())?;
         OPERATIONS.fetch_add(1, Ordering::Relaxed);
         Ok(Arc::new(Self {
             source,
@@ -110,6 +126,7 @@ impl DbOperation {
             error_taken: AtomicBool::new(false),
             result_kind: 101,
             counted: false,
+            source_close: true,
         }))
     }
     /// # Safety
@@ -129,6 +146,27 @@ impl DbOperation {
         };
         let operation = self.clone();
         match work {
+            Work::Immediate(action) => {
+                let result = std::panic::catch_unwind(AssertUnwindSafe(|| {
+                    action(operation.cancel.clone()).now_or_never()
+                }));
+                let result = match result {
+                    Ok(Some(value)) => value,
+                    Ok(None) => Err(Error::state(
+                        "cleanup attempted I/O after engine retirement",
+                    )),
+                    Err(_) => Err(Error::new(
+                        NW_NATIVE_PANIC,
+                        8,
+                        "retired cleanup panic contained",
+                    )),
+                };
+                // SAFETY: the live Core source lease covers synchronous terminal delivery inside start.
+                unsafe {
+                    operation.complete(result);
+                }
+                drop(lease);
+            }
             Work::Async(action) => {
                 self.source.runtime.handle.spawn(async move {
                     let result = AssertUnwindSafe(async { action(operation.cancel.clone()).await })
@@ -174,6 +212,9 @@ impl DbOperation {
         NW_OK
     }
     unsafe fn complete(&self, result: Result<Value>) {
+        // Terminal work has transferred its independent cursor/buffer owner. Core may
+        // request cancellation while draining the old callback; that cannot stop the result.
+        self.cancel.detach();
         let (status, value, fields) = match result {
             Ok(v) => (NW_OK, Some(v), Default::default()),
             Err(error) => {
@@ -191,6 +232,9 @@ impl Drop for DbOperation {
     fn drop(&mut self) {
         if self.counted {
             self.source.release_operation();
+        }
+        if self.source_close {
+            self.source.close_waiters.fetch_sub(1, Ordering::AcqRel);
         }
         OPERATIONS.fetch_sub(1, Ordering::Relaxed);
     }

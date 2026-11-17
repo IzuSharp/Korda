@@ -70,12 +70,13 @@ impl<'a> Fields<'a> {
     }
 }
 
+type DecodedValues = (Codec, u32, Vec<Option<Arc<[u8]>>>);
 pub(crate) fn values(
     root: &ModelBinding,
     bytes: &[u8],
     exact: Option<u32>,
     limits: Limits,
-) -> Result<(Codec, u32, Vec<Option<Arc<[u8]>>>)> {
+) -> Result<DecodedValues> {
     if bytes.len() < 112 || bytes.len() > limits.bytes {
         return Err(invalid("value size"));
     }

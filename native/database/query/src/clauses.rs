@@ -160,6 +160,7 @@ impl NativeQuery {
                     3 => UnionType::Except,
                     _ => return Err(unsupported("set operation")),
                 };
+                data.requires_transaction |= plan.requires_transaction();
                 data.statement.union(operation, plan.selection()?);
                 data.set_operations.push((f.u32(2)?, Arc::clone(plan)));
                 data.statement_nodes += plan.data.statement_nodes;
@@ -189,6 +190,7 @@ impl NativeQuery {
                 }
                 data.recursive_cte |= cte.binding.recursive;
                 data.with_clause.recursive(data.recursive_cte).cte(table);
+                data.requires_transaction |= cte.body.requires_transaction();
                 data.has_cte = true;
                 data.statement_nodes += cte.body.data.statement_nodes;
             }
@@ -230,6 +232,7 @@ impl NativeQuery {
                 if self.root.source.profile != Profile::PostgreSql {
                     return Err(unsupported("row locks require PostgreSQL"));
                 }
+                data.requires_transaction = true;
                 let mode = match f.u32(1)? {
                     0 => LockType::Update,
                     1 => LockType::Share,
@@ -350,6 +353,8 @@ impl NativeQuery {
                     .plans
                     .get(&(f.u64(1)? as u32))
                     .ok_or_else(|| invalid("native subquery plan"))?;
+                data.requires_transaction |= plan.requires_transaction();
+                data.subqueries.push(Arc::clone(plan));
                 let mut nodes = plan.data.statement_nodes + 1;
                 let expr = match f.u32(2)? {
                     0 => Expr::exists(plan.selection()?),

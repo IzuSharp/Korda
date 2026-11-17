@@ -162,6 +162,32 @@ impl<R: CodecRow> Cursor<R> {
             }
         }
     }
+    /// Fetches under a caller demand no larger than the already-reserved cursor limits.
+    /// This changes neither the provider nor the finite reservation. As with `fetch`,
+    /// the Host must retain an admitted future through its native terminal result.
+    pub async fn fetch_bounded(&mut self, max_rows: usize, max_bytes: usize) -> Result<Fetch> {
+        if max_rows == 0
+            || max_rows > self.limits.max_rows
+            || max_bytes == 0
+            || max_bytes > self.limits.max_batch_bytes
+        {
+            return Err(error(
+                ErrorKind::Capacity,
+                "fetch demand exceeds configured limits",
+            ));
+        }
+        let previous = self.limits;
+        let bounded = Limits {
+            max_rows,
+            max_batch_bytes: max_bytes,
+            ..previous
+        };
+        self.shape.validate_limits(bounded)?;
+        self.limits = bounded;
+        let result = self.fetch().await;
+        self.limits = previous;
+        result
+    }
     async fn fill(&mut self) -> Result<Fetch> {
         let mut rows = Vec::with_capacity(self.limits.max_rows);
         let mut bytes = self.shape.base_bytes;
@@ -192,6 +218,12 @@ impl<R: CodecRow> Cursor<R> {
                 .checked_add(row.wire_bytes)
                 .ok_or_else(|| error(ErrorKind::Capacity, "batch byte overflow"))?;
             if next_bytes > self.limits.max_batch_bytes {
+                if rows.is_empty() {
+                    return Err(error(
+                        ErrorKind::LargeValueRequiresStreaming,
+                        "single row exceeds this fetch byte demand",
+                    ));
+                }
                 // One bounded already-decoded lookahead row is retained; it is
                 // included in the reservation and no further row is pulled.
                 self.pending = Some(row);

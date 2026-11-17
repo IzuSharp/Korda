@@ -159,8 +159,9 @@ public sealed class ResultField
 /// no CLR delegate or function pointer is encoded in metadata. Instances are shareable if their delegates are.</remarks>
 public sealed class Projection<T>
 {
-    internal Projection(ResultField[] fields, RowMaterializer<T> materializer, TableIdentity? table = null, bool scalar = false)
-    { Fields = fields; Materializer = materializer; Table = table; IsScalar = scalar; CanonicalBytes = Canonical.Projection(fields); ShapeHash = Canonical.Hash(CanonicalBytes); }
+    internal Projection(ResultField[] fields, RowMaterializer<T> materializer, TableIdentity? table = null, bool scalar = false, object? tokenIdentity = null)
+    { Fields = fields; Materializer = materializer; Table = table; IsScalar = scalar; TokenIdentity = tokenIdentity ?? this; CanonicalBytes = Canonical.Projection(fields); ShapeHash = Canonical.Hash(CanonicalBytes); }
+    private object TokenIdentity { get; }
     internal ResultField[] Fields { get; }
     internal RowMaterializer<T> Materializer { get; }
     internal TableIdentity? Table { get; }
@@ -199,7 +200,7 @@ public sealed class Projection<T>
                 throw new DatabaseException("The complete ordered row shape differs from its projection.", DatabaseErrorKind.ShapeMismatch);
             if (lease.Value(i) is null && !expected.IsNullable) throw new DatabaseException("A non-null column contains SQL NULL.", DatabaseErrorKind.Conversion);
         }
-        return Materializer(new RowReader(lease, this, Table));
+        return Materializer(new RowReader(lease, TokenIdentity, Table));
     }
 }
 

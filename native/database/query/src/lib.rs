@@ -75,9 +75,12 @@ pub(crate) struct NativeState {
     has_cte: bool,
     recursive_cte: bool,
     statement_nodes: usize,
+    retained_nodes: usize,
     set_operations: Vec<(u32, Arc<NativePlan>)>,
+    subqueries: Vec<Arc<NativePlan>>,
     aggregate_nodes: usize,
     grouped: bool,
+    requires_transaction: bool,
 }
 
 impl NativeQuery {
@@ -120,9 +123,12 @@ impl NativeQuery {
                 has_cte: false,
                 recursive_cte: false,
                 statement_nodes: 1,
+                retained_nodes: 0,
                 set_operations: Vec::new(),
+                subqueries: Vec::new(),
                 aggregate_nodes: 0,
                 grouped: false,
+                requires_transaction: false,
             },
         })
     }
@@ -159,7 +165,9 @@ impl NativeQuery {
         self.data.assignments.clear();
         self.data.with_clause = WithClause::new();
         self.data.statement_nodes = 0;
+        self.data.retained_nodes = 0;
         self.data.set_operations.clear();
+        self.data.subqueries.clear();
     }
     /// Copies mutable native state with a fresh B09 token generation; source remains mutable.
     pub fn clone_selected(&self) -> Result<Self> {
@@ -184,6 +192,7 @@ impl NativeQuery {
         self.data
             .slots
             .extend(plan.data.slots.iter().map(|(k, v)| (*k, Arc::clone(v))));
+        self.data.retained_nodes += plan.data.nodes();
         self.data.plans.insert(token as u32, plan);
         Ok(token)
     }
@@ -194,6 +203,7 @@ impl NativeQuery {
         self.data
             .slots
             .extend(cte.body.data.slots.iter().map(|(k, v)| (*k, Arc::clone(v))));
+        self.data.retained_nodes += cte.body.data.nodes();
         self.data.ctes.insert(token as u32, cte);
         Ok(token)
     }
@@ -216,6 +226,7 @@ impl NativeQuery {
 impl NativeState {
     fn nodes(&self) -> usize {
         self.statement_nodes
+            + self.retained_nodes
             + self.expressions.values().map(|e| e.nodes).sum::<usize>()
             + self.windows.values().map(|(_, n)| *n).sum::<usize>()
     }
@@ -247,7 +258,7 @@ impl NativeState {
                 _ => 0,
             })
             .sum();
-        self.check_extra(incoming.statement_nodes, extra, limits)
+        self.check_extra(incoming.nodes(), extra, limits)
     }
 }
 

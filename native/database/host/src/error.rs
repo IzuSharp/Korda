@@ -82,13 +82,46 @@ impl From<nativeweave_data_codecs::CodecError> for Error {
 }
 impl From<nativeweave_data_streaming::StreamError> for Error {
     fn from(e: nativeweave_data_streaming::StreamError) -> Self {
-        Self::new(NW_DOMAIN_ERROR, 4, e.message)
+        use nativeweave_data_streaming::ErrorKind as K;
+        let code = match e.kind {
+            K::Shape => 4,
+            K::Conversion => 3,
+            K::Capability => 5,
+            K::Capacity => 6,
+            K::LargeValueRequiresStreaming => 14,
+            K::InvalidState => 8,
+            _ => 1,
+        };
+        Self::new(NW_DOMAIN_ERROR, code, e.message)
     }
 }
 #[cfg(feature = "postgres")]
 impl From<nativeweave_data_postgres::ProviderError> for Error {
     fn from(e: nativeweave_data_postgres::ProviderError) -> Self {
-        let mut v = Self::new(NW_DOMAIN_ERROR, 1, e.message);
+        use nativeweave_data_postgres::ErrorKind as K;
+        let code = match e.kind {
+            K::Codec => 3,
+            K::Shape => 4,
+            K::Busy => 7,
+            K::Closed => 8,
+            K::Configuration => 8,
+            _ => {
+                if e.sqlstate.as_ref().is_some_and(|s| s.starts_with("23")) {
+                    2
+                } else {
+                    1
+                }
+            }
+        };
+        let mut v = Self::new(
+            if e.kind == K::Canceled {
+                NW_CANCELED
+            } else {
+                NW_DOMAIN_ERROR
+            },
+            code,
+            e.message,
+        );
         v.provider = e.sqlstate;
         v.correlation = e.correlation_id;
         v
@@ -97,7 +130,34 @@ impl From<nativeweave_data_postgres::ProviderError> for Error {
 #[cfg(feature = "sqlite")]
 impl From<nativeweave_data_sqlite::ProviderError> for Error {
     fn from(e: nativeweave_data_sqlite::ProviderError) -> Self {
-        Self::new(NW_DOMAIN_ERROR, 1, e.message)
+        use nativeweave_data_sqlite::ErrorKind as K;
+        let code = match e.kind {
+            K::Capacity => 6,
+            K::Codec => 3,
+            K::Closed | K::Configuration | K::Protocol => 8,
+            _ => {
+                if e.provider_code
+                    .as_ref()
+                    .and_then(|s| s.parse::<u32>().ok())
+                    .is_some_and(|c| c & 255 == 19)
+                {
+                    2
+                } else {
+                    1
+                }
+            }
+        };
+        let mut value = Self::new(
+            if matches!(e.kind, K::CanceledBeforeDispatch | K::Interrupted) {
+                NW_CANCELED
+            } else {
+                NW_DOMAIN_ERROR
+            },
+            code,
+            e.message,
+        );
+        value.provider = e.provider_code;
+        value
     }
 }
 impl From<nativeweave_data_transactions::Error> for Error {

@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>NativeWeave.Database</AssemblyName>
+    <RootNamespace>NativeWeave.Database</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IsAotCompatible>true</IsAotCompatible>
+    <IsPackable>true</IsPackable>
+    <PackageId>NativeWeave.Database</PackageId>
+    <Description>Typed application facade over independently packaged NativeWeave Rust database engines.</Description>
+    <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifier)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifier).aot.lock.json</NuGetLockFilePath>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../NativeWeave.Core/NativeWeave.Core.csproj" />
+    <ProjectReference Include="../Data.Abstractions/NativeWeave.Data.csproj" />
+    <ProjectReference Include="../Data.Transactions/NativeWeave.Database.Transactions.csproj" />
+    <ProjectReference Include="../Data.Streaming/NativeWeave.Data.Streaming.csproj" />
+    <ProjectReference Include="../Query.Binding/NativeWeave.Query.Binding.csproj" />
+    <Compile Remove="Providers/**/*.cs;DependencyInjection/**/*.cs" />
+    <Compile Include="../Query.Native/**/*.cs;../Query.Fluent/**/*.cs;../Orm.Relations/**/*.cs;../Data.Migrations/**/*.cs;../Data.Materialization/**/*.cs" Exclude="../**/obj/**/*.cs;../**/bin/**/*.cs" />
+    <InternalsVisibleTo Include="NativeWeave.Database.Sqlite" />
+    <InternalsVisibleTo Include="NativeWeave.Database.PostgreSql" />
+    <InternalsVisibleTo Include="NativeWeave.Data.NativeHost.Tests" />
+    <InternalsVisibleTo Include="NativeWeave.Query.Native.Tests" />
+    <InternalsVisibleTo Include="NativeWeave.Query.Fluent.Tests" />
+    <InternalsVisibleTo Include="NativeWeave.Orm.Relations.Tests" />
+    <InternalsVisibleTo Include="NativeWeave.Data.Migrations.Tests" />
+    <InternalsVisibleTo Include="NativeWeave.Data.Materialization.Tests" />
+  </ItemGroup>
+</Project>

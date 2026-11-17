@@ -1,22 +1,20 @@
 # Native query maintainer example
 
-B11 is internal. Application-facing examples belong to B13's typed Fluent
-surface in the `NativeWeave.Database` assembly. The compiled maintainer sample is
-`tests/Query.Native/native/src/tests.rs`: `direct_seaquery_sql_and_parameter_order_agree`
-constructs an actual typed native query from canonical B01 metadata, applies an
-expression/filter/order/limit, seals it and compares the generated SQL and exact
-argument order with direct SeaQuery. `sqlite_actual_seaquery_and_sole_binder_cases`
-and the matching PostgreSQL test execute the generated command with the existing
-B07 binder and inspect actual typed rows.
+B11 is internal. Application examples use B13's strongly typed Fluent surface in
+`NativeWeave.Database`. [Examples.cs](Examples.cs) demonstrates the actual narrow
+integration seam: static table/DTO mapping, metadata registration, native filter and
+projection calls, clone/seal into an immutable reusable shape, execution through the
+real B04 Host, and deterministic reverse-order disposal. It is compiled into
+`tests/Query.Native/NativeWeave.Query.Native.Tests.csproj` and called by both the JIT
+and Native AOT runs; it introduces no separately distributed package or public FFI.
 
-Run the current component tests with the repository's pinned toolchains:
+The native consumer in `tests/Query.Native/native/src/tests.rs` supplies the direct
+SeaQuery SQL/ordered-argument comparison, provider result oracles and advanced
+JOIN/CTE/set/window/NULL cases. `tests/Query.Native/Program.cs` replays them through
+C# and the canonical ABI against both real providers. Exact source and artifact
+identities are recorded by `tests/Query.Native/verify.py`.
 
-```sh
-cargo test --manifest-path tests/Query.Native/native/Cargo.toml --locked --offline
-```
-
-For complete two-provider evidence, set `NATIVEWEAVE_TEST_POSTGRES_URL` to an
-isolated disposable test database and the required PostgreSQL test. This is a maintainer
-test command, not a consumer installation requirement. Do not label the optional
-PostgreSQL test's absent-endpoint path or native-only execution as full B11 host
-or Native AOT acceptance.
+Use the command in [the guide](../../../docs/guides/query-native.md). It requires
+PostgreSQL 18 tooling and a committed, built B04 native Host; ordinary application
+users do not install Rust or run this maintainer verifier. No absent-provider path
+is recorded as an acceptance pass.

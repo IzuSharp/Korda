@@ -12,3 +12,5 @@ pub mod session;
 pub mod sql;
 
 pub use error::{Error, Result};
+
+pub mod query;

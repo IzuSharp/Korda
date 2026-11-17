@@ -12,6 +12,8 @@ use sha2::{Digest, Sha256};
 use sqlx::Connection;
 use std::sync::Arc;
 
+type ExpectedRows = Vec<Vec<Option<Vec<u8>>>>;
+type QueryCase = (&'static str, RenderedQuery, ExpectedRows);
 type Field = (u16, u16, Vec<u8>);
 fn field(id: u16, ty: u16, v: Vec<u8>) -> Field {
     (id, ty, v)
@@ -441,7 +443,7 @@ fn expanded_native_expression_budget_prevents_exponential_cloning() {
     assert!(q.counts().2 <= 128);
 }
 
-fn case_queries(c: &Context) -> Vec<(&'static str, RenderedQuery, Vec<Vec<Option<Vec<u8>>>>)> {
+fn case_queries(c: &Context) -> Vec<QueryCase> {
     let mut cases = Vec::new();
     let mut q = c.query();
     let id = q.column(0, c.col("Id")).unwrap();
@@ -632,7 +634,9 @@ async fn sqlite_actual_seaquery_and_sole_binder_cases() {
         .unwrap();
     setup_sqlite(&mut db).await;
     let c = Context::new(Profile::Sqlite);
+    let mut oracles = Vec::new();
     for (label, command, expected) in case_queries(&c) {
+        oracles.push(oracle(label, &command, &expected));
         let params = nativeweave_data_codecs::Parameters::decode(
             &command.parameter_bytes,
             command.parameter_expectation,
@@ -667,6 +671,7 @@ async fn sqlite_actual_seaquery_and_sole_binder_cases() {
         }
         assert_eq!(actual, expected, "{label}");
     }
+    write_oracles(c.root.source.profile, &oracles);
 }
 async fn setup_sqlite(db: &mut sqlx::SqliteConnection) {
     for sql in [
@@ -693,7 +698,9 @@ async fn postgres_actual_seaquery_and_sole_binder_cases() {
         sqlx::query(sql).execute(&mut db).await.unwrap();
     }
     let c = Context::new(Profile::PostgreSql);
+    let mut oracles = Vec::new();
     for (label, command, expected) in case_queries(&c) {
+        oracles.push(oracle(label, &command, &expected));
         let params = nativeweave_data_codecs::Parameters::decode(
             &command.parameter_bytes,
             command.parameter_expectation,
@@ -729,6 +736,7 @@ async fn postgres_actual_seaquery_and_sole_binder_cases() {
         }
         assert_eq!(actual, expected, "{label}");
     }
+    write_oracles(c.root.source.profile, &oracles);
 }
 
 fn single_column_model(c: &Context, name: &str) -> ModelBinding {
@@ -778,7 +786,7 @@ fn selected_ids(c: &Context, op: u32, threshold: i64) -> NativeQuery {
     select(&mut q, &[(id, "Id", scalar(3, false))]);
     q
 }
-fn advanced_cases(c: &Context) -> Vec<(&'static str, RenderedQuery, Vec<Vec<Option<Vec<u8>>>>)> {
+fn advanced_cases(c: &Context) -> Vec<QueryCase> {
     let mut cases = Vec::new();
     for (operation, wanted) in [
         (0, vec![0, 1, 2]),
@@ -1020,4 +1028,90 @@ fn malformed_operations_and_nonfinite_values_fail_without_mutation() {
     assert!(q.value(&invalid_utf8).is_err());
     assert!(q.clause(5, &record(6, vec![token(1, u64::MAX)])).is_err());
     assert_eq!(q.counts(), before);
+}
+
+fn oracle(label: &str, command: &RenderedQuery, expected: &ExpectedRows) -> serde_json::Value {
+    let batch = Batch::parse(
+        &command.parameter_bytes,
+        command.parameter_expectation.clone(),
+    )
+    .unwrap();
+    let args = (0..command.parameter_expectation.descriptors.len())
+        .map(|i| batch.cell(0, i).unwrap().map(hex))
+        .collect::<Vec<_>>();
+    serde_json::json!({"label":label,"sql":command.sql,"ordered_arguments":args,
+        "rows": expected.iter().map(|row| row.iter().map(|cell|cell.as_deref().map_or_else(||"null".to_owned(),hex)).collect::<Vec<_>>().join("|")).collect::<Vec<_>>()})
+}
+fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+fn write_oracles(profile: Profile, values: &[serde_json::Value]) {
+    if let Ok(dir) = std::env::var("NATIVEWEAVE_QUERY_ORACLE_OUTPUT") {
+        let path = std::path::Path::new(&dir).join(if profile == Profile::Sqlite {
+            "sqlite.json"
+        } else {
+            "postgres.json"
+        });
+        std::fs::write(path, serde_json::to_vec_pretty(values).unwrap()).unwrap();
+    }
+}
+
+#[test]
+fn unused_imports_charge_retained_expanded_native_trees() {
+    let c = Context::new(Profile::Sqlite);
+    let mut source = c.query();
+    let v = c.value(&mut source, 1);
+    let mut e = source.binary(1, v, v).unwrap();
+    for _ in 0..7 {
+        e = source.binary(11, e, e).unwrap();
+    }
+    c.select_all(&mut source);
+    let expanded = source.counts().2;
+    let mut destination = c.query();
+    let mut admitted = 0;
+    loop {
+        let plan = source.clone_selected().unwrap().seal(8).unwrap();
+        let before = destination.counts();
+        match destination.import_plan(plan) {
+            Ok(_) => {
+                admitted += 1;
+                assert!(destination.counts().2 >= admitted * expanded);
+            }
+            Err(_) => {
+                assert_eq!(before, destination.counts());
+                break;
+            }
+        }
+        assert!(
+            admitted < 10,
+            "unused imported trees must not escape expanded-node charging"
+        );
+    }
+    assert!(admitted > 0);
+    assert!(destination.counts().2 <= Limits::default().nodes);
+}
+
+#[test]
+fn recursive_self_references_cannot_hide_in_nested_subqueries() {
+    let c = Context::new(Profile::Sqlite);
+    let declared = single_column_model(&c, "Numbers");
+    let mut nested = from_model(&c, declared.clone());
+    let id = nested.column(0, column(&declared, "Id")).unwrap();
+    select(&mut nested, &[(id, "Id", scalar(3, false))]);
+    let mut member = from_model(&c, declared.clone());
+    let id = member.column(0, column(&declared, "Id")).unwrap();
+    let imported = member.import_plan(nested.seal(8).unwrap()).unwrap();
+    let exists = member
+        .clause(14, &record(6, vec![token(1, imported), num(2, 0)]))
+        .unwrap();
+    where_expr(&mut member, exists);
+    select(&mut member, &[(id, "Id", scalar(3, false))]);
+    let mut anchor = selected_ids(&c, 1, 0);
+    let imported = anchor.import_plan(member.seal(8).unwrap()).unwrap();
+    anchor
+        .clause(9, &record(6, vec![token(1, imported), num(2, 1)]))
+        .unwrap();
+    let before = anchor.counts();
+    assert!(NativeCte::create(declared.clone(), declared.model.table_id(), &anchor, 1).is_err());
+    assert_eq!(before, anchor.counts());
 }

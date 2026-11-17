@@ -17,10 +17,7 @@ use std::{
     collections::HashMap,
     ffi::c_void,
     panic::{AssertUnwindSafe, catch_unwind},
-    sync::{
-        Arc, Mutex, OnceLock,
-        atomic::{AtomicUsize, Ordering},
-    },
+    sync::{Arc, Mutex, OnceLock, atomic::Ordering},
 };
 
 pub enum OwnerValue {
@@ -31,6 +28,9 @@ pub enum OwnerValue {
     Savepoint(Arc<SavepointOwner>),
     Model(Arc<Source>, ModelBinding),
     SqlPlan(Arc<SqlPlan>),
+    Query(Arc<Source>, Mutex<nativeweave_query_native::NativeQuery>),
+    Plan(Arc<Source>, Arc<nativeweave_query_native::NativePlan>),
+    Cte(Arc<Source>, Arc<nativeweave_query_native::NativeCte>),
 }
 impl OwnerValue {
     pub fn source(&self) -> Arc<Source> {
@@ -42,6 +42,7 @@ impl OwnerValue {
             Self::Savepoint(v) => v.transaction.session.source.clone(),
             Self::Model(v, _) => v.clone(),
             Self::SqlPlan(v) => v.source.clone(),
+            Self::Query(s, _) | Self::Plan(s, _) | Self::Cte(s, _) => s.clone(),
         }
     }
     pub fn kind(&self) -> u32 {
@@ -86,26 +87,28 @@ impl Drop for OwnerValue {
         }
     }
 }
-enum Stored {
+pub(crate) enum Stored {
     Owner(Arc<OwnerValue>),
     Operation(Arc<DbOperation>),
     Buffer(Arc<Buffer>),
 }
-static HANDLES: OnceLock<Mutex<HashMap<usize, Stored>>> = OnceLock::new();
-static NEXT_HANDLE: AtomicUsize = AtomicUsize::new(0x1000);
-fn handles() -> &'static Mutex<HashMap<usize, Stored>> {
+static HANDLES: OnceLock<Mutex<HashMap<usize, Box<Stored>>>> = OnceLock::new();
+pub fn module_identity() -> u64 {
+    &HANDLES as *const _ as usize as u64
+}
+fn handles() -> &'static Mutex<HashMap<usize, Box<Stored>>> {
     HANDLES.get_or_init(|| Mutex::new(HashMap::new()))
 }
-// Opaque references are monotonically allocated module-local identities, never dereferenced addresses.
-// No owner ID is reused within process lifetime; reserved zero cannot name an owner.
-fn publish(value: Stored) -> Result<*mut c_void> {
-    let id = NEXT_HANDLE
-        .try_update(Ordering::AcqRel, Ordering::Acquire, |n| n.checked_add(16))
-        .map_err(|_| Error::capacity())?;
+// A live allocation is a unique opaque identity across separately loaded modules.
+// Its address is only a registry key: foreign pointers are never dereferenced.
+// Release invalidates the reference; SafeHandle leases prohibit subsequent use.
+pub(crate) fn publish(value: Stored) -> Result<*mut c_void> {
+    let allocation = Box::new(value);
+    let id = (&*allocation as *const Stored) as usize;
     handles()
         .lock()
         .unwrap_or_else(|e| e.into_inner())
-        .insert(id, value);
+        .insert(id, allocation);
     Ok(id as *mut c_void)
 }
 pub fn owner(raw: *mut c_void) -> Result<Arc<OwnerValue>> {
@@ -113,6 +116,7 @@ pub fn owner(raw: *mut c_void) -> Result<Arc<OwnerValue>> {
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .get(&(raw as usize))
+        .map(|v| &**v)
     {
         Some(Stored::Owner(v)) => Ok(v.clone()),
         _ => Err(Error::state("invalid or retired database owner")),
@@ -123,6 +127,7 @@ fn operation(raw: *mut c_void) -> Result<Arc<DbOperation>> {
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .get(&(raw as usize))
+        .map(|v| &**v)
     {
         Some(Stored::Operation(v)) => Ok(v.clone()),
         _ => Err(Error::state("invalid operation owner")),
@@ -133,6 +138,7 @@ fn buffer(raw: *mut c_void) -> Result<Arc<Buffer>> {
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .get(&(raw as usize))
+        .map(|v| &**v)
     {
         Some(Stored::Buffer(v)) => Ok(v.clone()),
         _ => Err(Error::state("invalid buffer owner")),
@@ -151,6 +157,7 @@ pub enum BufferData {
 pub struct Buffer {
     pub source: Arc<Source>,
     pub data: BufferData,
+    cursor: Option<Arc<CursorOwner>>,
 }
 impl Buffer {
     pub fn bytes(source: Arc<Source>, bytes: Vec<u8>) -> Self {
@@ -158,6 +165,7 @@ impl Buffer {
         Self {
             source,
             data: BufferData::Bytes(bytes),
+            cursor: None,
         }
     }
     pub fn batch(source: Arc<Source>, batch: nativeweave_data_streaming::OwnedBatch) -> Self {
@@ -165,9 +173,23 @@ impl Buffer {
         Self {
             source,
             data: BufferData::Batch(batch),
+            cursor: None,
         }
     }
-    fn view(&self) -> &[u8] {
+    pub fn cursor_batch(
+        cursor: Arc<CursorOwner>,
+        batch: nativeweave_data_streaming::OwnedBatch,
+    ) -> Self {
+        let mut value = Self::batch(cursor.session.source.clone(), batch);
+        value.cursor = Some(cursor);
+        value
+    }
+    pub fn cursor_end(cursor: Arc<CursorOwner>, bytes: Vec<u8>) -> Self {
+        let mut value = Self::bytes(cursor.session.source.clone(), bytes);
+        value.cursor = Some(cursor);
+        value
+    }
+    pub(crate) fn view(&self) -> &[u8] {
         match &self.data {
             BufferData::Bytes(b) => b,
             BufferData::Batch(b) => b.bytes(),
@@ -176,6 +198,9 @@ impl Buffer {
 }
 impl Drop for Buffer {
     fn drop(&mut self) {
+        if let Some(cursor) = &self.cursor {
+            cursor.batch_live.store(false, Ordering::Release);
+        }
         BUFFERS.fetch_sub(1, Ordering::Relaxed);
     }
 }
@@ -207,7 +232,7 @@ pub unsafe fn view<'a>(value: NwBytesViewV1) -> Result<&'a [u8]> {
 }
 /// # Safety
 /// Output is a nonoverlapping, aligned writable pointer slot.
-unsafe fn clear(out: *mut *mut c_void) -> Result<()> {
+pub(crate) unsafe fn clear(out: *mut *mut c_void) -> Result<()> {
     if out.is_null() || !out.is_aligned() {
         return Err(Error::invalid("owner output"));
     }
@@ -305,8 +330,7 @@ pub unsafe extern "C" fn nw_database_get_abi_v1(
     capacity: u32,
     output: *mut NwAbiInfoV1,
 ) -> u32 {
-    let mask =
-        (1 << 0) | (1 << 2) | (1 << 3) | (1 << 4) | (1 << 13) | (1 << 16) | (1 << 23) | (1 << 24);
+    let mask = crate::query::capability_mask();
     // SAFETY: exact forwarding to the canonical ABI writer.
     unsafe { write_abi_v1(major, capacity, output, 0, mask) }
 }
@@ -718,17 +742,61 @@ pub unsafe extern "C" fn nw_db_execute_create_v1(
         let OwnerValue::Session(session) = &*s else {
             return Err(Error::state("session required"));
         };
-        let OwnerValue::SqlPlan(plan) = &*p else {
-            return Err(Error::state("execution plan required"));
-        };
-        // SAFETY: exact raw command snapshot is checked while its view remains borrowed.
+        // SAFETY: values are synchronously copied by the authoritative native plan binder.
         let arguments = unsafe { view(parameters)? };
-        if !arguments.is_empty() && arguments != plan.parameters {
-            return Err(Error::invalid("raw command arguments changed"));
-        }
         let gate = session.admit(false)?;
-        plan.submit(&session.source)?;
-        let result_kind = if plan.result_kind == 0 { 100 } else { 2 };
+        let plan = match &*p {
+            OwnerValue::SqlPlan(plan) => {
+                if !arguments.is_empty() && arguments != plan.parameters {
+                    return Err(Error::invalid("raw command arguments changed"));
+                }
+                if plan.kind == 2
+                    && session
+                        .transaction
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .as_ref()
+                        .and_then(std::sync::Weak::upgrade)
+                        .is_some_and(|t| !t.snapshot().local_resources_released)
+                {
+                    return Err(Error::state("session mutation in a transaction"));
+                }
+                plan.submit(&session.source)?;
+                plan.clone()
+            }
+            OwnerValue::Plan(source, plan) => {
+                if source.identity != session.source.identity {
+                    return Err(Error::state("mixed plan source"));
+                }
+                if plan.requires_transaction()
+                    && !session
+                        .transaction
+                        .lock()
+                        .unwrap_or_else(|e| e.into_inner())
+                        .as_ref()
+                        .and_then(std::sync::Weak::upgrade)
+                        .is_some_and(|t| {
+                            t.snapshot().state == nativeweave_data_transactions::Lifecycle::Active
+                        })
+                {
+                    return Err(Error::state(
+                        "row locking requires an active explicit transaction",
+                    ));
+                }
+                let rendered = plan.render_cached(
+                    source.identity,
+                    arguments,
+                    &mut source.shapes.lock().unwrap_or_else(|e| e.into_inner()),
+                )?;
+                Arc::new(SqlPlan::from_rendered(source.clone(), rendered)?)
+            }
+            _ => return Err(Error::state("execution plan required")),
+        };
+        let result_kind = if plan.result_kind == 0 || plan.scalar_count {
+            100
+        } else {
+            2
+        };
         let session = session.clone();
         let plan = plan.clone();
         let op = DbOperation::create(
@@ -780,8 +848,10 @@ pub unsafe extern "C" fn nw_db_cursor_fetch_create_v1(
             false,
             Box::new(move |cancel| {
                 async move {
-                    let batch = cursor.fetch(cancel).await?;
-                    Ok(Value::Buffer(Buffer::batch(source, batch)))
+                    let batch = cursor
+                        .fetch(cancel, max_rows as usize, max_bytes as usize)
+                        .await?;
+                    Ok(Value::Buffer(batch))
                 }
                 .boxed()
             }),
@@ -841,7 +911,7 @@ pub unsafe extern "C" fn nw_db_close_create_v1(
                             c.join().await;
                             Ok(Value::Buffer(Buffer::bytes(
                                 c.session.source.clone(),
-                                snapshot(0, 0, false, 2, 0, true, false, 0, None),
+                                c.snapshot(),
                             )))
                         }
                         .boxed()
@@ -861,6 +931,28 @@ pub unsafe extern "C" fn nw_db_close_create_v1(
                             Ok(Value::Buffer(Buffer::bytes(
                                 t.session.source.clone(),
                                 tx_snapshot(&t),
+                            )))
+                        }
+                        .boxed()
+                    }),
+                )?
+            }
+            OwnerValue::Savepoint(point) => {
+                let point = point.clone();
+                DbOperation::create(
+                    source.clone(),
+                    101,
+                    true,
+                    Box::new(move |_| {
+                        async move {
+                            point
+                                .transaction
+                                .transaction
+                                .dispose_savepoint(point.token)
+                                .await?;
+                            Ok(Value::Buffer(Buffer::bytes(
+                                point.transaction.session.source.clone(),
+                                snapshot(0, 0, false, 2, 0, true, false, 0, None),
                             )))
                         }
                         .boxed()
@@ -898,21 +990,7 @@ pub unsafe extern "C" fn nw_db_snapshot_v1(
             OwnerValue::Source(s) => source_snapshot(s),
             OwnerValue::Session(s) => session_snapshot(s),
             OwnerValue::Transaction(t) => tx_snapshot(t),
-            OwnerValue::Cursor(c) => snapshot(
-                0,
-                0,
-                false,
-                if c.retired.load(Ordering::Acquire) {
-                    2
-                } else {
-                    1
-                },
-                0,
-                c.retired.load(Ordering::Acquire),
-                false,
-                0,
-                None,
-            ),
+            OwnerValue::Cursor(c) => c.snapshot(),
             _ => return Err(Error::state("owner has no snapshot")),
         };
         // SAFETY: newly allocated immutable result transfer.
@@ -931,7 +1009,10 @@ pub unsafe extern "C" fn nw_db_snapshot_v1(
 pub unsafe extern "C" fn nw_db_owner_release_v1(raw: *mut c_void) {
     let value = {
         let mut all = handles().lock().unwrap_or_else(|e| e.into_inner());
-        if matches!(all.get(&(raw as usize)), Some(Stored::Owner(_))) {
+        if matches!(
+            all.get(&(raw as usize)).map(|v| &**v),
+            Some(Stored::Owner(_))
+        ) {
             all.remove(&(raw as usize))
         } else {
             None
@@ -976,7 +1057,10 @@ pub unsafe extern "C" fn nw_db_buffer_view_v1(
 pub unsafe extern "C" fn nw_db_buffer_release_v1(raw: *mut c_void) {
     let value = {
         let mut all = handles().lock().unwrap_or_else(|e| e.into_inner());
-        if matches!(all.get(&(raw as usize)), Some(Stored::Buffer(_))) {
+        if matches!(
+            all.get(&(raw as usize)).map(|v| &**v),
+            Some(Stored::Buffer(_))
+        ) {
             all.remove(&(raw as usize))
         } else {
             None
