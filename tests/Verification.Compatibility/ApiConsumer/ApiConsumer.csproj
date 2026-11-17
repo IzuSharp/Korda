@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>NativeWeave.Compatibility.ApiConsumer</AssemblyName>
+    <DefineConstants>$(DefineConstants);$(ConsumerGeneration)</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="NativeWeave.Compatibility.ApiFixture" HintPath="$(FixtureAssembly)" />
+  </ItemGroup>
+</Project>
