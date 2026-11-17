@@ -8,6 +8,17 @@ use tonic::{
 };
 
 const SEGMENT_CREDIT_BYTES: usize = 48;
+// Pinned http 1.5 bucket fields plus maximal natural-alignment padding fit 128;
+// extra-value links fit 96. These bounds support the documented map peak.
+const _: () = assert!(
+    size_of::<HeaderName>()
+        + size_of::<HeaderValue>()
+        + size_of::<Option<(usize, usize)>>()
+        + size_of::<u16>()
+        + 3 * align_of::<usize>()
+        <= 128
+);
+const _: () = assert!(size_of::<HeaderValue>() + 4 * size_of::<usize>() <= 96);
 const _: () = assert!(size_of::<Option<Segment<'static>>>() <= SEGMENT_CREDIT_BYTES);
 pub fn minimum_capacity(maximum: usize) -> Option<usize> {
     maximum
@@ -235,13 +246,13 @@ impl ResponseMetadata {
         }
         // Eight times the bounded source covers base64 growth, HeaderMap value
         // copies and Status/response ownership overlap. The per-entry allowance
-        // covers bounded map tables, retained value owners, and up to four live
-        // map projections; none of these allocations may await payload credit.
+        // covers bounded map tables, retained value owners, and up to five live
+        // map projections, including collision-driven table growth; none of these allocations may await payload credit.
         let capacity = data
             .len()
             .checked_mul(8)
-            .and_then(|v| v.checked_add(count * 1024))
-            .and_then(|v| v.checked_add(detail_bytes.checked_mul(8)?))
+            .and_then(|v| v.checked_add(count * 4096))
+            .and_then(|v| v.checked_add(detail_bytes.checked_mul(16)?))
             .and_then(|v| v.checked_add(1024))
             .ok_or_else(limit)?;
         let credit = budget

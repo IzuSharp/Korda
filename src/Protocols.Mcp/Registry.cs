@@ -9,6 +9,7 @@ public sealed class McpRegistry
 {
     private readonly List<McpEntry> _entries = [];
     private readonly HashSet<string>[] _names = [new(StringComparer.Ordinal), new(StringComparer.Ordinal), new(StringComparer.Ordinal)];
+    private readonly HashSet<string> _resourceNames = new(StringComparer.Ordinal);
     private bool _frozen;
     private int _metadata;
     /// <summary>Creates an empty registry without opening native resources.</summary>
@@ -74,8 +75,8 @@ public sealed class McpRegistry
     private McpRegistry Add(McpEntry entry, int bytes)
     {
         var names = _names[entry.Kind];
-        if (names.Count == 1024 || names.Contains(entry.Identity) || bytes > 4 * 1024 * 1024 - _metadata) throw new ArgumentException("Duplicate MCP identity or finite registry metadata limit.");
-        names.Add(entry.Identity); _entries.Add(entry); _metadata += bytes; return this;
+        if (names.Count == 1024 || names.Contains(entry.Identity) || entry.Kind == 1 && _resourceNames.Contains(entry.Name) || bytes > 4 * 1024 * 1024 - _metadata) throw new ArgumentException("Duplicate MCP identity or finite registry metadata limit.");
+        names.Add(entry.Identity); if (entry.Kind == 1) _resourceNames.Add(entry.Name); _entries.Add(entry); _metadata += bytes; return this;
     }
     internal McpEntry[] Snapshot() => [.. _entries];
     internal void Freeze() => _frozen = true;

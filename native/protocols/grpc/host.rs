@@ -373,13 +373,18 @@ pub async fn dispatch(
         grpc: Some(call.clone()),
     });
     lock(&host.requests).insert(id, request_state.clone());
+    let dispatched = Arc::new(AtomicBool::new(false));
+    let mut pending = PendingResponse {
+        request: request_state.clone(),
+        dispatched: dispatched.clone(),
+        transferred: false,
+    };
     let timer = Arc::downgrade(&request_state);
     let timer_host = host.clone();
     let finished = request_state.finished.clone();
     tokio::spawn(request_state.diagnostics.instrument(async move{
         tokio::select!{()=tokio::time::sleep_until(deadline.into())=>{if let Some(r)=timer.upgrade(){r.abort(NW_TIMEOUT);}},()=timer_host.abort.cancelled()=>{if let Some(r)=timer.upgrade(){r.abort(NW_CANCELED);}},()=finished.cancelled()=>{}}
     }));
-    let dispatched = Arc::new(AtomicBool::new(false));
     let dispatch_state = request_state.clone();
     let dispatch_host = host.clone();
     let dispatch_seen = dispatched.clone();
@@ -421,7 +426,7 @@ pub async fn dispatch(
                 .credit()
         });
     protocol::retain_headers(&mut parts.headers, header_credit);
-    Response::from_parts(
+    let response = Response::from_parts(
         parts,
         AxumBody::new(GrpcBody {
             inner: Some(body),
@@ -429,7 +434,33 @@ pub async fn dispatch(
             ended: false,
             terminal_head,
         }),
-    )
+    );
+    pending.transferred = true;
+    response
+}
+// Hyper can drop an HTTP/2 response future on peer reset before any Body exists.
+// Retain the same request owner across that gap; every exit either transfers it
+// to GrpcBody or establishes cancellation/body retirement here.
+struct PendingResponse {
+    request: Arc<RequestState>,
+    dispatched: Arc<AtomicBool>,
+    transferred: bool,
+}
+impl Drop for PendingResponse {
+    fn drop(&mut self) {
+        if !self.transferred {
+            self.request.abort(NW_CANCELED);
+            if !self.dispatched.load(Ordering::Acquire) {
+                self.request.mark_dispatch_done();
+                self.request.retired.store(true, Ordering::Release);
+            }
+            self.request.discard_input();
+            self.request.body_ended();
+            if let Some(host) = self.request.host.upgrade() {
+                host.reap();
+            }
+        }
+    }
 }
 // A committed terminal already owns its queue slot and has no remaining wait
 // before publication. Cancellation may stop an unresolved call, but must not

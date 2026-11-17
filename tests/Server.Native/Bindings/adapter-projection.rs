@@ -21,7 +21,7 @@ pub unsafe extern "C" fn nw_server_get_abi_v1(
             abi_major: 1,
             abi_minor: 0,
             pointer_width_bits: 64,
-            capabilities: 79,
+            capabilities: 127,
             reserved: 0,
         })
     };
@@ -189,6 +189,7 @@ pub unsafe extern "C" fn nw_server_operation_request_cancel(
     let Ok(op) = (unsafe { owner(operation) }) else {
         return NW_INVALID_ARGUMENT;
     };
+    crate::engine::grpc::cancel_read(&op.inner);
     op.inner.cancel.cancel();
     op.inner.operation.request_cancel()
 }
@@ -441,12 +442,20 @@ pub unsafe extern "C" fn nw_server_write_reserve_create(
         // SAFETY: The caller leases the creator-owned handle and supplies live synchronous input/output storage; this entry preserves its typed owner contract.
         let request = unsafe { request(request_ptr)? };
         let host = request.host()?;
-        if kind != 0 && kind != 2 {
+        if kind == 1 {
+            // SAFETY: output was initialized above; the gRPC reservation is request-kind checked independently.
+            return unsafe { grpc::reserve(request, native_capacity, out_op) };
+        }
+        if kind != 0 && kind != 2 && kind != 3 {
             return Err(ApiError::status(NW_NOT_SUPPORTED));
         }
-        let maximum = (host.config.max_chunk_bytes as u64)
-            .checked_mul(if kind == 2 { 3 } else { 1 })
-            .ok_or(invalid())?;
+        let maximum = if kind == 3 {
+            host.config.request_retained_bytes
+        } else {
+            (host.config.max_chunk_bytes as u64)
+                .checked_mul(if kind == 2 { 3 } else { 1 })
+                .ok_or(invalid())?
+        };
         if native_capacity == 0 || native_capacity > maximum {
             return Err(invalid());
         }
@@ -454,7 +463,12 @@ pub unsafe extern "C" fn nw_server_write_reserve_create(
             return Err(ApiError::domain(1));
         }
         let response = lock(&request.response);
-        if response.phase != 1 || (kind == 2 && !response.sse) {
+        if (kind == 3 && !crate::engine::mcp::state(&request)?.can_reply())
+            || (kind != 3
+                && (!crate::engine::mcp::raw_output(&request)
+                    || response.phase != 1
+                    || (kind == 2 && !response.sse)))
+        {
             return Err(ApiError::status(NW_INVALID_STATE));
         }
         drop(response);
@@ -546,12 +560,17 @@ pub unsafe extern "C" fn nw_server_operation_take_chunk(
         };
         match frame {
             crate::engine::ChunkResult::Data(value) => {
-                buffer.buffer = Some(value);
+                buffer.buffer = Some(value.into());
                 // SAFETY: move prepared data wrapper and discriminator together after successful typed take.
                 unsafe {
                     out_frame_kind.write(0);
                     out_buffer.write(Box::into_raw(buffer))
                 };
+            }
+            crate::engine::ChunkResult::GrpcData(value) => {
+                buffer.buffer = Some(value.into());
+                // SAFETY: complete protobuf message, including zero length, transfers as a kind0 owner.
+                unsafe { out_frame_kind.write(0); out_buffer.write(Box::into_raw(buffer)); }
             }
             crate::engine::ChunkResult::End(trailers) => {
                 if let Some(trailers) = trailers {
@@ -611,6 +630,7 @@ pub unsafe extern "C" fn nw_server_buffer_copy(
         if capacity < buffer.len() as u64 {
             return Err(ApiError::status(NW_BUFFER_TOO_SMALL));
         }
+        if buffer.len() == 0 { return Ok(()); }
         if destination.is_null() {
             return Err(invalid());
         }
@@ -669,6 +689,7 @@ pub unsafe extern "C" fn nw_server_response_flush_create(
         unsafe { output(out_op)? };
         // SAFETY: The caller leases the creator-owned handle and supplies live synchronous input/output storage; this entry preserves its typed owner contract.
         let request = unsafe { request(request_ptr)? };
+        if !crate::engine::mcp::raw_output(&request) { return Err(ApiError::status(NW_INVALID_STATE)); }
         let host = request.host()?;
         let side = SideGuard::acquire(&request.write_active)?;
         let op = OpState::new(host, Some(request.clone()), Job::Flush(request, side))?;
@@ -684,40 +705,64 @@ pub unsafe extern "C" fn nw_server_grpc_read_create(
     out_op: *mut *mut NwServerOperation,
     error: *mut NwErrorInfoV1,
 ) -> u32 {
-    ffi(error, || {
-        // SAFETY: unsupported optional protocols transfer no owner and always initialize the output.
-        unsafe { output(out_op)? };
-        Err(ApiError::status(NW_NOT_SUPPORTED))
-    })
+    // SAFETY: the exact borrowed-input/typed-owner ABI contract is forwarded unchanged.
+    unsafe { grpc::read(_request, out_op, error) }
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_mcp_gate_resume_create(
-    _request: *mut NwServerRequest,
-    _decision: u32,
+    request_ptr: *mut NwServerRequest,
+    decision: u32,
     out_op: *mut *mut NwServerOperation,
     error: *mut NwErrorInfoV1,
 ) -> u32 {
     ffi(error, || {
-        // SAFETY: unsupported optional protocols transfer no owner and always initialize the output.
+        // SAFETY: output is initialized before validating the leased input owner.
         unsafe { output(out_op)? };
-        Err(ApiError::status(NW_NOT_SUPPORTED))
+        // SAFETY: caller holds the creator-owned request for this synchronous create.
+        let request = unsafe { request(request_ptr)? };
+        if decision > 1 {
+            return Err(invalid());
+        }
+        if !crate::engine::mcp::state(&request)?.awaiting() || lock(&request.response).phase != 0 {
+            return Err(ApiError::status(NW_INVALID_STATE));
+        }
+        let op = OpState::new(
+            request.host()?,
+            Some(request.clone()),
+            Job::McpGate(request, decision),
+        )?;
+        // SAFETY: create transfers only an unstarted operation; decision commits at start.
+        unsafe { publish(out_op, op) };
+        Ok(())
     })
 }
 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_mcp_call_take(
-    _request: *mut NwServerRequest,
+    request_ptr: *mut NwServerRequest,
     out_call_kind: *mut u32,
     out_arguments: *mut *mut NwServerBuffer,
     error: *mut NwErrorInfoV1,
 ) -> u32 {
     ffi(error, || {
-        // SAFETY: unsupported protocol output remains null; no argument owner is transferred.
+        // SAFETY: failed take initializes null and leaves the native argument owner in place.
         unsafe { output(out_arguments)? };
         if out_call_kind.is_null() || !out_call_kind.is_aligned() {
             return Err(invalid());
         }
-        Err(ApiError::status(NW_NOT_SUPPORTED))
+        // SAFETY: caller owns the request lease and writable scalar/output slots.
+        let request = unsafe { request(request_ptr)? };
+        let (kind, buffer) = crate::engine::mcp::state(&request)?.take()?;
+        let buffer = Box::new(NwServerBuffer {
+            buffer: Some(buffer.into()),
+            host: request.host.clone(),
+        });
+        // SAFETY: exact-once ownership transfer follows all fallible checks.
+        unsafe {
+            out_call_kind.write(kind);
+            out_arguments.write(Box::into_raw(buffer));
+        }
+        Ok(())
     })
 }

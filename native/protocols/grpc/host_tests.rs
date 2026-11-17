@@ -500,3 +500,68 @@ async fn grpc_unresolved_response_deadline_terminates_without_waiting_for_handle
     drop(response);
     cleanup(host, request, pointer).await;
 }
+
+#[tokio::test]
+async fn grpc_dropped_response_future_cancels_pending_read_and_retires_body() {
+    let (host, request, pointer) = fixture();
+    let call = request.grpc.as_ref().unwrap().clone();
+    let incoming = Request::builder()
+        .version(http::Version::HTTP_2)
+        .method("POST")
+        .uri("http://localhost/test.Call/Run")
+        .header("content-type", "application/grpc")
+        .body(StreamBody::new(futures_util::stream::pending::<
+            std::result::Result<Frame<Bytes>, Status>,
+        >()))
+        .unwrap();
+    let mut serving = Box::pin(protocol::serve(
+        incoming,
+        call.clone(),
+        64,
+        Arc::new(|| Ok(())),
+    ));
+    assert!(futures_util::poll!(&mut serving).is_pending());
+    let pending = PendingResponse {
+        request: request.clone(),
+        dispatched: Arc::new(AtomicBool::new(true)),
+        transferred: false,
+    };
+    let read = read(
+        request.clone(),
+        SideGuard::acquire(&request.read_active).unwrap(),
+    );
+    tokio::pin!(read);
+    assert!(futures_util::poll!(&mut read).is_pending());
+    drop(pending);
+    assert_eq!(read.await.err().unwrap().status, NW_CANCELED);
+    assert!(request.body_done.load(Ordering::Acquire));
+    assert!(!request.dispatch_done.load(Ordering::Acquire));
+    // The canceled serving future still owns codec state until its own drop.
+    drop(serving);
+    drop(call);
+    cleanup(host, request, pointer).await;
+}
+
+#[tokio::test]
+async fn grpc_dropped_undispatched_response_retires_its_ticket() {
+    let (host, request, pointer) = fixture();
+    let pending = PendingResponse {
+        request: request.clone(),
+        dispatched: Arc::new(AtomicBool::new(false)),
+        transferred: false,
+    };
+    drop(pending);
+    assert!(request.body_done.load(Ordering::Acquire));
+    assert!(request.dispatch_done.load(Ordering::Acquire));
+    assert!(request.retired.load(Ordering::Acquire));
+    // SAFETY: fixed request owner remains live while every input cleanup source retires.
+    while unsafe { nw_server_request_try_retire(pointer) } != NW_OK {
+        tokio::task::yield_now().await;
+    }
+    // SAFETY: successful retirement above authorizes the creator's unique release.
+    unsafe { nw_server_request_release(pointer) };
+    host.reap();
+    assert!(lock(&host.requests).is_empty());
+    drop(request);
+    assert_eq!(host.budget.snapshot(), (0, 0));
+}

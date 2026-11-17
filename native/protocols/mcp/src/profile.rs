@@ -159,6 +159,7 @@ impl Profile {
             tool_models.push(model);
         }
         let mut uris = HashSet::new();
+        let mut resource_names = HashSet::new();
         let mut resource_models = Vec::new();
         for r in &d.resources {
             if !text(&r.uri, 4096, false)
@@ -167,6 +168,7 @@ impl Profile {
                 || !text(&r.mime_type, 256, false)
                 || r.description.as_ref().is_some_and(|v| !text(v, 4096, true))
                 || !uris.insert(&r.uri)
+                || !resource_names.insert(&r.name)
                 || r.handler_id == 0
                 || !ids.insert(r.handler_id)
             {
@@ -534,4 +536,21 @@ fn conforms_node(
         }
     }
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn resource_names_and_uris_are_both_unique_before_registration() {
+        let mut descriptor = serde_json::json!({"version":1,"kind":"mcp","handler_id":1,"protocol_version":"2026-07-28","legacy_sessions":false,"event_store":false,"strict_metadata":true,"allowed_hosts":[],"allowed_origins":[],"max_request_bytes":1048576,"max_json_depth":32,"max_json_nodes":4096,"max_json_string_bytes":262144,"tools":[],"prompts":[],"resources":[
+            {"uri":"nativeweave:first","name":"same","mime_type":"text/plain","description":null,"handler_id":2},
+            {"uri":"nativeweave:second","name":"same","mime_type":"text/plain","description":null,"handler_id":3}
+        ]});
+        assert!(Profile::parse(&serde_json::to_vec(&descriptor).unwrap(), 1).is_err());
+        descriptor["resources"][1]["name"] = Value::String("distinct".into());
+        assert!(Profile::parse(&serde_json::to_vec(&descriptor).unwrap(), 1).is_ok());
+        descriptor["resources"][1]["uri"] = Value::String("nativeweave:first".into());
+        assert!(Profile::parse(&serde_json::to_vec(&descriptor).unwrap(), 1).is_err());
+    }
 }

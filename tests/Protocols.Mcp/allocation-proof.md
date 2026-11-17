@@ -111,18 +111,38 @@ aggregate default/name/attribute strings to64 KiB. Only already supplied static
 context metadata is resolved. Unknown attribute constructors are rejected using
 `CustomAttributeData`; they are not executed by the exporter.
 
-For `T` distinct types, `P` properties, `A` attributes and `B` aggregate property-name
-and constant bytes, the pre-export reservation is:
+For `T` distinct metadata types, `P` unique mapped properties, `E` exporter visits
+(including finite enum-name nodes), `A` unique plus revisited attribute records,
+`K` unique plus revisited attribute argument elements and `B` unique plus revisited
+property/default/name/path/attribute bytes, the pre-export reservation is:
 
-`65536 + 4096T + 4096P + 16B + 1024A`.
+`65536 + 4096T + 1024P + 8192E + 256A + 64K + 16B`.
+
+The metadata-only `CountExport` follows the pinned `(JsonTypeInfo, JsonPropertyInfo)`
+cache cardinality. Scalar nodes are uncached; repeated nested properties, scalar enum
+lists, inherited attribute checks and JSON-pointer path lengths therefore count at
+every actual visit. The estimator stops before BCL export as soon as the derived grant
+would exceed the existing4 MiB startup cap. This prevents a small unique metadata graph
+from expanding into a large exporter graph. It does not implement schema semantics.
+Custom serializer-option converters and naming callbacks are outside this bounded
+profile; ordinary numeric and source-generated string enums remain supported.
 
 The pinned exporter constructs JsonSchema/JsonNode objects, property/required maps,
-path arrays and cached `(JsonTypeInfo, JsonPropertyInfo)` entries. The type/property
-terms cover those objects and geometric growth; `16B` covers UTF-16 input, escaped
-UTF-8 and overlapping node/encoded representations. The fixed term covers bounded
-writer storage and exporter state. The 64 KiB encoded limit is enforced while writing,
-not after allocating an unbounded serialized document. Concurrent scratch admission
-is separately capped at4 MiB and always released in `finally`.
+path arrays and cached context entries, then creates the final JsonNode representation.
+The fixed/type/property terms cover metadata inspection, bounded writer storage and
+exporter state. The per-visit term includes both native-AOT reflection/attribute costs
+and the simultaneously live schema/node/container representations. Explicit repeated
+attribute/argument terms cover construction and array growth. `16B` covers UTF-16,
+escaped UTF-8, JSON pointers and overlapping encoded representations. The64 KiB encoded
+limit is enforced while writing, not after an unbounded serialized allocation.
+Concurrent scratch admission is separately capped at4 MiB and released in `finally`.
+
+The failed `final02` receipt exposed why the earlier unique-property estimate was
+insufficient: wide256 used1,523,920 allocated bytes in Native AOT, exceeding its old
+1,148,160-byte allowance. The corrected count admits3,244,032 bytes for the same graph.
+The new repeated32-by32 fixture fails before export based on its repeated visits even
+though its unique metadata stays within the type/property caps. This finding is retained
+as evidence; the failed receipt is never rewritten as a passed run.
 
 `SchemaFixtures.cs` measures allocated bytes around the full repeated prewalk/export,
 checks the reservation and encoded cap, and separately verifies metadata boundary

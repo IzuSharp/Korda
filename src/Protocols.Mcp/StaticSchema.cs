@@ -21,11 +21,13 @@ internal static class StaticSchema
         ArgumentNullException.ThrowIfNull(typeInfo);
         if (typeInfo.Kind != JsonTypeInfoKind.Object || Nullable.GetUnderlyingType(typeInfo.Type) is not null || typeInfo.OriginatingResolver is not JsonSerializerContext context)
             throw McpValidation.Schema(name, typeInfo.Type, "provide source-generated JsonTypeInfo with an object root; nullable value, scalar, array, dictionary and open roots are unsupported");
-        var walk = new MetadataWalk(name, context); walk.Visit(typeInfo, 1);
+        if (typeInfo.Options.Converters.Count != 0 || typeInfo.Options.PropertyNamingPolicy is { } naming && naming.GetType().Assembly != typeof(JsonSerializer).Assembly)
+            throw McpValidation.Schema(name, typeInfo.Type, "custom serializer option converters/naming callbacks are outside the bounded exporter profile");
+        var walk = new MetadataWalk(name, context); walk.Visit(typeInfo, 1); walk.CountExport(typeInfo);
         // The admitted metadata graph bounds the exporter object/list/path graph.
         // Reserve before calling it; the checked layout/allocation witness belongs
         // to tests/Protocols.Mcp and is separate from retained schema bytes.
-        long scratch = checked(65_536L + 4096L * walk.Types + 4096L * walk.Properties + 16L * (walk.Names + walk.Constants) + 1024L * walk.Attributes);
+        long scratch = walk.Scratch;
         LastScratchBytes = scratch;
         if (Interlocked.Add(ref _scratch, scratch) > 4 * 1024 * 1024)
         { Interlocked.Add(ref _scratch, -scratch); throw new ArgumentException("NWAPI-S004: concurrent startup schema scratch exceeds 4 MiB."); }
@@ -62,6 +64,43 @@ internal static class StaticSchema
         internal int Constants;
         internal int Attributes;
         private readonly HashSet<MemberInfo> _attributes = [];
+        private readonly Dictionary<MemberInfo, (int Count, int Bytes, int Elements)> _attributeCosts = [];
+        private readonly Dictionary<Type, (int Count, int Bytes)> _enumCosts = [];
+        private readonly HashSet<(JsonTypeInfo, JsonPropertyInfo?)> _exported = [];
+        private long _exportNodes, _exportBytes, _exportAttributes, _exportElements;
+        private int _constantElements;
+        internal long Scratch => checked(65_536L + 4096L * Types + 1024L * Properties + 8192L * _exportNodes
+            + 16L * (Names + Constants + _exportBytes) + 256L * (Attributes + _exportAttributes) + 64L * (_constantElements + _exportElements));
+        // Mirrors only the pinned exporter's cache/traversal cardinality, never
+        // its JSON schema semantics. Scalar contexts are deliberately uncached.
+        internal void CountExport(JsonTypeInfo info, JsonPropertyInfo? property = null, long pathBytes = 0, bool cache = true)
+        {
+            _exportNodes++; _exportBytes = checked(_exportBytes + pathBytes);
+            for (Type? type = info.Type; type is not null && type != typeof(object); type = type.BaseType) AttributeVisit(type);
+            if (property?.AttributeProvider is MemberInfo member) AttributeVisit(member);
+            CheckScratch(info.Type);
+            if (cache && info.Kind != JsonTypeInfoKind.None && !_exported.Add((info, property))) return;
+            if (Nullable.GetUnderlyingType(info.Type) is { } nullable) { CountExport(Resolve(nullable), null, pathBytes, false); return; }
+            if (_enumCosts.TryGetValue(info.Type, out var enumeration))
+            { _exportNodes += enumeration.Count; _exportBytes += enumeration.Bytes; CheckScratch(info.Type); return; }
+            if (info.Kind == JsonTypeInfoKind.Object)
+            {
+                foreach (var item in info.Properties)
+                {
+                    if (item.Get is null && item.Set is null) continue;
+                    if (item.AssociatedParameter is { HasDefaultValue: true, DefaultValue: string text }) _exportBytes += McpValidation.Utf8.GetByteCount(text);
+                    CountExport(Resolve(item.PropertyType), item, checked(pathBytes + 11 + McpValidation.Utf8.GetByteCount(item.Name)));
+                }
+            }
+            else if (info.Kind == JsonTypeInfoKind.Enumerable) CountExport(Resolve(info.ElementType!), null, checked(pathBytes + 6));
+        }
+        private void AttributeVisit(MemberInfo member)
+        {
+            if (!_attributeCosts.TryGetValue(member, out var cost)) return;
+            _exportAttributes += cost.Count; _exportBytes += cost.Bytes; _exportElements += cost.Elements;
+        }
+        private void CheckScratch(Type type)
+        { if (Scratch > 4 * 1024 * 1024) throw McpValidation.Schema(name, type, "the pinned exporter visit/path/attribute expansion cannot fit startup scratch"); }
         private JsonTypeInfo Resolve(Type type) => context.GetTypeInfo(type) ?? throw McpValidation.Schema(name, type, "nested metadata is absent from the explicit static context");
         internal void Visit(JsonTypeInfo info, int depth)
         {
@@ -102,7 +141,9 @@ internal static class StaticSchema
                 {
                     var fields = EnumFields(info.Type);
                     if (fields.Length > 256) throw McpValidation.Schema(name, info.Type, "enum fields exceed256 before schema export");
+                    int before = Constants;
                     foreach (var field in fields) { AddConstant(field.Name); CheckAttributes(field); }
+                    _enumCosts[info.Type] = (fields.Length, Constants - before);
                 }
             }
             finally { _path.Remove(info.Type); }
@@ -118,6 +159,7 @@ internal static class StaticSchema
         private void CheckAttributes(MemberInfo member)
         {
             if (!_attributes.Add(member)) return;
+            int count = Attributes, bytes = Constants, elements = _constantElements;
             foreach (var attribute in member.GetCustomAttributesData())
             {
                 if (++Attributes > 1024 || attribute.AttributeType.Assembly != typeof(object).Assembly && attribute.AttributeType.Assembly != typeof(JsonSerializer).Assembly)
@@ -125,9 +167,11 @@ internal static class StaticSchema
                 foreach (var argument in attribute.ConstructorArguments) Constant(argument);
                 foreach (var argument in attribute.NamedArguments) Constant(argument.TypedValue);
             }
+            _attributeCosts[member] = (Attributes - count, Constants - bytes, _constantElements - elements);
         }
         private void Constant(CustomAttributeTypedArgument argument)
         {
+            _constantElements++;
             if (argument.Value is string text) AddConstant(text);
             else if (argument.Value is IReadOnlyCollection<CustomAttributeTypedArgument> array)
             { if (array.Count > 256) throw McpValidation.Schema(name, typeof(Array), "attribute array limit"); foreach (var element in array) Constant(element); }

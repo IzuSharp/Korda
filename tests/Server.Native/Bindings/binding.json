@@ -9,7 +9,7 @@
     "pointer_width_bits": 64
   },
   "provenance": {
-    "adapter_sha256": "e6fb6e1ed3f3367ba2ec740cc97cd11fa836d8488a419050aec6b0ae7387d70d",
+    "adapter_sha256": "74d80eeef7c41906b50b40c4152a8814e7b05dce55ff7e71567bf7588ba0eae6",
     "tool": "nativeweave-binding-inventory",
     "tool_version": "0.1.0",
     "upstream": [
@@ -1695,7 +1695,7 @@
       ],
       "parameters": [
         {
-          "name": "_request",
+          "name": "request_ptr",
           "type": "mut:NwServerRequest",
           "direction": "in",
           "nullable": false,
@@ -1706,7 +1706,7 @@
           "maximum_bytes": 8
         },
         {
-          "name": "_decision",
+          "name": "decision",
           "type": "u32",
           "direction": "in",
           "nullable": false,
@@ -1753,7 +1753,7 @@
       ],
       "parameters": [
         {
-          "name": "_request",
+          "name": "request_ptr",
           "type": "mut:NwServerRequest",
           "direction": "in",
           "nullable": false,

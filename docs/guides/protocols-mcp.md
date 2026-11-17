@@ -121,7 +121,7 @@ attributes are bounded to 256 fields per enum and included in the constant budge
 Recursive/open JSON, dictionaries, custom converters, unknown exporter attribute
 constructors and unregistered polymorphism fail registration. The prewalk resolves
 only types reachable through the supplied static context. It does not scan assemblies.
-Schema export happens once, under a separate startup scratch grant; each encoded
+The startup estimator also counts repeated exporter contexts, paths and attributes before permitting expansion. Schema export happens once, under a separate startup scratch grant; each encoded
 schema is at most 64 KiB and aggregate registry metadata at most 4 MiB.
 
 `get_tool` returns the exact registered schema. Native finite-shape checks and the

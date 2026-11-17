@@ -11,7 +11,12 @@ using NativeWeave.Server.Mcp;
 int assertions = 0, calls = 0, middleware = 0, completed = 0;
 void Check(bool value, string name) { if (!value) throw new InvalidOperationException(name); Interlocked.Increment(ref assertions); Console.WriteLine("PASS " + name); }
 void Throws<T>(Action action) where T : Exception { try { action(); } catch (T) { Interlocked.Increment(ref assertions); return; } throw new InvalidOperationException("Expected " + typeof(T).Name); }
+var uniqueResources = new McpRegistry().AddResource("nativeweave:first", "same", "text/plain", static _ => Task.FromResult(new McpTextResource("nativeweave:first", "x")));
+Throws<ArgumentException>(() => uniqueResources.AddResource("nativeweave:second", "same", "text/plain", static _ => Task.FromResult(new McpTextResource("nativeweave:second", "x"))));
+uniqueResources.AddResource("nativeweave:second", "distinct", "text/plain", static _ => Task.FromResult(new McpTextResource("nativeweave:second", "x")));
+Check(true, "Rejected duplicate resource name leaves registration reusable");
 SchemaFixtures.Run(Check);
+if (args.Contains("--schema-only")) return;
 var schema = StaticSchema.Create("echo", Json.Default.Input);
 using (var document = JsonDocument.Parse(schema))
 {

@@ -16,6 +16,7 @@ internal static class SchemaFixtures
             throw new InvalidOperationException("Schema unexpectedly admitted " + name);
         }
         Reject(SchemaJson.Default.Wide257, "property257");
+        Reject(SchemaJson.Default.RepeatedRoot, "repeated-export-context");
         Reject(SchemaJson.Default.Recursive, "recursive");
         Reject(SchemaJson.Default.Open, "open");
         Reject(SchemaJson.Default.DictionaryDto, "dictionary");
@@ -37,8 +38,8 @@ internal static class SchemaFixtures
             long before = GC.GetAllocatedBytesForCurrentThread();
             byte[] schema = create();
             long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-            check(allocated <= StaticSchema.LastScratchBytes && schema.Length <= 65536 && StaticSchema.ScratchBytes == 0, "Measured startup exporter allocation fits admitted scratch: " + name);
             Console.WriteLine($"schema case={name} allocated={allocated} admitted={StaticSchema.LastScratchBytes} encoded={schema.Length}");
+            check(allocated <= StaticSchema.LastScratchBytes && schema.Length <= 65536 && StaticSchema.ScratchBytes == 0, "Measured startup exporter allocation fits admitted scratch: " + name);
             using var document = JsonDocument.Parse(schema);
             if (name == "enum-string") check(document.RootElement.GetProperty("properties").GetProperty("value").GetProperty("enum").EnumerateArray().Any(v => v.GetString() == "renamed-value"), "Static renamed enum field survives schema export and Native AOT trimming");
         }
@@ -740,6 +741,7 @@ internal sealed class Distinct60;
 internal sealed class Distinct61;
 internal sealed class Distinct62;
 internal sealed class Distinct63;
+[JsonSerializable(typeof(RepeatedRoot))]
 [JsonSerializable(typeof(WideArray))]
 [JsonSerializable(typeof(Wide256))]
 [JsonSerializable(typeof(Wide257))]
@@ -1016,4 +1018,75 @@ internal sealed class WideCell
     public string? P252 { get; set; }
     public string? P253 { get; set; }
     public string? P254 { get; set; }
+}
+
+internal sealed class RepeatedRoot
+{
+    public RepeatedCell? P00 { get; set; }
+    public RepeatedCell? P01 { get; set; }
+    public RepeatedCell? P02 { get; set; }
+    public RepeatedCell? P03 { get; set; }
+    public RepeatedCell? P04 { get; set; }
+    public RepeatedCell? P05 { get; set; }
+    public RepeatedCell? P06 { get; set; }
+    public RepeatedCell? P07 { get; set; }
+    public RepeatedCell? P08 { get; set; }
+    public RepeatedCell? P09 { get; set; }
+    public RepeatedCell? P10 { get; set; }
+    public RepeatedCell? P11 { get; set; }
+    public RepeatedCell? P12 { get; set; }
+    public RepeatedCell? P13 { get; set; }
+    public RepeatedCell? P14 { get; set; }
+    public RepeatedCell? P15 { get; set; }
+    public RepeatedCell? P16 { get; set; }
+    public RepeatedCell? P17 { get; set; }
+    public RepeatedCell? P18 { get; set; }
+    public RepeatedCell? P19 { get; set; }
+    public RepeatedCell? P20 { get; set; }
+    public RepeatedCell? P21 { get; set; }
+    public RepeatedCell? P22 { get; set; }
+    public RepeatedCell? P23 { get; set; }
+    public RepeatedCell? P24 { get; set; }
+    public RepeatedCell? P25 { get; set; }
+    public RepeatedCell? P26 { get; set; }
+    public RepeatedCell? P27 { get; set; }
+    public RepeatedCell? P28 { get; set; }
+    public RepeatedCell? P29 { get; set; }
+    public RepeatedCell? P30 { get; set; }
+    public RepeatedCell? P31 { get; set; }
+}
+internal sealed class RepeatedCell
+{
+    public string? P00 { get; set; }
+    public string? P01 { get; set; }
+    public string? P02 { get; set; }
+    public string? P03 { get; set; }
+    public string? P04 { get; set; }
+    public string? P05 { get; set; }
+    public string? P06 { get; set; }
+    public string? P07 { get; set; }
+    public string? P08 { get; set; }
+    public string? P09 { get; set; }
+    public string? P10 { get; set; }
+    public string? P11 { get; set; }
+    public string? P12 { get; set; }
+    public string? P13 { get; set; }
+    public string? P14 { get; set; }
+    public string? P15 { get; set; }
+    public string? P16 { get; set; }
+    public string? P17 { get; set; }
+    public string? P18 { get; set; }
+    public string? P19 { get; set; }
+    public string? P20 { get; set; }
+    public string? P21 { get; set; }
+    public string? P22 { get; set; }
+    public string? P23 { get; set; }
+    public string? P24 { get; set; }
+    public string? P25 { get; set; }
+    public string? P26 { get; set; }
+    public string? P27 { get; set; }
+    public string? P28 { get; set; }
+    public string? P29 { get; set; }
+    public string? P30 { get; set; }
+    public string? P31 { get; set; }
 }
