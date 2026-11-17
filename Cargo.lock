@@ -1086,6 +1086,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "nativeweave-server-streaming"
+version = "0.1.0"
+dependencies = [
+ "bytes",
+ "http",
+ "http-body",
+ "nativeweave-interop-abi",
+ "nativeweave-interop-async",
+ "nativeweave-interop-errors",
+ "tokio",
+]
+
+[[package]]
 name = "nativeweave-verification-interop"
 version = "0.1.0"
 dependencies = [

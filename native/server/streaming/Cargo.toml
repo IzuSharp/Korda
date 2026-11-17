@@ -1,0 +1,29 @@
+[package]
+name = "nativeweave-server-streaming"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.100"
+license = "MIT"
+publish = false
+
+[lib]
+crate-type = ["rlib", "cdylib"]
+
+[features]
+default = []
+conformance = []
+
+[dependencies]
+nativeweave-interop-abi = { path = "../../interop/abi" }
+nativeweave-interop-async = { path = "../../interop/async" }
+nativeweave-interop-errors = { path = "../../interop/errors" }
+bytes = "=1.12.1"
+http = "=1.5.0"
+http-body = "=1.1.0"
+tokio = { version = "=1.54.1", features = ["rt", "sync", "time", "macros"] }
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+
+[lints.clippy]
+undocumented_unsafe_blocks = "deny"
