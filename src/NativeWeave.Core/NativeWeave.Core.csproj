@@ -13,6 +13,7 @@
     <Compile Include="../Interop.Negotiation/**/*.cs;../Interop.Errors/**/*.cs" Exclude="../Interop.Negotiation/**/obj/**/*.cs;../Interop.Negotiation/**/bin/**/*.cs;../Interop.Errors/**/obj/**/*.cs;../Interop.Errors/**/bin/**/*.cs" />
     <Compile Include="../Interop.Lifetime/**/*.cs;../Interop.Memory/**/*.cs" Exclude="../Interop.Lifetime/**/obj/**/*.cs;../Interop.Lifetime/**/bin/**/*.cs;../Interop.Memory/**/obj/**/*.cs;../Interop.Memory/**/bin/**/*.cs" />
     <ProjectReference Include="../Interop.Abi/Interop.Abi.csproj" />
+    <InternalsVisibleTo Include="NativeWeave.Engines.SyncProof" />
     <InternalsVisibleTo Include="NativeWeave.Interop.Negotiation.Tests" />
     <InternalsVisibleTo Include="NativeWeave.Interop.Errors.Tests" />
     <InternalsVisibleTo Include="NativeWeave.Interop.Errors.Sample" />
