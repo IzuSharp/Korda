@@ -52,12 +52,52 @@ def checked_file(root, item):
     return path
 
 
+def uses_callbacks(sidecar):
+    """Recognize generated reverse entries or actual shared-Core v1 table inputs.
+
+    A09 callbacks[] describes exported signatures for A10-generated UCO entries.
+    A facade can instead supply the existing A06/A07 entries through the standard
+    tables. This check identifies that use; source/conformance still proves its
+    stop, drain and owner-retirement implementation.
+    """
+    callbacks = sidecar.get("callbacks")
+    fail(not isinstance(callbacks, list), "Missing native callback inventory")
+    tables = {"NwCallbacksV1": "on_event", "NwOperationCallbacksV1": "on_terminal"}
+    records = {record["name"]: record for record in sidecar.get("records", [])}
+    owners = {owner["kind"] for owner in sidecar["owners"]}
+    used = False
+    for export in sidecar["exports"]:
+        for parameter in export.get("parameters", []):
+            name = parameter.get("type", "").rsplit(":", 1)[-1]
+            if name not in tables:
+                continue
+            record = records.get(name, {})
+            fields = [(field.get("name"), field.get("type"), field.get("offset"), field.get("reserved"))
+                      for field in record.get("fields", [])]
+            fail(record.get("size") != 24 or record.get("alignment") != 8 or fields != [
+                ("struct_size", "u32", 0, False), ("flags", "u32", 4, True),
+                ("cookie", "usize", 8, False), (tables[name], "usize", 16, False)],
+                "Unsupported shared-Core callback table layout")
+            fail(parameter.get("type") != "const:" + name or parameter.get("direction") != "in" or
+                 parameter.get("nullable") is not False or parameter.get("mutable") is not False or
+                 parameter.get("owner") != "" or parameter.get("borrow_end") != "call" or
+                 parameter.get("copy_before_accept") is not True or parameter.get("maximum_bytes") != 24,
+                 "Shared-Core callback tables require a readonly copied-before-accept input")
+            fail(export.get("return") != "u32" or not any(
+                p.get("owner") in owners and p.get("direction") == "in" and p.get("borrow_end") == "call"
+                for p in export.get("parameters", [])),
+                "Shared-Core callback table use requires a retained native owner borrow")
+            used = True
+    return bool(callbacks) or used
+
+
 def load(root, descriptor):
     data = json.loads(descriptor.read_text())
     keys = {"schema_version", "engine_id", "package", "abi", "threading", "components",
             "capabilities", "native", "binding", "upstream", "files", "dependencies", "coverage"}
     fail(set(data) != keys or data["schema_version"] != 1, "Unknown or incomplete scaffold schema")
-    fail(not re.fullmatch(r"[a-z][a-z0-9_.-]{0,127}", data["engine_id"]), "Invalid Engine identity")
+    fail(not re.fullmatch(r"[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*", data["engine_id"])
+         or len(data["engine_id"]) > 128, "Invalid Engine identity")
     package = data["package"]
     fail(set(package) != {"id", "version", "namespace", "assembly"}, "Incomplete package identity")
     for key in ("id", "namespace", "assembly"):
@@ -91,20 +131,25 @@ def load(root, descriptor):
     fail(len({c["name"] for c in caps}) != len(caps) or len({c["bit"] for c in caps}) != len(caps), "Duplicate capability")
     native = data["native"]
     fail(set(native) != {"asset", "filename", "rid", "target", "cpu", "link_mode"}, "Incomplete native asset")
-    fail((native["rid"], native["target"], native["cpu"], native["link_mode"]) !=
-         ("linux-x64", "x86_64-unknown-linux-gnu", "x64-v2", "dynamic"),
-         "This scaffold is validated only for Linux x64-v2 GNU dynamic assets")
+    fail((native["rid"], native["target"], native["link_mode"]) !=
+         ("linux-x64", "x86_64-unknown-linux-gnu", "dynamic") or
+         native["cpu"] not in {"x86-64", "x86-64-v2"},
+         "This scaffold requires a supported Linux x64 GNU dynamic CPU profile")
     fail(not re.fullmatch(r"lib[A-Za-z0-9_]+\.so", native["filename"]), "Invalid Linux native filename")
     checked_file(root, native["asset"])
     binding = data["binding"]
     fail(set(binding) != {"sidecar", "inventory", "adapter", "linked_symbols", "library"}, "Incomplete A09 binding inputs")
     fail(not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", binding["library"]), "Invalid static import library")
+    fail(native["filename"] != "lib" + binding["library"] + ".so", "Static import and native asset basenames differ")
     for name in ("sidecar", "inventory", "adapter", "linked_symbols"):
         checked_file(root, binding[name])
     sidecar = json.loads(checked_file(root, binding["sidecar"]).read_text())
     fail(sidecar.get("schema_version") != 1, "Unsupported A09 binding schema")
     fail(sidecar["module"]["id"] != data["engine_id"] or sidecar["module"]["abi_major"] != abi["major"]
          or sidecar["module"]["abi_minor"] != abi["minor"], "Engine and binding identities differ")
+    fail((sidecar["module"].get("rid"), sidecar["module"].get("target"),
+          sidecar["module"].get("pointer_width_bits")) !=
+         (native["rid"], native["target"], 64), "Native and binding target profiles differ")
     fail(set(sidecar["capabilities"]) != {c["name"] for c in caps}, "Capability and binding inventories differ")
     symbols = {e["symbol"] for e in sidecar["exports"]}
     fail(abi["bootstrap"] not in symbols, "The bootstrap is absent from the static export inventory")
@@ -112,6 +157,8 @@ def load(root, descriptor):
         fail(owner["release"] not in symbols, "A native owner has no creator release")
     fail(bool(sidecar["owners"]) and "ownership" not in components, "Owners require the ownership component")
     fail(bool(sidecar["operations"]) != ("async" in components), "Async operations and opted-in components differ")
+    fail(uses_callbacks(sidecar) != ("callback" in components),
+         "Native callbacks and opted-in components differ")
     fail(not data["upstream"], "Exact upstream provenance is required")
     for source in data["upstream"]:
         fail(set(source) != {"repository", "commit", "crate", "version", "checksum", "features", "patches", "license"},
@@ -125,7 +172,7 @@ def load(root, descriptor):
     fail(not isinstance(data["files"], dict) or not data["files"], "Supply actual reviewed facade/sample source")
     for destination, source in data["files"].items():
         relative(root, destination)
-        fail(not destination.startswith(("src/Engine/", "samples/Consumer/", "docs/", "buildTransitive/")), "Unowned scaffold destination")
+        fail(not destination.startswith(("src/Engine/", "samples/Consumer/", "docs/", "buildTransitive/", "tools/", "nativeweave/")), "Unowned scaffold destination")
         fail(destination.endswith((".csproj", ".props")) or "ScaffoldPackage.g.cs" in destination,
              "Generated build/manifest files cannot be replaced by source inputs")
         checked_file(root, source)
@@ -148,10 +195,22 @@ def run(command, cwd, log):
     fail(result.returncode != 0, "Binding validation failed; inspect " + log.name)
 
 
-def generate(root, descriptor, output):
+def generate(root, descriptor, output, sdk_revision=None):
     root, descriptor, output = root.resolve(), descriptor.resolve(), output.resolve()
     data = load(root, descriptor)
     fail(output.exists(), "Output already exists; generation never overwrites a repository")
+    sdk_files = ["Directory.Build.props", "Directory.Build.targets", "global.json",
+                 "src/Build.Integration/NativeWeave.Build.targets", "src/Build.Integration/compose_docs.py",
+                 "src/Build.Integration/ApiReference/Program.cs",
+                 "src/Build.Integration/ApiReference/ApiReference.csproj",
+                 "src/Build.Integration/ApiReference/packages.lock.json"]
+    if sdk_revision is None:
+        sdk_revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+    fail(not re.fullmatch(r"[0-9a-f]{40}", sdk_revision), "SDK revision must be an exact commit")
+    for name in sdk_files:
+        committed = subprocess.check_output(["git", "show", sdk_revision + ":" + name], cwd=root)
+        fail(hashlib.sha256(committed).hexdigest() != digest(root / name),
+             "The selected SDK revision differs from the actual conformance tool: " + name)
     adoption = json.loads((root / "public-api-standard.json").read_text())
     standard = relative(root, adoption["localPath"])
     fail(digest(standard) != adoption["sha256"], "The adopted API standard changed")
@@ -180,10 +239,13 @@ def generate(root, descriptor, output):
         adoption["scope"] = "This generated Engine explicitly adopts the exact standard. Product/platform acceptance requires actual conformance."
         (staging / "public-api-standard.json").write_text(json.dumps(adoption, indent=2) + "\n")
         templates = Path(__file__).parent / "templates"
-        for path in ("AGENTS.md", "eng/verify.py", ".github/workflows/conformance.yml"):
+        template_paths = ("AGENTS.md", "eng/verify.py", ".github/workflows/conformance.yml")
+        for path in template_paths:
             target = staging / path
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(templates / path, target)
+        workflow = staging / ".github/workflows/conformance.yml"
+        workflow.write_text(workflow.read_text().replace("__NATIVEWEAVE_SDK_REVISION__", sdk_revision))
         for name, item in b.items():
             if isinstance(item, dict):
                 target = staging / "provenance" / (name + Path(item["path"]).suffix)
@@ -206,13 +268,14 @@ internal static class ScaffoldPackage
     internal static EngineDescriptor Descriptor { get; } = EnginePackage.CreateDescriptor(
         new EnginePackageManifest(%s, %s, %s,
             new AbiVersion(%d, %d), %s, EngineThreadingModel.%s,
-            [new NativeAssetDescriptor("linux-x64", %s, %s, "x64-v2")],
+            [new NativeAssetDescriptor("linux-x64", %s, %s, %s)],
             [%s]), typeof(ScaffoldPackage).Assembly);
 }
 ''' % (p["namespace"], json.dumps(data["engine_id"]), json.dumps(p["id"]), json.dumps(p["version"]),
        a["major"], a["minor"], json.dumps(a["bootstrap"]), data["threading"], json.dumps(asset_path),
-       json.dumps(native["asset"]["sha256"]), capabilities)
+       json.dumps(native["asset"]["sha256"]), json.dumps(native["cpu"]), capabilities)
         (staging / "src/Engine/ScaffoldPackage.g.cs").write_text(source)
+        (staging / "native-sha256").write_text(native["asset"]["sha256"] + "\n")
         references = "\n".join('    <PackageReference Include="' + escape(k) + '" Version="[' + escape(v) + ']" />' for k, v in sorted(data["dependencies"].items()))
         project = '''<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
@@ -226,10 +289,14 @@ internal static class ScaffoldPackage
     <Compile Include="../../bindings/Bindings.g.cs" />
     <None Include="../../%s" Pack="true" PackagePath="%s" CopyToOutputDirectory="PreserveNewest" Link="%s" />
     <None Include="../../buildTransitive/**/*" Pack="true" PackagePath="buildTransitive/%%(RecursiveDir)%%(Filename)%%(Extension)" />
+    <None Include="../../tools/**/*" Pack="true" PackagePath="tools/%%(RecursiveDir)%%(Filename)%%(Extension)" />
+    <None Include="../../nativeweave/**/*" Pack="true" PackagePath="nativeweave/%%(RecursiveDir)%%(Filename)%%(Extension)" />
+    <None Include="../../docs/THIRD-PARTY-NOTICES.txt" Pack="true" PackagePath="" Condition="Exists('../../docs/THIRD-PARTY-NOTICES.txt')" />
+    <EmbeddedResource Include="../../native-sha256" LogicalName="%s.native-sha256" />
     <InternalsVisibleTo Include="%s.Conformance" />
   </ItemGroup>
 </Project>
-''' % (p["assembly"], p["id"], p["version"], references, asset_path, asset_path, native["filename"], p["assembly"])
+''' % (p["assembly"], p["id"], p["version"], references, asset_path, asset_path, native["filename"], p["assembly"], p["assembly"])
         (staging / "src/Engine/Engine.csproj").write_text(project)
         (staging / "Directory.Build.props").write_text('''<Project><PropertyGroup>
 <TargetFramework>net11.0</TargetFramework><LangVersion>15.0</LangVersion><Nullable>enable</Nullable>
@@ -240,6 +307,8 @@ internal static class ScaffoldPackage
 ''')
         (staging / "samples/Consumer/Consumer.csproj").write_text('''<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup>
 <OutputType>Exe</OutputType><AssemblyName>%s.Conformance</AssemblyName><AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+<NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifier)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifier).aot.lock.json</NuGetLockFilePath>
+<NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifiers)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifiers).aot.lock.json</NuGetLockFilePath>
 </PropertyGroup><ItemGroup><PackageReference Include="%s" Version="[%s]" /></ItemGroup></Project>
 ''' % (p["assembly"], p["id"], p["version"]))
         (staging / "samples/Consumer/AotGuard.cs").write_text('''using System.Runtime.CompilerServices;
@@ -250,9 +319,13 @@ internal static class AotGuard
     {
         if (Environment.GetEnvironmentVariable("NATIVEWEAVE_REQUIRE_AOT") == "1" && RuntimeFeature.IsDynamicCodeSupported)
             throw new InvalidOperationException("Actual Native AOT execution is required.");
+        var engine = %s.ScaffoldPackage.Descriptor.Inspect();
+        if (engine.ThreadingModel != NativeWeave.Interop.EngineThreadingModel.%s)
+            throw new InvalidOperationException("Generated threading descriptor differs.");
+%s
     }
 }
-''')
+''' % (p["namespace"], data["threading"], "\n".join("        engine.Require(new NativeWeave.Interop.EngineCapability(" + json.dumps(cap["name"]) + "));" for cap in data["capabilities"])))
         (staging / "api-reference.json").write_text(json.dumps({
             "assembly": "src/Engine/bin/Release/net11.0/" + p["assembly"] + ".dll",
             "sources": ["src/Engine"], "baselines": ["docs/public-api.expected.json"],
@@ -265,20 +338,29 @@ internal static class AotGuard
             "compile/package the actual facade and execute its independent JIT and Native AOT consumer. "
             "The initial generated tree is not a release acceptance record. Ordinary applications restore "
             "precompiled packages; these maintainer checks are never imported into application builds.\n")
-        sdk_files = ["src/Build.Integration/compose_docs.py", "src/Build.Integration/ApiReference/Program.cs",
-                     "src/Build.Integration/ApiReference/ApiReference.csproj"]
         manifest = {"schema_version": 1, "descriptor_sha256": digest(descriptor), "template_sha256": {},
+                    "sdk_git_revision": sdk_revision,
                     "sdk_tool_sha256": {name: digest(root / name) for name in sdk_files},
                     "files": {}, "accepted": False, "components": data["components"], "core_source_changed": False}
-        for file in sorted(templates.rglob("*")):
-            if file.is_file(): manifest["template_sha256"][file.relative_to(templates).as_posix()] = digest(file)
+        tool_names = subprocess.check_output(["git", "ls-files", "--", "src/Generators.Model", "src/Generators.CSharp",
+            "src/Generators.Rust", "Directory.Build.props", "Directory.Build.targets", "global.json"], cwd=root, text=True).splitlines()
+        manifest["generation_tool_sha256"] = {name: digest(root / name) for name in tool_names}
+        manifest["generation_log_sha256"] = {file.name: digest(file) for file in logs.iterdir() if file.is_file()}
+        for path in template_paths:
+            manifest["template_sha256"][path] = digest(templates / path)
         for file in sorted(staging.rglob("*")):
             if file.is_file() and not file.is_relative_to(staging / "artifacts"):
                 manifest["files"][file.relative_to(staging).as_posix()] = digest(file)
         (staging / "scaffold-manifest.json").write_text(json.dumps(manifest, sort_keys=True, indent=2) + "\n")
         staging.rename(output)
-    except BaseException:
-        shutil.rmtree(staging)
+    except BaseException as error:
+        # Keep exact failed generator output without publishing an apparent
+        # successful repository at the requested destination.
+        (staging / "failure.json").write_text(json.dumps({"accepted": False, "error": str(error)}) + "\n")
+        failure = output.with_name(output.name + ".failed-" + staging.name.rsplit("-", 1)[-1])
+        staging.rename(failure)
+        if isinstance(error, Exception):
+            raise ScaffoldError("Generation failed; retained inputs/logs: " + str(failure)) from error
         raise
     return {"output": str(output), "engine_id": data["engine_id"], "accepted": False,
             "manifest_sha256": digest(output / "scaffold-manifest.json")}
@@ -289,8 +371,9 @@ def main():
     parser.add_argument("descriptor", type=Path)
     parser.add_argument("output", type=Path)
     parser.add_argument("--root", type=Path, default=ROOT)
+    parser.add_argument("--sdk-revision", help="Exact published SDK commit; its used tool inputs must match --root")
     args = parser.parse_args()
-    print(json.dumps(generate(args.root, args.descriptor, args.output)))
+    print(json.dumps(generate(args.root, args.descriptor, args.output, args.sdk_revision)))
 
 
 if __name__ == "__main__":

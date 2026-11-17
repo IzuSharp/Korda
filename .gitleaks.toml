@@ -40,3 +40,15 @@ condition = "AND"
 paths = ['''^src/(Build\.Integration|Verification\.Compatibility)/design-inputs\.json$''']
 regexTarget = "secret"
 regexes = ['''^f7316b35bfb8cce5cb4fded82a0907e602626c4e9e54ff18d99fe242f2b4b681$''']
+
+[[allowlists]]
+description = "Exact public locked Design API/header SHA-256 identities in Task-04 component provenance"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^src/(Interop\.(Callbacks|Async)|Engines\.SyncProof|Packaging\.(Linux|Release)|Tooling\.EngineScaffold)/design-inputs\.json$''']
+regexTarget = "secret"
+regexes = [
+  '''^6d79a3d030ec429e4706f6012d4e9f876ddc35307d4b4c814fc18d5100b4c6e2$''',
+  '''^d3e989c4f8732f2514c66a2c1ecf038b460fc29e3581d0b36855612751e974e4$''',
+  '''^f7316b35bfb8cce5cb4fded82a0907e602626c4e9e54ff18d99fe242f2b4b681$''',
+]

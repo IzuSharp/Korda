@@ -1,0 +1,6 @@
+{
+  "task": "A06",
+  "design_commit": "c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9",
+  "symbols": [],
+  "applicability": "Internal static callback registration/revocation/draining. Domain handlers require no unmanaged function pointers or GCHandle management."
+}

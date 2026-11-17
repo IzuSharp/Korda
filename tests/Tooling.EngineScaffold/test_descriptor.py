@@ -22,8 +22,10 @@ class DescriptorTests(unittest.TestCase):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content)
             return {"path": name, "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
-        sidecar = {"schema_version": 1, "module": {"id": "nativeweave.scaffold.test", "abi_major": 1, "abi_minor": 0},
-                   "capabilities": ["codec.test.v1"], "exports": [{"symbol": "nw_test_get_abi_v1"}], "owners": [], "operations": []}
+        sidecar = {"schema_version": 1, "module": {"id": "nativeweave.scaffold.test", "abi_major": 1, "abi_minor": 0,
+                   "rid": "linux-x64", "target": "x86_64-unknown-linux-gnu", "pointer_width_bits": 64},
+                   "capabilities": ["codec.test.v1"], "exports": [{"symbol": "nw_test_get_abi_v1"}],
+                   "owners": [], "operations": [], "callbacks": []}
         self.data = {"schema_version": 1, "engine_id": "nativeweave.scaffold.test",
             "package": {"id": "NativeWeave.Scaffold.Test", "assembly": "NativeWeave.Scaffold.Test",
                         "namespace": "NativeWeave.Scaffold.Test", "version": "0.1.0-proof.1"},
@@ -31,7 +33,7 @@ class DescriptorTests(unittest.TestCase):
             "threading": "Synchronous", "components": ["abi", "error"],
             "capabilities": [{"name": "codec.test.v1", "bit": 0}],
             "native": {"asset": source("fixture.so", "validation-only fixture, never loaded"), "filename": "libfixture.so",
-                       "rid": "linux-x64", "target": "x86_64-unknown-linux-gnu", "cpu": "x64-v2", "link_mode": "dynamic"},
+                       "rid": "linux-x64", "target": "x86_64-unknown-linux-gnu", "cpu": "x86-64-v2", "link_mode": "dynamic"},
             "binding": {"sidecar": source("binding.json", json.dumps(sidecar)), "inventory": source("inventory.json", "{}"),
                         "adapter": source("adapter.rs", ""), "linked_symbols": source("symbols.txt", "nw_test_get_abi_v1\n"), "library": "fixture"},
             "upstream": [{"repository": "https://github.com/example/fixture", "commit": "1" * 40,
@@ -96,6 +98,80 @@ class DescriptorTests(unittest.TestCase):
         self.reject(lambda d: d["files"].pop("samples/Consumer/Program.cs"))
         self.reject(lambda d: d.update(upstream=[]))
         self.reject(lambda d: d["dependencies"].update({"NativeWeave.Core": "*"}))
+        self.reject(lambda d: d.update(engine_id="nativeweave..invalid"))
+        self.reject(lambda d: d.update(engine_id="nativeweave_invalid"))
+        self.reject(lambda d: d["binding"].update(library="different_asset"))
+
+    def test_cpu_vocabulary_matches_core(self):
+        for cpu in ("x86-64", "x86-64-v2"):
+            value = copy.deepcopy(self.data)
+            value["native"]["cpu"] = cpu
+            self.assertEqual(self.read(value)["native"]["cpu"], cpu)
+        self.reject(lambda d: d["native"].update(cpu="x64-v2"))
+        self.reject(lambda d: d["native"].update(cpu="x86-64-v3"))
+
+    def test_binding_target_must_match_native(self):
+        path = self.root / "binding.json"
+        original = json.loads(path.read_text())
+        for mutation in ({"rid": "win-x64", "target": "x86_64-pc-windows-msvc"},
+                         {"pointer_width_bits": 32}, {"target": "aarch64-unknown-linux-gnu"}):
+            model = copy.deepcopy(original)
+            model["module"].update(mutation)
+            path.write_text(json.dumps(model))
+            self.data["binding"]["sidecar"]["sha256"] = scaffold.digest(path)
+            with self.assertRaisesRegex(scaffold.ScaffoldError, "target profiles differ"):
+                self.read(self.data)
+
+    def test_sidecar_callback_requires_opt_in(self):
+        path = self.root / "binding.json"
+        model = json.loads(path.read_text())
+        model["callbacks"] = [{"symbol": "on_event", "contract": "notification"}]
+        path.write_text(json.dumps(model))
+        self.data["binding"]["sidecar"]["sha256"] = scaffold.digest(path)
+        with self.assertRaisesRegex(scaffold.ScaffoldError, "callbacks and opted-in"):
+            self.read(self.data)
+
+    def test_shared_core_tables_require_actual_layout_borrow_and_opt_in(self):
+        # The real A18 mechanism consumes existing A06/A07 UCO tables. It does
+        # not declare a fabricated native export for a second generated UCO.
+        path = self.root / "binding.json"
+        model = json.loads(path.read_text())
+        model["owners"] = [{"kind": "NwHttpHost", "release": "nw_host_release"}]
+        model["exports"].append({"symbol": "nw_host_release"})
+        model["records"] = [{"name": "NwCallbacksV1", "size": 24, "alignment": 8, "fields": [
+            {"name": name, "type": kind, "offset": offset, "reserved": reserved}
+            for name, kind, offset, reserved in [("struct_size", "u32", 0, False),
+                ("flags", "u32", 4, True), ("cookie", "usize", 8, False), ("on_event", "usize", 16, False)]]}]
+        table = {"type": "const:NwCallbacksV1", "direction": "in", "nullable": False,
+                 "mutable": False, "owner": "", "borrow_end": "call", "copy_before_accept": True,
+                 "maximum_bytes": 24}
+        model["exports"].append({"symbol": "nw_host_start", "return": "u32", "parameters": [
+            {"owner": "NwHttpHost", "direction": "in", "borrow_end": "call"}, table]})
+        self.assertTrue(scaffold.uses_callbacks(model))
+        path.write_text(json.dumps(model))
+        self.data["binding"]["sidecar"]["sha256"] = scaffold.digest(path)
+        self.data["components"] = ["abi", "error", "ownership"]
+        with self.assertRaisesRegex(scaffold.ScaffoldError, "callbacks and opted-in"):
+            self.read(self.data)
+        # An unused record alone cannot justify a callback component declaration.
+        unused = copy.deepcopy(model)
+        unused["exports"].pop()
+        self.assertFalse(scaffold.uses_callbacks(unused))
+        for mutation in (lambda m: m["records"][0].update(size=32),
+                         lambda m: m["records"][0]["fields"][3].update(offset=8),
+                         lambda m: m["exports"][-1]["parameters"][-1].update(copy_before_accept=False),
+                         lambda m: m["exports"][-1]["parameters"][-1].update(mutable=True),
+                         lambda m: m["exports"][-1]["parameters"][-1].update(type="mut:NwCallbacksV1"),
+                         lambda m: m["exports"][-1]["parameters"][0].update(owner="unknown")):
+            changed = copy.deepcopy(model)
+            mutation(changed)
+            with self.assertRaises(scaffold.ScaffoldError):
+                scaffold.uses_callbacks(changed)
+        operation = copy.deepcopy(model)
+        operation["records"][0]["name"] = "NwOperationCallbacksV1"
+        operation["records"][0]["fields"][3]["name"] = "on_terminal"
+        operation["exports"][-1]["parameters"][-1]["type"] = "const:NwOperationCallbacksV1"
+        self.assertTrue(scaffold.uses_callbacks(operation))
 
 
 if __name__ == "__main__":
