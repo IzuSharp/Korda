@@ -71,4 +71,20 @@ string referencePath = Path.Combine(root, "src/Protocols.Grpc/api-reference.md")
 if (args.Contains("--write")) File.WriteAllText(referencePath, reference.ToString());
 else if (File.ReadAllText(referencePath) != reference.ToString()) throw new Exception("Generated reference is stale.");
 
-Console.WriteLine($"PASS B18 {actual.Count} exact compiled declarations; public API, XML and generated reference match the pinned Design.");
+var negative = new Dictionary<string, string>
+{
+    ["wrong-request-marshaller"] = "_ = new GrpcMethod<string, string>(\"/demo.Service/Call\", GrpcMethodKind.Unary, new GrpcMarshaller<int>((v,w) => {}, b => 0), text);",
+    ["wrong-handler-input"] = "app.MapGrpcUnary(method, (int value, GrpcCallContext context) => Task.FromResult(value));",
+    ["arbitrary-service-delegate"] = "app.MapGrpc((Delegate)(Action)(() => {}));",
+    ["wrong-decoder-result"] = "_ = new GrpcMarshaller<string>((v,w) => {}, bytes => 42);",
+    ["public-context-construction"] = "_ = new GrpcCallContext();"
+};
+foreach (var fixture in negative)
+{
+    string source = "using System; using System.Threading.Tasks; using NativeWeave.Server; using NativeWeave.Server.Grpc; public static class Consumer { public static void Run(NativeServerApplication app) { var text = new GrpcMarshaller<string>((v,w) => {}, bytes => string.Empty); var method = new GrpcMethod<string,string>(\"/demo.Service/Call\", GrpcMethodKind.Unary, text, text); " + fixture.Value + " } }";
+    var compiled = CSharpCompilation.Create("NegativeConsumer", [CSharpSyntaxTree.ParseText(source)], productReferences, options);
+    var failures = compiled.GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error).ToArray();
+    if (failures.Length == 0 || failures.Any(d => d.Id is "CS0012" or "CS0246")) throw new Exception("Invalid negative consumer witness: " + fixture.Key + ": " + string.Join(';', failures.Select(d => d.ToString())));
+    Console.WriteLine("PASS compile-negative " + fixture.Key + ": " + string.Join(',', failures.Select(d => d.Id).Distinct()));
+}
+Console.WriteLine($"PASS B18 {actual.Count} exact compiled declarations; public API, XML, reference and {negative.Count} negative consumers match the pinned Design.");

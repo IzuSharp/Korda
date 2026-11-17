@@ -344,6 +344,7 @@ fn schema_node(
         if !matches!(
             key.as_str(),
             "$schema"
+                | "$comment"
                 | "type"
                 | "properties"
                 | "required"
@@ -356,11 +357,28 @@ fn schema_node(
                 | "enum"
                 | "minimum"
                 | "maximum"
+                | "minLength"
+                | "maxLength"
+                | "contentEncoding"
                 | "pattern"
                 | "deprecated"
         ) {
             return Err("unsupported static schema keyword");
         }
+    }
+    for keyword in ["minLength", "maxLength"] {
+        if obj
+            .get(keyword)
+            .is_some_and(|value| value.as_u64().is_none())
+        {
+            return Err("invalid scalar length annotation");
+        }
+    }
+    if obj
+        .get("contentEncoding")
+        .is_some_and(|value| value.as_str() != Some("base64"))
+    {
+        return Err("unsupported scalar encoding");
     }
     // The pinned BCL string-enum exporter emits only `enum` (without `type`).
     // Preserve its exact descriptor and admit the finite scalar choice set.
@@ -368,7 +386,8 @@ fn schema_node(
         return match obj.get("enum").and_then(Value::as_array) {
             Some(values)
                 if !values.is_empty()
-                    && values.len() <= 256
+                    && values.len() <= 257
+                    && values.iter().filter(|v| !v.is_null()).count() <= 256
                     && values.iter().all(|v| !v.is_array() && !v.is_object()) =>
             {
                 Ok(())

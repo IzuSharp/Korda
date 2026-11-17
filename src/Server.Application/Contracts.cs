@@ -68,7 +68,8 @@ namespace NativeWeave.Server
 
     /// <summary>HTTP protocol selection without implicit upgrades.</summary>
     /// <remarks>Linux x64 verified package; other RID acceptance is separate; base http1/http2/tls/trailers module bits; requested listener capabilities checked at Build. Single-threaded bounded startup snapshots; O(config bytes); options/services freeze at Build, routes separately freeze at first Start; no default global runtime. This policy applies to members unless their documentation states a narrower rule. Configuration is single-threaded before freeze; borrowed request members expire after dispatch cleanup, and asynchronous operations retain native owners until retirement.</remarks>
-    [Flags] public enum ServerProtocols
+    [Flags]
+    public enum ServerProtocols
     {
         /// <summary>No protocol selected; invalid for a listener.</summary>
         /// <inheritdoc cref="T:NativeWeave.Server.ServerProtocols" path="/member/remarks" />
@@ -122,7 +123,8 @@ namespace NativeWeave.Server
     }
     /// <summary>Negotiated optional host capabilities.</summary>
     /// <remarks>Linux x64 verified package; other RID acceptance is separate; base http1/http2/tls/trailers module bits; requested listener capabilities checked at Build. Single-threaded bounded startup snapshots; O(config bytes); options/services freeze at Build, routes separately freeze at first Start; no default global runtime. This policy applies to members unless their documentation states a narrower rule. Configuration is single-threaded before freeze; borrowed request members expire after dispatch cleanup, and asynchronous operations retain native owners until retirement.</remarks>
-    [Flags] public enum ServerCapabilities : ulong
+    [Flags]
+    public enum ServerCapabilities : ulong
     {
         /// <summary>No capability bits.</summary>
         /// <inheritdoc cref="T:NativeWeave.Server.ServerCapabilities" path="/member/remarks" />
@@ -333,7 +335,8 @@ namespace NativeWeave.Server
     [AttributeUsage(AttributeTargets.Class)] public sealed class ServerEndpointsAttribute : Attribute { }
     /// <summary>Declares a route on a supported static method; arbitrary Delegate reflection is prohibited.</summary>
     /// <remarks>Finite annotated static handler whitelist; missing/ambiguous shapes are compile diagnostics. Build-time generation; no per-handler Rust compilation, reflection scan, Expression.Compile or runtime argument object[]. This policy applies to members unless their documentation states a narrower rule. Configuration is single-threaded before freeze; borrowed request members expire after dispatch cleanup, and asynchronous operations retain native owners until retirement.</remarks>
-    [AttributeUsage(AttributeTargets.Method, AllowMultiple = true)] public sealed class ServerRouteAttribute : Attribute
+    [AttributeUsage(AttributeTargets.Method, AllowMultiple = true)]
+    public sealed class ServerRouteAttribute : Attribute
     {
         /// <summary>Declares one HTTP method and pattern.</summary>
         /// <inheritdoc cref="T:NativeWeave.Server.ServerRouteAttribute" path="/member/remarks" />
@@ -349,7 +352,8 @@ namespace NativeWeave.Server
     }
     /// <summary>Explicit scalar route binding for generated adapters.</summary>
     /// <remarks>Finite annotated static handler whitelist; missing/ambiguous shapes are compile diagnostics. Build-time generation; no per-handler Rust compilation, reflection scan, Expression.Compile or runtime argument object[]. This policy applies to members unless their documentation states a narrower rule. Configuration is single-threaded before freeze; borrowed request members expire after dispatch cleanup, and asynchronous operations retain native owners until retirement.</remarks>
-    [AttributeUsage(AttributeTargets.Parameter)] public sealed class RouteParameterAttribute : Attribute
+    [AttributeUsage(AttributeTargets.Parameter)]
+    public sealed class RouteParameterAttribute : Attribute
     {
         /// <summary>Uses the supplied name, or the parameter name when null.</summary>
         /// <inheritdoc cref="T:NativeWeave.Server.RouteParameterAttribute" path="/member/remarks" />
@@ -361,7 +365,8 @@ namespace NativeWeave.Server
     }
     /// <summary>Explicit scalar or repeated-array query binding for generated adapters.</summary>
     /// <remarks>Finite annotated static handler whitelist; missing/ambiguous shapes are compile diagnostics. Build-time generation; no per-handler Rust compilation, reflection scan, Expression.Compile or runtime argument object[]. This policy applies to members unless their documentation states a narrower rule. Configuration is single-threaded before freeze; borrowed request members expire after dispatch cleanup, and asynchronous operations retain native owners until retirement.</remarks>
-    [AttributeUsage(AttributeTargets.Parameter)] public sealed class QueryParameterAttribute : Attribute
+    [AttributeUsage(AttributeTargets.Parameter)]
+    public sealed class QueryParameterAttribute : Attribute
     {
         /// <summary>Uses the supplied name, or the parameter name when null.</summary>
         /// <inheritdoc cref="T:NativeWeave.Server.QueryParameterAttribute" path="/member/remarks" />
@@ -373,7 +378,8 @@ namespace NativeWeave.Server
     }
     /// <summary>Explicit scalar header binding for generated adapters.</summary>
     /// <remarks>Finite annotated static handler whitelist; missing/ambiguous shapes are compile diagnostics. Build-time generation; no per-handler Rust compilation, reflection scan, Expression.Compile or runtime argument object[]. This policy applies to members unless their documentation states a narrower rule. Configuration is single-threaded before freeze; borrowed request members expire after dispatch cleanup, and asynchronous operations retain native owners until retirement.</remarks>
-    [AttributeUsage(AttributeTargets.Parameter)] public sealed class HeaderParameterAttribute : Attribute
+    [AttributeUsage(AttributeTargets.Parameter)]
+    public sealed class HeaderParameterAttribute : Attribute
     {
         /// <summary>Uses one validated case-insensitive header name.</summary>
         /// <inheritdoc cref="T:NativeWeave.Server.HeaderParameterAttribute" path="/member/remarks" />

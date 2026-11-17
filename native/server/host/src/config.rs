@@ -351,7 +351,8 @@ pub fn encode_headers(headers: &HeaderMap) -> Result<Vec<u8>> {
     let count = u32::try_from(headers.len()).map_err(|_| invalid())?;
     let size = headers.iter().try_fold(4usize, |n, (name, value)| {
         value.to_str().map_err(|_| invalid())?;
-        n.checked_add(8 + name.as_str().len() + value.as_bytes().len()).ok_or(invalid())
+        n.checked_add(8 + name.as_str().len() + value.as_bytes().len())
+            .ok_or(invalid())
     })?;
     let mut bytes = Vec::with_capacity(size);
     bytes.extend_from_slice(&count.to_le_bytes());
@@ -466,13 +467,22 @@ pub unsafe fn route(value: *const NwServerRouteV1) -> Result<Route> {
         return Err(invalid());
     }
     let grpc = if v.kind == 1 {
-        if !parameters.is_empty() || parsed != [Method::POST] || v.max_json_bytes != 0 { return Err(invalid()); }
+        if !parameters.is_empty() || parsed != [Method::POST] || v.max_json_bytes != 0 {
+            return Err(invalid());
+        }
         // SAFETY: the bounded exact-schema descriptor is consumed during synchronous registration.
         let descriptor = nativeweave_protocols_grpc::Descriptor::parse(
-            unsafe { bytes(v.protocol_descriptor, 16_384)? }, &pattern, v.handler_id,
-            duration(v.timeout_ns, false)?, v.max_request_bytes).map_err(|_| invalid())?;
+            unsafe { bytes(v.protocol_descriptor, 16_384)? },
+            &pattern,
+            v.handler_id,
+            duration(v.timeout_ns, false)?,
+            v.max_request_bytes,
+        )
+        .map_err(|_| invalid())?;
         Some(Arc::new(descriptor))
-    } else { None };
+    } else {
+        None
+    };
     let mcp = if v.kind == 2 {
         if !parameters.is_empty() || parsed != [Method::POST] || v.max_json_bytes != 0 {
             return Err(invalid());

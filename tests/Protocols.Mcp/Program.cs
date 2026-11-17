@@ -17,6 +17,7 @@ uniqueResources.AddResource("nativeweave:second", "distinct", "text/plain", stat
 Check(true, "Rejected duplicate resource name leaves registration reusable");
 SchemaFixtures.Run(Check);
 if (args.Contains("--schema-only")) return;
+Console.WriteLine("scalar_schema=" + Encoding.UTF8.GetString(StaticSchema.Create("scalars", Json.Default.ScalarInput)));
 var schema = StaticSchema.Create("echo", Json.Default.Input);
 using (var document = JsonDocument.Parse(schema))
 {
@@ -46,6 +47,8 @@ foreach (var version in new[] { HttpVersion.Version11, HttpVersion.Version20 })
     }).AddTool("failure", "Explicit error", Json.Default.Input, Json.Default.Output, static (_, _) => Task.FromResult(McpToolResult<Output>.Error("Safe selected failure")))
         .AddTool("throw", "Unexpected error", Json.Default.Input, Json.Default.Output, static (_, _) => throw new InvalidOperationException("secret exception payload"))
         .AddTool("badoutput", "Invalid non-nullable output", Json.Default.Input, Json.Default.Output, static (_, _) => Task.FromResult(McpToolResult<Output>.Success(new(null!))))
+        .AddTool("peakoutput", "Output native peak fallback", Json.Default.Input, Json.Default.ArrayOutput, static (_, _) => Task.FromResult(McpToolResult<ArrayOutput>.Success(new(Enumerable.Repeat(new Output(new string('x', 90)), 1000).ToArray()))))
+        .AddTool("scalars", "Finite BCL scalar mappings", Json.Default.ScalarInput, Json.Default.ScalarInput, static (value, _) => Task.FromResult(McpToolResult<ScalarInput>.Success(value)))
         .AddTool("largeoutput", "Bounded output", Json.Default.Input, Json.Default.Output, static (_, _) => Task.FromResult(McpToolResult<Output>.Success(new(new string('x', 300_000)))))
         .AddTool("empty", "Empty static object", SchemaJson.Default.Empty, SchemaJson.Default.Empty, static (_, _) => Task.FromResult(McpToolResult<Empty>.Success(new())))
         .AddTool("enum", "Static string enum", StringEnumJson.Default.EnumDto, StringEnumJson.Default.EnumDto, static (value, _) => Task.FromResult(McpToolResult<EnumDto>.Success(value)))
@@ -107,6 +110,8 @@ foreach (var version in new[] { HttpVersion.Version11, HttpVersion.Version20 })
     var explicitError = await Send("tools/call", "\"name\":\"failure\",\"arguments\":{\"text\":\"x\"}", "failure"); Check(explicitError.Body.Contains("\"isError\":true", StringComparison.Ordinal), "Explicit tool error remains result layer");
     var unexpected = await Send("tools/call", "\"name\":\"throw\",\"arguments\":{\"text\":\"x\"}", "throw"); Check(unexpected.Body.Contains("\"isError\":true", StringComparison.Ordinal) && !unexpected.Body.Contains("secret", StringComparison.Ordinal), "Unexpected tool error is redacted");
     var badOutput = await Send("tools/call", "\"name\":\"badoutput\",\"arguments\":{\"text\":\"x\"}", "badoutput"); Check(badOutput.Status == 200 && badOutput.Body.Contains("\"isError\":true", StringComparison.Ordinal) && !badOutput.Body.Contains("structuredContent", StringComparison.Ordinal), "Native output schema rejection returns redacted tool result and retains reservation until retry transfer");
+    var peakOutput = await Send("tools/call", "\"name\":\"peakoutput\",\"arguments\":{\"text\":\"x\"}", "peakoutput"); Check(peakOutput.Status == 200 && peakOutput.Body.Contains("\"isError\":true", StringComparison.Ordinal) && !peakOutput.Body.Contains("structuredContent", StringComparison.Ordinal), "Native output peak rejection returns redacted tool error with reusable pregrant");
+    var scalars = await Send("tools/call", "\"name\":\"scalars\",\"arguments\":{\"character\":\"a\",\"binary\":\"AQID\",\"id\":\"00112233-4455-6677-8899-aabbccddeeff\",\"date\":\"2026-11-17\",\"time\":\"12:00:00\",\"duration\":\"00:00:01\",\"uri\":\"https://example.com/x\",\"version\":\"1.2.3\"}", "scalars"); Check(scalars.Status == 200 && scalars.Body.Contains("\"structuredContent\":", StringComparison.Ordinal) && scalars.Body.Contains("AQID", StringComparison.Ordinal), "Finite BCL char/base64/UUID/date/time/duration/URI/version schemas agree with codecs");
     var oversized = await Send("tools/call", "\"name\":\"largeoutput\",\"arguments\":{\"text\":\"x\"}", "largeoutput"); Check(oversized.Status == 200 && oversized.Body.Contains("\"isError\":true", StringComparison.Ordinal), "Oversized application output is bounded and redacted");
     var empty = await Send("tools/call", "\"name\":\"empty\",\"arguments\":{}", "empty"); Check(empty.Status == 200 && empty.Body.Contains("\"structuredContent\":{}", StringComparison.Ordinal), "Empty object schema remains an actual static object codec");
     var enumCall = await Send("tools/call", "\"name\":\"enum\",\"arguments\":{\"value\":\"renamed-value\"}", "enum"); Check(enumCall.Status == 200 && enumCall.Body.Contains("\"structuredContent\":{\"value\":\"renamed-value\"}", StringComparison.Ordinal), "Source-generated string enum roundtrip through real rmcp");
@@ -151,7 +156,11 @@ Console.WriteLine($"B19 actual Host assertions={assertions}, managed_retirements
 
 public sealed record Input(string Text, string? Optional = null);
 public sealed record Output(string Text);
+public sealed record ArrayOutput(Output[] Items);
+public sealed record ScalarInput(char Character, byte[] Binary, Guid Id, DateOnly Date, TimeOnly Time, TimeSpan Duration, Uri Uri, Version Version);
 public readonly record struct ValueInput(int Number);
+[JsonSerializable(typeof(ArrayOutput))]
+[JsonSerializable(typeof(ScalarInput))]
 [JsonSerializable(typeof(Input))]
 [JsonSerializable(typeof(Output))]
 [JsonSerializable(typeof(string))]

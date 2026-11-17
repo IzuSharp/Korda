@@ -165,7 +165,8 @@ internal sealed class XmlEnricher(Dictionary<string, JsonElement> policies) : CS
         return id is null || ns is null ? null : ns + "." + id;
     }
     private static string Escape(string text) => System.Security.SecurityElement.Escape(text)!;
-    private static string Parameter(ParameterSyntax p) => p.Identifier.ValueText switch {
+    private static string Parameter(ParameterSyntax p) => p.Identifier.ValueText switch
+    {
         "cancellationToken" => "Caller cancellation intent; cancellation never releases native owners before their retirement join.",
         "handler" => "A strongly typed application callback invoked on managed dispatch outside native locks; await its asynchronous work.",
         "typeInfo" or "requestTypeInfo" or "responseTypeInfo" => "Static JSON metadata; nullable registration arguments resolve from UseJson contexts at route freeze, without reflection fallback.",
@@ -181,5 +182,6 @@ internal sealed class XmlEnricher(Dictionary<string, JsonElement> policies) : CS
         "bytes" or "data" => "The payload or finite byte limit described in the summary; application-owned input is not an unbounded framework allocation.",
         "provider" => "An explicit scope-capable service provider; ownership transfers only when disposeWithServer is true.",
         "disposeWithServer" => "Whether application disposal also disposes the supplied provider; false retains caller ownership.",
-        _ => "The " + p.Identifier.ValueText + " value described by this operation" + (p.Default is null ? "." : "; omitted calls use " + Escape(p.Default.Value.ToString()) + ".") };
+        _ => "The " + p.Identifier.ValueText + " value described by this operation" + (p.Default is null ? "." : "; omitted calls use " + Escape(p.Default.Value.ToString()) + ".")
+    };
 }

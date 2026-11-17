@@ -272,12 +272,25 @@ internal sealed record ServerConfiguration(ServerOptions Options, ListenerSnapsh
         }
         return new()
         {
-            RequestTimeout = source.RequestTimeout, ShutdownTimeout = source.ShutdownTimeout, MaxRequestBodyBytes = source.MaxRequestBodyBytes,
-            MaxJsonBytes = source.MaxJsonBytes, MaxHeaderBytes = source.MaxHeaderBytes, HeaderReadTimeout = source.HeaderReadTimeout,
-            KeepAliveTimeout = source.KeepAliveTimeout, TrustedProxies = proxies,
-            Budget = new() { MaxConnections = b.MaxConnections, MaxHttp2StreamsPerConnection = b.MaxHttp2StreamsPerConnection,
-                MaxActiveRequests = b.MaxActiveRequests, MaxQueuedRequests = b.MaxQueuedRequests, ManagedPayloadBytes = b.ManagedPayloadBytes,
-                NativePayloadBytes = b.NativePayloadBytes, RetainedBytesPerRequest = b.RetainedBytesPerRequest, MaxChunkBytes = b.MaxChunkBytes }
+            RequestTimeout = source.RequestTimeout,
+            ShutdownTimeout = source.ShutdownTimeout,
+            MaxRequestBodyBytes = source.MaxRequestBodyBytes,
+            MaxJsonBytes = source.MaxJsonBytes,
+            MaxHeaderBytes = source.MaxHeaderBytes,
+            HeaderReadTimeout = source.HeaderReadTimeout,
+            KeepAliveTimeout = source.KeepAliveTimeout,
+            TrustedProxies = proxies,
+            Budget = new()
+            {
+                MaxConnections = b.MaxConnections,
+                MaxHttp2StreamsPerConnection = b.MaxHttp2StreamsPerConnection,
+                MaxActiveRequests = b.MaxActiveRequests,
+                MaxQueuedRequests = b.MaxQueuedRequests,
+                ManagedPayloadBytes = b.ManagedPayloadBytes,
+                NativePayloadBytes = b.NativePayloadBytes,
+                RetainedBytesPerRequest = b.RetainedBytesPerRequest,
+                MaxChunkBytes = b.MaxChunkBytes
+            }
         };
     }
 }

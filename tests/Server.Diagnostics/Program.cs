@@ -280,8 +280,12 @@ internal sealed class TraceCollector : IDisposable
     internal TraceCollector(ActivitySamplingResult result, int every = 1)
     {
         int sampled = 0;
-        _listener = new() { ShouldListenTo = source => source.Name == "NativeWeave.Server", Sample = (ref ActivityCreationOptions<ActivityContext> _) => Interlocked.Increment(ref sampled) % every == 0 ? result : ActivitySamplingResult.None,
-            ActivityStopped = activity => Completed.Enqueue(new(activity.TraceId.ToHexString(), activity.ParentSpanId.ToHexString(), activity.TraceStateString ?? "", activity.TagObjects.Select(pair => KeyValuePair.Create(pair.Key, pair.Value?.ToString() ?? "")).ToArray())) };
+        _listener = new()
+        {
+            ShouldListenTo = source => source.Name == "NativeWeave.Server",
+            Sample = (ref ActivityCreationOptions<ActivityContext> _) => Interlocked.Increment(ref sampled) % every == 0 ? result : ActivitySamplingResult.None,
+            ActivityStopped = activity => Completed.Enqueue(new(activity.TraceId.ToHexString(), activity.ParentSpanId.ToHexString(), activity.TraceStateString ?? "", activity.TagObjects.Select(pair => KeyValuePair.Create(pair.Key, pair.Value?.ToString() ?? "")).ToArray()))
+        };
         ActivitySource.AddActivityListener(_listener);
     }
     public void Dispose() => _listener.Dispose();

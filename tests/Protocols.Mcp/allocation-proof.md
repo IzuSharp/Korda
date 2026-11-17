@@ -96,9 +96,10 @@ Output serialization uses bounded writers (at most 256 KiB each), a bounded stat
 object/string/node prewalk and explicit static metadata. The managed grant covers
 DTO JSON, outer result JSON, final byte copy and writer/encoding overlap. Native reply
 validation parses only under the already-owned 3 MiB reservation, checks its own
-structural/native peak, exact output schema and structured/text agreement. Invalid
-output is replaced with a small redacted error while the failed-create token is still
-caller-owned. Successful create transfers the token exactly once. The SDK response
+structural/native peak, exact output schema and structured/text agreement. An invalid shape or an output whose derived native peak exceeds that reservation
+is replaced with a small redacted error while the failed-create token is still
+caller-owned. The actual1000-object output fixture reaches this native peak boundary
+after bounded managed encoding and verifies the same-token fallback. Successful create transfers the token exactly once. The SDK response
 moves the same reservation to the actual Body; short reply operation completion is
 not a release boundary.
 

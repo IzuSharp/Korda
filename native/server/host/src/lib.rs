@@ -19,7 +19,11 @@ struct ApiError {
 }
 impl ApiError {
     const fn status(status: u32) -> Self {
-        Self { status, code: 0, error_domain: 0x53525652 }
+        Self {
+            status,
+            code: 0,
+            error_domain: 0x53525652,
+        }
     }
     const fn domain(code: i32) -> Self {
         Self {

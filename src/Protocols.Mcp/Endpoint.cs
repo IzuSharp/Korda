@@ -156,10 +156,10 @@ internal sealed class McpDescriptor : INativeServerProtocolDescriptor
             }
             nint pointer;
             try { pointer = CreateReply(reservation, reply.Kind, bytes); }
-            catch (ArgumentException)
+            catch (Exception error) when (error is ArgumentException or ServerException { Code: "resource_limit" })
             {
-                // Native finite-schema validation can reject an otherwise valid
-                // JSON result (for example a null non-nullable member). Failed
+                // Native finite-schema or peak validation can reject an otherwise
+                // valid JSON result before any transfer. Failed
                 // create leaves this exact reservation owned by the caller.
                 reply = entry.Kind == 0 ? McpReply.ToolError("Tool output failed") : McpReply.Error(-32603, "Application output failed");
                 pointer = CreateReply(reservation, reply.Kind, reply.Encode());

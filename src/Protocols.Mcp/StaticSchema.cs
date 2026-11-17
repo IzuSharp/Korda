@@ -177,7 +177,7 @@ internal static class StaticSchema
             { if (array.Count > 256) throw McpValidation.Schema(name, typeof(Array), "attribute array limit"); foreach (var element in array) Constant(element); }
         }
     }
-    private static bool Scalar(Type type) => type.IsPrimitive || type.IsEnum || type == typeof(string) || type == typeof(decimal) || type == typeof(Guid) || type == typeof(DateTime) || type == typeof(DateTimeOffset) || type == typeof(DateOnly) || type == typeof(TimeOnly) || type == typeof(TimeSpan) || type == typeof(Uri) || type == typeof(Version) || type == typeof(byte[]);
+    private static bool Scalar(Type type) => (type.IsPrimitive && type != typeof(nint) && type != typeof(nuint)) || type.IsEnum || type == typeof(string) || type == typeof(decimal) || type == typeof(Guid) || type == typeof(DateTime) || type == typeof(DateTimeOffset) || type == typeof(DateOnly) || type == typeof(TimeOnly) || type == typeof(TimeSpan) || type == typeof(Uri) || type == typeof(Version) || type == typeof(byte[]);
     internal static void CheckOutput<T>(T value, JsonTypeInfo<T> info)
     {
         int nodes = 0, strings = 0; var context = (JsonSerializerContext)info.OriginatingResolver!;

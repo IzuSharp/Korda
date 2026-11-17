@@ -32,8 +32,13 @@ public sealed class HeaderCollection
     public string? GetSingle(string name)
     {
         var values = this[name];
-        return values.Count switch { 0 => null, 1 => values[0], _ => throw (_mutable is null
-            ? new RequestBindingException(name, "Exactly one header value is required.") : new InvalidOperationException("The response header has repeated values.")) };
+        return values.Count switch
+        {
+            0 => null,
+            1 => values[0],
+            _ => throw (_mutable is null
+            ? new RequestBindingException(name, "Exactly one header value is required.") : new InvalidOperationException("The response header has repeated values."))
+        };
     }
     /// <summary>Tests for a field name.</summary>
     /// <inheritdoc cref="T:NativeWeave.Server.HeaderCollection" path="/member/remarks" />

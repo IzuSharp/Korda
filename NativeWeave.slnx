@@ -1,5 +1,10 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/Server.Application/NativeWeave.Server.csproj" />
+    <Project Path="src/Server.Application/Hosting/NativeWeave.Server.Hosting.csproj" />
+    <Project Path="src/Server.Application/Generator/NativeWeave.Server.Generator.csproj" />
+    <Project Path="src/Protocols.Grpc/NativeWeave.Server.Grpc.csproj" />
+    <Project Path="src/Protocols.Mcp/NativeWeave.Server.Mcp.csproj" />
     <Project Path="src/Engines.SyncProof/NativeWeave.Engines.SyncProof.csproj" />
     <Project Path="src/Engines.AsyncProof/NativeWeave.Engines.AsyncProof.csproj" />
     <Project Path="src/Verification.ExtensionProof/NativeWeave.Verification.ExtensionProof.csproj" />
@@ -49,6 +54,12 @@
     <Project Path="samples/api/verification-compatibility/CompatibilitySample.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Server.Application/Server.Application.Tests.csproj" />
+    <Project Path="tests/Server.Streaming/Server.Streaming.Tests.csproj" />
+    <Project Path="tests/Server.Native/Server.Native.Tests.csproj" />
+    <Project Path="tests/Protocols.Grpc/NativeWeave.Server.Grpc.Tests.csproj" />
+    <Project Path="tests/Protocols.Mcp/Protocols.Mcp.Tests.csproj" />
+    <Project Path="tests/Server.Diagnostics/Server.Diagnostics.Tests.csproj" />
     <Project Path="tests/Interop.Callbacks/Interop.Callbacks.Tests.csproj" />
     <Project Path="tests/Interop.Async/Interop.Async.Tests.csproj" />
     <Project Path="tests/Engines.SyncProof/NativeWeave.Engines.SyncProof.Tests.csproj" />
@@ -132,5 +143,23 @@
   </Folder>
   <Folder Name="/tests/A11/">
     <Project Path="tests/Generators.Rust/Consumer/Consumer.csproj" />
+  </Folder>
+  <Folder Name="/tools/B15/">
+    <Project Path="tests/Server.Application/ApiCheck/ApiCheck.csproj" />
+  </Folder>
+  <Folder Name="/tools/B16/">
+    <Project Path="tests/Server.Streaming/ApiCheck/ApiCheck.csproj" />
+  </Folder>
+  <Folder Name="/tools/B18/">
+    <Project Path="tests/Protocols.Grpc/ApiCheck/ApiCheck.csproj" />
+  </Folder>
+  <Folder Name="/tools/B19/">
+    <Project Path="tests/Protocols.Mcp/ApiCheck/ApiCheck.csproj" />
+  </Folder>
+  <Folder Name="/tools/B20/">
+    <Project Path="tests/Server.Diagnostics/ApiCheck/ApiCheck.csproj" />
+  </Folder>
+  <Folder Name="/benchmarks/B17/">
+    <Project Path="tests/Server.Native/Benchmarks/Benchmarks.csproj" />
   </Folder>
 </Solution>

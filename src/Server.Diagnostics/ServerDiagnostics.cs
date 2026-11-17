@@ -61,13 +61,24 @@ internal static class ServerDiagnostics
     }
     internal static string Category(Exception? error) => error switch
     {
-        null => "none", OperationCanceledException => "canceled", TimeoutException => "timeout", RequestBindingException => "binding",
-        ServerException { Code: "resource_limit" } => "resource_limit", ServerException { Code: "body_limit_exceeded" } => "body_limit",
-        ServerException { Code: "transport_failed" } => "transport", ServerException { Code: "content_length_mismatch" } => "framing",
-        ServerException { Code: "tls_configuration_failed" } => "tls", ServerException { Code: "listener_bind_failed" } => "listener",
-        ServerException { Code: "unsupported_media_type" } => "media_type", ServerException => "server_failure",
-        NativeEngineException { StatusCode: 8 } => "callback", NativeEngineException { StatusCode: 9 } => "native_panic",
-        NativeEngineException { StatusCode: 10 } => "poisoned", NativeEngineException { StatusCode: 11 } => "contract", NativeEngineException => "native_failure", _ => "application_failure"
+        null => "none",
+        OperationCanceledException => "canceled",
+        TimeoutException => "timeout",
+        RequestBindingException => "binding",
+        ServerException { Code: "resource_limit" } => "resource_limit",
+        ServerException { Code: "body_limit_exceeded" } => "body_limit",
+        ServerException { Code: "transport_failed" } => "transport",
+        ServerException { Code: "content_length_mismatch" } => "framing",
+        ServerException { Code: "tls_configuration_failed" } => "tls",
+        ServerException { Code: "listener_bind_failed" } => "listener",
+        ServerException { Code: "unsupported_media_type" } => "media_type",
+        ServerException => "server_failure",
+        NativeEngineException { StatusCode: 8 } => "callback",
+        NativeEngineException { StatusCode: 9 } => "native_panic",
+        NativeEngineException { StatusCode: 10 } => "poisoned",
+        NativeEngineException { StatusCode: 11 } => "contract",
+        NativeEngineException => "native_failure",
+        _ => "application_failure"
     };
     internal static string Bounded(string value)
     {
@@ -84,9 +95,17 @@ internal struct DiagnosticSnapshot
     internal readonly double CallbackMaxSeconds => (double)CallbackMax / Stopwatch.Frequency;
     public static DiagnosticSnapshot operator +(DiagnosticSnapshot a, DiagnosticSnapshot b) => new()
     {
-        Active = a.Active + b.Active, Queued = a.Queued + b.Queued, Retiring = a.Retiring + b.Retiring,
-        Managed = a.Managed + b.Managed, Native = a.Native + b.Native, Rejected = a.Rejected + b.Rejected,
-        Dropped = a.Dropped + b.Dropped, CallbackTicks = a.CallbackTicks + b.CallbackTicks, CallbackCount = a.CallbackCount + b.CallbackCount, CallbackMax = Math.Max(a.CallbackMax, b.CallbackMax), CallbackFailures = a.CallbackFailures + b.CallbackFailures
+        Active = a.Active + b.Active,
+        Queued = a.Queued + b.Queued,
+        Retiring = a.Retiring + b.Retiring,
+        Managed = a.Managed + b.Managed,
+        Native = a.Native + b.Native,
+        Rejected = a.Rejected + b.Rejected,
+        Dropped = a.Dropped + b.Dropped,
+        CallbackTicks = a.CallbackTicks + b.CallbackTicks,
+        CallbackCount = a.CallbackCount + b.CallbackCount,
+        CallbackMax = Math.Max(a.CallbackMax, b.CallbackMax),
+        CallbackFailures = a.CallbackFailures + b.CallbackFailures
     };
 }
 internal sealed class ServerDiagnosticsController
@@ -137,9 +156,17 @@ internal sealed class ServerDiagnosticsController
         }
         return new()
         {
-            Active = (long)value.active_requests, Queued = (long)value.queued_requests, Retiring = (long)value.retiring_requests,
-            Managed = (long)value.retained_managed_bytes, Native = (long)value.retained_native_bytes, Rejected = (long)value.rejected_requests,
-            Dropped = (long)value.diagnostic_drops, CallbackFailures = (long)value.callback_failures, CallbackTicks = Interlocked.Read(ref _callbackTicks), CallbackCount = Interlocked.Read(ref _callbackCount), CallbackMax = Interlocked.Read(ref _callbackMax)
+            Active = (long)value.active_requests,
+            Queued = (long)value.queued_requests,
+            Retiring = (long)value.retiring_requests,
+            Managed = (long)value.retained_managed_bytes,
+            Native = (long)value.retained_native_bytes,
+            Rejected = (long)value.rejected_requests,
+            Dropped = (long)value.diagnostic_drops,
+            CallbackFailures = (long)value.callback_failures,
+            CallbackTicks = Interlocked.Read(ref _callbackTicks),
+            CallbackCount = Interlocked.Read(ref _callbackCount),
+            CallbackMax = Interlocked.Read(ref _callbackMax)
         };
     }
     internal void Dropped() => _counters.Drop();
@@ -214,7 +241,8 @@ internal sealed class ServerRequestDiagnostics
         catch { _owner.Dropped(); }
         finally
         {
-            try { _activity?.Dispose(); } catch { _owner.Dropped(); }
+            try { _activity?.Dispose(); }
+            catch { _owner.Dropped(); }
             finally { try { if (_activity is not null) Activity.Current = _previousActivity; } catch { _owner.Dropped(); } }
         }
     }

@@ -937,7 +937,10 @@ pub unsafe extern "C" fn nw_server_operation_take_chunk(
             crate::engine::ChunkResult::GrpcData(value) => {
                 buffer.buffer = Some(value.into());
                 // SAFETY: complete protobuf message, including zero length, transfers as a kind0 owner.
-                unsafe { out_frame_kind.write(0); out_buffer.write(Box::into_raw(buffer)); }
+                unsafe {
+                    out_frame_kind.write(0);
+                    out_buffer.write(Box::into_raw(buffer));
+                }
             }
             crate::engine::ChunkResult::End(trailers) => {
                 if let Some(trailers) = trailers {
@@ -1003,7 +1006,9 @@ pub unsafe extern "C" fn nw_server_buffer_copy(
         if capacity < buffer.len() as u64 {
             return Err(ApiError::status(NW_BUFFER_TOO_SMALL));
         }
-        if buffer.len() == 0 { return Ok(()); }
+        if buffer.len() == 0 {
+            return Ok(());
+        }
         if destination.is_null() {
             return Err(invalid());
         }
@@ -1073,7 +1078,9 @@ pub unsafe extern "C" fn nw_server_response_begin_create(
         unsafe { output(out_op)? };
         // SAFETY: The caller leases the creator-owned handle and supplies live synchronous input/output storage; this entry preserves its typed owner contract.
         let request = unsafe { request(request_ptr)? };
-        if !crate::engine::mcp::raw_output(&request) { return Err(ApiError::status(NW_INVALID_STATE)); }
+        if !crate::engine::mcp::raw_output(&request) {
+            return Err(ApiError::status(NW_INVALID_STATE));
+        }
         let host = request.host()?;
         if !(200..=599).contains(&http_status) {
             return Err(invalid());
@@ -1115,7 +1122,9 @@ pub unsafe extern "C" fn nw_server_response_write_create(
         unsafe { output(out_op)? };
         // SAFETY: The caller leases the creator-owned handle and supplies live synchronous input/output storage; this entry preserves its typed owner contract.
         let request = unsafe { request(request_ptr)? };
-        if !crate::engine::mcp::raw_output(&request) { return Err(ApiError::status(NW_INVALID_STATE)); }
+        if !crate::engine::mcp::raw_output(&request) {
+            return Err(ApiError::status(NW_INVALID_STATE));
+        }
         let host = request.host()?;
         // SAFETY: The ABI caller retains this creator-owned handle and synchronous view/output borrows; the surrounding validation and owner protocol authorize this access.
         let token = unsafe { owner(reservation)? }
@@ -1171,7 +1180,9 @@ pub unsafe extern "C" fn nw_server_response_flush_create(
         unsafe { output(out_op)? };
         // SAFETY: The caller leases the creator-owned handle and supplies live synchronous input/output storage; this entry preserves its typed owner contract.
         let request = unsafe { request(request_ptr)? };
-        if !crate::engine::mcp::raw_output(&request) { return Err(ApiError::status(NW_INVALID_STATE)); }
+        if !crate::engine::mcp::raw_output(&request) {
+            return Err(ApiError::status(NW_INVALID_STATE));
+        }
         let host = request.host()?;
         let side = SideGuard::acquire(&request.write_active)?;
         let op = OpState::new(host, Some(request.clone()), Job::Flush(request, side))?;
@@ -1196,7 +1207,9 @@ pub unsafe extern "C" fn nw_server_response_finish_create(
         unsafe { output(out_op)? };
         // SAFETY: The caller leases the creator-owned handle and supplies live synchronous input/output storage; this entry preserves its typed owner contract.
         let request = unsafe { request(request_ptr)? };
-        if !crate::engine::mcp::raw_output(&request) { return Err(ApiError::status(NW_INVALID_STATE)); }
+        if !crate::engine::mcp::raw_output(&request) {
+            return Err(ApiError::status(NW_INVALID_STATE));
+        }
         let host = request.host()?;
         let trailers = config::headers(
             // SAFETY: The ABI caller retains this creator-owned handle and synchronous view/output borrows; the surrounding validation and owner protocol authorize this access.
@@ -1269,7 +1282,9 @@ pub unsafe extern "C" fn nw_server_sse_write_create(
         unsafe { output(out_op)? };
         // SAFETY: The ABI caller retains this creator-owned handle and synchronous view/output borrows; the surrounding validation and owner protocol authorize this access.
         let request = unsafe { request(request_ptr)? };
-        if !crate::engine::mcp::raw_output(&request) { return Err(ApiError::status(NW_INVALID_STATE)); }
+        if !crate::engine::mcp::raw_output(&request) {
+            return Err(ApiError::status(NW_INVALID_STATE));
+        }
         let host = request.host()?;
         // SAFETY: The ABI caller retains this creator-owned handle and synchronous view/output borrows; the surrounding validation and owner protocol authorize this access.
         let event = unsafe { config::record(event)? };
@@ -1535,7 +1550,13 @@ pub unsafe extern "C" fn nw_server_mcp_reply_create(
         let op = OpState::with_slot(
             host,
             Some(request.clone()),
-            Job::McpReply(request, reply_kind, value, token.reservation.into_body(), token.side),
+            Job::McpReply(
+                request,
+                reply_kind,
+                value,
+                token.reservation.into_body(),
+                token.side,
+            ),
             slot,
         );
         // SAFETY: operation owns the native value and full reservation until start/release.
