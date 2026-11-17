@@ -1086,6 +1086,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "nativeweave-verification-interop"
+version = "0.1.0"
+dependencies = [
+ "nativeweave-interop-abi",
+ "nativeweave-interop-errors",
+ "nativeweave-interop-memory",
+]
+
+[[package]]
 name = "num-traits"
 version = "0.2.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
