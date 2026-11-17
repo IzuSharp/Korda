@@ -16,45 +16,45 @@ internal static unsafe partial class Fixture
     // allocation, views, capacity charges and creator releases below are actual.
     internal static readonly EngineInfo Engine = new(new EnginePackageManifest("interop.memory.fixture", "NativeWeave.Core", "0.1.0",
         new AbiVersion(1, 0), "nw_memory_fixture_bootstrap_v1", EngineThreadingModel.Synchronous,
-        [new NativeAssetDescriptor("linux-x64", "runtimes/linux-x64/native/libnativeweave_interop_memory.so", new string('0',64), "x86-64")], []), "linux-x64", new AbiVersion(1, 0), 0);
+        [new NativeAssetDescriptor("linux-x64", "runtimes/linux-x64/native/libnativeweave_interop_memory.so", new string('0', 64), "x86-64")], []), "linux-x64", new AbiVersion(1, 0), 0);
 
-    [LibraryImport(Library, EntryPoint="nw_memory_fixture_copy_v1")]
+    [LibraryImport(Library, EntryPoint = "nw_memory_fixture_copy_v1")]
     internal static partial uint Copy(byte* data, ulong length, ulong reserve, uint fail, out nint output);
-    [LibraryImport(Library, EntryPoint="nw_memory_fixture_slice_v1")]
+    [LibraryImport(Library, EntryPoint = "nw_memory_fixture_slice_v1")]
     internal static partial uint Slice(nint source, ulong offset, ulong length, out nint output);
-    [LibraryImport(Library, EntryPoint="nw_memory_fixture_view_v1")]
+    [LibraryImport(Library, EntryPoint = "nw_memory_fixture_view_v1")]
     internal static partial uint View(nint owner, out nint address, out ulong length, out ulong capacity);
-    [LibraryImport(Library, EntryPoint="nw_memory_fixture_release_v1")]
+    [LibraryImport(Library, EntryPoint = "nw_memory_fixture_release_v1")]
     internal static partial void Release(nint owner);
-    [LibraryImport(Library, EntryPoint="nw_memory_fixture_counter_v1")]
+    [LibraryImport(Library, EntryPoint = "nw_memory_fixture_counter_v1")]
     internal static partial ulong Counter(uint kind);
-    [LibraryImport(Library, EntryPoint="nw_memory_fixture_validate_v1")]
+    [LibraryImport(Library, EntryPoint = "nw_memory_fixture_validate_v1")]
     internal static partial uint Validate(ulong address, ulong length, ulong count, ulong width, ulong offset, ulong capacity, ulong limit, uint alignment, out ulong start);
 
     internal static BufferHandle Create(ReadOnlySpan<byte> bytes, ulong reserve = 0)
     {
-        fixed (byte* p=bytes)
+        fixed (byte* p = bytes)
         {
-            uint status=Copy(p,(ulong)bytes.Length,reserve,0,out nint owner);
-            if(status!=0) throw new InvalidOperationException("Native fixture create status="+status);
+            uint status = Copy(p, (ulong)bytes.Length, reserve, 0, out nint owner);
+            if (status != 0) throw new InvalidOperationException("Native fixture create status=" + status);
             try { return new BufferHandle(owner); }
             catch { Release(owner); throw; }
         }
     }
     internal static NativeBuffer Adopt(BufferHandle owner)
     {
-        bool lease=false;
+        bool lease = false;
         try
         {
             owner.DangerousAddRef(ref lease);
-            if(View(owner.DangerousGetHandle(),out nint address,out ulong length,out _)!=0) throw new InvalidOperationException("Native fixture view failed.");
-            return NativeBufferFactory.Adopt(Engine,owner,address,checked((int)length));
+            if (View(owner.DangerousGetHandle(), out nint address, out ulong length, out _) != 0) throw new InvalidOperationException("Native fixture view failed.");
+            return NativeBufferFactory.Adopt(Engine, owner, address, checked((int)length));
         }
-        finally { if(lease)owner.DangerousRelease(); }
+        finally { if (lease) owner.DangerousRelease(); }
     }
     internal static NativeBuffer New(ReadOnlySpan<byte> bytes, ulong reserve = 0)
     {
-        BufferHandle handle=Create(bytes,reserve);
-        try{return Adopt(handle);}catch{handle.Dispose();throw;}
+        BufferHandle handle = Create(bytes, reserve);
+        try { return Adopt(handle); } catch { handle.Dispose(); throw; }
     }
 }
