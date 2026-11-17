@@ -47,8 +47,11 @@ public sealed class LayoutProofAnalyzer : DiagnosticAnalyzer
                     assemblyName = named.ContainingAssembly.Identity.Name;
                     metadata = LayoutProof.MetadataName(named.OriginalDefinition);
                 }
-                else if (statement.Condition is BinaryExpressionSyntax { Right: InvocationExpressionSyntax
-                    { Expression: MemberAccessExpressionSyntax { Expression: MemberAccessExpressionSyntax { Expression: TypeOfExpressionSyntax anchor } }, ArgumentList.Arguments: var arguments } } &&
+                else if (statement.Condition is BinaryExpressionSyntax
+                {
+                    Right: InvocationExpressionSyntax
+                    { Expression: MemberAccessExpressionSyntax { Expression: MemberAccessExpressionSyntax { Expression: TypeOfExpressionSyntax anchor } }, ArgumentList.Arguments: var arguments }
+                } &&
                     arguments.Count == 3 && arguments[0].Expression is LiteralExpressionSyntax name &&
                     analysis.SemanticModel.GetTypeInfo(anchor.Type, analysis.CancellationToken).Type is INamedTypeSymbol owner)
                 { assemblyName = owner.ContainingAssembly.Identity.Name; metadata = name.Token.ValueText; }
