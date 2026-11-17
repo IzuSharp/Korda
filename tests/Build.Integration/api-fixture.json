@@ -1,0 +1,15 @@
+{
+  "assembly": "tests/Build.Integration/ApiFixture/bin/Release/net11.0/NativeWeave.Build.ApiFixture.dll",
+  "sources": [
+    "tests/Build.Integration/ApiFixture"
+  ],
+  "baselines": [
+    "tests/Build.Integration/api-fixture.expected.json"
+  ],
+  "title": "A13 compiled API conformance",
+  "scope": "Unpublished Linux build-tool conformance fixture. This is not an application package or a product Engine. Native execution is verified by the separate A13 consumer.",
+  "output": "artifacts/task03/A13/reference/api-reference.md",
+  "guides": [
+    "docs/guides/build-integration.md"
+  ]
+}

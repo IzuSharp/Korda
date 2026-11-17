@@ -21,3 +21,22 @@ condition = "AND"
 paths = ['''^tests/Interop\.Negotiation/verify\.py$''']
 regexTarget = "line"
 regexes = ['''^\s*ET\.SubElement\(sources, "add", key="a02-fixtures", value=str\(feed\)\)\s*$''']
+
+[[allowlists]]
+description = "Exact public Design API/header SHA-256 identities in reviewed Task-03 component inputs"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^src/(Analyzers|Generators\.(CSharp|Rust)|Build\.Integration|Verification\.Compatibility)/design-inputs\.json$''', '''^src/Interop\.Memory/public-api\.expected\.json$''']
+regexTarget = "secret"
+regexes = [
+  '''^d3e989c4f8732f2514c66a2c1ecf038b460fc29e3581d0b36855612751e974e4$''',
+  '''^6d79a3d030ec429e4706f6012d4e9f876ddc35307d4b4c814fc18d5100b4c6e2$''',
+]
+
+[[allowlists]]
+description = "Exact public server ABI header SHA-256 pinned at Design c62cdb8 in A13/A22"
+targetRules = ["generic-api-key"]
+condition = "AND"
+paths = ['''^src/(Build\.Integration|Verification\.Compatibility)/design-inputs\.json$''']
+regexTarget = "secret"
+regexes = ['''^f7316b35bfb8cce5cb4fded82a0907e602626c4e9e54ff18d99fe242f2b4b681$''']

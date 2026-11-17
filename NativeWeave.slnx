@@ -11,6 +11,10 @@
     <Project Path="src/Data.Streaming/NativeWeave.Data.Streaming.csproj" />
     <Project Path="src/Generators.Model/NativeWeave.Generators.Model.csproj" />
     <Project Path="src/Query.Binding/NativeWeave.Query.Binding.csproj" />
+    <Project Path="src/Generators.Rust/NativeWeave.Generators.Rust.csproj" />
+    <Project Path="src/Generators.CSharp/NativeWeave.Generators.CSharp.csproj" />
+    <Project Path="src/Generators.CSharp/Metadata/NativeWeave.Generators.CSharp.Metadata.csproj" />
+    <Project Path="src/Analyzers/NativeWeave.Analyzers.csproj" />
   </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/HelloWorld/HelloWorld.csproj" />
@@ -27,6 +31,13 @@
     <Project Path="samples/api/data-streaming/DataStreaming.csproj" />
     <Project Path="samples/api/generators-model/Generators.Model.Sample.csproj" />
     <Project Path="samples/api/query-binding/QueryBindingSample.csproj" />
+    <Project Path="samples/api/interop-lifetime/Interop.Lifetime.Sample.csproj" />
+    <Project Path="samples/api/interop-memory/Interop.Memory.Sample.csproj" />
+    <Project Path="samples/api/generators-rust/Generators.Rust.Sample.csproj" />
+    <Project Path="samples/api/generators-csharp/Generators.CSharp.Sample.csproj" />
+    <Project Path="samples/api/analyzers/AnalyzersSample.csproj" />
+    <Project Path="samples/api/build-integration/Build.Integration.Sample.csproj" />
+    <Project Path="samples/api/verification-compatibility/CompatibilitySample.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/NativeWeave.HelloWorld.Tests/NativeWeave.HelloWorld.Tests.csproj" />
@@ -42,6 +53,11 @@
     <Project Path="tests/Generators.Model/NativeWeave.Generators.Model.Tests.csproj" />
     <Project Path="tests/Query.Binding/NativeWeave.Query.Binding.Tests.csproj" />
     <Project Path="tests/Interop.Errors/InvalidUco/InvalidUco.csproj" />
+    <Project Path="tests/Interop.Lifetime/Interop.Lifetime.Tests.csproj" />
+    <Project Path="tests/Interop.Memory/Interop.Memory.Tests.csproj" />
+    <Project Path="tests/Generators.Rust/NativeWeave.Generators.Rust.Tests.csproj" />
+    <Project Path="tests/Generators.CSharp/NativeWeave.Generators.CSharp.Tests.csproj" />
+    <Project Path="tests/Analyzers/NativeWeave.Analyzers.Tests.csproj" />
   </Folder>
   <Folder Name="/tools/">
     <Project Path="tools/ApiDocs/ApiDocs.csproj" />
@@ -74,5 +90,21 @@
   </Folder>
   <Folder Name="/tools/B09/">
     <Project Path="tests/Query.Binding/ApiCheck/ApiCheck.csproj" />
+  </Folder>
+  <Folder Name="/tools/A03/">
+    <Project Path="tests/Interop.Lifetime/ApiCheck/ApiCheck.csproj" />
+  </Folder>
+  <Folder Name="/tools/A04/">
+    <Project Path="tests/Interop.Memory/ApiCheck/ApiCheck.csproj" />
+  </Folder>
+  <Folder Name="/tools/A13/">
+    <Project Path="src/Build.Integration/ApiReference/ApiReference.csproj" />
+    <Project Path="tests/Build.Integration/ApiFixture/ApiFixture.csproj" />
+  </Folder>
+  <Folder Name="/tests/A10/">
+    <Project Path="tests/Generators.CSharp/Consumer/Consumer.csproj" />
+  </Folder>
+  <Folder Name="/tests/A11/">
+    <Project Path="tests/Generators.Rust/Consumer/Consumer.csproj" />
   </Folder>
 </Solution>

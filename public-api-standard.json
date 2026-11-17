@@ -5,16 +5,18 @@
   "sourcePath": "docs/standards/csharp-public-api-and-documentation.md",
   "localPath": "docs/standards/csharp-public-api-and-documentation.md",
   "sha256": "78f2aab2212fbbc49267e7827231a3f64cf9b840206d0acdc33768417e2dbcac",
-  "scope": "Experimental Hello World bootstrap; not acceptance of production Delivery tasks",
+  "scope": "Implemented product components: exact pinned API/XML/reference pipeline with Linux x64 component consumers. Later Host, other platforms and release acceptance remain explicitly separate.",
   "checks": [
-    "compiled public API/nullability/default baseline",
-    "XML and generated Markdown reference",
-    "package-based JIT and Native AOT consumers"
+    "SDK/language and exact Design standard pin",
+    "compiled complete public API/nullability/default/generic baselines",
+    "task-owned XML and generated Markdown reference",
+    "pinned DocFX assembly/XML reference build",
+    "actual Linux component JIT/Native AOT and compiler-host package consumers",
+    "explicit maintainer Cargo provenance; ordinary consumer build has no Rust hook"
   ],
   "deferred": [
-    "independent API review",
-    "DocFX publication",
-    "released-package compatibility baseline",
-    "production engine contract implementation"
+    "public DocFX website publication",
+    "released Core package compatibility baseline",
+    "production engine and final pristine consumer acceptance owned by later tasks"
   ]
 }

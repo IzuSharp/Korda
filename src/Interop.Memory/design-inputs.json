@@ -1,0 +1,11 @@
+{
+  "design_commit": "c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9",
+  "task": "A04",
+  "sha256": {
+    "docs/contracts/lifetime-v0.1.md": "de5cf64b2b113cccbe5d2cf5489d22bee48f6c1e586937118f97eb1cb3602774",
+    "docs/contracts/buffer-v0.1.md": "524b76834de5573cedb1f4e4deca8d84554d445c608aaae7fad576873e3d0f76",
+    "docs/api/interop.md": "2b32e5c2dcdfe78dd0b39014949a88bf91d6b2d011f8d75117e00507ecae4b74",
+    "docs/api/interop-symbol-policies.json": "ebd262a177629f6b140493ef2ea9d5405ea4b232a3ad05dea7c3efa716c4088c",
+    "docs/standards/csharp-public-api-and-documentation.md": "78f2aab2212fbbc49267e7827231a3f64cf9b840206d0acdc33768417e2dbcac"
+  }
+}

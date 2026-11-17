@@ -227,7 +227,7 @@ void Add(ISymbol symbol)
 void Walk(INamespaceSymbol ns)
 {
     foreach (var child in ns.GetNamespaceMembers()) Walk(child);
-    foreach (var type in ns.GetTypeMembers().Where(t => t.DeclaredAccessibility == Accessibility.Public)) { if (type.ToDisplayString() is "NativeWeave.Interop.NativeEngineException" or "NativeWeave.Interop.EngineLoadException" or "NativeWeave.Interop.EngineLoadFailure") continue; Add(type); foreach (var member in type.GetMembers()) Add(member); }
+    foreach (var type in ns.GetTypeMembers().Where(t => t.DeclaredAccessibility == Accessibility.Public)) { if (type.ToDisplayString() is "NativeWeave.Interop.NativeEngineException" or "NativeWeave.Interop.EngineLoadException" or "NativeWeave.Interop.EngineLoadFailure" or "NativeWeave.Interop.NativeBuffer" or "NativeWeave.Interop.NativeBufferReader" or "NativeWeave.Interop.NativeBufferReader<TResult>" or "NativeWeave.Interop.Extensibility.NativeBufferFactory") continue; Add(type); foreach (var member in type.GetMembers()) Add(member); }
 }
 Walk(assembly.GlobalNamespace);
 var failures = new List<string>();
