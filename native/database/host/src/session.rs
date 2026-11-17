@@ -536,6 +536,9 @@ impl NativeCursor {
 pub struct CursorOwner {
     pub session: Arc<Session>,
     cursor: AsyncMutex<NativeCursor>,
+    // The provider owns copied SQL/parameter data; this independent owner keeps
+    // the exact projection and relation dependencies until its safety join.
+    plan: Mutex<Option<Arc<SqlPlan>>>,
     gate: Mutex<Option<CommandGate>>,
     stop: Arc<dyn Fn() + Send + Sync>,
     pub closing: AtomicBool,
@@ -718,6 +721,7 @@ impl CursorOwner {
             end_wire,
             end_sent: AtomicBool::new(false),
             retirement: Mutex::new(None),
+            plan: Mutex::new(Some(plan)),
         }))
     }
     pub async fn fetch(
@@ -839,6 +843,15 @@ impl CursorOwner {
         let cursor = self.clone();
         self.session.source.runtime.handle.spawn(async move {
             let result = cursor.cursor.lock().await.close().await;
+            if let Some(plan) = cursor.plan.lock().unwrap_or_else(|e| e.into_inner()).take() {
+                if result.as_ref().is_ok_and(|receipt| receipt.native_retired) {
+                    drop(plan);
+                } else {
+                    // Match B06's bounded isolation: an unconfirmed provider
+                    // receipt must never release its admitted dependencies.
+                    std::mem::forget(plan);
+                }
+            }
             let gate = cursor.gate.lock().unwrap_or_else(|e| e.into_inner()).take();
             if let Some(gate) = gate {
                 gate.complete(result.is_err());

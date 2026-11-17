@@ -55,8 +55,11 @@ public sealed class ValueCodec<T>
         if (_boundedEncode is not null) return _boundedEncode(value, maximumBytes);
         var width = Id switch
         {
-            1 => 2, 2 or 8 or 12 or 17 => 4, 3 or 9 or 10 or 11 or 15 => 8,
-            4 => 1, 7 or 13 or 14 => 16,
+            1 => 2,
+            2 or 8 or 12 or 17 => 4,
+            3 or 9 or 10 or 11 or 15 => 8,
+            4 => 1,
+            7 or 13 or 14 => 16,
             5 => Validation.Utf8.GetByteCount((string)(object)value!),
             6 => ((byte[])(object)value!).Length,
             _ => throw new InvalidOperationException("The selected codec has no bounded snapshot encoder.")

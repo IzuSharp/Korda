@@ -28,9 +28,13 @@ internal static class Program
     private readonly record struct Field(ExpressionReference Expression, string Name, uint Codec, bool Nullable = false);
     private static CodecDescriptor Codec(Field field) => (field.Codec switch
     {
-        3 => Codecs.Int64.Descriptor, 4 => Codecs.Boolean.Descriptor, 5 => Codecs.String.Descriptor,
-        11 => Codecs.Double.Descriptor, _ => throw new InvalidOperationException("Test field codec")
-    }) with { Nullable = field.Nullable };
+        3 => Codecs.Int64.Descriptor,
+        4 => Codecs.Boolean.Descriptor,
+        5 => Codecs.String.Descriptor,
+        11 => Codecs.Double.Descriptor,
+        _ => throw new InvalidOperationException("Test field codec")
+    }) with
+    { Nullable = field.Nullable };
     private static Projection<string> Select(QueryBinding q, params Field[] fields)
     {
         var projection = Projection<string>.Create(fields.Select(f => new ResultField(f.Name, Codec(f))).ToArray(), row =>

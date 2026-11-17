@@ -8,7 +8,7 @@ use nativeweave_data_contracts::{
     Profile,
     wire::{Batch, Descriptor, Expectation},
 };
-use nativeweave_query_binding::ProjectionBinding;
+use nativeweave_query_binding::{ProjectionBinding, RelationBinding};
 use sha2::{Digest, Sha256};
 use std::{
     collections::{HashMap, HashSet},
@@ -25,6 +25,9 @@ pub struct SqlPlan {
     pub parameters: Vec<u8>,
     pub expectation: Expectation,
     pub projection: Option<ProjectionBinding>,
+    // A relation load retains both exact immutable model/codec roots, even
+    // after the creating source removes its registry/cache references.
+    pub relation: Option<Arc<RelationBinding>>,
     pub kind: u32,
     pub result_kind: u32,
     pub scalar_count: bool,
@@ -150,6 +153,7 @@ impl SqlPlan {
             parameters: parameters.to_vec(),
             expectation,
             projection,
+            relation: None,
             kind,
             result_kind,
             scalar_count: false,
@@ -189,6 +193,7 @@ impl SqlPlan {
             parameters: rendered.parameter_bytes,
             expectation: rendered.parameter_expectation,
             projection,
+            relation: None,
             kind: if result_kind == 0 { 1 } else { 0 },
             result_kind,
             scalar_count,

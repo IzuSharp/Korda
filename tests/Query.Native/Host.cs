@@ -19,7 +19,8 @@ internal sealed unsafe class Host : IDisposable
     internal int RetiredOperations { get; private set; }
     internal int ReleasedBuffers { get; private set; }
     internal static byte[] Parameters(uint profile) => DbWire.Encode(new(PayloadKind.Parameters, profile,
-        SHA256.HashData("{\"version\":1,\"parameters\":[]}"u8), 0, 0, []) { ExactRows = 1 }, 1, []);
+        SHA256.HashData("{\"version\":1,\"parameters\":[]}"u8), 0, 0, [])
+    { ExactRows = 1 }, 1, []);
     internal Host(string path, uint profile, string connection)
     {
         Profile = profile; _library = NativeLibrary.Load(Path.GetFullPath(path));

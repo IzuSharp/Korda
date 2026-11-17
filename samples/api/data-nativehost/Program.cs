@@ -7,7 +7,10 @@ using NativeWeave.Database.PostgreSql;
 // NW_TEST_POSTGRES for this local example; production keeps the verified TLS default.
 var builder = new DataSourceBuilder().ConfigureLimits(new DatabaseLimits
 {
-    MaxConnections = 2, MaxBatchRows = 2, MaxBufferedRows = 32, MaxBufferedBytes = 64 * 1024
+    MaxConnections = 2,
+    MaxBatchRows = 2,
+    MaxBufferedRows = 32,
+    MaxBufferedBytes = 64 * 1024
 }).WithName("host-guide");
 var provider = args.FirstOrDefault() ?? "sqlite";
 var file = Path.Combine(Path.GetTempPath(), "nativeweave-host-" + Guid.NewGuid().ToString("N") + ".db");

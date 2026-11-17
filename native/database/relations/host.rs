@@ -199,6 +199,7 @@ pub unsafe extern "C" fn nw_db_relation_load_create_v1(
         let rendered =
             nativeweave_data_relations::compile_relation(&load, limits).map_err(binding_failure)?;
         let mut plan = SqlPlan::from_rendered(source.clone(), rendered)?;
+        plan.relation = Some(load.relation.clone());
         let gate = session.admit(false)?;
         let session = session.clone();
         let operation = DbOperation::create(
@@ -207,9 +208,8 @@ pub unsafe extern "C" fn nw_db_relation_load_create_v1(
             false,
             Box::new(move |cancel| {
                 async move {
-                    // Retain both exact model/codec roots until execution returns its
-                    // independently retained cursor, even if source cache roots close.
-                    let _load = load;
+                    // The plan transfers relation/model/projection dependencies
+                    // into the cursor until provider-confirmed local retirement.
                     plan.timeout = timeout.saturating_sub(admitted.elapsed());
                     session.execute(Arc::new(plan), cancel, gate).await
                 }
