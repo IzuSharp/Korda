@@ -907,6 +907,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "nativeweave-interop-exports"
+version = "0.1.0"
+dependencies = [
+ "nativeweave-interop-abi",
+]
+
+[[package]]
 name = "nativeweave-query-binding"
 version = "0.1.0"
 dependencies = [
