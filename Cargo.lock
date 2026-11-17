@@ -899,6 +899,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "nativeweave-engine-extensionproof"
+version = "0.1.0"
+dependencies = [
+ "nativeweave-interop-abi",
+ "nativeweave-interop-callbacks",
+ "nativeweave-interop-errors",
+]
+
+[[package]]
 name = "nativeweave-engine-syncproof"
 version = "0.1.0"
 dependencies = [

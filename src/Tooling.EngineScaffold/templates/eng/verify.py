@@ -90,10 +90,15 @@ def main():
         run("restore", ["dotnet", "restore", project, "--configfile", config, *common])
         run("build", ["dotnet", "build", project, "-c", "Release", "--no-restore", *common])
         # The exact compiled/XML checker is pinned independently of this Engine.
-        tool = sdk / "src/Build.Integration/ApiReference/ApiReference.csproj"
-        run("api-tool", ["dotnet", "build", tool, "-c", "Release", *common], sdk)
+        sdk_copy = output / "sdk-source"
+        for name in manifest["sdk_tool_sha256"]:
+            destination = sdk_copy / name
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(sdk / name, destination)
+        tool = sdk_copy / "src/Build.Integration/ApiReference/ApiReference.csproj"
+        run("api-tool", ["dotnet", "build", tool, "-c", "Release", *common], sdk_copy)
         run("api-xml", ["dotnet", "run", "--project", tool, "-c", "Release", "--no-build", "--", root,
-            os.environ["DOTNET_ROOT"], root / "api-reference.json", "--write"], sdk)
+            os.environ.get("DOTNET_ROOT", str(Path(shutil.which("dotnet")).resolve().parent)), root / "api-reference.json", "--write"], sdk_copy)
         run("pack", ["dotnet", "pack", project, "-c", "Release", "--no-build", "--no-restore", "-o", feed, *common])
         consumer = scratch / "Consumer"
         shutil.copytree(root / "samples/Consumer", consumer)
@@ -129,6 +134,12 @@ def main():
         receipt.update(status="passed", native_sha256=before,
             executable_sha256=sha(output / "aot" / name), managed_edit_native_unchanged=True,
             packages={file.name: sha(file) for file in feed.glob("*.nupkg")}, rust_invoked=False)
+        receipt["consumer_source"] = {file.name: sha(file) for file in consumer.iterdir() if file.is_file()}
+        snapshot = output / "independent-consumer"
+        snapshot.mkdir()
+        for file in consumer.iterdir():
+            if file.is_file(): shutil.copy2(file, snapshot / file.name)
+        shutil.copy2(config, snapshot / config.name)
     except BaseException as error:
         receipt.update(status="failed", error=str(error))
         raise

@@ -57,7 +57,8 @@ def load(root, descriptor):
     keys = {"schema_version", "engine_id", "package", "abi", "threading", "components",
             "capabilities", "native", "binding", "upstream", "files", "dependencies", "coverage"}
     fail(set(data) != keys or data["schema_version"] != 1, "Unknown or incomplete scaffold schema")
-    fail(not re.fullmatch(r"[a-z][a-z0-9_.-]{0,127}", data["engine_id"]), "Invalid Engine identity")
+    fail(not re.fullmatch(r"[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*", data["engine_id"])
+         or len(data["engine_id"]) > 128, "Invalid Engine identity")
     package = data["package"]
     fail(set(package) != {"id", "version", "namespace", "assembly"}, "Incomplete package identity")
     for key in ("id", "namespace", "assembly"):
@@ -100,6 +101,7 @@ def load(root, descriptor):
     binding = data["binding"]
     fail(set(binding) != {"sidecar", "inventory", "adapter", "linked_symbols", "library"}, "Incomplete A09 binding inputs")
     fail(not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", binding["library"]), "Invalid static import library")
+    fail(native["filename"] != "lib" + binding["library"] + ".so", "Static import and native asset basenames differ")
     for name in ("sidecar", "inventory", "adapter", "linked_symbols"):
         checked_file(root, binding[name])
     sidecar = json.loads(checked_file(root, binding["sidecar"]).read_text())
@@ -155,10 +157,22 @@ def run(command, cwd, log):
     fail(result.returncode != 0, "Binding validation failed; inspect " + log.name)
 
 
-def generate(root, descriptor, output):
+def generate(root, descriptor, output, sdk_revision=None):
     root, descriptor, output = root.resolve(), descriptor.resolve(), output.resolve()
     data = load(root, descriptor)
     fail(output.exists(), "Output already exists; generation never overwrites a repository")
+    sdk_files = ["Directory.Build.props", "Directory.Build.targets", "global.json",
+                 "src/Build.Integration/NativeWeave.Build.targets", "src/Build.Integration/compose_docs.py",
+                 "src/Build.Integration/ApiReference/Program.cs",
+                 "src/Build.Integration/ApiReference/ApiReference.csproj",
+                 "src/Build.Integration/ApiReference/packages.lock.json"]
+    if sdk_revision is None:
+        sdk_revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+    fail(not re.fullmatch(r"[0-9a-f]{40}", sdk_revision), "SDK revision must be an exact commit")
+    for name in sdk_files:
+        committed = subprocess.check_output(["git", "show", sdk_revision + ":" + name], cwd=root)
+        fail(hashlib.sha256(committed).hexdigest() != digest(root / name),
+             "The selected SDK revision differs from the actual conformance tool: " + name)
     adoption = json.loads((root / "public-api-standard.json").read_text())
     standard = relative(root, adoption["localPath"])
     fail(digest(standard) != adoption["sha256"], "The adopted API standard changed")
@@ -191,6 +205,8 @@ def generate(root, descriptor, output):
             target = staging / path
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(templates / path, target)
+        workflow = staging / ".github/workflows/conformance.yml"
+        workflow.write_text(workflow.read_text().replace("__NATIVEWEAVE_SDK_REVISION__", sdk_revision))
         for name, item in b.items():
             if isinstance(item, dict):
                 target = staging / "provenance" / (name + Path(item["path"]).suffix)
@@ -236,6 +252,7 @@ internal static class ScaffoldPackage
     <None Include="../../buildTransitive/**/*" Pack="true" PackagePath="buildTransitive/%%(RecursiveDir)%%(Filename)%%(Extension)" />
     <None Include="../../tools/**/*" Pack="true" PackagePath="tools/%%(RecursiveDir)%%(Filename)%%(Extension)" />
     <None Include="../../nativeweave/**/*" Pack="true" PackagePath="nativeweave/%%(RecursiveDir)%%(Filename)%%(Extension)" />
+    <None Include="../../docs/THIRD-PARTY-NOTICES.txt" Pack="true" PackagePath="" Condition="Exists('../../docs/THIRD-PARTY-NOTICES.txt')" />
     <EmbeddedResource Include="../../native-sha256" LogicalName="%s.native-sha256" />
     <InternalsVisibleTo Include="%s.Conformance" />
   </ItemGroup>
@@ -251,6 +268,8 @@ internal static class ScaffoldPackage
 ''')
         (staging / "samples/Consumer/Consumer.csproj").write_text('''<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup>
 <OutputType>Exe</OutputType><AssemblyName>%s.Conformance</AssemblyName><AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+<NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifier)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifier).aot.lock.json</NuGetLockFilePath>
+<NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifiers)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifiers).aot.lock.json</NuGetLockFilePath>
 </PropertyGroup><ItemGroup><PackageReference Include="%s" Version="[%s]" /></ItemGroup></Project>
 ''' % (p["assembly"], p["id"], p["version"]))
         (staging / "samples/Consumer/AotGuard.cs").write_text('''using System.Runtime.CompilerServices;
@@ -261,9 +280,13 @@ internal static class AotGuard
     {
         if (Environment.GetEnvironmentVariable("NATIVEWEAVE_REQUIRE_AOT") == "1" && RuntimeFeature.IsDynamicCodeSupported)
             throw new InvalidOperationException("Actual Native AOT execution is required.");
+        var engine = %s.ScaffoldPackage.Descriptor.Inspect();
+        if (engine.ThreadingModel != NativeWeave.Interop.EngineThreadingModel.%s)
+            throw new InvalidOperationException("Generated threading descriptor differs.");
+%s
     }
 }
-''')
+''' % (p["namespace"], data["threading"], "\n".join("        engine.Require(new NativeWeave.Interop.EngineCapability(" + json.dumps(cap["name"]) + "));" for cap in data["capabilities"])))
         (staging / "api-reference.json").write_text(json.dumps({
             "assembly": "src/Engine/bin/Release/net11.0/" + p["assembly"] + ".dll",
             "sources": ["src/Engine"], "baselines": ["docs/public-api.expected.json"],
@@ -276,11 +299,14 @@ internal static class AotGuard
             "compile/package the actual facade and execute its independent JIT and Native AOT consumer. "
             "The initial generated tree is not a release acceptance record. Ordinary applications restore "
             "precompiled packages; these maintainer checks are never imported into application builds.\n")
-        sdk_files = ["src/Build.Integration/compose_docs.py", "src/Build.Integration/ApiReference/Program.cs",
-                     "src/Build.Integration/ApiReference/ApiReference.csproj"]
         manifest = {"schema_version": 1, "descriptor_sha256": digest(descriptor), "template_sha256": {},
+                    "sdk_git_revision": sdk_revision,
                     "sdk_tool_sha256": {name: digest(root / name) for name in sdk_files},
                     "files": {}, "accepted": False, "components": data["components"], "core_source_changed": False}
+        tool_names = subprocess.check_output(["git", "ls-files", "--", "src/Generators.Model", "src/Generators.CSharp",
+            "src/Generators.Rust", "Directory.Build.props", "Directory.Build.targets", "global.json"], cwd=root, text=True).splitlines()
+        manifest["generation_tool_sha256"] = {name: digest(root / name) for name in tool_names}
+        manifest["generation_log_sha256"] = {file.name: digest(file) for file in logs.iterdir() if file.is_file()}
         for file in sorted(templates.rglob("*")):
             if file.is_file(): manifest["template_sha256"][file.relative_to(templates).as_posix()] = digest(file)
         for file in sorted(staging.rglob("*")):
@@ -306,8 +332,9 @@ def main():
     parser.add_argument("descriptor", type=Path)
     parser.add_argument("output", type=Path)
     parser.add_argument("--root", type=Path, default=ROOT)
+    parser.add_argument("--sdk-revision", help="Exact published SDK commit; its used tool inputs must match --root")
     args = parser.parse_args()
-    print(json.dumps(generate(args.root, args.descriptor, args.output)))
+    print(json.dumps(generate(args.root, args.descriptor, args.output, args.sdk_revision)))
 
 
 if __name__ == "__main__":

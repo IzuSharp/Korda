@@ -11,6 +11,7 @@
     <InternalsVisibleTo Include="NativeWeave.Interop.Abi.Tests" />
     <InternalsVisibleTo Include="NativeWeave.Interop.Abi.Sample" />
     <InternalsVisibleTo Include="NativeWeave.Core" />
+    <InternalsVisibleTo Include="NativeWeave.Verification.ExtensionProof" />
     <InternalsVisibleTo Include="NativeWeave.Interop.Errors.Tests" />
     <InternalsVisibleTo Include="NativeWeave.Query.Binding" />
     <InternalsVisibleTo Include="NativeWeave.Query.Binding.Tests" />

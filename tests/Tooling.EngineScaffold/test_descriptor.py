@@ -98,6 +98,9 @@ class DescriptorTests(unittest.TestCase):
         self.reject(lambda d: d["files"].pop("samples/Consumer/Program.cs"))
         self.reject(lambda d: d.update(upstream=[]))
         self.reject(lambda d: d["dependencies"].update({"NativeWeave.Core": "*"}))
+        self.reject(lambda d: d.update(engine_id="nativeweave..invalid"))
+        self.reject(lambda d: d.update(engine_id="nativeweave_invalid"))
+        self.reject(lambda d: d["binding"].update(library="different_asset"))
 
     def test_cpu_vocabulary_matches_core(self):
         for cpu in ("x86-64", "x86-64-v2"):

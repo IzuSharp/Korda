@@ -45,7 +45,7 @@ regexes = ['''^f7316b35bfb8cce5cb4fded82a0907e602626c4e9e54ff18d99fe242f2b4b681$
 description = "Exact public locked Design API/header SHA-256 identities in Task-04 component provenance"
 targetRules = ["generic-api-key"]
 condition = "AND"
-paths = ['''^src/(Interop\.(Callbacks|Async)|Engines\.SyncProof|Packaging\.(Linux|Release)|Tooling\.EngineScaffold)/design-inputs\.json$''']
+paths = ['''^src/(Interop\.(Callbacks|Async)|Engines\.SyncProof|Packaging\.(Linux|Release)|Tooling\.EngineScaffold|Verification\.ExtensionProof)/design-inputs\.json$''']
 regexTarget = "secret"
 regexes = [
   '''^6d79a3d030ec429e4706f6012d4e9f876ddc35307d4b4c814fc18d5100b4c6e2$''',
