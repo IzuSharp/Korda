@@ -217,6 +217,7 @@ impl Drop for WorkLease {
 
 // Exact exported conformance fixture. Product engines reuse the Rust type above
 // and their own generated prefixes; this test adapter is not a public Engine API.
+#[cfg(feature = "conformance")]
 mod fixture;
 
 #[cfg(test)]

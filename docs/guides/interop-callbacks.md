@@ -99,7 +99,10 @@ throughput or universal performance claim.
 The application API baseline remains unchanged: all new managed types are
 internal, and callback records reuse the exact A01 layout. The Rust native
 conformance exports use a fixture prefix; real engines supply their own versioned
-operation prefixes. No ABI-table replacement, cookie reuse while live, default
+operation prefixes. The fixture exports require the explicit Cargo feature
+`conformance`; default rlib consumers receive no fixture exports. The test runner
+builds that feature, while engine dependencies keep it disabled. Actual downstream
+cdylib symbol inspection verifies this separation. No ABI-table replacement, cookie reuse while live, default
 Tokio runtime, new release package or other-platform support is added.
 
 ## Examples and verification

@@ -63,8 +63,8 @@ def main():
         report["source_sha256"] = {p: sha(ROOT / p) for p in sorted(set(paths)) if (ROOT / p).is_file()}
         run("native-format", ["cargo", "fmt", "-p", "nativeweave-interop-callbacks", "--", "--check"])
         run("native-tests", ["cargo", "test", "--release", "--locked", "-p", "nativeweave-interop-callbacks"])
-        run("native-build", ["cargo", "build", "--release", "--locked", "-p", "nativeweave-interop-callbacks"])
-        run("native-clippy", ["cargo", "clippy", "--locked", "-p", "nativeweave-interop-callbacks", "--all-targets", "--", "-D", "warnings"])
+        run("native-build", ["cargo", "build", "--release", "--locked", "-p", "nativeweave-interop-callbacks", "--features", "conformance"])
+        run("native-clippy", ["cargo", "clippy", "--locked", "-p", "nativeweave-interop-callbacks", "--all-targets", "--all-features", "--", "-D", "warnings"])
         native = ROOT / "target/release/libnativeweave_interop_callbacks.so"
         report["artifacts"]["native"] = {"path": str(native), "sha256": sha(native)}
         common = ["-p:UseSharedCompilation=false", "-nr:false", "-m:1"]

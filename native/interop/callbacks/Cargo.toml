@@ -9,6 +9,10 @@ publish = false
 [lib]
 crate-type = ["rlib", "cdylib"]
 
+[features]
+default = []
+conformance = []
+
 [dependencies]
 nativeweave-interop-abi = { path = "../abi" }
 nativeweave-interop-errors = { path = "../errors" }

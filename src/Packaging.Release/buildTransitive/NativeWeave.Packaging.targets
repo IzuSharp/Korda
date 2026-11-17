@@ -1,0 +1,30 @@
+<Project>
+  <!-- Included once by each tested facade/native package. These are validation
+       and SDK-output records only: no consumer Cargo or restore graph mutation. -->
+  <UsingTask TaskName="NativeWeave.Packaging.PackageClosure"
+             AssemblyFile="$(MSBuildThisFileDirectory)../tools/net11.0/NativeWeave.Packaging.Tasks.dll" />
+  <ItemGroup>
+    <NativeWeaveClosure Include="$(MSBuildThisFileDirectory)../nativeweave/closure.json" />
+  </ItemGroup>
+  <Target Name="NativeWeaveValidatePackageClosure" BeforeTargets="CoreCompile;PrepareForPublish"
+          DependsOnTargets="ResolveReferences" Condition="'$(DesignTimeBuild)' != 'true'">
+    <PackageClosure ClosureFiles="@(NativeWeaveClosure)" AssetsFile="$(ProjectAssetsFile)"
+                    RuntimeIdentifier="$(RuntimeIdentifier)"
+                    ResolvedFiles="@(NativeCopyLocalItems);@(RuntimeTargetsCopyLocalItems)" />
+  </Target>
+  <Target Name="NativeWeaveWriteBuildAssets" AfterTargets="CopyFilesToOutputDirectory"
+          Condition="'$(DesignTimeBuild)' != 'true'">
+    <PackageClosure ClosureFiles="@(NativeWeaveClosure)" AssetsFile="$(ProjectAssetsFile)"
+                    RuntimeIdentifier="$(RuntimeIdentifier)" Mode="build" OutputDirectory="$(TargetDir)"
+                    ResolvedFiles="@(NativeCopyLocalItems);@(RuntimeTargetsCopyLocalItems)" />
+  </Target>
+  <Target Name="NativeWeaveWritePublishAssets" AfterTargets="ComputeFilesToPublish"
+          Condition="'$(DesignTimeBuild)' != 'true'">
+    <PackageClosure ClosureFiles="@(NativeWeaveClosure)" AssetsFile="$(ProjectAssetsFile)"
+                    RuntimeIdentifier="$(RuntimeIdentifier)" Mode="publish"
+                    OutputDirectory="$(IntermediateOutputPath)nativeweave-publish"
+                    ResolvedFiles="@(ResolvedFileToPublish)">
+      <Output TaskParameter="Records" ItemName="ResolvedFileToPublish" />
+    </PackageClosure>
+  </Target>
+</Project>

@@ -14,6 +14,7 @@
     <Compile Include="../Interop.Lifetime/**/*.cs;../Interop.Memory/**/*.cs" Exclude="../Interop.Lifetime/**/obj/**/*.cs;../Interop.Lifetime/**/bin/**/*.cs;../Interop.Memory/**/obj/**/*.cs;../Interop.Memory/**/bin/**/*.cs" />
     <Compile Include="../Interop.Callbacks/**/*.cs" Exclude="../Interop.Callbacks/**/obj/**/*.cs;../Interop.Callbacks/**/bin/**/*.cs" />
     <ProjectReference Include="../Interop.Abi/Interop.Abi.csproj" />
+    <InternalsVisibleTo Include="NativeWeave.Engines.SyncProof" />
     <InternalsVisibleTo Include="NativeWeave.Interop.Callbacks.Tests" />
     <InternalsVisibleTo Include="NativeWeave.Interop.Callbacks.Sample" />
     <InternalsVisibleTo Include="NativeWeave.Interop.Negotiation.Tests" />

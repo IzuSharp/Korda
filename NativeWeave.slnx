@@ -97,6 +97,10 @@
   <Folder Name="/tools/A04/">
     <Project Path="tests/Interop.Memory/ApiCheck/ApiCheck.csproj" />
   </Folder>
+  <Folder Name="/tools/A16/">
+    <Project Path="src/Packaging.Release/BuildTasks/NativeWeave.Packaging.Tasks.csproj" />
+    <Project Path="tests/Packaging.Release/ApiCheck/ApiCheck.csproj" />
+  </Folder>
   <Folder Name="/tools/A13/">
     <Project Path="src/Build.Integration/ApiReference/ApiReference.csproj" />
     <Project Path="tests/Build.Integration/ApiFixture/ApiFixture.csproj" />
