@@ -26,6 +26,7 @@ internal static class Suite
         if (args.Length < 1) throw new ArgumentException("result-directory [--require-aot]");
         if (args.Contains("--require-aot", StringComparer.Ordinal)) Check(!RuntimeFeature.IsDynamicCodeSupported, "Actual Native AOT process");
         ProjectionOracle.Run();
+        GeneratedOracle.Run();
         var pg = Environment.GetEnvironmentVariable("NW_TEST_POSTGRES") ?? throw new InvalidOperationException("Real PostgreSQL18 endpoint required.");
         var directory = Path.Combine(Path.GetTempPath(), "nw-b12-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(directory);
         try
@@ -135,6 +136,24 @@ internal static class Suite
         var noRows = SqlCommand.Create($"SELECT id,name,bytes,optional,settings FROM {table} WHERE id<0");
         Check(await counted.Stream(session, noRows, MaterializationExamples.Projection).SingleOrDefaultAsync() is null, "Default cardinality and zero rows");
         await Retired();
+        var generatedCommand = SqlCommand.Create($"SELECT id, CASE WHEN optional IS NULL THEN NULL ELSE name END AS optional FROM {table} ORDER BY id");
+        foreach (var projection in GeneratedOracle.Projections)
+        {
+            GeneratedRow.Calls = 0;
+            var actual = await counted.Stream(session, generatedCommand, projection).ToListAsync();
+            Check(actual.Count == 5 && actual[0].Id == 1 && actual[0].Optional is null && actual[1].Optional == "row 🦀 2" && GeneratedRow.Calls == 5,
+                "Actual generated/manual owned materialization shares independent expected rows");
+            await Retired();
+            GeneratedRow.Calls = 0; GeneratedRow.Failure = new MappingFailure("actual generated/manual constructor");
+            IReadOnlyList<GeneratedRow>? partial = null;
+            try
+            {
+                var failure = await ThrowsAsync<MappingFailure>(async () => partial = await counted.Stream(session, generatedCommand, projection).ToListAsync());
+                Check(ReferenceEquals(failure, GeneratedRow.Failure) && GeneratedRow.Calls == 3 && partial is null, "Actual generated/manual throw has no partial result");
+            }
+            finally { GeneratedRow.Failure = null; }
+            await Retired();
+        }
         await session.ExecuteAsync(SqlCommand.Create("DROP TABLE " + table, kind: SqlCommandKind.Mutation));
         await session.DisposeAsync(); await source.DisposeAsync();
         counted.AssertRetired(); await diagnostic.WaitAllZero();

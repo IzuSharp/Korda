@@ -35,6 +35,26 @@ pub struct RenderedQuery {
 }
 impl NativeQuery {
     pub fn seal(&mut self, terminal: u32) -> Result<Arc<NativePlan>> {
+        if self.data.grouped {
+            for (node, aggregate) in &self.data.selected_nodes {
+                if !aggregate {
+                    let expression = &self
+                        .data
+                        .expressions
+                        .get(node)
+                        .ok_or_else(|| state("selected native node"))?
+                        .expr;
+                    if !self.data.group_nodes.iter().any(|group| {
+                        self.data
+                            .expressions
+                            .get(group)
+                            .is_some_and(|value| &value.expr == expression)
+                    }) {
+                        return Err(invalid("nonaggregated projection must be a grouping key"));
+                    }
+                }
+            }
+        }
         // All native state is already built. B09 atomically freezes the validated shape.
         let binding = self.arena.seal(terminal)?;
         Ok(Arc::new(NativePlan {
@@ -323,11 +343,11 @@ impl NativePlan {
         match self.binding.terminal {
             0 | 1 | 8 => Ok(render_select(&statement)),
             2 => {
-                statement.limit(1);
+                statement.limit(self.data.take.map_or(1, |limit| std::cmp::min(limit, 1)));
                 Ok(render_select(&statement))
             }
             3 => {
-                statement.limit(2);
+                statement.limit(self.data.take.map_or(2, |limit| std::cmp::min(limit, 2)));
                 Ok(render_select(&statement))
             }
             4 => {

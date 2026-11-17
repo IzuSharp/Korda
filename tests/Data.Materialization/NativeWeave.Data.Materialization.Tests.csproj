@@ -9,9 +9,10 @@
     <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifier)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifier).aot.lock.json</NuGetLockFilePath>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="Program.cs;ShapeOracle.cs;CountedTransport.cs" />
+    <Compile Include="Program.cs;ShapeOracle.cs;CountedTransport.cs;GeneratedOracle.cs" />
     <Compile Include="../../samples/api/data-materialization/Examples.cs" Link="Examples.cs" />
     <ProjectReference Include="../../src/Data.Sqlite/NativeWeave.Database.Sqlite.csproj" />
     <ProjectReference Include="../../src/Data.Postgres/NativeWeave.Database.PostgreSql.csproj" />
+    <ProjectReference Include="../../src/Query.Generator/NativeWeave.Query.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
 </Project>

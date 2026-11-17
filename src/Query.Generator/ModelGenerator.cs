@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
+using System.Security.Cryptography;
+using System.Threading;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -32,19 +34,31 @@ public sealed class ModelGenerator : IIncrementalGenerator
             static (node, _) => node is TypeDeclarationSyntax,
             static (input, _) => (INamedTypeSymbol)input.TargetSymbol).Collect();
         var profiles = context.AnalyzerConfigOptionsProvider.Select(static (options, _) => options.GlobalOptions.TryGetValue("build_property.NativeWeaveEnabledNativeCodecs", out var value) ? value : "");
-        context.RegisterSourceOutput(inputs.Combine(profiles), static (output, input) => Generate(output, input.Left, input.Right));
+        var mappings = inputs.Combine(profiles).Select(static (input, cancellation) =>
+        {
+            var emission = new Emission(cancellation);
+            Generate(emission, input.Left, input.Right);
+            return emission;
+        }).WithComparer(EmissionComparer.Instance).WithTrackingName("StaticMappings");
+        context.RegisterSourceOutput(mappings, static (output, emission) =>
+        {
+            foreach (var diagnostic in emission.Diagnostics) output.ReportDiagnostic(diagnostic);
+            foreach (var source in emission.Sources) output.AddSource(source.Name, source.Text);
+        });
     }
 
-    private static void Generate(SourceProductionContext output, ImmutableArray<INamedTypeSymbol> models, string enabled)
+    private static void Generate(Emission output, ImmutableArray<INamedTypeSymbol> models, string enabled)
     {
         var names = new HashSet<string>(StringComparer.Ordinal);
         HashSet<string>? codecs = enabled.Length == 0 ? null : new HashSet<string>(enabled.Split(',').Select(x => x.Trim()), StringComparer.Ordinal);
         foreach (var model in models.OrderBy(x => x.ToDisplayString(), StringComparer.Ordinal))
         {
             output.CancellationToken.ThrowIfCancellationRequested();
-            if (model.TypeKind != TypeKind.Class || model.IsStatic || model.IsAbstract || model.TypeParameters.Length != 0 || model.ContainingType is not null || model.BaseType?.SpecialType != SpecialType.System_Object)
+            if (model.TypeKind != TypeKind.Class || model.IsStatic || model.IsAbstract || model.IsFileLocal || model.TypeParameters.Length != 0 || model.ContainingType is not null || model.BaseType?.SpecialType != SpecialType.System_Object)
             { Report(output, InputError, model, model.Name, "models must be closed, concrete top-level classes or records with no model base class"); continue; }
-            var table = model.GetAttributes().Single(x => Has(x, "WeaveTableAttribute"));
+            var tables = model.GetAttributes().Where(x => Has(x, "WeaveTableAttribute")).ToArray();
+            if (tables.Length != 1) { Report(output, MetadataError, model, model.Name, "a model requires exactly one table declaration"); continue; }
+            var table = tables[0];
             string? tableName = table.ConstructorArguments.FirstOrDefault().Value as string;
             string? schema = Named(table, "Schema") as string;
             string descriptor = Named(table, "DescriptorName") as string ?? model.Name + "Mapping";
@@ -72,7 +86,7 @@ public sealed class ModelGenerator : IIncrementalGenerator
                 bool key = attributes.Any(x => Has(x, "WeaveKeyAttribute"));
                 bool version = attributes.Any(x => Has(x, "WeaveVersionAttribute"));
                 bool generated = column is not null && Named(column, "Generated") is true;
-                if (string.IsNullOrWhiteSpace(store) || !storeNames.Add(store) || property.Name is "Table" or "Row")
+                if (string.IsNullOrWhiteSpace(store) || !storeNames.Add(store) || property.Name is "Table" or "Row" || property.Name == descriptor)
                 { Report(output, MetadataError, property, property.Name, "duplicate/invalid store name or reserved descriptor member"); valid = false; continue; }
                 if (Dynamic(property.Type))
                 { Report(output, DynamicError, property, property.Name); valid = false; continue; }
@@ -90,7 +104,7 @@ public sealed class ModelGenerator : IIncrementalGenerator
             if (members.Count == 0)
             { Report(output, MetadataError, model, model.Name, "at least one supported mapped property is required"); continue; }
             var constructors = model.InstanceConstructors.Where(x => x.DeclaredAccessibility is Accessibility.Public or Accessibility.Internal or Accessibility.ProtectedOrInternal)
-                .Where(c => c.Parameters.All(p => members.Count(m => string.Equals(m.Symbol.Name, p.Name, StringComparison.OrdinalIgnoreCase) && SymbolEqualityComparer.Default.Equals(m.Symbol.Type, p.Type)) == 1))
+                .Where(c => c.Parameters.All(p => p.RefKind == RefKind.None && members.Count(m => string.Equals(m.Symbol.Name, p.Name, StringComparison.OrdinalIgnoreCase) && SymbolEqualityComparer.Default.Equals(m.Symbol.Type, p.Type)) == 1))
                 .Where(c => members.All(m => c.Parameters.Any(p => string.Equals(m.Symbol.Name, p.Name, StringComparison.OrdinalIgnoreCase)) || m.Symbol.SetMethod?.DeclaredAccessibility is Accessibility.Public or Accessibility.Internal or Accessibility.ProtectedOrInternal)).ToArray();
             if (constructors.Length != 1)
             { Report(output, ConstructorError, model, model.Name, "no unique accessible constructor covers the mapped properties"); continue; }
@@ -108,9 +122,10 @@ public sealed class ModelGenerator : IIncrementalGenerator
         }
     }
 
-    private static void Emit(SourceProductionContext output, INamedTypeSymbol model, string descriptor, string table, string? schema, IMethodSymbol constructor, Property[] properties)
+    private static void Emit(Emission output, INamedTypeSymbol model, string descriptor, string table, string? schema, IMethodSymbol constructor, Property[] properties)
     {
         string entity = model.ToDisplayString(Full);
+        string descriptorType = (model.ContainingNamespace.IsGlobalNamespace ? "global::" : "global::" + model.ContainingNamespace.ToDisplayString() + ".") + "@" + descriptor;
         string access = model.DeclaredAccessibility == Accessibility.Public ? "public" : "internal";
         var source = new StringBuilder("// <auto-generated/>\n#nullable enable\n");
         if (!model.ContainingNamespace.IsGlobalNamespace) source.Append("namespace ").Append(model.ContainingNamespace.ToDisplayString()).Append(";\n");
@@ -122,15 +137,17 @@ public sealed class ModelGenerator : IIncrementalGenerator
             source.Append("    /// <summary>Typed column token for the exact mapped property.</summary>\n    public static readonly global::NativeWeave.Data.Column<").Append(entity).Append(", ").Append(property.Symbol.Type.ToDisplayString(Full)).Append("> @").Append(property.Symbol.Name).Append(";\n");
         source.Append("    static @").Append(descriptor).Append("()\n    {\n        var builder = new global::NativeWeave.Data.TableBuilder<").Append(entity).Append(">(").Append(Literal(table)).Append(", ").Append(schema is null ? "null" : Literal(schema)).Append(");\n");
         foreach (var property in properties)
-            source.Append("        @").Append(property.Symbol.Name).Append(" = builder.Column(").Append(Literal(property.Store)).Append(", ").Append(property.Codec).Append(", new global::NativeWeave.Data.ColumnOptions { IsPrimaryKey = ").Append(Bool(property.Key)).Append(", IsGenerated = ").Append(Bool(property.Generated)).Append(", IsConcurrencyToken = ").Append(Bool(property.Version)).Append(" });\n");
+            source.Append("        ").Append(descriptorType).Append(".@").Append(property.Symbol.Name).Append(" = builder.Column(").Append(Literal(property.Store)).Append(", ").Append(property.Codec).Append(", new global::NativeWeave.Data.ColumnOptions { IsPrimaryKey = ").Append(Bool(property.Key)).Append(", IsGenerated = ").Append(Bool(property.Generated)).Append(", IsConcurrencyToken = ").Append(Bool(property.Version)).Append(" });\n");
         source.Append("        Table = builder.Build(static row => new ").Append(entity).Append('(');
-        source.Append(string.Join(", ", constructor.Parameters.Select(p => "row.Get(@" + properties.Single(m => string.Equals(m.Symbol.Name, p.Name, StringComparison.OrdinalIgnoreCase)).Symbol.Name + ")"))).Append(')');
+        source.Append(string.Join(", ", constructor.Parameters.Select(p => "row.Get(" + descriptorType + ".@" + properties.Single(m => string.Equals(m.Symbol.Name, p.Name, StringComparison.OrdinalIgnoreCase)).Symbol.Name + ")"))).Append(')');
         var remaining = properties.Where(p => !constructor.Parameters.Any(c => string.Equals(c.Name, p.Symbol.Name, StringComparison.OrdinalIgnoreCase)) || p.Symbol.IsRequired).ToArray();
-        if (remaining.Length != 0) source.Append(" { ").Append(string.Join(", ", remaining.Select(p => "@" + p.Symbol.Name + " = row.Get(@" + p.Symbol.Name + ")"))).Append(" }");
+        if (remaining.Length != 0) source.Append(" { ").Append(string.Join(", ", remaining.Select(p => "@" + p.Symbol.Name + " = row.Get(" + descriptorType + ".@" + p.Symbol.Name + ")"))).Append(" }");
         source.Append(", static (row, value) =>\n        {\n");
-        foreach (var property in properties) source.Append("            row.Set(@").Append(property.Symbol.Name).Append(", value.@").Append(property.Symbol.Name).Append(");\n");
+        foreach (var property in properties) source.Append("            row.Set(").Append(descriptorType).Append(".@").Append(property.Symbol.Name).Append(", value.@").Append(property.Symbol.Name).Append(");\n");
         source.Append("        });\n    }\n}\n");
-        output.AddSource(model.ToDisplayString().Replace('.', '_') + ".Mapping.g.cs", SourceText.From(source.ToString(), Encoding.UTF8));
+        using var hash = SHA256.Create();
+        string identity = string.Concat(hash.ComputeHash(Encoding.UTF8.GetBytes(model.ToDisplayString(Full))).Select(x => x.ToString("x2", System.Globalization.CultureInfo.InvariantCulture)));
+        output.AddSource(model.Name + "." + identity + ".Mapping.g.cs", SourceText.From(source.ToString(), Encoding.UTF8));
     }
 
     private static (int Id, string Expression)? Codec(ITypeSymbol type)
@@ -147,13 +164,31 @@ public sealed class ModelGenerator : IIncrementalGenerator
         if (type.IsReferenceType && type.NullableAnnotation == NullableAnnotation.Annotated) expression = "global::NativeWeave.Data.Codecs.NullableReference(" + expression + ")";
         return (id, expression);
     }
-    private static bool Dynamic(ITypeSymbol type) => type.TypeKind is TypeKind.Dynamic or TypeKind.TypeParameter or TypeKind.Delegate || type.SpecialType == SpecialType.System_Object || type.ToDisplayString() is "System.Type" or "System.Reflection.MemberInfo" || type is INamedTypeSymbol n && n.TypeArguments.Any(Dynamic);
+    private static bool Dynamic(ITypeSymbol type) => type.TypeKind is TypeKind.Dynamic or TypeKind.TypeParameter or TypeKind.Delegate || type.SpecialType == SpecialType.System_Object || type.ToDisplayString() is "System.Type" or "System.Reflection.MemberInfo" || type is IArrayTypeSymbol array && Dynamic(array.ElementType) || type is INamedTypeSymbol n && n.TypeArguments.Any(Dynamic);
     private static bool IsNullable(ITypeSymbol type) => type.NullableAnnotation == NullableAnnotation.Annotated || type is INamedTypeSymbol n && n.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T;
     private static bool Has(AttributeData attribute, string name) => attribute.AttributeClass?.ToDisplayString() == Prefix + name;
     private static object? Named(AttributeData attribute, string name) => attribute.NamedArguments.FirstOrDefault(p => p.Key == name).Value.Value;
     private static string Literal(string value) => SymbolDisplay.FormatLiteral(value, true);
     private static string Bool(bool value) => value ? "true" : "false";
-    private static void Report(SourceProductionContext output, DiagnosticDescriptor descriptor, ISymbol symbol, params object[] args) => output.ReportDiagnostic(Diagnostic.Create(descriptor, symbol.Locations.FirstOrDefault(), args));
+    private static void Report(Emission output, DiagnosticDescriptor descriptor, ISymbol symbol, params object[] args) => output.ReportDiagnostic(Diagnostic.Create(descriptor, symbol.Locations.FirstOrDefault(), args));
+    // Compare emitted semantic content after symbol resolution. Unrelated compilation
+    // edits then reuse the output stage; diagnostics retain fresh source-tree locations.
+    private sealed class Emission(CancellationToken cancellation)
+    {
+        internal CancellationToken CancellationToken { get; } = cancellation;
+        internal List<Diagnostic> Diagnostics { get; } = [];
+        internal List<(string Name, SourceText Text)> Sources { get; } = [];
+        internal void ReportDiagnostic(Diagnostic diagnostic) => Diagnostics.Add(diagnostic);
+        internal void AddSource(string name, SourceText source) => Sources.Add((name, source));
+    }
+    private sealed class EmissionComparer : IEqualityComparer<Emission>
+    {
+        internal static readonly EmissionComparer Instance = new();
+        public bool Equals(Emission? first, Emission? second) => ReferenceEquals(first, second) || first is not null && second is not null &&
+            first.Diagnostics.Count == 0 && second.Diagnostics.Count == 0 && first.Sources.Count == second.Sources.Count &&
+            first.Sources.Zip(second.Sources, (a, b) => a.Name == b.Name && a.Text.ContentEquals(b.Text)).All(x => x);
+        public int GetHashCode(Emission value) => value.Sources.Count;
+    }
     private sealed class Property(IPropertySymbol symbol, string store, string codec, bool key, bool generated, bool version, bool nullable)
     {
         internal IPropertySymbol Symbol { get; } = symbol;

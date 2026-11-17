@@ -80,6 +80,9 @@ pub(crate) struct NativeState {
     subqueries: Vec<Arc<NativePlan>>,
     aggregate_nodes: usize,
     grouped: bool,
+    group_nodes: Vec<u32>,
+    selected_nodes: Vec<(u32, bool)>,
+    take: Option<u64>,
     requires_transaction: bool,
 }
 
@@ -128,6 +131,9 @@ impl NativeQuery {
                 subqueries: Vec::new(),
                 aggregate_nodes: 0,
                 grouped: false,
+                group_nodes: Vec::new(),
+                selected_nodes: Vec::new(),
+                take: None,
                 requires_transaction: false,
             },
         })

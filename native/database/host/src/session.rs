@@ -11,6 +11,7 @@ use nativeweave_data_transactions::{
     AdmissionToken, Capabilities, CommandLease, Confirmation, Options as TxOptions, ProtocolState,
     ProviderFailure, SavepointToken, Snapshot, Transaction, TransactionDriver,
 };
+#[cfg(feature = "sqlite")]
 use sqlx::{Column, Statement, TypeInfo};
 use std::{
     sync::{
@@ -389,7 +390,7 @@ impl Session {
     async fn execute_count(
         &self,
         plan: &SqlPlan,
-        cancel: Arc<crate::operation::Cancel>,
+        _cancel: Arc<crate::operation::Cancel>,
     ) -> Result<u64> {
         match &self.provider {
             #[cfg(feature = "postgres")]
@@ -415,7 +416,7 @@ impl Session {
             ProviderSession::Sqlite(session) => {
                 let token = nativeweave_data_sqlite::Cancellation::default();
                 let stop = token.clone();
-                cancel.install(Arc::new(move || {
+                _cancel.install(Arc::new(move || {
                     stop.cancel();
                 }));
                 Ok(session

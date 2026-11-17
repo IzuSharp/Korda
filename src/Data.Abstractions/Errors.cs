@@ -57,6 +57,9 @@ public class DatabaseException : Exception
 
     internal DatabaseException(string message, DatabaseErrorKind kind, string? providerCode, ulong correlationId, bool transient)
         : this(message, kind, providerCode, correlationId) => _isTransient = transient;
+
+    internal DatabaseException(string message, DatabaseErrorKind kind, string? providerCode, ulong correlationId, bool transient, Exception innerException)
+        : this(message, kind, providerCode, correlationId, innerException) => _isTransient = transient;
 }
 
 /// <summary>Identifies a required capability missing from an engine or provider profile.</summary>

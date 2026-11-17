@@ -124,6 +124,8 @@ pub struct Source {
     pub pool: Pool,
     pub runtime: RuntimeOwner,
     pub sessions: Arc<Semaphore>,
+    pub administration: Arc<Semaphore>,
+    pub administration_waiting: AtomicUsize,
     pub waiting: AtomicUsize,
     pub pending: AtomicUsize,
     pub close_waiters: AtomicUsize,
@@ -196,6 +198,8 @@ impl Source {
             pool,
             runtime,
             sessions,
+            administration: Arc::new(Semaphore::new(1)),
+            administration_waiting: AtomicUsize::new(0),
             waiting: AtomicUsize::new(0),
             pending: AtomicUsize::new(0),
             close_waiters: AtomicUsize::new(0),
@@ -276,6 +280,8 @@ impl Source {
             return;
         }
         self.sessions.close();
+        self.administration.close();
+        self.changed.notify_waiters();
         self.shapes
             .lock()
             .unwrap_or_else(|e| e.into_inner())

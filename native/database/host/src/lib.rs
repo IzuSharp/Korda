@@ -2,6 +2,8 @@
 //!
 //! Providers, transaction state and streaming remain the existing B02/B03/B05/B06
 //! components. No source creates connections until explicit session admission.
+#[path = "../../migrations/host.rs"]
+pub mod administration;
 pub mod abi;
 pub mod config;
 pub mod control;

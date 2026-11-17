@@ -11,10 +11,11 @@ crate-type = ["rlib", "cdylib"]
 
 [features]
 default = ["postgres", "sqlite"]
-postgres = ["dep:nativeweave-data-postgres"]
-sqlite = ["dep:nativeweave-data-sqlite"]
+postgres = ["dep:nativeweave-data-postgres", "nativeweave-data-migrations/postgres"]
+sqlite = ["dep:nativeweave-data-sqlite", "nativeweave-data-migrations/sqlite"]
 
 [dependencies]
+nativeweave-data-migrations = { path = "../migrations", default-features = false }
 nativeweave-interop-abi = { path = "../../interop/abi" }
 nativeweave-interop-async = { path = "../../interop/async" }
 nativeweave-interop-errors = { path = "../../interop/errors" }

@@ -109,7 +109,8 @@ try:
         time.sleep(.05)
     else:
         raise RuntimeError('PostgreSQL startup exceeded its finite deadline.')
-    env['NATIVEWEAVE_TEST_POSTGRES_URL'] = f'postgresql://nativeweave@127.0.0.1:{port}/postgres?sslmode=disable'
+    # Host accepts typed TLS policy only; URI query options are intentionally rejected.
+    env['NATIVEWEAVE_TEST_POSTGRES_URL'] = f'postgresql://nativeweave@127.0.0.1:{port}/postgres'
     run('native-real-providers', ['cargo', 'test', '--manifest-path', manifest, '--locked', '--offline', '--', '--nocapture'])
     common = ['-p:UseSharedCompilation=false', '-nr:false', '-m:1']
     config = ['--configfile', a.nuget_config] if a.nuget_config else []

@@ -9,6 +9,7 @@ pub struct Error {
     pub message: &'static str,
     pub provider: Option<String>,
     pub correlation: u64,
+    pub cleanup: Option<Box<Error>>,
 }
 static NEXT_ERROR: AtomicU64 = AtomicU64::new(1);
 impl Error {
@@ -19,6 +20,7 @@ impl Error {
             message,
             provider: None,
             correlation: NEXT_ERROR.fetch_add(1, Ordering::Relaxed),
+            cleanup: None,
         }
     }
     pub fn invalid(message: &'static str) -> Self {
@@ -176,6 +178,7 @@ impl From<nativeweave_data_transactions::Error> for Error {
                 message: "commit outcome is unknown",
                 provider: provider_code,
                 correlation: correlation_id,
+                cleanup: None,
             },
             T::Provider {
                 provider_code,
@@ -190,6 +193,7 @@ impl From<nativeweave_data_transactions::Error> for Error {
                 message: "transaction operation failed",
                 provider: provider_code,
                 correlation: correlation_id,
+                cleanup: None,
             },
             _ => Self::state("transaction admission rejected"),
         }

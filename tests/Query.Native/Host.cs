@@ -133,8 +133,7 @@ internal sealed unsafe class Host : IDisposable
     internal void Sql(string text)
     {
         var bytes = Encoding.UTF8.GetBytes(text); var parameters = Parameters(Profile);
-        var ddl = text.StartsWith("CREATE", StringComparison.Ordinal) || text.StartsWith("DROP", StringComparison.Ordinal);
-        var options = ControlRecord.Encode(20, N(1, ddl ? 2u : 1u), N(2, 0), U(3, 30_000_000_000, 3), N(4, 0), B(5, new byte[4]), N(6, 0));
+        var options = ControlRecord.Encode(20, N(1, 1), N(2, 0), U(3, 30_000_000_000, 3), N(4, 0), B(5, new byte[4]), N(6, 0));
         using var session = Session.Borrow(DatabaseOwnerKind.Session); nint pointer = 0; var error = BindingChecks.Error();
         fixed (byte* s = bytes) fixed (byte* p = parameters) fixed (byte* o = options)
             BindingChecks.Status(Calls.nw_db_sql_create_v1(session.Pointer, V(s, bytes.Length), V(p, parameters.Length), V(o, options.Length), &pointer, &error), error);

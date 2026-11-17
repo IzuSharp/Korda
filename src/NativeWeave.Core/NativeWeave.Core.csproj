@@ -38,5 +38,6 @@
     <InternalsVisibleTo Include="NativeWeave.Generators.CSharp.Sample" />
     <InternalsVisibleTo Include="NativeWeave.Database" />
     <InternalsVisibleTo Include="NativeWeave.Data.NativeHost.Tests" />
+    <InternalsVisibleTo Include="NativeWeave.Data.Migrations.Tests" />
   </ItemGroup>
 </Project>

@@ -80,11 +80,13 @@ impl NativeQuery {
                 let value = self.expression(f.u64(1)?)?;
                 data.statement.add_group_by([value.expr]);
                 data.grouped = true;
+                data.group_nodes.push(f.u64(1)? as u32);
                 data.statement_nodes += value.nodes;
             }
             5 => {
                 if f.get(1).is_some() {
                     data.statement.limit(f.u64(1)?);
+                    data.take = Some(f.u64(1)?);
                 }
                 if f.get(2).is_some() {
                     data.statement.offset(f.u64(2)?);
@@ -103,6 +105,10 @@ impl NativeQuery {
                     return Err(invalid("projection count"));
                 }
                 data.statement.clear_selects();
+                data.selected_nodes = tokens
+                    .iter()
+                    .map(|token| Ok((*token as u32, self.arena.expression_type(*token)?.aggregate)))
+                    .collect::<Result<Vec<_>>>()?;
                 for (token, field) in tokens.iter().zip(projection.projection.fields()) {
                     let value = self.expression(*token)?;
                     data.statement

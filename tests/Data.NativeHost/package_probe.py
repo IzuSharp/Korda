@@ -121,7 +121,7 @@ shutil.copy2(ROOT / 'samples/api/data-nativehost/Program.cs', consumer / 'Progra
 (consumer / 'Generated.cs').write_text('''using NativeWeave.Data;
 [WeaveTable("generated_host")]
 public sealed class GeneratedHostRow { [WeaveKey] public long Id { get; set; } public string Name { get; set; } = ""; }
-internal static class GeneratedProbe { internal static void Assert() { if (GeneratedHostRowMapping.Row.Fields.Length != 2) throw new System.InvalidOperationException("Transitive generator mapping failed."); } }
+internal static class GeneratedProbe { internal static void Assert() { if (GeneratedHostRowMapping.Table.MetadataHash.Length != 64 || GeneratedHostRowMapping.Row is null) throw new System.InvalidOperationException("Transitive generator mapping failed."); } }
 ''')
 program = (consumer / 'Program.cs').read_text().replace('var builder =', 'GeneratedProbe.Assert();\nvar builder =')
 (consumer / 'Program.cs').write_text(program)
@@ -135,6 +135,9 @@ program = (consumer / 'Program.cs').read_text().replace('var builder =', 'Genera
 </ItemGroup></Project>''')
 configuration = ET.Element('configuration'); sources = ET.SubElement(configuration, 'packageSources'); ET.SubElement(sources, 'clear')
 ET.SubElement(sources, 'add', key='candidate', value=str(feed)); ET.SubElement(sources, 'add', key='nuget.org', value='https://api.nuget.org/v3/index.json')
+mapping = ET.SubElement(configuration, 'packageSourceMapping'); ET.SubElement(mapping, 'clear')
+ET.SubElement(ET.SubElement(mapping, 'packageSource', key='candidate'), 'package', pattern='NativeWeave.*')
+ET.SubElement(ET.SubElement(mapping, 'packageSource', key='nuget.org'), 'package', pattern='*')
 ET.ElementTree(configuration).write(consumer / 'NuGet.Config')
 consumer_env = env.copy(); consumer_env['NUGET_PACKAGES'] = str(consumer / 'packages')
 traps = consumer / 'rust-traps'; traps.mkdir(); marker = consumer / 'unexpected-rust.txt'

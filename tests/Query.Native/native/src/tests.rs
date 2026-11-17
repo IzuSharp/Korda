@@ -47,7 +47,7 @@ fn record(kind: u16, fields: Vec<Field>) -> Vec<u8> {
 fn fixture(name: &str) -> Vec<u8> {
     std::fs::read(
         std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../Query.Binding/golden")
+            .join("../golden")
             .join(name),
     )
     .unwrap()
@@ -329,6 +329,54 @@ fn failures_are_atomic_and_capabilities_precede_render() {
     assert!(q.column(0, c.col("Id")).is_err());
     q.close();
     assert_eq!(q.counts(), (0, 0, 0));
+}
+
+#[test]
+fn cardinality_bounds_preserve_take_and_grouping_rejects_arbitrary_columns() {
+    for profile in [Profile::Sqlite, Profile::PostgreSql] {
+        let c = Context::new(profile);
+        for terminal in [2, 3] {
+            for take in [0, 1, 2, 5] {
+                let mut q = c.query();
+                c.select_all(&mut q);
+                q.clause(5, &record(6, vec![token(1, take)])).unwrap();
+                let rendered = c.render(&mut q, terminal);
+                let expected = std::cmp::min(take, if terminal == 2 { 1 } else { 2 });
+                let mut oracle = Query::select();
+                oracle
+                    .columns([
+                        (Alias::new("Parents"), Alias::new("Id")),
+                        (Alias::new("Parents"), Alias::new("Name")),
+                    ])
+                    .from(Alias::new("Parents"))
+                    .limit(expected);
+                let (_, values) = match profile {
+                    Profile::Sqlite => oracle.build(SqliteQueryBuilder),
+                    Profile::PostgreSql => oracle.build(PostgresQueryBuilder),
+                };
+                let batch = Batch::parse(&rendered.parameter_bytes, rendered.parameter_expectation)
+                    .unwrap();
+                assert_eq!(values.0.len(), 1);
+                assert_eq!(
+                    batch.cell(0, 0).unwrap(),
+                    Some((expected as i64).to_le_bytes().as_slice())
+                );
+            }
+        }
+        let mut q = c.query();
+        let key = q.column(0, c.col("Id")).unwrap();
+        q.clause(4, &record(6, vec![token(1, key)])).unwrap();
+        c.select_all(&mut q);
+        assert!(q.seal(8).is_err());
+        assert_eq!(q.state(), nativeweave_query_binding::QueryState::Mutable);
+        // Reacquiring an equivalent native key has a distinct token, and remains legal.
+        let second_key = q.column(0, c.col("Id")).unwrap();
+        select(&mut q, &[(second_key, "Id", scalar(3, false))]);
+        // A render/CTE/prepared snapshot has a new arena generation but the same
+        // native node indices. Group validation must survive that ordinary clone.
+        assert!(q.clone_selected().unwrap().seal(8).is_ok());
+        assert!(q.seal(8).is_ok());
+    }
 }
 
 #[test]

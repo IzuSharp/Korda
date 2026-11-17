@@ -41,10 +41,10 @@ internal static class Program
                 if (row.IsNull(i)) { values[i] = "null"; continue; }
                 var bytes = fields[i].Codec switch
                 {
-                    3 => Codecs.Int64.Encode(row.Read(i, Codecs.Int64)),
-                    4 => Codecs.Boolean.Encode(row.Read(i, Codecs.Boolean)),
-                    5 => Codecs.String.Encode(row.Read(i, Codecs.String)),
-                    11 => Codecs.Double.Encode(row.Read(i, Codecs.Double)),
+                    3 => Codecs.Int64.Encode(fields[i].Nullable ? row.Read(i, Codecs.Nullable(Codecs.Int64))!.Value : row.Read(i, Codecs.Int64)),
+                    4 => Codecs.Boolean.Encode(fields[i].Nullable ? row.Read(i, Codecs.Nullable(Codecs.Boolean))!.Value : row.Read(i, Codecs.Boolean)),
+                    5 => Codecs.String.Encode(fields[i].Nullable ? row.Read(i, Codecs.NullableReference(Codecs.String))! : row.Read(i, Codecs.String)),
+                    11 => Codecs.Double.Encode(fields[i].Nullable ? row.Read(i, Codecs.Nullable(Codecs.Double))!.Value : row.Read(i, Codecs.Double)),
                     _ => throw new InvalidOperationException("Codec")
                 };
                 values[i] = Convert.ToHexStringLower(bytes!);
@@ -58,6 +58,7 @@ internal static class Program
     }
     private static void Verify(Host host, QueryBinding q, Projection<string> projection, string label, JsonElement oracle)
     {
+        Console.WriteLine($"CASE profile={host.Profile} {label}");
         Check(oracle.GetProperty("label").GetString() == label, "Native oracle order " + label);
         var sql = host.Render(q);
         Check(sql == oracle.GetProperty("sql").GetString(), "Direct Rust / C# ABI SQL parity: " + label + "\n" + sql);
@@ -92,8 +93,8 @@ internal static class Program
             var q = Query(); var id = q.Column(pid.Id); var v = Value(host, q, threshold); Where(q, q.Binary(op, id, v));
             return (q, Select(q, new Field(id, "Id", 3)));
         }
-        host.Sql("CREATE TEMP TABLE \"Parents\" (\"Id\" BIGINT PRIMARY KEY, \"Name\" TEXT NOT NULL)");
-        host.Sql("CREATE TEMP TABLE \"Children\" (\"Id\" BIGINT PRIMARY KEY, \"ParentId\" BIGINT NULL)");
+        host.Sql("CREATE TABLE \"Parents\" (\"Id\" BIGINT PRIMARY KEY, \"Name\" TEXT NOT NULL)");
+        host.Sql("CREATE TABLE \"Children\" (\"Id\" BIGINT PRIMARY KEY, \"ParentId\" BIGINT NULL)");
         host.Sql("INSERT INTO \"Parents\" VALUES (0,'Zero'),(1,'Alice'),(2,'O''Reilly 🦀')");
         host.Sql("INSERT INTO \"Children\" VALUES (10,1),(11,NULL)");
         using (var q = Query())
@@ -224,6 +225,11 @@ internal static class Program
     }
     public static int Main(string[] args)
     {
+        try { return Run(args); }
+        catch (BindingFailure e) { Console.Error.WriteLine($"status={e.Status} domain={e.Domain} code={e.Code} correlation={e.Correlation}"); throw; }
+    }
+    private static int Run(string[] args)
+    {
         if (args.Length < 3) throw new ArgumentException("native-module oracle-directory result-directory [--require-aot]");
         if (args.Contains("--require-aot", StringComparer.Ordinal)) Check(!RuntimeFeature.IsDynamicCodeSupported, "Actual Native AOT execution");
         var before = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(args[0])));
@@ -234,6 +240,7 @@ internal static class Program
             using var host = new Host(args[0], profile, profile == 1 ? ":memory:" : url);
             Scenarios(host, Path.Combine(args[1], profile == 1 ? "sqlite.json" : "postgres.json"));
             NativeQueryExamples.Run(host);
+            host.Sql("DROP TABLE \"Children\""); host.Sql("DROP TABLE \"Parents\"");
             retired += host.RetiredOperations; buffers += host.ReleasedBuffers;
         }
         var after = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(args[0]))); Check(before == after, "Same native hash after ordinary entity changes");

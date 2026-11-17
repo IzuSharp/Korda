@@ -56,7 +56,7 @@ internal sealed unsafe class HostAsyncCalls(DataSource source) : AsyncNativeCall
     internal override void Poison() => source.Poison();
     internal override Exception MapFailure(nint operation, uint status, in NwErrorInfoV1 error, CancellationToken token)
     {
-        string? provider = null;
+        string? provider = null; bool cleanupFailed = false;
         if (source.Binding.Calls.nw_db_operation_take_error_v1 != null)
         {
             nint pointer = 0; var detail = BindingChecks.Error(); var taken = source.Binding.Calls.nw_db_operation_take_error_v1(operation, &pointer, &detail);
@@ -66,9 +66,19 @@ internal sealed unsafe class HostAsyncCalls(DataSource source) : AsyncNativeCall
                 source.TestAfterErrorTake?.Invoke();
                 var fields = HostEncoding.ReadControl(owner.Copy(), 7);
                 if (fields.TryGetValue(9, out var code)) provider = HostEncoding.Utf8.GetString(code);
+                cleanupFailed = fields.TryGetValue(4, out var cleanup) && BinaryPrimitives.ReadUInt32LittleEndian(cleanup) == (uint)CleanupStatus.Failed;
             }
         }
-        return HostFailure.Create(source.Binding, status, error, provider, token);
+        var failure = HostFailure.Create(source.Binding, status, error, provider, token);
+        if (!cleanupFailed) return failure;
+        var cleanupFailure = new DatabaseException("Administrative rollback or connection closure also failed; the dedicated connection was discarded.", DatabaseErrorKind.Provider);
+        return failure switch
+        {
+            DatabaseException database => new DatabaseException(database.Message, database.Kind, database.ProviderCode, database.CorrelationId, database.IsTransient, cleanupFailure),
+            OperationCanceledException cancellation => new OperationCanceledException(cancellation.Message, cleanupFailure, cancellation.CancellationToken),
+            TimeoutException timeout => new TimeoutException(timeout.Message, cleanupFailure),
+            _ => new AggregateException(failure, cleanupFailure)
+        };
     }
 }
 internal static class HostFailure

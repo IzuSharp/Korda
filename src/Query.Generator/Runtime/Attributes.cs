@@ -9,10 +9,13 @@ public sealed class WeaveTableAttribute : Attribute
     /// <summary>Declares the exact store table name.</summary>
     /// <param name="name">A nonempty table identifier; casing is preserved.</param>
     /// <exception cref="ArgumentException">The name is empty or whitespace.</exception>
+    /// <inheritdoc cref="WeaveTableAttribute" path="/member/remarks" />
     public WeaveTableAttribute(string name) { ArgumentException.ThrowIfNullOrWhiteSpace(name); }
     /// <summary>Gets or initializes the optional exact schema name.</summary>
+    /// <inheritdoc cref="WeaveTableAttribute" path="/member/remarks" />
     public string? Schema { get; init; }
     /// <summary>Gets or initializes the generated static descriptor class name; default is EntityNameMapping.</summary>
+    /// <inheritdoc cref="WeaveTableAttribute" path="/member/remarks" />
     public string? DescriptorName { get; init; }
 }
 /// <summary>Overrides a property's exact store name and generated-value policy.</summary>
@@ -23,8 +26,10 @@ public sealed class WeaveColumnAttribute : Attribute
     /// <summary>Declares the exact store column name.</summary>
     /// <param name="name">A nonempty store identifier.</param>
     /// <exception cref="ArgumentException">The name is empty or whitespace.</exception>
+    /// <inheritdoc cref="WeaveColumnAttribute" path="/member/remarks" />
     public WeaveColumnAttribute(string name) { ArgumentException.ThrowIfNullOrWhiteSpace(name); }
     /// <summary>Gets or initializes whether the database supplies the value on insertion.</summary>
+    /// <inheritdoc cref="WeaveColumnAttribute" path="/member/remarks" />
     public bool Generated { get; init; }
 }
 /// <summary>Marks a non-null primary-key property in deterministic projection order.</summary>

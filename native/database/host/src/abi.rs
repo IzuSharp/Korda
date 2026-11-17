@@ -340,7 +340,7 @@ pub unsafe extern "C" fn nw_database_get_abi_v1(
     capacity: u32,
     output: *mut NwAbiInfoV1,
 ) -> u32 {
-    let mask = crate::query::capability_mask();
+    let mask = crate::query::capability_mask() | (1 << 5) | (1 << 6);
     // SAFETY: exact forwarding to the canonical ABI writer.
     unsafe { write_abi_v1(major, capacity, output, 0, mask) }
 }
@@ -609,9 +609,9 @@ pub unsafe extern "C" fn nw_db_operation_take_error_v1(
             0,
             0,
             false,
-            0,
-            0,
-            false,
+            if value.cleanup.is_some() { 4 } else { 0 },
+            if value.cleanup.is_some() { 3 } else { 0 },
+            value.cleanup.is_some(),
             false,
             value.correlation,
             value.provider.as_deref(),

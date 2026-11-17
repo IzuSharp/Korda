@@ -920,6 +920,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "nativeweave-data-migrations"
+version = "0.1.0"
+dependencies = [
+ "futures-util",
+ "nativeweave-data-contracts",
+ "sha2 0.10.9",
+ "sqlx",
+ "tokio",
+]
+
+[[package]]
 name = "nativeweave-data-postgres"
 version = "0.1.0"
 dependencies = [
@@ -977,6 +988,7 @@ dependencies = [
  "futures-util",
  "nativeweave-data-codecs",
  "nativeweave-data-contracts",
+ "nativeweave-data-migrations",
  "nativeweave-data-postgres",
  "nativeweave-data-sqlite",
  "nativeweave-data-streaming",
