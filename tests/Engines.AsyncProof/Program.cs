@@ -57,6 +57,75 @@ async Task NotificationFailure()
     Check(host.GetSnapshot().ManagedHandlers == 0 && host.GetSnapshot().QueuedNotifications == 0, "failed notification drained");
     await Zero();
 }
+async Task ObserverBudget()
+{
+    TaskCompletionSource release = Gate();
+    var host = new HttpProofHost(Handler, maxOperations: 1, frameDelayMilliseconds: 0);
+    host.RetirementGate = release.Task;
+    (await host.GetAsync(1)).Dispose();
+    await Wait(() => host.GetSnapshot().Operations == 0 && host.OperationReservations == 1, "native operation retired while cleanup observer is paused");
+    await Quota(() => host.GetAsync(2), "managed cleanup reservation remains bounded");
+    Check(host.OperationReservations == 1, "at most one operation/root/observer reservation");
+    Task close = host.CloseAsync();
+    await Wait(() => host.GetSnapshot().RuntimeWorkers == 0 && host.GetSnapshot().RuntimeTasks == 0, "native runtime actually exited before managed bookkeeping release");
+    Check(!close.IsCompleted, "host closure joins cleanup bookkeeping as well as native retirement");
+    release.TrySetResult(); await close;
+    Check(host.OperationReservations == 0, "cleanup metadata reservation released exactly once");
+    await Zero();
+}
+async Task NonblockingCancellationCallbacks()
+{
+    for (int mode = 0; mode < 2; mode++)
+    {
+        TaskCompletionSource entered = Gate(), callbackEntered = Gate(), handlerRelease = Gate();
+        using var callbackRelease = new ManualResetEventSlim();
+        int profile = mode;
+        var host = new HttpProofHost(async (_, token) =>
+        {
+            using var registration = token.Register(() =>
+            {
+                callbackEntered.TrySetResult();
+                callbackRelease.Wait();
+                if (profile == 1) throw new InvalidOperationException("cancellation-registration-failure");
+            });
+            entered.TrySetResult(); await handlerRelease.Task; return [1];
+        });
+        Task<HttpProofResponse> get = host.GetAsync(1);
+        await entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        using var wait = new CancellationTokenSource(50);
+        Task? closeWait = null;
+        Task invocation = Task.Factory.StartNew(() =>
+        {
+            if (profile == 0) host.Dispose();
+            else closeWait = host.CloseAsync(wait.Token);
+        }, CancellationToken.None, TaskCreationOptions.DenyChildAttach, TaskScheduler.Default);
+        try
+        {
+            await callbackEntered.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            await invocation.WaitAsync(TimeSpan.FromSeconds(2));
+            Check(true, "first Dispose/CloseAsync invocation returns while a foreign cancellation callback is blocked");
+            if (profile == 1) await Throws<OperationCanceledException>(() => closeWait!, "first close caller can cancel only its wait");
+            Check(!host.CloseAsync().IsCompleted, "actual close retains the blocked callback and claimed handler");
+        }
+        finally { callbackRelease.Set(); handlerRelease.TrySetResult(); }
+        await CanceledOrTransport(get);
+        if (profile == 1) await Throws<AggregateException>(() => host.CloseAsync(), "asynchronous cancellation callback failure survives cleanup");
+        else await host.CloseAsync();
+        await Zero();
+    }
+}
+if (args.Contains("--nonblocking-cancel"))
+{
+    await NonblockingCancellationCallbacks();
+    Console.WriteLine($"{{\"case\":\"nonblocking-cancel\",\"checks\":{checks},\"live_resources\":0}}");
+    return;
+}
+if (args.Contains("--observer-budget"))
+{
+    await ObserverBudget();
+    Console.WriteLine($"{{\"case\":\"observer-budget\",\"checks\":{checks},\"live_resources\":0}}");
+    return;
+}
 if (args.Contains("--notification-fault"))
 {
     await NotificationFailure();
@@ -98,6 +167,15 @@ foreach (uint route in new uint[] { 7, 99 })
     }
     foreach (NativeBuffer chunk in chunks) chunk.Dispose();
     await Zero();
+}
+
+// A managed payload above the exact profile limit becomes an empty HTTP error, never a partial owner.
+{
+    var host = new HttpProofHost(static (_, _) => Task.FromResult(new byte[1025]), chunkBytes: 1024);
+    using HttpProofResponse response = await host.GetAsync(1);
+    Check(response.StatusCode == 500, "oversized handler payload is rejected by the bounded service profile");
+    Check(await response.ReadChunkAsync() is null, "oversized response exposes no partial chunk");
+    response.Dispose(); await host.CloseAsync(); await Zero();
 }
 
 // Real early response disposal cancels the pending native Body read.
@@ -147,7 +225,7 @@ foreach (uint route in new uint[] { 7, 99 })
     Task<HttpProofResponse> first = host.GetAsync(1); await entered.Task.WaitAsync(TimeSpan.FromSeconds(10));
     await Quota(() => host.GetAsync(2), "operation quota");
     release.TrySetResult(); HttpProofResponse response = await first;
-    await Wait(() => host.GetSnapshot().Operations == 0, "completed operation retired separately from held response");
+    await Wait(() => host.GetSnapshot().Operations == 0 && host.OperationReservations == 0, "completed operation retired separately from held response");
     await Quota(() => host.GetAsync(2), "held response item quota");
     response.Dispose(); await host.CloseAsync(); await Zero();
 }
@@ -155,9 +233,9 @@ foreach (uint route in new uint[] { 7, 99 })
 {
     var host = new HttpProofHost(Handler, maxOperations: 1, frameDelayMilliseconds: 50);
     HttpProofResponse response = await host.GetAsync(3);
-    await Wait(() => host.GetSnapshot().Operations == 0, "get retired before capacity-one read");
+    await Wait(() => host.GetSnapshot().Operations == 0 && host.OperationReservations == 0, "get retired before capacity-one read");
     NativeBuffer chunk = (await response.ReadChunkAsync())!;
-    await Wait(() => host.GetSnapshot().Operations == 0, "first read retired while chunk retained");
+    await Wait(() => host.GetSnapshot().Operations == 0 && host.OperationReservations == 0, "first read retired while chunk retained");
     await Quota(() => response.ReadChunkAsync(), "held chunk item quota");
     response.Dispose(); await host.CloseAsync();
     Check(chunk.ToArray().Length > 0 && host.GetSnapshot().RetainedBytes > 0, "quota failure keeps earlier chunk independent");
@@ -190,6 +268,8 @@ foreach (uint route in new uint[] { 7, 99 })
     await host.CloseAsync(); await Zero();
 }
 await NotificationFailure();
+await ObserverBudget();
+await NonblockingCancellationCallbacks();
 // The exact A06 handler scope rejects waiting for its own retirement.
 {
     HttpProofHost? host = null; bool rejected = false;

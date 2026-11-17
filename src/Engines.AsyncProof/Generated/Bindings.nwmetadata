@@ -1,9 +1,9 @@
 nativeweave-metadata-v1
 module	nativeweave.engines.asyncproof
-digest	c8e8fbd26b984fb2a3b69be1b35e617dc69cddc66652e1ffce8f5463f393be53
+digest	717032239783222b482151f06519a247cdc5a492a58eb5fc144715291f29c27d
 namespace	NativeWeave.Engines.AsyncProof.Generated
 library	nativeweave_engine_asyncproof
-source_sha256	cf685b7fc86ddbd421fcfb040b22ce2202004182383c6a62de479b9cf588155c
+source_sha256	d193fa6c7764d79d1e7807561dac588f6e20638a17bb69de1f8e16e67d0db531
 record	NwAbiInfoV1	32	8
 field	NwAbiInfoV1	struct_size	u32	0
 field	NwAbiInfoV1	abi_major	u32	4

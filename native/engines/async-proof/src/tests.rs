@@ -88,3 +88,9 @@ fn worker_panic_payload_retained_without_foreign_unwind() {
         "worker panic: one retained host, one unknown-size retained payload, no foreign unwind"
     );
 }
+
+#[test]
+fn issued_frame_permit_after_body_drop_refunds_queue() {
+    let _case = CASE_GATE.lock().unwrap();
+    crate::engine::issued_permit_outlives_body();
+}

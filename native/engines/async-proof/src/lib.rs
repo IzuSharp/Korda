@@ -560,7 +560,8 @@ pub unsafe extern "C" fn nw_asyncproof_take_response_v1(
 }
 
 /// # Safety
-/// Live Read operation and exclusive outputs. EOF has null owner/data and end=1.
+/// Live Read operation and exclusive outputs. EOF transfers a non-null empty owner
+/// that must be released, with null data, zero length and end=1.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_asyncproof_take_chunk_v1(
     operation: *const NwHttpOperation,

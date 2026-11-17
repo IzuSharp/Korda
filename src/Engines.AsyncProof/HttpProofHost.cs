@@ -27,18 +27,22 @@ public sealed class HttpProofHost : IDisposable, IAsyncDisposable
     private readonly CallbackRegistration _callbacks;
     private readonly Func<uint, CancellationToken, Task<byte[]>> _handler;
     private readonly CancellationTokenSource _stop = new();
-    private readonly HashSet<AsyncOperation> _operations = [];
+    private readonly TaskCompletionSource _operationsDrained = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly int _maxOperations;
+    private int _operationReservations;
     private readonly EngineInfo _engine;
     private readonly uint _delay;
     private TaskCompletionSource? _close;
     private bool _closing;
     // Friend-test seam runs in the actual queued notification, outside the business handler catch.
     internal Action? NotificationProbe { get; set; }
+    internal Task? RetirementGate { get; set; }
+    internal int OperationReservations { get { lock (_gate) return _operationReservations; } }
 
     /// <summary>Loads the precompiled engine, binds an ephemeral loopback port and starts its native worker.</summary>
     /// <param name="handler">A statically compiled managed handler for a numeric route. Its bounded result becomes HTTP 200; an ordinary handler exception becomes HTTP 500 with an empty body.</param>
     /// <param name="maxStreams">Maximum live Body/producer/claimed-handler groups, from one through eight.</param>
-    /// <param name="maxOperations">Maximum accepted native operations and each independent held response/chunk item quota, from one through 64.</param>
+    /// <param name="maxOperations">Maximum operations including managed retirement bookkeeping, and each independent held response/chunk item quota, from one through 64.</param>
     /// <param name="retainedBytes">Maximum conservatively charged native backing bytes, from chunkBytes through one MiB.</param>
     /// <param name="chunkBytes">Maximum response payload and received frame, from one through 4096 bytes. Each nonempty backing reserves this full amount until its last Bytes owner drops.</param>
     /// <param name="frameDelayMilliseconds">Native producer delay before each of at most two frames, from zero through 1000 milliseconds.</param>
@@ -58,7 +62,7 @@ public sealed class HttpProofHost : IDisposable, IAsyncDisposable
         if (chunkBytes is < 1 or > 4096) throw new ArgumentOutOfRangeException(nameof(chunkBytes));
         if (retainedBytes < chunkBytes || retainedBytes > 1048576) throw new ArgumentOutOfRangeException(nameof(retainedBytes));
         if (frameDelayMilliseconds is < 0 or > 1000) throw new ArgumentOutOfRangeException(nameof(frameDelayMilliseconds));
-        _handler = handler; _delay = (uint)frameDelayMilliseconds; ChunkBytes = chunkBytes;
+        _handler = handler; _delay = (uint)frameDelayMilliseconds; ChunkBytes = chunkBytes; _maxOperations = maxOperations;
         _engine = Descriptor.Inspect(); _engine.Require(new EngineCapability("http.loopback.stream.v1"));
         _coordinator = new CallbackCoordinator(maxOperations + 1);
         G.NwHttpLimitsV1 limits = new()
@@ -145,24 +149,45 @@ public sealed class HttpProofHost : IDisposable, IAsyncDisposable
     private Task<T> Start<T>(G.Owner_NwHttpOperation owner, bool read, Func<nint, T> mapper, CancellationToken token)
     {
         AsyncOperation<T>? operation = null;
+        bool reserved = false;
         try
         {
+            lock (_gate)
+            {
+                ObjectDisposedException.ThrowIf(_closing, this);
+                if (_operationReservations == _maxOperations) throw new OutOfMemoryException("The finite managed operation/cleanup quota is exhausted.");
+                _operationReservations++; reserved = true;
+            }
             var calls = new OperationCalls(owner, read);
             operation = new AsyncOperation<T>(owner.Resource, calls, _coordinator,
                 pointer => read ? G.Operation_Read.MapResult(calls, () => mapper(pointer)) : G.Operation_Get.MapResult(calls, () => mapper(pointer)), token);
             calls.Context = operation;
-            lock (_gate) _operations.Add(operation);
             if (ExecutionContext.IsFlowSuppressed()) _ = ObserveRetirement(operation);
             else { using (ExecutionContext.SuppressFlow()) _ = ObserveRetirement(operation); }
             return operation.Start();
         }
-        catch { if (operation is null) owner.Dispose(); else operation.Dispose(); throw; }
+        catch
+        {
+            if (operation is null) { owner.Dispose(); if (reserved) ReleaseReservation(); }
+            else operation.Dispose(); // its already-created observer retains the reservation through actual retirement
+            throw;
+        }
     }
 
     private async Task ObserveRetirement(AsyncOperation operation)
     {
         await operation.Retirement.ConfigureAwait(false);
-        lock (_gate) _operations.Remove(operation);
+        if (RetirementGate is { } gate) await gate.ConfigureAwait(false);
+        ReleaseReservation();
+    }
+
+    private void ReleaseReservation()
+    {
+        lock (_gate)
+        {
+            _operationReservations--;
+            if (_closing && _operationReservations == 0) _operationsDrained.TrySetResult();
+        }
     }
 
     private unsafe HttpProofResponse TakeResponse(nint operation)
@@ -263,6 +288,7 @@ public sealed class HttpProofHost : IDisposable, IAsyncDisposable
     /// <returns>The shared actual-close completion, optionally wrapped in a cancellable wait.</returns>
     /// <exception cref="OperationCanceledException">The caller stopped waiting before closure completed.</exception>
     /// <exception cref="InvalidOperationException">A handler attempts to await its own host retirement.</exception>
+    /// <exception cref="AggregateException">A managed cancellation registration fails; actual cleanup completes before this failure is reported.</exception>
     /// <remarks>Early response disposal and host close request cancellation. Held NativeBuffer chunks remain valid
     /// and keep their independent byte/item quota until disposal or final release. Close never reports success from a timeout.</remarks>
     public Task CloseAsync(CancellationToken cancellationToken = default)
@@ -284,6 +310,7 @@ public sealed class HttpProofHost : IDisposable, IAsyncDisposable
         {
             if (_close is not null) return _close.Task;
             _closing = true; _close = completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+            if (_operationReservations == 0) _operationsDrained.TrySetResult();
         }
         _callbacks.Dispose();
         _ = FinishClose(completion);
@@ -294,11 +321,12 @@ public sealed class HttpProofHost : IDisposable, IAsyncDisposable
         try
         {
             Exception? cancellationFailure = null;
-            try { _stop.Cancel(); } catch (Exception error) { cancellationFailure = error; }
+            // Foreign cancellation registrations must not run inline on the
+            // Dispose/CloseAsync caller. One engine-owned async cancellation task
+            // remains part of the real close lifetime, including its failures.
+            try { await _stop.CancelAsync().ConfigureAwait(false); } catch (Exception error) { cancellationFailure = error; }
             await _callbacks.Retirement.ConfigureAwait(false);
-            Task[] operations;
-            lock (_gate) operations = _operations.Select(operation => operation.Retirement).ToArray();
-            await Task.WhenAll(operations).ConfigureAwait(false);
+            await _operationsDrained.Task.ConfigureAwait(false);
             _coordinator.Dispose(); _stop.Dispose();
             await _callbacks.Completion.ConfigureAwait(false);
             if (cancellationFailure is not null) throw cancellationFailure;

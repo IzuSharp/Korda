@@ -57,9 +57,7 @@
     {
       "crate": "http-body",
       "version": "1.1.0",
-      "features": [
-        ""
-      ],
+      "features": [],
       "license": "MIT",
       "repository": "https://github.com/hyperium/http-body",
       "vcs_commit": "2fb78de9c875c364b7eb1a1a117acc3b83ffb13a",

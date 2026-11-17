@@ -123,7 +123,7 @@ def main():
         if sha(native) != native_before: raise RuntimeError('Consumption changed the native asset.')
         run('diff-check', ['git', 'diff', '--check'])
         receipt['artifacts'] = artifacts
-        receipt['preparation_regressions'] = 'A18-R1/R2/R3 failure-before-fix logs/source hashes retained in the component acceptance receipt; normal native tests reproduce all corrected boundaries.'
+        receipt['preparation_regressions'] = 'A18-R1 through R6 failure-before-fix logs/source hashes retained in the component acceptance receipt; normal native tests reproduce all corrected boundaries.'
         prior_path = args.a17_result.resolve()
         prior = json.loads(prior_path.read_text())
         if not prior['passed'] or prior['task'] != 'A17': raise RuntimeError('Accepted A17 result required for static incremental-cost comparison.')

@@ -52,6 +52,45 @@ def checked_file(root, item):
     return path
 
 
+def uses_callbacks(sidecar):
+    """Recognize generated reverse entries or actual shared-Core v1 table inputs.
+
+    A09 callbacks[] describes exported signatures for A10-generated UCO entries.
+    A facade can instead supply the existing A06/A07 entries through the standard
+    tables. This check identifies that use; source/conformance still proves its
+    stop, drain and owner-retirement implementation.
+    """
+    callbacks = sidecar.get("callbacks")
+    fail(not isinstance(callbacks, list), "Missing native callback inventory")
+    tables = {"NwCallbacksV1": "on_event", "NwOperationCallbacksV1": "on_terminal"}
+    records = {record["name"]: record for record in sidecar.get("records", [])}
+    owners = {owner["kind"] for owner in sidecar["owners"]}
+    used = False
+    for export in sidecar["exports"]:
+        for parameter in export.get("parameters", []):
+            name = parameter.get("type", "").rsplit(":", 1)[-1]
+            if name not in tables:
+                continue
+            record = records.get(name, {})
+            fields = [(field.get("name"), field.get("type"), field.get("offset"), field.get("reserved"))
+                      for field in record.get("fields", [])]
+            fail(record.get("size") != 24 or record.get("alignment") != 8 or fields != [
+                ("struct_size", "u32", 0, False), ("flags", "u32", 4, True),
+                ("cookie", "usize", 8, False), (tables[name], "usize", 16, False)],
+                "Unsupported shared-Core callback table layout")
+            fail(parameter.get("type") != "const:" + name or parameter.get("direction") != "in" or
+                 parameter.get("nullable") is not False or parameter.get("mutable") is not False or
+                 parameter.get("owner") != "" or parameter.get("borrow_end") != "call" or
+                 parameter.get("copy_before_accept") is not True or parameter.get("maximum_bytes") != 24,
+                 "Shared-Core callback tables require a readonly copied-before-accept input")
+            fail(export.get("return") != "u32" or not any(
+                p.get("owner") in owners and p.get("direction") == "in" and p.get("borrow_end") == "call"
+                for p in export.get("parameters", [])),
+                "Shared-Core callback table use requires a retained native owner borrow")
+            used = True
+    return bool(callbacks) or used
+
+
 def load(root, descriptor):
     data = json.loads(descriptor.read_text())
     keys = {"schema_version", "engine_id", "package", "abi", "threading", "components",
@@ -118,8 +157,7 @@ def load(root, descriptor):
         fail(owner["release"] not in symbols, "A native owner has no creator release")
     fail(bool(sidecar["owners"]) and "ownership" not in components, "Owners require the ownership component")
     fail(bool(sidecar["operations"]) != ("async" in components), "Async operations and opted-in components differ")
-    fail(not isinstance(sidecar.get("callbacks"), list) or
-         bool(sidecar["callbacks"]) != ("callback" in components),
+    fail(uses_callbacks(sidecar) != ("callback" in components),
          "Native callbacks and opted-in components differ")
     fail(not data["upstream"], "Exact upstream provenance is required")
     for source in data["upstream"]:

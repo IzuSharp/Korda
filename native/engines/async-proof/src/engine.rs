@@ -239,8 +239,7 @@ impl State {
                     let Ok(permit) = sender.reserve().await else {
                         break;
                     };
-                    add(14);
-                    permit.send(Frame::data(chunk));
+                    permit.send(QueuedFrame::new(Frame::data(chunk)));
                 }
             };
             tokio::select! { _ = produce => {}, _ = closed(stop) => {} }
@@ -507,8 +506,27 @@ impl Body for Empty {
         true
     }
 }
+// The queued obligation follows the item itself. Tokio permits issued before
+// receiver close may publish after the receiver's visible drain has finished;
+// channel destruction must refund those late items as well as ordinary reads.
+struct QueuedFrame(Option<Frame<Bytes>>);
+impl QueuedFrame {
+    fn new(frame: Frame<Bytes>) -> Self {
+        add(14);
+        Self(Some(frame))
+    }
+    fn into_frame(mut self) -> Frame<Bytes> {
+        self.0.take().expect("queued frame is consumed once")
+    }
+}
+impl Drop for QueuedFrame {
+    fn drop(&mut self) {
+        sub(14);
+    }
+}
+
 struct StreamBody {
-    receiver: mpsc::Receiver<Frame<Bytes>>,
+    receiver: mpsc::Receiver<QueuedFrame>,
     slot: Option<Arc<StreamSlot>>,
     counted: bool,
 }
@@ -540,10 +558,7 @@ impl Body for StreamBody {
         cx: &mut Context<'_>,
     ) -> Poll<Option<Result<Frame<Bytes>, Infallible>>> {
         match self.receiver.poll_recv(cx) {
-            Poll::Ready(Some(frame)) => {
-                sub(14);
-                Poll::Ready(Some(Ok(frame)))
-            }
+            Poll::Ready(Some(frame)) => Poll::Ready(Some(Ok(frame.into_frame()))),
             Poll::Ready(None) => {
                 self.retire();
                 Poll::Ready(None)
@@ -558,9 +573,7 @@ impl Body for StreamBody {
 impl Drop for StreamBody {
     fn drop(&mut self) {
         self.receiver.close();
-        while self.receiver.try_recv().is_ok() {
-            sub(14);
-        }
+        while self.receiver.try_recv().is_ok() {}
         self.retire();
     }
 }
@@ -716,4 +729,26 @@ impl OperationState {
         }
         NW_OK
     }
+}
+
+#[cfg(test)]
+pub(crate) fn issued_permit_outlives_body() {
+    let initial = count(14);
+    let (sender, receiver) = mpsc::channel(1);
+    let body = StreamBody {
+        receiver,
+        slot: None,
+        counted: false,
+    };
+    let permit = sender.try_reserve().expect("one free frame slot");
+    drop(body); // closes and drains the actual receiver before the issued permit publishes
+    permit.send(QueuedFrame::new(Frame::data(Bytes::from_static(
+        b"late frame",
+    ))));
+    drop(sender); // Tokio's final channel owner destroys the late payload
+    assert_eq!(
+        count(14),
+        initial,
+        "every late frame must refund its queued obligation"
+    );
 }

@@ -131,6 +131,48 @@ class DescriptorTests(unittest.TestCase):
         with self.assertRaisesRegex(scaffold.ScaffoldError, "callbacks and opted-in"):
             self.read(self.data)
 
+    def test_shared_core_tables_require_actual_layout_borrow_and_opt_in(self):
+        # The real A18 mechanism consumes existing A06/A07 UCO tables. It does
+        # not declare a fabricated native export for a second generated UCO.
+        path = self.root / "binding.json"
+        model = json.loads(path.read_text())
+        model["owners"] = [{"kind": "NwHttpHost", "release": "nw_host_release"}]
+        model["exports"].append({"symbol": "nw_host_release"})
+        model["records"] = [{"name": "NwCallbacksV1", "size": 24, "alignment": 8, "fields": [
+            {"name": name, "type": kind, "offset": offset, "reserved": reserved}
+            for name, kind, offset, reserved in [("struct_size", "u32", 0, False),
+                ("flags", "u32", 4, True), ("cookie", "usize", 8, False), ("on_event", "usize", 16, False)]]}]
+        table = {"type": "const:NwCallbacksV1", "direction": "in", "nullable": False,
+                 "mutable": False, "owner": "", "borrow_end": "call", "copy_before_accept": True,
+                 "maximum_bytes": 24}
+        model["exports"].append({"symbol": "nw_host_start", "return": "u32", "parameters": [
+            {"owner": "NwHttpHost", "direction": "in", "borrow_end": "call"}, table]})
+        self.assertTrue(scaffold.uses_callbacks(model))
+        path.write_text(json.dumps(model))
+        self.data["binding"]["sidecar"]["sha256"] = scaffold.digest(path)
+        self.data["components"] = ["abi", "error", "ownership"]
+        with self.assertRaisesRegex(scaffold.ScaffoldError, "callbacks and opted-in"):
+            self.read(self.data)
+        # An unused record alone cannot justify a callback component declaration.
+        unused = copy.deepcopy(model)
+        unused["exports"].pop()
+        self.assertFalse(scaffold.uses_callbacks(unused))
+        for mutation in (lambda m: m["records"][0].update(size=32),
+                         lambda m: m["records"][0]["fields"][3].update(offset=8),
+                         lambda m: m["exports"][-1]["parameters"][-1].update(copy_before_accept=False),
+                         lambda m: m["exports"][-1]["parameters"][-1].update(mutable=True),
+                         lambda m: m["exports"][-1]["parameters"][-1].update(type="mut:NwCallbacksV1"),
+                         lambda m: m["exports"][-1]["parameters"][0].update(owner="unknown")):
+            changed = copy.deepcopy(model)
+            mutation(changed)
+            with self.assertRaises(scaffold.ScaffoldError):
+                scaffold.uses_callbacks(changed)
+        operation = copy.deepcopy(model)
+        operation["records"][0]["name"] = "NwOperationCallbacksV1"
+        operation["records"][0]["fields"][3]["name"] = "on_terminal"
+        operation["exports"][-1]["parameters"][-1]["type"] = "const:NwOperationCallbacksV1"
+        self.assertTrue(scaffold.uses_callbacks(operation))
+
 
 if __name__ == "__main__":
     unittest.main()

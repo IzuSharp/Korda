@@ -16,7 +16,7 @@ public NativeWeave.Engines.AsyncProof.HttpProofHost.HttpProofHost(System.Func<ui
 
 **param maxStreams:** Maximum live Body/producer/claimed-handler groups, from one through eight.
 
-**param maxOperations:** Maximum accepted native operations and each independent held response/chunk item quota, from one through 64.
+**param maxOperations:** Maximum operations including managed retirement bookkeeping, and each independent held response/chunk item quota, from one through 64.
 
 **param retainedBytes:** Maximum conservatively charged native backing bytes, from chunkBytes through one MiB.
 
@@ -51,6 +51,8 @@ public System.Threading.Tasks.Task NativeWeave.Engines.AsyncProof.HttpProofHost.
 **exception:** The caller stopped waiting before closure completed.
 
 **exception:** A handler attempts to await its own host retirement.
+
+**exception:** A managed cancellation registration fails; actual cleanup completes before this failure is reported.
 
 **remarks:** Early response disposal and host close request cancellation. Held NativeBuffer chunks remain valid and keep their independent byte/item quota until disposal or final release. Close never reports success from a timeout.
 

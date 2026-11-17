@@ -33,6 +33,14 @@ an asynchronous Engine explicitly requires callback and owner retirement. The
 adapter's domain operations and destructor are real reviewed source inputs,
 not fabricated throwing stubs or copies of a managed domain algorithm.
 
+The callback component covers both A10-generated reverse entries and actual
+shared-Core v1 callback tables. The latter must appear as declared 24-byte records
+passed readonly and copied before acceptance under a native owner borrow. A09's
+`callbacks` list describes signatures for generated reverse entries; it is empty
+when an Engine reuses the existing A06/A07 UCO implementations. An unused record
+alone does not establish callback use. The bound facade and real conformance still
+establish stop, drain and retirement; recognizing a table does not prove them.
+
 ## Ownership, errors and cost
 
 Generation is an offline maintainer action apart from the normal pinned .NET
@@ -99,3 +107,13 @@ JIT/AOT package execution, separate normal/AOT locks and unchanged shared Core
 source hashes. A passing synchronous result alone does not accept A24's required
 heterogeneous pair. The template deliberately leaves `accepted=false`; acceptance
 belongs to the independently reviewed execution receipts.
+
+`tests/Tooling.EngineScaffold/prepare_async.py` accepts the same three preparation
+arguments for the accepted A18 formal result. It stages the actual Hyper/Tokio
+facade, full consumer and native library, verifies source and package identities,
+and copies the exact A16 target/task/closure from the already consumed facade
+archive. It preserves upstream VCS revisions, locked crate checksums, enabled
+features, notices and the explicit A06/A07 callback authorities. This Python-only
+staging does not rebuild Rust or repeat A18's accepted native/direct-Rust suite.
+The generated package then executes the full consumer separately in JIT and AOT,
+with the existing facade assembly friend prerequisite stated above.
