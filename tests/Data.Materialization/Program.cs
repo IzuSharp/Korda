@@ -8,12 +8,13 @@ using NativeWeave.Database;
 using NativeWeave.Database.PostgreSql;
 using NativeWeave.Database.Sqlite;
 using NativeWeave.Samples.Materialization;
+using NativeWeave.Interop.Async;
 
 await Suite.Run(args);
 
 internal static class Suite
 {
-    private static int _assertions;
+    private static int _assertions, _retirements;
     private static readonly List<ProviderResult> Providers = [];
     internal static void Check(bool value, string message) { _assertions++; if (!value) throw new InvalidOperationException(message); }
     internal static T Throws<T>(Action action) where T : Exception
@@ -36,12 +37,18 @@ internal static class Suite
             foreach (var source in new[] { sqlite, postgres }) await Provider(source);
         }
         finally { Directory.Delete(directory, true); }
-        var result = new Result(!RuntimeFeature.IsDynamicCodeSupported, _assertions, Providers);
+        var result = new Result(!RuntimeFeature.IsDynamicCodeSupported, _assertions, _retirements, Providers);
         Directory.CreateDirectory(args[0]); File.WriteAllText(Path.Combine(args[0], "result.json"), JsonSerializer.Serialize(result, TestJson.Default.Result));
         Console.WriteLine($"PASS B12 actual two-provider materialization: {_assertions} assertions; AOT={result.NativeAot}; every failure retired managed batches/bytes and native cursor/operation/buffer owners");
     }
     private static async Task Provider(DataSource source)
     {
+        source.TestRetirement = snapshot =>
+        {
+            Check(snapshot.Released && !snapshot.RootLive && snapshot.Controls == 0 && snapshot.CallbackEntries == 0 && snapshot.RetainedInputBytes == 0, "Managed retirement released callback/root/control/input owners");
+            Check(snapshot.Start is AsyncStartOutcome.Skipped or AsyncStartOutcome.Rejected or AsyncStartOutcome.NotStarted || snapshot.NativeQuiet, "Accepted native operation is quiet before managed result returns");
+            Interlocked.Increment(ref _retirements);
+        };
         var provider = source.Provider.ToString();
         var filename = source.Provider == DatabaseProvider.Sqlite ? "libnw_database_sqlite.so" : "libnw_database_postgresql.so";
         var path = Path.Combine(AppContext.BaseDirectory, "runtimes", "linux-x64", "native", filename);
@@ -207,7 +214,7 @@ internal sealed class Diagnostic : IDisposable
     public void Dispose() => NativeLibrary.Free(_library);
 }
 internal sealed record ProviderResult(string Provider, int Cases, int ManagedBatchesReleased, int NativeJoinsObserved, long PeakChargedBatchBytes, ulong[] FinalNativeOwners, string NativeSha256Before, string NativeSha256After);
-internal sealed record Result(bool NativeAot, int Assertions, List<ProviderResult> Providers);
+internal sealed record Result(bool NativeAot, int Assertions, int ManagedRetirements, List<ProviderResult> Providers);
 [JsonSerializable(typeof(Result))]
 [JsonSerializable(typeof(ThrowingJson))]
 [JsonSerializable(typeof(int))]

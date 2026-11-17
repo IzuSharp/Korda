@@ -15,6 +15,7 @@ postgres = ["dep:nativeweave-data-postgres", "nativeweave-data-migrations/postgr
 sqlite = ["dep:nativeweave-data-sqlite", "nativeweave-data-migrations/sqlite"]
 
 [dependencies]
+nativeweave-data-relations = { path = "../relations" }
 nativeweave-data-migrations = { path = "../migrations", default-features = false }
 nativeweave-interop-abi = { path = "../../interop/abi" }
 nativeweave-interop-async = { path = "../../interop/async" }

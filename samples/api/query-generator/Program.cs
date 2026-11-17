@@ -3,6 +3,9 @@ using NativeWeave.Database;
 using NativeWeave.Database.Sqlite;
 using NativeWeave.Query;
 
+if (args.Contains("--require-aot") && System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported)
+    throw new InvalidOperationException("This acceptance row requires an actual NativeAOT executable.");
+
 string file = Path.Combine(Path.GetTempPath(), "nw-generated-" + Guid.NewGuid().ToString("N") + ".db");
 try
 {

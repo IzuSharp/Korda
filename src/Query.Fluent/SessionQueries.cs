@@ -13,6 +13,7 @@ public sealed partial class DataSession
     /// <exception cref="ArgumentNullException"><paramref name="table"/> is null.</exception>
     /// <exception cref="ObjectDisposedException">Session or source admission is closed.</exception>
     /// <exception cref="DatabaseException">The native metadata, capability or capacity rejects construction.</exception>
+    /// <remarks>The returned query owns one native arena and borrows this session's admission. Composition copies values immediately; dispose the query after its terminal or stream has retired.</remarks>
     public Query<TEntity> From<TEntity>(Table<TEntity> table) where TEntity : class
     {
         ArgumentNullException.ThrowIfNull(table); CheckOpen(); Source.Capabilities.Require("db.query.v1");

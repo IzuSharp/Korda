@@ -4,12 +4,16 @@ namespace NativeWeave.Data;
 /// <typeparam name="T">The result value or entity type.</typeparam>
 /// <param name="row">A borrowed stack-only reader valid only for the call.</param>
 /// <returns>The owned result; no row borrow may escape.</returns>
+/// <remarks>The callback runs synchronously while its batch lease is live. Decoding and the application
+/// constructor create owned CLR values; borrowed reader state must not escape or cross an await.</remarks>
 public delegate T RowMaterializer<T>(RowReader row);
 
 /// <summary>Synchronously extracts typed entity values before native dispatch.</summary>
 /// <typeparam name="T">The application entity type.</typeparam>
 /// <param name="row">A stack-only writer valid only for this snapshot.</param>
 /// <param name="value">The application entity.</param>
+/// <remarks>The callback runs synchronously during a finite input snapshot. Typed writes copy encoded
+/// values into owned buffers before native dispatch; the stack-only writer must not be retained.</remarks>
 public delegate void EntityWriter<T>(RowWriter row, T value);
 
 internal interface IRowLease
@@ -132,6 +136,8 @@ public readonly struct ResultColumn<T>
 }
 
 /// <summary>An immutable exact result alias, logical codec configuration and SQL nullability.</summary>
+/// <remarks>Creating a field allocates one managed metadata object with no native resource. It can be
+/// retained in a static projection; source-specific codec binding occurs separately at registration.</remarks>
 public sealed class ResultField
 {
     internal ResultField(string name, CodecDescriptor descriptor) { Name = name; Descriptor = descriptor; }

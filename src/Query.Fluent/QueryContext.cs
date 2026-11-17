@@ -31,7 +31,13 @@ internal sealed class QueryContext : IDisposable
     internal T Run<T>(Func<T> action, bool mutable = true)
     {
         using var admission = Enter(mutable);
-        try { return action(); } catch (BindingFailure failure) { throw HostFailure.Binding(Source.Binding, failure); }
+        try { return action(); }
+        catch (BindingFailure failure)
+        {
+            if (failure.Status == NativeWeave.Interop.Abi.NativeStatus.NotSupported)
+                throw new DatabaseException("The native query operation is unavailable for this provider, codec or shape.", DatabaseErrorKind.UnsupportedCapability, correlationId: failure.Correlation);
+            throw HostFailure.Binding(Source.Binding, failure);
+        }
     }
     internal void Run(Action action, bool mutable = true) => Run(() => { action(); return 0; }, mutable);
     internal Admission Enter(bool mutable = true)
@@ -105,6 +111,15 @@ internal sealed class QueryContext : IDisposable
         var plan = Binding.Seal(terminal); _sealed = true; return plan;
     });
     internal byte[] Values(QueryParameters? supplied) => ParameterDefinition.Encode(Source, Parameters.Values, supplied);
+    internal void PublishPlan(DatabaseOwner plan)
+    {
+        Interlocked.Exchange(ref _plan, plan)?.Dispose();
+        if (Volatile.Read(ref _disposed) == 0) return;
+        // Dispose may have observed no plan between native Seal and publication.
+        // Whichever side removes the reference retires it exactly once.
+        if (ReferenceEquals(Interlocked.CompareExchange(ref _plan, null, plan), plan)) plan.Dispose();
+        throw new ObjectDisposedException(nameof(QueryContext));
+    }
     internal TypedStream<T> Stream<T>(Projection<T> projection, uint terminal, CancellationToken cancellationToken, bool buffered = false)
     {
         return Run(() =>
@@ -114,7 +129,7 @@ internal sealed class QueryContext : IDisposable
                 throw new DatabaseException("Buffered result demand is disabled.", DatabaseErrorKind.ResourceLimit);
             var bytes = Values(null);
             var id = Source.RegisterProjection(projection); var codecs = projection.Fields.Select(f => Source.BindCodec(f.Descriptor)).ToArray();
-            var plan = Seal(terminal); _plan = plan;
+            var plan = Seal(terminal); PublishPlan(plan);
             return new TypedStream<T>(async (rows, token) =>
             {
                 ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
@@ -132,7 +147,7 @@ internal sealed class QueryContext : IDisposable
     }
     internal Task<long> Count(uint terminal, CancellationToken cancellationToken) => Run(() =>
     {
-        var bytes = Values(null); var plan = Seal(terminal); _plan = plan;
+        var bytes = Values(null); var plan = Seal(terminal); PublishPlan(plan);
         return Execute();
         async Task<long> Execute()
         {
@@ -150,7 +165,7 @@ internal sealed class QueryContext : IDisposable
     public void Dispose()
     {
         if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
-        try { _stop.Cancel(); } finally { _plan?.Dispose(); Binding.Dispose(); _stop.Dispose(); }
+        try { _stop.Cancel(); } finally { Interlocked.Exchange(ref _plan, null)?.Dispose(); Binding.Dispose(); _stop.Dispose(); }
     }
     // Cancellation remains attached until actual B06/B04 retirement. No row owner
     // or native borrow is replaced by this lightweight registration owner.

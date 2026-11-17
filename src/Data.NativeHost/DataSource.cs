@@ -77,6 +77,13 @@ public sealed partial class DataSource : IDisposable, IAsyncDisposable
     private async Task<T> Complete<T>(AsyncOperation<T> operation, Task<T> result)
     {
         try { return await result.ConfigureAwait(false); }
+        catch (OperationCanceledException) when (operation.TerminalFailure is OperationCanceledException { InnerException: not null })
+        {
+            // The Core task retains cancellation semantics; the domain preserves its
+            // copied cleanup diagnostic after the native operation has retired.
+            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(operation.TerminalFailure!).Throw();
+            throw;
+        }
         finally { await operation.Retirement.ConfigureAwait(false); TestRetirement?.Invoke(operation.Snapshot); }
     }
     /// <summary>Acquires an independent physical session through bounded native pool admission.</summary>
@@ -118,9 +125,10 @@ public sealed partial class DataSource : IDisposable, IAsyncDisposable
     private void RequestClose()
     {
         lock (_gate) _closing = true;
-        lock (_registrations) { foreach (var model in _models.Values) model.Dispose(); _models.Clear(); _codecs.Clear(); }
+        lock (_registrations) { ReleaseRelations(); foreach (var model in _models.Values) model.Dispose(); _models.Clear(); _codecs.Clear(); }
         _close.Request();
     }
+    partial void ReleaseRelations();
     private void FinishClose() { Owner.Dispose(); _resources.Dispose(); }
     /// <summary>Closes admission and requests bounded native cleanup without blocking for I/O.</summary>
     public void Dispose() => RequestClose();

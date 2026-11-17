@@ -21,7 +21,8 @@ public sealed partial class DataSession : IDisposable, IAsyncDisposable
     public DataTransaction? Transaction => _transaction is { State: not TransactionState.Closed } transaction ? transaction : null;
     /// <summary>Gets the current cleanup observation, retained after disposal.</summary>
     public DatabaseCloseResult Cleanup => _close.Snapshot;
-    internal void CheckOpen() { ObjectDisposedException.ThrowIf(Volatile.Read(ref _closing) != 0, this); Source.CheckOpen(); }
+    internal void CheckOpen() { ObjectDisposedException.ThrowIf(Volatile.Read(ref _closing) != 0, this); Source.CheckOpen(); CheckCompoundUse(); }
+    partial void CheckCompoundUse();
     /// <summary>Executes one trusted mutation or explicit session-changing command and observes its affected-row count.</summary>
     /// <param name="command">An immutable typed command with a nonquery effect classification.</param>
     /// <param name="cancellationToken">Requests cancellation; accepted work retains resources until native retirement.</param>
@@ -38,8 +39,8 @@ public sealed partial class DataSession : IDisposable, IAsyncDisposable
     }
     private async Task<long> ExecuteCommand(SqlCommand command, CancellationToken token)
     { using var plan = SqlSubmission.Create(this, command, 0, 0); return await ExecuteCountAsync(plan, ReadOnlyMemory<byte>.Empty, token).ConfigureAwait(false); }
-    internal Task<long> ExecuteCountAsync(DatabaseOwner plan, ReadOnlyMemory<byte> values, CancellationToken token) => Source.Start(() => NativeHost.Execute(Owner, plan, values), operation => NativeHost.TakeCount(Source.Binding, operation), token);
-    internal Task<DatabaseOwner> ExecutePlanAsync(DatabaseOwner plan, ReadOnlyMemory<byte> values, CancellationToken token) => Source.Start(() => NativeHost.Execute(Owner, plan, values), operation => NativeHost.TakeOwner(Source.Binding, operation, 2, DatabaseOwnerKind.Cursor), token);
+    internal Task<long> ExecuteCountAsync(DatabaseOwner plan, ReadOnlyMemory<byte> values, CancellationToken token) => Source.Start(() => AdmitOperation(() => NativeHost.Execute(Owner, plan, values)), operation => NativeHost.TakeCount(Source.Binding, operation), token);
+    internal Task<DatabaseOwner> ExecutePlanAsync(DatabaseOwner plan, ReadOnlyMemory<byte> values, CancellationToken token) => Source.Start(() => AdmitOperation(() => NativeHost.Execute(Owner, plan, values)), operation => NativeHost.TakeOwner(Source.Binding, operation, 2, DatabaseOwnerKind.Cursor), token);
     /// <summary>Reads exactly one row and column through an explicit scalar codec.</summary>
     /// <typeparam name="T">The owned scalar type, including an explicitly nullable codec.</typeparam>
     /// <param name="command">An immutable query command.</param>
@@ -116,10 +117,10 @@ public sealed partial class DataSession : IDisposable, IAsyncDisposable
         if (cancellationToken.IsCancellationRequested) return Task.FromCanceled<DataTransaction>(cancellationToken);
         return BeginCore(record, options.RecoveryKey, cancellationToken);
     }
-    private async Task<DataTransaction> BeginCore(byte[] record, string? recovery, CancellationToken token)
+    private async Task<DataTransaction> BeginCore(byte[] record, string? recovery, CancellationToken token, BulkSessionLease? bulk = null)
     {
-        var owner = await Source.Start(() => HostTransactionTransport.Begin(Owner, record), operation => NativeHost.TakeOwner(Source.Binding, operation, 3, HostTransactionTransport.TransactionKind), token).ConfigureAwait(false);
-        try { var transaction = new DataTransaction(new HostTransactionTransport(Source, owner, recovery), recovery); Volatile.Write(ref _transaction, transaction); return transaction; }
+        var owner = await Source.Start(() => AdmitOperation(() => HostTransactionTransport.Begin(Owner, record), bulk), operation => NativeHost.TakeOwner(Source.Binding, operation, 3, HostTransactionTransport.TransactionKind), token).ConfigureAwait(false);
+        try { var transaction = new DataTransaction(new HostTransactionTransport(Source, owner, recovery), recovery); bulk?.AttachTransaction(transaction); Volatile.Write(ref _transaction, transaction); return transaction; }
         catch { owner.Dispose(); throw; }
     }
     /// <summary>Starts closure, then waits within an independent finite caller budget.</summary>

@@ -31,6 +31,7 @@ public sealed class DatabaseAdministration
     /// <returns>A confirmed completed report; a failed migration throws.</returns>
     /// <exception cref="ArgumentException">The bundle/provider/options are invalid.</exception>
     /// <exception cref="DatabaseException">Provider, checksum, dirty phase or finite result capacity fails.</exception>
+    /// <exception cref="DatabaseCapabilityException">The native provider/profile does not support the requested migration mode.</exception>
     /// <exception cref="OperationCanceledException">Cancellation is confirmed after native cleanup.</exception>
     /// <remarks>PostgreSQL commits each transactional entry independently. SQLite commits the entire selected
     /// batch in one tracked IMMEDIATE transaction. Nontransactional PostgreSQL preserves partial effects and
@@ -87,8 +88,12 @@ public sealed class DatabaseAdministration
     {
         using var owner = _source.Owner.Borrow(DatabaseOwnerKind.Source); nint result = 0; var error = BindingChecks.Error();
         BindingChecks.Require((nint)_source.Binding.Calls.nw_db_admin_create_v1, "admin_create");
+        uint status;
         fixed (byte* bytes = payload)
-            HostFailure.Check(_source.Binding, _source.Binding.Calls.nw_db_admin_create_v1(owner.Pointer, action, BindingChecks.View(bytes, payload.Length), &result, &error), error);
+            status = _source.Binding.Calls.nw_db_admin_create_v1(owner.Pointer, action, BindingChecks.View(bytes, payload.Length), &result, &error);
+        if (status == NativeWeave.Interop.Abi.NativeStatus.NotSupported && error.Domain == 0x4442 && error.Code == 5)
+            throw new DatabaseCapabilityException(action == 3 ? "db.schema.read.v1" : "db.migrations.v1", _source.Provider.ToString());
+        HostFailure.Check(_source.Binding, status, error);
         return result;
     }
 }

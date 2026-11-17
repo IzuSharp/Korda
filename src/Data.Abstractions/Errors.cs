@@ -63,6 +63,8 @@ public class DatabaseException : Exception
 }
 
 /// <summary>Identifies a required capability missing from an engine or provider profile.</summary>
+/// <remarks>The owned exception retains validated managed identity strings and no native handle.
+/// Constructing or reading it performs no provider call; capability admission rejects before business dispatch.</remarks>
 public sealed class DatabaseCapabilityException : DatabaseException
 {
     /// <summary>Creates a failure that must be reported before a native business side effect.</summary>

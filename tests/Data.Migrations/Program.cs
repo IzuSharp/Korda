@@ -5,13 +5,33 @@ using NativeWeave.Database.PostgreSql;
 using NativeWeave.Interop;
 using NativeWeave.Interop.Async;
 using System.Diagnostics;
+using System.Buffers.Binary;
+using NativeWeave.Interop.Abi;
+using NativeWeave.Interop.Callbacks;
+using NativeWeave.Interop.Lifetime;
+using NativeWeave.Query.Internal;
 
+if (args.Contains("--manifest-bounds")) { Suite.ManifestBounds(); return; }
 if (args.Length > 0) { await Suite.Worker(args); return; }
 await Suite.Run();
 
 internal static class Suite
 {
     private static int _assertions, _retirements;
+    internal static void ManifestBounds()
+    {
+        _ = new MigrationBundle(DatabaseProvider.Sqlite, [new(1, "warm", "SELECT 1")]);
+        string script = new('é', 800000);
+        Migration[] entries = [new(1, "one", script), new(2, "two", script), new(3, "three", script)];
+        long before = GC.GetAllocatedBytesForCurrentThread(); bool rejected = false;
+        try { _ = new MigrationBundle(DatabaseProvider.Sqlite, entries); } catch (ArgumentException) { rejected = true; }
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Check(rejected && allocated < 65536, "aggregate UTF-8 size rejects before script-sized allocation");
+        // Exact kind12 overhead:104 + one entry144 + description1.
+        var exact = new MigrationBundle(DatabaseProvider.Sqlite, [new(1, "x", new string('s', 4 * 1024 * 1024 - 249))]);
+        Check(exact.Bytes.Length == 4 * 1024 * 1024, "exact finite wire boundary is admitted");
+        Console.WriteLine($"B08 focused manifest bounds: {_assertions} assertions; rejection allocated={allocated} bytes");
+    }
     private static void Check(bool value, string message) { Interlocked.Increment(ref _assertions); if (!value) throw new InvalidOperationException(message); }
     private static async Task<T> Throws<T>(Func<Task> action) where T : Exception
     { try { await action(); } catch (T error) { Interlocked.Increment(ref _assertions); return error; } throw new InvalidOperationException("Expected " + typeof(T).Name); }
@@ -98,10 +118,11 @@ internal static class Suite
         var failed = new MigrationBundle(DatabaseProvider.Sqlite,[new(1,"one","CREATE TABLE first_entry(id INTEGER)"),new(2,"failure","INSERT INTO missing_table VALUES(1)")]);
         await Throws<DatabaseException>(() => source.Administration.MigrateAsync(failed)); Check((await source.Administration.GetTablesAsync()).Count == 0,"SQLite failed second migration rolls back complete batch and ledgers");
         var nontransactional = new MigrationBundle(DatabaseProvider.Sqlite,[new(1,"no_tx","CREATE TABLE bad(id INTEGER)",MigrationTransactionMode.NonTransactional)]);
-        await Throws<NotSupportedException>(() => source.Administration.MigrateAsync(nontransactional,new() {AllowNonTransactional=true}));
+        var unsupported=await Throws<DatabaseCapabilityException>(() => source.Administration.MigrateAsync(nontransactional,new() {AllowNonTransactional=true})); Check(unsupported.Capability=="db.migrations.v1" && unsupported.Provider=="Sqlite","unsupported profile preserves stable capability/provider identities");
         var longScript = new MigrationBundle(DatabaseProvider.Sqlite,[new(1,"cancel","CREATE TABLE canceled AS WITH RECURSIVE n(v) AS (VALUES(1) UNION ALL SELECT v+1 FROM n WHERE v<100000000) SELECT v FROM n")]);
         using var cancel = new CancellationTokenSource(); var pending = source.Administration.MigrateAsync(longScript,cancellationToken:cancel.Token); await Task.Delay(30); cancel.Cancel();
-        var stopped = await Throws<OperationCanceledException>(() => pending); Check(stopped.CancellationToken==cancel.Token,"SQLite progress cancellation keeps token"); Check((await source.Administration.GetTablesAsync()).Count==0,"SQLite cancellation rollback completes before return");
+        var stopped = await Throws<OperationCanceledException>(() => pending); Check(stopped.CancellationToken==cancel.Token && pending.IsCanceled,"SQLite progress cancellation keeps token and canceled Task status"); Check(stopped.InnerException is DatabaseException,"actual SQLite interruption preserves failed rollback as cleanup InnerException"); Check((await source.Administration.GetTablesAsync()).Count==0,"SQLite cancellation rollback completes before return");
+        await ObserveCleanupSnapshot(source,longScript,true);
         // Source shutdown requests cancellation and awaits actual administration retirement.
         var closing = source.Administration.MigrateAsync(longScript); await Task.Delay(25); await source.DisposeAsync();
         await Throws<OperationCanceledException>(()=>closing);Check(source.Cleanup.LocalResourcesReleased,"source close retains admin worker until rollback and close");
@@ -111,12 +132,58 @@ internal static class Suite
         await using var source=Source(DatabaseProvider.PostgreSql,connection);Observe(source);
         var next = new MigrationBundle(DatabaseProvider.PostgreSql,[..original.Entries,new(3,"cancel","CREATE TABLE canceled(id INTEGER); SELECT pg_sleep(0.2)")]);
         using var cancellation = new CancellationTokenSource(); var watch=Stopwatch.StartNew();var pending=source.Administration.MigrateAsync(next,cancellationToken:cancellation.Token);
-        await Task.Delay(30);cancellation.Cancel();await Throws<OperationCanceledException>(()=>pending);Check(watch.Elapsed>=TimeSpan.FromMilliseconds(180),"PG cancellation retains the dispatched native future");
+        await Task.Delay(30);cancellation.Cancel();await Throws<OperationCanceledException>(()=>pending);Check(pending.IsCanceled,"ordinary PG cancellation retains canceled Task status");Check(watch.Elapsed>=TimeSpan.FromMilliseconds(180),"PG cancellation retains the dispatched native future");
         Check(!(await source.Administration.GetTablesAsync()).Any(x=>x.Name=="canceled"),"PG canceled migration explicitly rolled back");
         var successful = new MigrationBundle(DatabaseProvider.PostgreSql,[..original.Entries,new(3,"commit","CREATE TABLE committed(id INTEGER)")]);
         Check((await source.Administration.MigrateAsync(successful)).AppliedCount==1,"next migration succeeds after canceled dedicated connection closed");
         var future = new MigrationBundle(DatabaseProvider.PostgreSql,[..successful.Entries,new(4,"future index","CREATE INDEX CONCURRENTLY future_index ON committed(id)",MigrationTransactionMode.NonTransactional)]);
         Check((await source.Administration.MigrateAsync(future,new() {TargetVersion=3})).AppliedCount==0,"unselected future nontransactional entry needs no execution opt-in");
+        var terminated=new MigrationBundle(DatabaseProvider.PostgreSql,[..successful.Entries,new(4,"terminate","SELECT pg_terminate_backend(pg_backend_pid())")]);
+        var failure=await Throws<DatabaseException>(()=>source.Administration.MigrateAsync(terminated));
+        Check(failure.ProviderCode=="57P01" && failure.Kind==DatabaseErrorKind.Provider && failure.InnerException is DatabaseException,"actual PG provider failure retains failed rollback/close without replacing primary identity");
+        await ObserveCleanupSnapshot(source,terminated,false);
+    }
+    private static async Task ObserveCleanupSnapshot(DataSource source,MigrationBundle bundle,bool cancel)
+    {
+        using var token=new CancellationTokenSource();
+        using var coordinator=new CallbackCoordinator(4);
+        using var resource=new NativeResourceOwner(new OperationHandle(source.Binding,CreateRawAdmin(source,bundle)),source);
+        var calls=new ErrorSnapshotCalls(source);
+        var operation=new AsyncOperation<bool>(resource,calls,coordinator,_=>throw new InvalidOperationException("Failure operation cannot transfer a success result."),token.Token);
+        var task=operation.Start();
+        if(cancel){await Task.Delay(30);token.Cancel();await Throws<OperationCanceledException>(()=>task);}
+        else await Throws<DatabaseException>(()=>task);
+        await operation.Retirement;
+        Check(calls.Observed,"actual owned kind7 cleanup record was observed");
+        Check(operation.Snapshot.Released && operation.Snapshot.NativeQuiet && !operation.Snapshot.RootLive,"raw admin ownership retired independently");
+        Interlocked.Increment(ref _retirements);
+    }
+    private static unsafe nint CreateRawAdmin(DataSource source,MigrationBundle bundle)
+    {
+        var payload=AdministrationEncoding.Request(source,0,bundle,new MigrationOptions(),null);
+        using var lease=source.Owner.Borrow(DatabaseOwnerKind.Source);nint operation=0;var error=BindingChecks.Error();
+        fixed(byte* bytes=payload)
+            HostFailure.Check(source.Binding,source.Binding.Calls.nw_db_admin_create_v1(lease.Pointer,0,BindingChecks.View(bytes,payload.Length),&operation,&error),error);
+        return operation;
+    }
+    private sealed unsafe class ErrorSnapshotCalls(DataSource source):AsyncNativeCalls
+    {
+        internal bool Observed;
+        internal override uint Start(nint operation,in NwOperationCallbacksV1 callbacks)
+        {var error=BindingChecks.Error();fixed(NwOperationCallbacksV1* pointer=&callbacks)return source.Binding.Calls.nw_db_operation_start_v1(operation,pointer,&error);}
+        internal override uint RequestCancel(nint operation)=>source.Binding.Calls.nw_db_operation_request_cancel_v1(operation);
+        internal override uint TryRetire(nint operation)=>source.Binding.Calls.nw_db_operation_try_retire_v1(operation);
+        internal override void Poison()=>source.Poison();
+        internal override Exception MapFailure(nint operation,uint status,in NwErrorInfoV1 error,CancellationToken token)
+        {
+            nint owner=0;var detail=BindingChecks.Error();HostFailure.Check(source.Binding,source.Binding.Calls.nw_db_operation_take_error_v1(operation,&owner,&detail),detail);
+            using var buffer=new NativeWeave.Database.NativeBuffer(source.Binding,owner);var fields=HostEncoding.ReadControl(buffer.Copy(),7);
+            Check(BinaryPrimitives.ReadUInt32LittleEndian(fields[4])==(uint)CleanupStatus.Failed,"actual cleanup failure flag");
+            Check(BinaryPrimitives.ReadUInt32LittleEndian(fields[5])==3 && (uint)ConnectionDisposition.Discarded==3,"canonical discarded disposition is 3");
+            Check(BinaryPrimitives.ReadUInt32LittleEndian(fields[6])==1,"dedicated connection local owner released despite cleanup failure");
+            Observed=true;var provider=fields.TryGetValue(9,out var code)?HostEncoding.Utf8.GetString(code):null;
+            return HostFailure.Create(source.Binding,status,error,provider,token);
+        }
     }
     internal static async Task Worker(string[] args)
     {

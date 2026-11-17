@@ -10,6 +10,7 @@ pub struct Error {
     pub provider: Option<String>,
     pub correlation: u64,
     pub cleanup: Option<Box<Error>>,
+    pub bulk: Option<crate::relations::NativeBulkProgress>,
 }
 static NEXT_ERROR: AtomicU64 = AtomicU64::new(1);
 impl Error {
@@ -21,6 +22,7 @@ impl Error {
             provider: None,
             correlation: NEXT_ERROR.fetch_add(1, Ordering::Relaxed),
             cleanup: None,
+            bulk: None,
         }
     }
     pub fn invalid(message: &'static str) -> Self {
@@ -179,6 +181,7 @@ impl From<nativeweave_data_transactions::Error> for Error {
                 provider: provider_code,
                 correlation: correlation_id,
                 cleanup: None,
+                bulk: None,
             },
             T::Provider {
                 provider_code,
@@ -194,6 +197,7 @@ impl From<nativeweave_data_transactions::Error> for Error {
                 provider: provider_code,
                 correlation: correlation_id,
                 cleanup: None,
+                bulk: None,
             },
             _ => Self::state("transaction admission rejected"),
         }

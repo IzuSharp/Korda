@@ -7,10 +7,16 @@ internal static class AdministrationEncoding
 {
     internal static byte[] Request(DataSource source, uint action, MigrationBundle? bundle, MigrationOptions? options, string? schema)
     {
+        var capability = action == 3 ? "db.schema.read.v1" : "db.migrations.v1";
+        source.Capabilities.Require(capability);
         var fields = new List<ControlField> { new(1, 1, ControlRecord.U32((uint)source.Provider)) };
         if (bundle is not null)
         {
             if (bundle.Provider != source.Provider) throw new ArgumentException("The bundle belongs to another provider.", nameof(bundle));
+            if (source.Provider == DatabaseProvider.Sqlite && bundle.Entries.Any(entry => entry.TransactionMode == MigrationTransactionMode.NonTransactional))
+                throw new DatabaseCapabilityException("db.migrations.v1", source.Provider.ToString());
+            if (source.Provider == DatabaseProvider.PostgreSql && action == 0 && options?.AllowNonTransactional != true && bundle.Entries.Any(entry => entry.TransactionMode == MigrationTransactionMode.NonTransactional && (options?.TargetVersion is not { } target || entry.Version <= target)))
+                throw new ArgumentException("Selected nontransactional PostgreSQL entries require explicit AllowNonTransactional.", nameof(options));
             if (bundle.Entries.Length > source.Limits.MaxQueryNodes || bundle.Entries.Any(value => HostEncoding.Utf8.GetByteCount(value.Description) > source.Limits.MaxFieldBytes || HostEncoding.Utf8.GetByteCount(value.Sql) > source.Limits.MaxFieldBytes)) throw new ArgumentException("Migration manifest exceeds the source limits.", nameof(bundle));
             fields.Add(new(2, 5, bundle.Bytes));
         }

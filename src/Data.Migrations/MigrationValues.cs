@@ -39,16 +39,28 @@ public sealed class MigrationBundle
     {
         ArgumentNullException.ThrowIfNull(migrations);
         if (!Enum.IsDefined(provider)) throw new ArgumentOutOfRangeException(nameof(provider));
-        if (migrations.Count > 4096) throw new ArgumentOutOfRangeException(nameof(migrations));
-        Provider = provider; Entries = new Migration[migrations.Count]; var records = new byte[migrations.Count][]; long previous = 0;
-        for (var i = 0; i < records.Length; i++)
+        var count = migrations.Count;
+        if (count > 4096) throw new ArgumentOutOfRangeException(nameof(migrations));
+        Provider = provider; Entries = new Migration[count]; long previous = 0;
+        // Count the complete kind12 record before copying any script bytes. The
+        // 104-byte envelope includes its provider, sequence count and bundle hash;
+        // each sequence entry adds 144 bytes plus its two UTF-8 strings.
+        long encodedLength = 104;
+        for (var i = 0; i < Entries.Length; i++)
         {
             var value = migrations[i]; ArgumentNullException.ThrowIfNull(value);
             if (value.Version <= previous || !Enum.IsDefined(value.TransactionMode)) throw new ArgumentException("Migration versions must be positive and strictly ascending, with a known transaction mode.", nameof(migrations));
             previous = value.Version;
+            encodedLength = checked(encodedLength + 144 + TextLength(value.Description, nameof(value.Description)) + TextLength(value.Sql, nameof(value.Sql)));
+            if (encodedLength > DbWire.MaxEncodedBytes) throw new ArgumentException("Migration bundle exceeds the encoded record limit.", nameof(migrations));
+            Entries[i] = value;
+        }
+        var records = new byte[count][];
+        for (var i = 0; i < records.Length; i++)
+        {
+            var value = Entries[i];
             var description = HostEncoding.Text(value.Description, DbWire.MaxEncodedBytes, nameof(value.Description));
             var sql = HostEncoding.Text(value.Sql, DbWire.MaxEncodedBytes, nameof(value.Sql));
-            Entries[i] = value;
             records[i] = ControlRecord.Encode(11, HostEncoding.Count(1, value.Version), new(2, 4, description), new(3, 4, sql), new(4, 1, ControlRecord.U32((uint)value.TransactionMode)), new(5, 5, SHA256.HashData(sql)));
         }
         var sequence = HostEncoding.Sequence(records);
@@ -56,6 +68,12 @@ public sealed class MigrationBundle
         var hash = SHA256.HashData(ControlRecord.Encode(12, fields));
         ContentHash = Convert.ToHexStringLower(hash);
         Bytes = ControlRecord.Encode(12, fields[0], fields[1], new(3, 5, hash));
+    }
+    private static int TextLength(string value, string name)
+    {
+        ArgumentNullException.ThrowIfNull(value, name);
+        if (value.Length == 0 || value.Contains('\0')) throw new ArgumentException("A nonempty Unicode value without NUL is required.", name);
+        return HostEncoding.Utf8.GetByteCount(value);
     }
     /// <summary>Gets the lowercase SHA-256 of the canonical provider and immutable entry sequence.</summary>
     public string ContentHash { get; }

@@ -71,6 +71,8 @@ internal abstract class AsyncOperation : CoordinatedCallback, IDisposable, IAsyn
     private uint _nativeStatus;
     private NwErrorInfoV1 _error = new() { StructSize = 24 };
     private Exception? _localFailure;
+    private Exception? _terminalFailure;
+    internal Exception? TerminalFailure => Volatile.Read(ref _terminalFailure);
     private bool _localCanceled;
     private uint _cancelFailureStatus;
     private AsyncStartOutcome _startOutcome;
@@ -473,7 +475,6 @@ internal abstract class AsyncOperation : CoordinatedCallback, IDisposable, IAsyn
                     PublishFailure(failure);
                     MarkResultProcessed();
                 }
-                else if (_nativeStatus == NativeStatus.Canceled) { PublishCanceled(_token); MarkResultProcessed(); }
                 else if (_nativeStatus != NativeStatus.Ok)
                 {
                     bool lease = false;
@@ -482,7 +483,10 @@ internal abstract class AsyncOperation : CoordinatedCallback, IDisposable, IAsyn
                     try
                     {
                         nint pointer = AcquireControl(ref lease, cleanup: true);
-                        PublishFailure(_native.MapFailure(pointer, _nativeStatus, in _error, _token));
+                        Exception failure = _native.MapFailure(pointer, _nativeStatus, in _error, _token);
+                        Volatile.Write(ref _terminalFailure, failure);
+                        if (_nativeStatus == NativeStatus.Canceled && failure is OperationCanceledException) PublishCanceled(_token);
+                        else PublishFailure(failure);
                     }
                     catch (Exception error) { PublishFailure(error); }
                     finally { ReleaseControl(ref lease, notify: false); s_callbackScope = previous; MarkResultProcessed(); }

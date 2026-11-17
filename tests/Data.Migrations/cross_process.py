@@ -11,6 +11,11 @@ parser.add_argument('command',nargs=argparse.REMAINDER)
 args=parser.parse_args(); command=args.command[1:] if args.command[:1]==['--'] else args.command
 assert command and os.name=='posix'
 args.output.mkdir(parents=True,exist_ok=True); observations=[]
+executable=Path(command[-1]).resolve()
+inputs={str(executable):hashlib.file_digest(executable.open('rb'),'sha256').hexdigest()}
+for native in executable.parent.rglob('libnw_database_*.so'):
+    inputs[str(native)]=hashlib.file_digest(native.open('rb'),'sha256').hexdigest()
+observations.append({'actual_consumer_command':command,'input_sha256':inputs})
 base=os.environ['NW_TEST_POSTGRES']; pg=args.postgres_bin/'psql'
 def sql(uri,text):
     result=subprocess.run([pg,'-X','-A','-t','-v','ON_ERROR_STOP=1','-d',uri,'-c',text],capture_output=True,text=True,timeout=10)

@@ -8,6 +8,7 @@
     <IsPackable>true</IsPackable>
     <PackageId>NativeWeave.Database</PackageId>
     <Description>Typed application facade over independently packaged NativeWeave Rust database engines.</Description>
+    <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifiers)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifiers).aot.lock.json</NuGetLockFilePath>
     <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifier)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifier).aot.lock.json</NuGetLockFilePath>
   </PropertyGroup>
   <ItemGroup>
@@ -17,7 +18,7 @@
     <ProjectReference Include="../Data.Streaming/NativeWeave.Data.Streaming.csproj" />
     <ProjectReference Include="../Query.Binding/NativeWeave.Query.Binding.csproj" />
     <Compile Remove="Providers/**/*.cs;DependencyInjection/**/*.cs" />
-    <Compile Include="../Query.Native/**/*.cs;../Query.Fluent/**/*.cs;../Orm.Relations/**/*.cs;../Data.Migrations/**/*.cs;../Data.Materialization/**/*.cs" Exclude="../**/obj/**/*.cs;../**/bin/**/*.cs" />
+    <Compile Include="../Query.Native/**/*.cs;../Query.Fluent/**/*.cs;../Orm.Relations/**/*.cs;../Data.Migrations/**/*.cs;../Data.Materialization/**/*.cs" Exclude="../**/obj/**/*.cs;../**/bin/**/*.cs;../Orm.Relations/ConcurrencyConflictException.cs" />
     <InternalsVisibleTo Include="NativeWeave.Database.Sqlite" />
     <InternalsVisibleTo Include="NativeWeave.Database.PostgreSql" />
     <InternalsVisibleTo Include="NativeWeave.Data.NativeHost.Tests" />

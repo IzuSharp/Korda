@@ -107,5 +107,14 @@ consumer references the normal Database/provider NuGets and executes the
 compiled sample without a source-project reference. Linux x64 JIT and actual
 Native AOT results, immutable input hashes and raw failures belong to the B12
 Plan evidence. Windows acceptance and final pristine release consumption remain
-with their designated platform/task rows. Generated materializers are checked
-against the same oracle when B10 is integrated in this batch.
+with their designated platform/task rows. The generated and handwritten readers
+consume the same independent shape oracle, and both execute real two-provider
+rows and throwing constructors through the same counted cleanup path.
+
+Run `tests/Data.Materialization/verify.py` with the pinned Design checkout,
+PostgreSQL18 binaries, the two maintainer-built provider modules and their
+committed Host source. The runner records immutable source/native inputs, builds
+and executes JIT and Linux x64 AOT, packs the normal dependency graph, then copies
+the public consumer to a directory outside the repository with a fresh NuGet
+cache. Package, lockfile and executable hashes remain in the evidence directory.
+Consumer compilation has no source-project or Rust build step.

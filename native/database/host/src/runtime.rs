@@ -110,12 +110,13 @@ pub enum Pool {
     #[cfg(feature = "sqlite")]
     Sqlite(sqlx::SqlitePool),
 }
-struct Registry {
-    configured: Vec<(u32, Codec)>,
-    models: HashMap<[u8; 32], Arc<Model>>,
-    projections: HashMap<[u8; 32], ProjectionBinding>,
-    bytes: usize,
+pub(crate) struct Registry {
+    pub(crate) configured: Vec<(u32, Codec)>,
+    pub(crate) models: HashMap<[u8; 32], Arc<Model>>,
+    pub(crate) projections: HashMap<[u8; 32], ProjectionBinding>,
+    pub(crate) bytes: usize,
     next_projection: u32,
+    pub(crate) relations: HashMap<[u8; 32], Arc<nativeweave_query_binding::RelationBinding>>,
 }
 /// Mandatory source owner; no static executor, pool, connection or application metadata.
 pub struct Source {
@@ -135,7 +136,7 @@ pub struct Source {
     pub retired: AtomicBool,
     pub poisoned: AtomicBool,
     children: Mutex<Vec<Weak<crate::session::Session>>>,
-    registry: Mutex<Registry>,
+    pub(crate) registry: Mutex<Registry>,
     pub parameters: Arc<ParameterRegistry>,
     pub shapes: Mutex<nativeweave_query_native::ShapeCache>,
     pub stream_budget: nativeweave_data_streaming::Budget,
@@ -215,6 +216,7 @@ impl Source {
                 projections: HashMap::new(),
                 bytes: 0,
                 next_projection: 1,
+                relations: HashMap::new(),
             }),
             parameters,
             shapes,
@@ -288,6 +290,7 @@ impl Source {
             .clear();
         {
             let mut registry = self.registry.lock().unwrap_or_else(|e| e.into_inner());
+            registry.relations.clear();
             registry.models.clear();
             registry.projections.clear();
             registry.configured.clear();
@@ -360,7 +363,10 @@ impl Source {
             return Ok(*id);
         }
         let bytes = codec.configuration.as_ref().map_or(0, String::len);
-        if registry.configured.len() + registry.models.len() + registry.projections.len()
+        if registry.configured.len()
+            + registry.models.len()
+            + registry.projections.len()
+            + registry.relations.len()
             >= self.config.limits.nodes
             || registry.bytes + bytes > self.config.limits.parameter_bytes
         {
@@ -399,7 +405,10 @@ impl Source {
         {
             return Err(Error::invalid("table ID collision"));
         }
-        if registry.models.len() + registry.projections.len() + registry.configured.len()
+        if registry.models.len()
+            + registry.projections.len()
+            + registry.configured.len()
+            + registry.relations.len()
             >= self.config.limits.nodes
             || registry.bytes + canonical.len() > self.config.limits.parameter_bytes
         {
@@ -429,7 +438,10 @@ impl Source {
             }
             return Ok(previous.clone());
         }
-        if registry.models.len() + registry.projections.len() + registry.configured.len()
+        if registry.models.len()
+            + registry.projections.len()
+            + registry.configured.len()
+            + registry.relations.len()
             >= self.config.limits.nodes
             || registry.bytes + bytes.len() > self.config.limits.parameter_bytes
         {
@@ -458,7 +470,10 @@ impl Source {
             return Ok(previous.clone());
         }
         let bytes = binding.projection.bytes().len();
-        if registry.models.len() + registry.projections.len() + registry.configured.len()
+        if registry.models.len()
+            + registry.projections.len()
+            + registry.configured.len()
+            + registry.relations.len()
             >= self.config.limits.nodes
             || registry.bytes + bytes > self.config.limits.parameter_bytes
         {

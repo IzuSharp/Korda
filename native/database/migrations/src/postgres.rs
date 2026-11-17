@@ -14,7 +14,7 @@ pub async fn run(
     cancel: Arc<Cancellation>,
 ) -> Result<Output> {
     let mut connection =
-        tokio::time::timeout(limits.command_timeout, PgConnection::connect_with(&options))
+        tokio::time::timeout(limits.connect_timeout, PgConnection::connect_with(&options))
             .await
             .map_err(|_| Error::new(ErrorKind::Timeout, "administrative connection timed out"))??;
     LIVE_CONNECTIONS.fetch_add(1, Ordering::AcqRel);

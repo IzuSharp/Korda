@@ -68,7 +68,10 @@ impl Error {
         )
     }
     fn with_cleanup(mut self, cleanup: Error) -> Self {
-        self.cleanup = Some(Box::new(cleanup));
+        self.cleanup = Some(match self.cleanup.take() {
+            Some(previous) => Box::new(previous.with_cleanup(cleanup)),
+            None => Box::new(cleanup),
+        });
         self
     }
 }

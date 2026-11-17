@@ -31,6 +31,7 @@ fn failure(value: migrations::Error) -> Error {
     };
     let mut result = Error::new(status, code, value.message);
     result.provider = value.provider;
+    result.cleanup = value.cleanup.map(|cleanup| Box::new(failure(*cleanup)));
     result
 }
 fn bundle(bytes: &[u8], source: &Source) -> Result<migrations::Bundle> {

@@ -1,4 +1,5 @@
 using System.Runtime.CompilerServices;
+using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -7,13 +8,15 @@ using NativeWeave.Database;
 using NativeWeave.Database.PostgreSql;
 using NativeWeave.Database.Sqlite;
 using NativeWeave.Query;
+using NativeWeave.Interop.Async;
 
 await Suite.Run(args);
 
 internal static class Suite
 {
-    private static int _assertions;
+    private static int _assertions, _retirements;
     private static readonly List<string> Completed = [];
+    private static readonly List<CompositionCost> Costs = [];
     internal static void Check(bool value, string message) { _assertions++; if (!value) throw new InvalidOperationException(message); }
     internal static T Throws<T>(Action action) where T : Exception
     { try { action(); } catch (T error) { _assertions++; return error; } throw new InvalidOperationException("Expected " + typeof(T).Name); }
@@ -29,15 +32,23 @@ internal static class Suite
         var hashes = nativeFiles.Select(f => Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(f)))).ToArray();
         foreach (var source in new[] { SqliteDataSource.Create(sqliteFile), PostgreSqlDataSource.Create(pg, o => o.TlsMode = PostgreSqlTlsMode.DisableForLocalDevelopment) })
         {
+            source.TestRetirement = snapshot =>
+            {
+                Check(snapshot.Released && !snapshot.RootLive && snapshot.Controls == 0 && snapshot.CallbackEntries == 0 && snapshot.RetainedInputBytes == 0, "Managed retirement released callback/root/control/input owners");
+                Check(snapshot.Start is AsyncStartOutcome.Skipped or AsyncStartOutcome.Rejected or AsyncStartOutcome.NotStarted || snapshot.NativeQuiet, "Accepted native operation is quiet before managed result returns");
+                Interlocked.Increment(ref _retirements);
+            };
+            using var diagnostic = new Diagnostic(nativeFiles[source.Provider == DatabaseProvider.Sqlite ? 0 : 1]);
             await using (source)
-            await using (var session = await source.OpenSessionAsync()) await Provider(session);
+            await using (var session = await source.OpenSessionAsync()) await Provider(session, diagnostic);
+            await diagnostic.WaitAllZero();
         }
         File.Delete(sqliteFile);
         Check(hashes.SequenceEqual(nativeFiles.Select(f => Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(f))))), "New C# DTOs and ordinary expressions reuse unchanged native assets");
-        Directory.CreateDirectory(args[0]); File.WriteAllText(Path.Combine(args[0], "result.json"), JsonSerializer.Serialize(new Receipt(!RuntimeFeature.IsDynamicCodeSupported, _assertions, Completed, hashes), ReceiptJson.Default.Receipt));
+        Directory.CreateDirectory(args[0]); File.WriteAllText(Path.Combine(args[0], "result.json"), JsonSerializer.Serialize(new Receipt(!RuntimeFeature.IsDynamicCodeSupported, _assertions, _retirements, Completed, hashes, Costs), ReceiptJson.Default.Receipt));
         Console.WriteLine($"PASS B13 actual two-provider Fluent: {_assertions} assertions; AOT={!RuntimeFeature.IsDynamicCodeSupported}");
     }
-    private static async Task Provider(DataSession session)
+    private static async Task Provider(DataSession session, Diagnostic diagnostic)
     {
         Console.WriteLine("PROVIDER " + session.Source.Provider);
         await session.ExecuteAsync(SqlCommand.Create("CREATE TABLE \"Parents\" (\"Id\" BIGINT PRIMARY KEY,\"Name\" TEXT NOT NULL,\"Age\" INTEGER NOT NULL,\"Optional\" BIGINT NULL)", kind: SqlCommandKind.Mutation));
@@ -45,7 +56,7 @@ internal static class Suite
         await session.ExecuteAsync(SqlCommand.Create("INSERT INTO \"Parents\" VALUES (0,'Zero',10,NULL),(1,'Alice',20,1),(2,'O''Reilly 🦀',30,NULL)", kind: SqlCommandKind.Mutation));
         await session.ExecuteAsync(SqlCommand.Create("INSERT INTO \"Children\" VALUES (10,1),(11,NULL)", kind: SqlCommandKind.Mutation));
         Query<Person> Q() => session.From(Models.People);
-        async Task Done(string name) { Completed.Add(session.Source.Provider + "/" + name); Check(await session.ScalarAsync(SqlCommand.Create("SELECT COUNT(*) FROM \"Parents\""), Codecs.Int64) == 3, "Session usable after " + name); }
+        async Task Done(string name) { Completed.Add(session.Source.Provider + "/" + name); Check(await session.ScalarAsync(SqlCommand.Create("SELECT COUNT(*) FROM \"Parents\""), Codecs.Int64) == 3, "Session usable after " + name); await diagnostic.WaitCursorZero(); Console.WriteLine("CASE " + name); }
         using (var q = Q())
         {
             var threshold = 18; var callbacks = 0;
@@ -76,9 +87,14 @@ internal static class Suite
         using (var q = Q())
         {
             SqlExpression<long?> expired = default;
-            Throws<MappingFailure>(() => q.LeftJoin(Models.Children, "aborted", on => { expired = on.Right(Models.ParentId); throw new MappingFailure(); }));
+            JoinPredicate<Person, Child> expiredCallback = default;
+            Throws<MappingFailure>(() => q.LeftJoin(Models.Children, "aborted", on => { expiredCallback = on; expired = on.Right(Models.ParentId); throw new MappingFailure(); }));
             Throws<ArgumentException>(() => expired.IsNull());
-            var alias = q.InnerJoin(Models.Children, "good", on => on.Left(Models.Id).AsNullable().Equal(on.Right(Models.ParentId)));
+            Throws<InvalidOperationException>(() => expiredCallback.Left(Models.Id));
+            Throws<InvalidOperationException>(() => expiredCallback.Right(Models.ParentId));
+            var alias = q.InnerJoin(Models.Children, "good", on => { expiredCallback = on; return on.Left(Models.Id).AsNullable().Equal(on.Right(Models.ParentId)); });
+            Throws<InvalidOperationException>(() => expiredCallback.Left(Models.Id));
+            Throws<InvalidOperationException>(() => expiredCallback.Right(Models.ParentId));
             Check((await q.Select(q.Column(alias, Models.ChildId)).ToListAsync()).SequenceEqual([10L]), "JOIN abort leaves query usable");
         }
         await Done("joins-nullability-abort");
@@ -116,7 +132,7 @@ internal static class Suite
         using (var q = Q()) Check(await q.Where(q.Column(Models.Name).Like("O%")).CountAsync() == 1, "Raw LIKE pattern");
         using (var q = Q()) Check(await q.Where(q.Column(Models.Name).AsNullableReference().ContainsNullableLiteral("Ali")).CountAsync() == 1, "Nullable text pattern");
         using (var q = Q()) Check(await q.Where(q.Column(Models.Name).Collate(session.Source.Provider == DatabaseProvider.Sqlite ? "BINARY" : "C").Equal("Alice")).CountAsync() == 1, "Allowlisted collation");
-        using (var q = Q()) Throws<DatabaseCapabilityException>(() => q.Column(Models.Name).Collate("injected"));
+        using (var q = Q()) Check(Throws<DatabaseException>(() => q.Column(Models.Name).Collate("injected")).Kind == DatabaseErrorKind.UnsupportedCapability, "Unregistered collation structured rejection");
         await Done("text-pattern-collation");
         using (var q = Q())
         {
@@ -126,10 +142,12 @@ internal static class Suite
             Check(await q.Select(projection).SingleAsync() == new Aggregates(3, 60, 20, 0, 1), "Native aggregate widening/nullability");
         }
         using (var q = Q()) { var id = q.Column(Models.Id); q.GroupBy(id).Having(q.CountRows().GreaterThan(0L)); Check((await q.OrderBy(Models.Id).Select(id, q.CountRows(), (a, b) => (a, b)).ToListAsync()).Count == 3, "Group/Having/static factory"); }
+        using (var q = Q()) { q.GroupBy(q.Column(Models.Id)); Throws<ArgumentException>(() => q.SelectAll().Prepare()); Check((await q.Select(q.Column(Models.Id)).ToListAsync()).Count == 3, "Invalid grouped projection rejects before sealing and recovers"); }
         using (var q = Q()) { var window = q.Window().OrderBy(q.Column(Models.Id)).RowsBetween(FrameBoundary.UnboundedPreceding, FrameBoundary.CurrentRow); var rank = SqlFunctions.RowNumber(window); window.PartitionBy(q.Column(Models.Id)); Check((await q.OrderBy(Models.Id).Select(rank).ToListAsync()).SequenceEqual([1L, 2L, 3L]), "Window snapshot survives later mutation"); }
         using (var q = Q()) { var window = q.Window().OrderBy(q.Column(Models.Id)).RowsBetween(FrameBoundary.UnboundedPreceding, FrameBoundary.CurrentRow); Check((await q.OrderBy(Models.Id).Select(SqlFunctions.Sum(q.Column(Models.Id)).Over(window)).ToListAsync()).SequenceEqual(new long?[] { 0L, 1L, 3L }), "Aggregate OVER cast after window"); }
         using (var q = Q()) { var id = q.Column(Models.Id); Check((await q.OrderBy(Models.Id).Select(SqlFunctions.Case(id.GreaterThan(0L), q.Value(1L, Codecs.Int64), q.Value(0L, Codecs.Int64))).ToListAsync()).SequenceEqual([0L, 1L, 1L]), "Typed CASE prepare metadata"); }
         await Done("aggregate-window-case");
+        using (var q = Q()) Check((await q.Distinct().Select(q.Value(1L, Codecs.Int64)).ToListAsync()).SequenceEqual([1L]), "Native DISTINCT typed scalar");
         foreach (var operation in Enum.GetValues<SetOperation>())
         {
             using var a = Q(); using var b = Q(); var first = a.WhereGreaterThanOrEqual(Models.Id, 1L).Select(a.Column(Models.Id)); var second = b.WhereEqual(Models.Id, 0L).Select(b.Column(Models.Id));
@@ -145,6 +163,17 @@ internal static class Suite
             using var cte = CommonTable<IdRow>.Create(Models.Cte, selection); body.WhereEqual(Models.Id, 99L);
             using var q = session.From(Models.Cte); Check((await q.With(cte).OrderBy(Models.CteId).SelectAll().ToListAsync()).Select(r => r.Id).SequenceEqual([1L, 2L]), "Explicit CTE immutable body");
         }
+        using (var anchor = Q())
+        using (var member = session.From(Models.Cte))
+        {
+            var anchorBuilder = anchor.Projection<IdRow>(); var anchorId = anchorBuilder.Add(anchor.Column(Models.Id), "Id");
+            var seed = anchor.WhereEqual(Models.Id, 0L).Select(anchorBuilder.Build(row => new(row.Get(anchorId))));
+            var memberBuilder = member.Projection<IdRow>(); var next = memberBuilder.Add(member.Column(Models.CteId).Add(1L), "Id");
+            var recursive = member.Where(member.Column(Models.CteId).LessThan(2L)).Select(memberBuilder.Build(row => new(row.Get(next))));
+            using var cte = CommonTable<IdRow>.Create(Models.Cte, seed.Combine(recursive, SetOperation.UnionAll), recursive: true);
+            using var q = session.From(Models.Cte);
+            Check((await q.With(cte).OrderBy(Models.CteId).SelectAll().ToListAsync()).Select(row => row.Id).SequenceEqual([0L, 1L, 2L]), "Validated bounded recursive CTE");
+        }
         await Done("set-subquery-cte");
         using (var query = Q())
         {
@@ -152,6 +181,12 @@ internal static class Suite
             using var prepared = query.SelectAll().Prepare(); query.Dispose();
             var values = new QueryParameters().Set(minimum, 1L); var first = prepared.ToListAsync(session, values); values.Set(minimum, 2L);
             Check((await first).Count == 2 && (await prepared.ToListAsync(session, values)).Single().Id == 2, "Independent prepare-time execution snapshot");
+            await using (var a = await session.Source.OpenSessionAsync())
+            await using (var b = await session.Source.OpenSessionAsync())
+            {
+                var parallel = await Task.WhenAll(prepared.ToListAsync(a, new QueryParameters().Set(minimum, 0L)), prepared.ToListAsync(b, new QueryParameters().Set(minimum, 2L)));
+                Check(parallel[0].Count == 3 && parallel[1].Single().Id == 2, "Concurrent immutable plan executions use independent sessions and values");
+            }
             Throws<ArgumentException>(() => prepared.ToListAsync(session));
             using var second = Q(); var extra = second.Parameter("extra", Codecs.Int64); Throws<ArgumentException>(() => prepared.ToListAsync(session, values.Set(extra, 0L)));
         }
@@ -169,7 +204,14 @@ internal static class Suite
             Throws<ArgumentException>(() => q.Where(other.Column(Models.Id).Equal(0L)));
             Throws<InvalidOperationException>(() => default(SqlExpression<long>).Equal(0L));
             Throws<InvalidOperationException>(() => default(QuerySelection<long>).ToSql());
-            q.Where(row => { var concurrent = Task.Run(() => Throws<DatabaseException>(() => q.Take(1))).GetAwaiter().GetResult(); Check(concurrent.Kind == DatabaseErrorKind.ConcurrentUse, "Concurrent callback composition fails fast"); return row.Equal(Models.Id, 1L); });
+            q.Where(row =>
+            {
+                Exception? observed = null;
+                var thread = new Thread(() => { try { q.Take(1); } catch (Exception error) { observed = error; } });
+                thread.Start(); Check(thread.Join(TimeSpan.FromSeconds(5)), "Foreign-thread composition completes without waiting on owner");
+                Check(observed is DatabaseException { Kind: DatabaseErrorKind.ConcurrentUse }, "Concurrent callback composition fails fast");
+                return row.Equal(Models.Id, 1L);
+            });
             using var clone = q.Clone(); Check(await clone.CountAsync() == 1, "Explicit independent native clone");
             Check((await q.SelectAll().FirstAsync()).Id == 1, "First owns one row and retires");
         }
@@ -179,7 +221,35 @@ internal static class Suite
         using (var q = Q()) { var sequence = q.OrderBy(Models.Id).SelectAll().AsAsyncEnumerable(); await using var e = sequence.GetAsyncEnumerator(); Check(await e.MoveNextAsync(), "One-shot lazy enumeration"); Throws<InvalidOperationException>(() => sequence.GetAsyncEnumerator()); }
         using (var q = Q()) { using var canceled = new CancellationTokenSource(); canceled.Cancel(); await ThrowsAsync<OperationCanceledException>(() => q.SelectAll().ToListAsync(canceled.Token)); }
         using (var q = Q()) { q.Dispose(); Throws<ObjectDisposedException>(() => q.Take(1)); }
+        using (var q = Q()) await ThrowsAsync<TimeoutException>(() => q.WithTimeout(TimeSpan.Zero).SelectAll().ToListAsync());
+        using (var q = Q())
+        {
+            var failure = new MappingFailure();
+            var builder = q.Projection<Person>(); builder.Add(q.Column(Models.Id), "id");
+            var projection = builder.Build(_ => throw failure);
+            Check(ReferenceEquals(failure, await ThrowsAsync<MappingFailure>(() => q.Select(projection).ToListAsync())), "Fluent constructor error retains original exception after retirement");
+        }
+        using (var q = Q())
+        {
+            await using var stream = q.SelectAll().AsAsyncEnumerable().GetAsyncEnumerator();
+            Check(await stream.MoveNextAsync(), "Active query row before query disposal"); q.Dispose();
+        }
+        // Deterministic interleavings of actual native plan publication and Dispose.
+        // No fake executor or timing-sensitive thread race supplies these owners.
+        using (var q = Q())
+        {
+            q.SelectAll(); var plan = q.Context.Seal(0); q.Dispose();
+            Throws<ObjectDisposedException>(() => q.Context.PublishPlan(plan));
+            Check(plan.IsClosed, "Seal/Dispose/Publish releases late native plan");
+        }
+        using (var q = Q())
+        {
+            q.SelectAll(); var plan = q.Context.Seal(0); q.Context.PublishPlan(plan); q.Dispose();
+            Check(plan.IsClosed, "Seal/Publish/Dispose releases published native plan");
+        }
         await Done("owners-streaming-cardinality");
+        MeasureComposition(session);
+        await Done("direct-composition-cost-input");
         if (session.Source.Provider == DatabaseProvider.Sqlite)
         { using var q = Q(); Throws<DatabaseCapabilityException>(() => q.ForUpdate()); }
         else
@@ -189,7 +259,7 @@ internal static class Suite
             using var q = Q(); Check((await q.WhereEqual(Models.Id, 1L).ForUpdate(RowLockMode.Share, LockWait.NoWait).SelectAll().ToListAsync()).Count == 1, "PostgreSQL explicit transaction row lock");
             await transaction.RollbackAsync();
         }
-        using (var q = Q()) Throws<DatabaseCapabilityException>(() => q.DeleteAsync());
+        using (var q = Q()) Check(Throws<DatabaseException>(() => q.DeleteAsync()).Kind == DatabaseErrorKind.UnsupportedCapability, "Unfiltered native DELETE rejection");
         using (var q = Q()) Check(await q.WhereEqual(Models.Id, 1L).UpdateAsync(setters => setters.Set(Models.Age, q.Column(Models.Age).Add(1))) == 1, "Native filtered setters UPDATE");
         using (var q = Q()) Check(await q.WhereEqual(Models.Id, 1L).UpdateAsync(new Changes<Person>().Set(Models.Name, "Changed")) == 1, "Explicit Changes UPDATE");
         using (var q = Q()) Check((await q.WhereEqual(Models.Id, 1L).SelectAll().SingleAsync()) is { Name: "Changed", Age: 21 }, "Update actual effect");
@@ -197,6 +267,22 @@ internal static class Suite
         await Done("mutation-row-lock");
         await session.ExecuteAsync(SqlCommand.Create("DROP TABLE \"Children\"", kind: SqlCommandKind.Mutation));
         await session.ExecuteAsync(SqlCommand.Create("DROP TABLE \"Parents\"", kind: SqlCommandKind.Mutation));
+    }
+    private static void MeasureComposition(DataSession session)
+    {
+        void Compose(long value)
+        {
+            using var query = session.From(Models.People);
+            _ = query.WhereEqual(Models.Id, value).Take(1).SelectAll().ToSql();
+        }
+        Compose(0);
+        const int iterations = 64;
+        var before = GC.GetAllocatedBytesForCurrentThread(); var started = Stopwatch.GetTimestamp();
+        for (var i = 0; i < iterations; i++) Compose(i % 3);
+        var elapsed = Stopwatch.GetTimestamp() - started; var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        int encoded = NativeWeave.Query.Internal.OperandEncoding.Value(session.Source.Binding.SemanticProfile, Codecs.Int64, 3, 1L).Length;
+        Check(encoded > sizeof(long) && allocated > 0, "Direct boundary allocations and encoded copies are explicit");
+        Costs.Add(new(session.Source.Provider.ToString(), iterations, allocated, elapsed, Stopwatch.Frequency, encoded, 15));
     }
     private sealed class MappingFailure : Exception;
     private sealed record Joined(long Id, long? Child, bool Matched);
@@ -226,6 +312,7 @@ internal static class Models
         var cte = new TableBuilder<IdRow>("ChosenParents"); CteId = cte.Column("Id", Codecs.Int64); Cte = cte.Build(r => new(r.Get(CteId)), (r, v) => r.Set(CteId, v.Id));
     }
 }
-internal sealed record Receipt(bool NativeAot, int Assertions, List<string> Cases, string[] NativeSha256);
+internal sealed record CompositionCost(string Provider, int Iterations, long ManagedAllocatedBytes, long StopwatchTicks, long StopwatchFrequency, int OneInt64WireBytes, int InspectedDirectAbiCallsPerIteration);
+internal sealed record Receipt(bool NativeAot, int Assertions, int ManagedRetirements, List<string> Cases, string[] NativeSha256, List<CompositionCost> CompositionCosts);
 [JsonSerializable(typeof(Receipt))]
 internal partial class ReceiptJson : JsonSerializerContext { }

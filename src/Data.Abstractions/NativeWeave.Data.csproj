@@ -12,6 +12,8 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="../Query.Generator/Runtime/**/*.cs" />
+    <Compile Include="../Orm.Relations/ConcurrencyConflictException.cs" />
+    <InternalsVisibleTo Include="NativeWeave.Orm.Relations.Tests" />
     <InternalsVisibleTo Include="NativeWeave.Query.Generator.Tests" />
     <InternalsVisibleTo Include="NativeWeave.Data.Tests" />
     <InternalsVisibleTo Include="NativeWeave.Database" />

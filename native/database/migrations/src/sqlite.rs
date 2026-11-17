@@ -47,18 +47,27 @@ async fn execute(
     let result = execute_locked(&mut tx, request, limits, &cancel).await;
     // Disable cancellation only after the real migration future has completed;
     // explicit rollback/commit must itself run to completion on the same worker.
-    tx.lock_handle().await?.remove_progress_handler();
+    let reset = tx
+        .lock_handle()
+        .await
+        .map(|mut handle| handle.remove_progress_handler());
+    let result = match (result, reset) {
+        (result, Ok(())) => result,
+        (Err(original), Err(cleanup)) => Err(original.with_cleanup(cleanup.into())),
+        (Ok(_), Err(cleanup)) => Err(cleanup.into()),
+    };
     match result {
         Ok(output) => {
             tx.commit().await?;
             Ok(output)
         }
         Err(mut error) => {
-            if cancel.requested() {
-                error.kind = ErrorKind::Canceled;
-            }
-            if Instant::now() >= deadline && error.kind == ErrorKind::Provider {
-                error.kind = ErrorKind::Timeout;
+            if error.kind == ErrorKind::Provider && error.provider.as_deref() == Some("9") {
+                if cancel.requested() {
+                    error.kind = ErrorKind::Canceled;
+                } else if Instant::now() >= deadline {
+                    error.kind = ErrorKind::Timeout;
+                }
             }
             match tx.rollback().await {
                 Ok(()) => Err(error),

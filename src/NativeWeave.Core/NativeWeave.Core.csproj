@@ -39,5 +39,8 @@
     <InternalsVisibleTo Include="NativeWeave.Database" />
     <InternalsVisibleTo Include="NativeWeave.Data.NativeHost.Tests" />
     <InternalsVisibleTo Include="NativeWeave.Data.Migrations.Tests" />
+    <InternalsVisibleTo Include="NativeWeave.Orm.Relations.Tests" />
+    <InternalsVisibleTo Include="NativeWeave.Query.Fluent.Tests" />
+    <InternalsVisibleTo Include="NativeWeave.Data.Materialization.Tests" />
   </ItemGroup>
 </Project>

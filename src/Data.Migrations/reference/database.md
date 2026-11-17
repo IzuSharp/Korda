@@ -438,6 +438,8 @@ public System.Threading.Tasks.Task<NativeWeave.Database.MigrationReport> NativeW
 
 **exception:** Provider, checksum, dirty phase or finite result capacity fails.
 
+**exception:** The native provider/profile does not support the requested migration mode.
+
 **exception:** Cancellation is confirmed after native cleanup.
 
 **remarks:** PostgreSQL commits each transactional entry independently. SQLite commits the entire selected batch in one tracked IMMEDIATE transaction. Nontransactional PostgreSQL preserves partial effects and an applying phase; only a new explicit identical call may resume a replay-safe script. Cancellation or connection closure never proves that a previously dispatched business commit did not happen.

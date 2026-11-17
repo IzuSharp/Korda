@@ -1,4 +1,45 @@
 use super::*;
+
+#[cfg(feature = "postgres")]
+#[tokio::test]
+async fn postgres_connection_deadline_is_independent_of_command_deadline() {
+    // A real TCP peer accepts PostgreSQL's startup packet but sends no greeting.
+    // This isolates connect policy without a DNS/server failure racing the timer.
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let (stop, stopped) = tokio::sync::oneshot::channel::<()>();
+    let peer = tokio::spawn(async move {
+        let (socket, _) = listener.accept().await.unwrap();
+        let _ = stopped.await;
+        drop(socket);
+    });
+    let mut policy = limits();
+    policy.connect_timeout = Duration::from_millis(100);
+    policy.command_timeout = Duration::from_secs(3);
+    let options = sqlx::postgres::PgConnectOptions::new()
+        .host("127.0.0.1")
+        .port(address.port())
+        .username("deadline_probe")
+        .database("deadline_probe")
+        .ssl_mode(sqlx::postgres::PgSslMode::Disable);
+    let began = std::time::Instant::now();
+    let result = run(
+        ConnectionOptions::Postgres(options),
+        request(0, &["SELECT 1"]),
+        policy,
+        Arc::new(Cancellation::default()),
+    )
+    .await;
+    let elapsed = began.elapsed();
+    let _ = stop.send(());
+    peer.await.unwrap();
+    assert_eq!(result.unwrap_err().kind, ErrorKind::Timeout);
+    assert!(
+        elapsed < Duration::from_secs(1),
+        "connect used command timeout: {elapsed:?}"
+    );
+}
+
 #[test]
 fn migration_contract_rejects_escape_and_immutable_identity_is_exact() {
     for sql in [
@@ -269,7 +310,12 @@ async fn sqlite_contention_idempotency_checksum_cancellation_and_limits() {
     });
     tokio::time::sleep(Duration::from_millis(30)).await;
     stop.cancel();
-    assert_eq!(work.await.unwrap().unwrap_err().kind, ErrorKind::Canceled);
+    let canceled = work.await.unwrap().unwrap_err();
+    assert_eq!(canceled.kind, ErrorKind::Canceled);
+    assert!(
+        canceled.cleanup.is_some(),
+        "actual SQLite interruption also reports failed tracked rollback"
+    );
     let mut observer = sqlx::SqliteConnection::connect_with(&sqlite_options(&cancel_path))
         .await
         .unwrap();
@@ -493,6 +539,30 @@ async fn postgres_actual_lock_cleanup_permissions_cancel_and_partial_recovery() 
             .await
             .unwrap()
     );
+    let mut terminated = partial.clone();
+    terminated.bundle.as_mut().unwrap().migrations.push(
+        Migration::new(
+            3,
+            "terminate".into(),
+            "SELECT pg_terminate_backend(pg_backend_pid())".into(),
+            false,
+        )
+        .unwrap(),
+    );
+    let failure = run(
+        ConnectionOptions::Postgres(options.clone()),
+        terminated,
+        limits(),
+        Arc::default(),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(failure.kind, ErrorKind::Provider);
+    assert_eq!(failure.provider.as_deref(), Some("57P01"));
+    assert!(
+        failure.cleanup.is_some(),
+        "actual terminated backend retains failed rollback/close"
+    );
     observer
         .execute("CREATE TABLE empty_table()")
         .await
@@ -611,4 +681,16 @@ fn target_admission_excludes_future_nontransactional_entries_and_caps_history() 
         value.validate(0, &bounded).unwrap_err().kind,
         ErrorKind::Capacity
     );
+}
+
+#[test]
+fn original_failure_retains_rollback_and_close_failures() {
+    let primary = Error::new(ErrorKind::Checksum, "original");
+    let error = primary
+        .with_cleanup(Error::new(ErrorKind::Provider, "rollback"))
+        .with_cleanup(Error::new(ErrorKind::Cleanup, "close"));
+    assert_eq!(error.kind, ErrorKind::Checksum);
+    let rollback = error.cleanup.unwrap();
+    assert_eq!(rollback.message, "rollback");
+    assert_eq!(rollback.cleanup.unwrap().message, "close");
 }

@@ -42,6 +42,12 @@ foreach (string name in policies.Keys.Order(StringComparer.Ordinal))
     foreach (var s in PublicMembers(declared)) { expected.Add(s.GetDocumentationCommentId()!, Signature(s)); if (!s.IsImplicitlyDeclared) documented.Add(s.GetDocumentationCommentId()!); }
     foreach (var s in PublicMembers(implemented)) actual.Add(s.GetDocumentationCommentId()!, Signature(s));
 }
+const string sessionName = "NativeWeave.Database.DataSession";
+var declaredFrom = expectedCompilation.GetTypeByMetadataName(sessionName)!.GetMembers("From").Single();
+var implementedFrom = productCompilation.GetTypeByMetadataName(sessionName)!.GetMembers("From").Single();
+expected.Add(declaredFrom.GetDocumentationCommentId()!, Signature(declaredFrom));
+actual.Add(implementedFrom.GetDocumentationCommentId()!, Signature(implementedFrom));
+documented.Add(declaredFrom.GetDocumentationCommentId()!);
 var errors = expected.Where(x => !actual.TryGetValue(x.Key, out var got) || got != x.Value).Select(x => $"{x.Key}\n  design: {x.Value}\n  actual: {(actual.TryGetValue(x.Key, out var got) ? got : "<missing>")}")
     .Concat(actual.Keys.Except(expected.Keys).Select(x => "Unexpected product member: " + x)).ToArray();
 if (errors.Length != 0) throw new Exception(string.Join("\n", errors));

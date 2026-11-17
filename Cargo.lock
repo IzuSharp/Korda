@@ -946,6 +946,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "nativeweave-data-relations"
+version = "0.1.0"
+dependencies = [
+ "nativeweave-data-contracts",
+ "nativeweave-interop-abi",
+ "nativeweave-query-binding",
+ "nativeweave-query-native",
+ "sea-query",
+ "serde_json",
+ "sha2 0.10.9",
+]
+
+[[package]]
 name = "nativeweave-data-sqlite"
 version = "0.1.0"
 dependencies = [
@@ -990,6 +1003,7 @@ dependencies = [
  "nativeweave-data-contracts",
  "nativeweave-data-migrations",
  "nativeweave-data-postgres",
+ "nativeweave-data-relations",
  "nativeweave-data-sqlite",
  "nativeweave-data-streaming",
  "nativeweave-data-transactions",

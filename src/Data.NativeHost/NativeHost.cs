@@ -56,7 +56,7 @@ internal sealed unsafe class HostAsyncCalls(DataSource source) : AsyncNativeCall
     internal override void Poison() => source.Poison();
     internal override Exception MapFailure(nint operation, uint status, in NwErrorInfoV1 error, CancellationToken token)
     {
-        string? provider = null; bool cleanupFailed = false;
+        string? provider = null; bool cleanupFailed = false; BulkProgress? nativeProgress = null;
         if (source.Binding.Calls.nw_db_operation_take_error_v1 != null)
         {
             nint pointer = 0; var detail = BindingChecks.Error(); var taken = source.Binding.Calls.nw_db_operation_take_error_v1(operation, &pointer, &detail);
@@ -64,21 +64,22 @@ internal sealed unsafe class HostAsyncCalls(DataSource source) : AsyncNativeCall
             {
                 using var owner = new NativeBuffer(source.Binding, pointer);
                 source.TestAfterErrorTake?.Invoke();
-                var fields = HostEncoding.ReadControl(owner.Copy(), 7);
+                var fields = HostEncoding.ReadControl(BulkErrorPayload.Read(owner.Copy(), out nativeProgress), 7);
                 if (fields.TryGetValue(9, out var code)) provider = HostEncoding.Utf8.GetString(code);
                 cleanupFailed = fields.TryGetValue(4, out var cleanup) && BinaryPrimitives.ReadUInt32LittleEndian(cleanup) == (uint)CleanupStatus.Failed;
             }
         }
         var failure = HostFailure.Create(source.Binding, status, error, provider, token);
-        if (!cleanupFailed) return failure;
+        if (!cleanupFailed) return BulkErrorPayload.AttachNative(failure, nativeProgress);
         var cleanupFailure = new DatabaseException("Administrative rollback or connection closure also failed; the dedicated connection was discarded.", DatabaseErrorKind.Provider);
-        return failure switch
+        Exception enriched = failure switch
         {
             DatabaseException database => new DatabaseException(database.Message, database.Kind, database.ProviderCode, database.CorrelationId, database.IsTransient, cleanupFailure),
             OperationCanceledException cancellation => new OperationCanceledException(cancellation.Message, cleanupFailure, cancellation.CancellationToken),
             TimeoutException timeout => new TimeoutException(timeout.Message, cleanupFailure),
             _ => new AggregateException(failure, cleanupFailure)
         };
+        return BulkErrorPayload.AttachNative(enriched, nativeProgress);
     }
 }
 internal static class HostFailure
@@ -89,6 +90,7 @@ internal static class HostFailure
     {
         if (status != NativeStatus.DomainError || error.Domain != 0x4442) return NativeError.Create(binding.Calls.EngineId, "database", status, in error, token);
         var kind = error.Code switch { 1 or 10 => DatabaseErrorKind.Provider, 2 or 16 => DatabaseErrorKind.Constraint, 3 => DatabaseErrorKind.Conversion, 4 => DatabaseErrorKind.ShapeMismatch, 5 => DatabaseErrorKind.UnsupportedCapability, 6 or 14 => DatabaseErrorKind.ResourceLimit, 7 => DatabaseErrorKind.ConcurrentUse, 9 => DatabaseErrorKind.UnknownOutcome, _ => DatabaseErrorKind.InvalidState };
+        if (error.Code == 16) return new ConcurrencyConflictException("The native write did not match its expected key and concurrency tokens.", 1, 0);
         if (error.Code == 9) return new CommitOutcomeUnknownException("Native commit outcome is unknown; do not retry implicitly.", null, provider, error.CorrelationId);
         var transient = kind == DatabaseErrorKind.Provider && provider is "40001" or "40P01" or "55P03" or "5" or "6";
         return new DatabaseException(error.Code == 14 ? "LargeValueRequiresStreaming: an inline field exceeds the admitted byte budget." : "The native database operation failed.", kind, provider, error.CorrelationId, transient);

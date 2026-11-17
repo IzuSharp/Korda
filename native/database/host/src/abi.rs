@@ -28,6 +28,7 @@ pub enum OwnerValue {
     Savepoint(Arc<SavepointOwner>),
     Model(Arc<Source>, ModelBinding),
     SqlPlan(Arc<SqlPlan>),
+    Relation(Arc<Source>, Arc<nativeweave_query_binding::RelationBinding>),
     Query(
         Arc<Source>,
         Box<Mutex<nativeweave_query_native::NativeQuery>>,
@@ -45,7 +46,9 @@ impl OwnerValue {
             Self::Savepoint(v) => v.transaction.session.source.clone(),
             Self::Model(v, _) => v.clone(),
             Self::SqlPlan(v) => v.source.clone(),
-            Self::Query(s, _) | Self::Plan(s, _) | Self::Cte(s, _) => s.clone(),
+            Self::Query(s, _) | Self::Plan(s, _) | Self::Cte(s, _) | Self::Relation(s, _) => {
+                s.clone()
+            }
         }
     }
     pub fn kind(&self) -> u32 {
@@ -340,7 +343,7 @@ pub unsafe extern "C" fn nw_database_get_abi_v1(
     capacity: u32,
     output: *mut NwAbiInfoV1,
 ) -> u32 {
-    let mask = crate::query::capability_mask() | (1 << 5) | (1 << 6);
+    let mask = crate::query::capability_mask() | (1 << 5) | (1 << 6) | (1 << 7) | (1 << 8) | (1 << 19);
     // SAFETY: exact forwarding to the canonical ABI writer.
     unsafe { write_abi_v1(major, capacity, output, 0, mask) }
 }
@@ -605,7 +608,7 @@ pub unsafe extern "C" fn nw_db_operation_take_error_v1(
         if op.error_taken.swap(true, Ordering::AcqRel) {
             return Err(Error::state("rich error already taken"));
         }
-        let bytes = snapshot(
+        let mut bytes = snapshot(
             0,
             0,
             false,
@@ -616,6 +619,9 @@ pub unsafe extern "C" fn nw_db_operation_take_error_v1(
             value.correlation,
             value.provider.as_deref(),
         );
+        if let Some(progress) = value.bulk {
+            bytes.extend_from_slice(&progress.encode());
+        }
         let buffer = Buffer::bytes(op.source.clone(), bytes);
         // SAFETY: one owned immutable error payload transfer.
         unsafe {
