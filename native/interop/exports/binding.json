@@ -1,0 +1,483 @@
+{
+  "schema_version": 1,
+  "module": {
+    "id": "nativeweave.exports.conformance",
+    "abi_major": 1,
+    "abi_minor": 0,
+    "rid": "linux-x64",
+    "target": "x86_64-unknown-linux-gnu",
+    "pointer_width_bits": 64
+  },
+  "provenance": {
+    "adapter_sha256": "402727b3eb306214fe9f7a586a55727b3b4757c0b93f3d2e4ffa01d9b0483d9c",
+    "tool": "nativeweave-binding-inventory",
+    "tool_version": "0.1.0",
+    "upstream": [
+      {
+        "repository": "https://github.com/IzuSharp/NativeWeave",
+        "commit": "22b467667bcf44aa8b22e964937446b225e87e61",
+        "features": [
+          "abi-v1"
+        ]
+      }
+    ]
+  },
+  "capabilities": [
+    "exports.conformance.v1"
+  ],
+  "records": [
+    {
+      "name": "NwAbiInfoV1",
+      "size": 32,
+      "alignment": 8,
+      "fields": [
+        {
+          "name": "struct_size",
+          "type": "u32",
+          "offset": 0,
+          "reserved": false
+        },
+        {
+          "name": "abi_major",
+          "type": "u32",
+          "offset": 4,
+          "reserved": false
+        },
+        {
+          "name": "abi_minor",
+          "type": "u32",
+          "offset": 8,
+          "reserved": false
+        },
+        {
+          "name": "pointer_width_bits",
+          "type": "u32",
+          "offset": 12,
+          "reserved": false
+        },
+        {
+          "name": "capabilities",
+          "type": "u64",
+          "offset": 16,
+          "reserved": false
+        },
+        {
+          "name": "reserved",
+          "type": "u64",
+          "offset": 24,
+          "reserved": true
+        }
+      ]
+    }
+  ],
+  "exports": [
+    {
+      "symbol": "nw_exports_get_abi_v1",
+      "calling_convention": "C",
+      "return": "u32",
+      "capability": "exports.conformance.v1",
+      "error": "status-v1",
+      "thread": "free-threaded",
+      "reentrancy": "forbidden",
+      "targets": [
+        "linux-x64"
+      ],
+      "parameters": [
+        {
+          "name": "major",
+          "type": "u32",
+          "direction": "in",
+          "nullable": false,
+          "borrow_end": "none",
+          "owner": "",
+          "mutable": false,
+          "copy_before_accept": false,
+          "maximum_bytes": 0
+        },
+        {
+          "name": "capacity",
+          "type": "u32",
+          "direction": "in",
+          "nullable": false,
+          "borrow_end": "none",
+          "owner": "",
+          "mutable": false,
+          "copy_before_accept": false,
+          "maximum_bytes": 0
+        },
+        {
+          "name": "output",
+          "type": "mut:NwAbiInfoV1",
+          "direction": "out",
+          "nullable": false,
+          "borrow_end": "call",
+          "owner": "",
+          "mutable": true,
+          "copy_before_accept": false,
+          "maximum_bytes": 32
+        }
+      ]
+    },
+    {
+      "symbol": "nw_exports_create_v1",
+      "calling_convention": "C",
+      "return": "u32",
+      "capability": "exports.conformance.v1",
+      "error": "status-v1",
+      "thread": "free-threaded",
+      "reentrancy": "forbidden",
+      "targets": [
+        "linux-x64"
+      ],
+      "parameters": [
+        {
+          "name": "value",
+          "type": "u64",
+          "direction": "in",
+          "nullable": false,
+          "borrow_end": "none",
+          "owner": "",
+          "mutable": false,
+          "copy_before_accept": false,
+          "maximum_bytes": 0
+        },
+        {
+          "name": "output",
+          "type": "mut:mut:NwFixtureOwner",
+          "direction": "out",
+          "nullable": false,
+          "borrow_end": "transfer-success",
+          "owner": "NwFixtureOwner",
+          "mutable": true,
+          "copy_before_accept": false,
+          "maximum_bytes": 8
+        }
+      ]
+    },
+    {
+      "symbol": "nw_exports_read_v1",
+      "calling_convention": "C",
+      "return": "u32",
+      "capability": "exports.conformance.v1",
+      "error": "status-v1",
+      "thread": "free-threaded",
+      "reentrancy": "forbidden",
+      "targets": [
+        "linux-x64"
+      ],
+      "parameters": [
+        {
+          "name": "owner",
+          "type": "const:NwFixtureOwner",
+          "direction": "in",
+          "nullable": false,
+          "borrow_end": "call",
+          "owner": "NwFixtureOwner",
+          "mutable": false,
+          "copy_before_accept": false,
+          "maximum_bytes": 8
+        },
+        {
+          "name": "output",
+          "type": "mut:u64",
+          "direction": "out",
+          "nullable": false,
+          "borrow_end": "call",
+          "owner": "",
+          "mutable": true,
+          "copy_before_accept": false,
+          "maximum_bytes": 8
+        }
+      ]
+    },
+    {
+      "symbol": "nw_exports_release_v1",
+      "calling_convention": "C",
+      "return": "void",
+      "capability": "exports.conformance.v1",
+      "error": "cleanup-no-fail",
+      "thread": "free-threaded",
+      "reentrancy": "forbidden",
+      "targets": [
+        "linux-x64"
+      ],
+      "parameters": [
+        {
+          "name": "owner",
+          "type": "mut:NwFixtureOwner",
+          "direction": "in",
+          "nullable": false,
+          "borrow_end": "call",
+          "owner": "NwFixtureOwner",
+          "mutable": true,
+          "copy_before_accept": false,
+          "maximum_bytes": 8
+        }
+      ]
+    },
+    {
+      "symbol": "nw_exports_counters_v1",
+      "calling_convention": "C",
+      "return": "u32",
+      "capability": "exports.conformance.v1",
+      "error": "status-v1",
+      "thread": "free-threaded",
+      "reentrancy": "forbidden",
+      "targets": [
+        "linux-x64"
+      ],
+      "parameters": [
+        {
+          "name": "live",
+          "type": "mut:usize",
+          "direction": "out",
+          "nullable": false,
+          "borrow_end": "call",
+          "owner": "",
+          "mutable": true,
+          "copy_before_accept": false,
+          "maximum_bytes": 8
+        },
+        {
+          "name": "released",
+          "type": "mut:usize",
+          "direction": "out",
+          "nullable": false,
+          "borrow_end": "call",
+          "owner": "",
+          "mutable": true,
+          "copy_before_accept": false,
+          "maximum_bytes": 8
+        }
+      ]
+    },
+    {
+      "symbol": "nw_exports_notification_v1",
+      "calling_convention": "C",
+      "return": "u32",
+      "capability": "exports.conformance.v1",
+      "error": "status-v1",
+      "thread": "free-threaded",
+      "reentrancy": "notification-only",
+      "targets": [
+        "linux-x64"
+      ],
+      "parameters": [
+        {
+          "name": "_cookie",
+          "type": "usize",
+          "direction": "in",
+          "nullable": false,
+          "borrow_end": "none",
+          "owner": "",
+          "mutable": false,
+          "copy_before_accept": false,
+          "maximum_bytes": 0
+        },
+        {
+          "name": "status",
+          "type": "u32",
+          "direction": "in",
+          "nullable": false,
+          "borrow_end": "none",
+          "owner": "",
+          "mutable": false,
+          "copy_before_accept": false,
+          "maximum_bytes": 0
+        }
+      ]
+    },
+    {
+      "symbol": "nw_exports_invoke_v1",
+      "calling_convention": "C",
+      "return": "u32",
+      "capability": "exports.conformance.v1",
+      "error": "status-v1",
+      "thread": "free-threaded",
+      "reentrancy": "forbidden",
+      "targets": [
+        "linux-x64"
+      ],
+      "parameters": [
+        {
+          "name": "callback",
+          "type": "usize",
+          "direction": "in",
+          "nullable": false,
+          "borrow_end": "none",
+          "owner": "",
+          "mutable": false,
+          "copy_before_accept": false,
+          "maximum_bytes": 0
+        },
+        {
+          "name": "cookie",
+          "type": "usize",
+          "direction": "in",
+          "nullable": false,
+          "borrow_end": "none",
+          "owner": "",
+          "mutable": false,
+          "copy_before_accept": false,
+          "maximum_bytes": 0
+        },
+        {
+          "name": "status",
+          "type": "u32",
+          "direction": "in",
+          "nullable": false,
+          "borrow_end": "none",
+          "owner": "",
+          "mutable": false,
+          "copy_before_accept": false,
+          "maximum_bytes": 0
+        }
+      ]
+    },
+    {
+      "symbol": "nw_exports_close_v1",
+      "calling_convention": "C",
+      "return": "u32",
+      "capability": "exports.conformance.v1",
+      "error": "status-v1",
+      "thread": "free-threaded",
+      "reentrancy": "forbidden",
+      "targets": [
+        "linux-x64"
+      ],
+      "parameters": [
+        {
+          "name": "owner",
+          "type": "mut:NwFixtureOwner",
+          "direction": "in",
+          "nullable": false,
+          "borrow_end": "call",
+          "owner": "NwFixtureOwner",
+          "mutable": true,
+          "copy_before_accept": false,
+          "maximum_bytes": 8
+        }
+      ]
+    },
+    {
+      "symbol": "nw_exports_drain_v1",
+      "calling_convention": "C",
+      "return": "u32",
+      "capability": "exports.conformance.v1",
+      "error": "status-v1",
+      "thread": "free-threaded",
+      "reentrancy": "forbidden",
+      "targets": [
+        "linux-x64"
+      ],
+      "parameters": [
+        {
+          "name": "owner",
+          "type": "mut:NwFixtureOwner",
+          "direction": "in",
+          "nullable": false,
+          "borrow_end": "call",
+          "owner": "NwFixtureOwner",
+          "mutable": true,
+          "copy_before_accept": false,
+          "maximum_bytes": 8
+        }
+      ]
+    },
+    {
+      "symbol": "nw_exports_start_v1",
+      "calling_convention": "C",
+      "return": "u32",
+      "capability": "exports.conformance.v1",
+      "error": "status-v1",
+      "thread": "free-threaded",
+      "reentrancy": "forbidden",
+      "targets": [
+        "linux-x64"
+      ],
+      "parameters": [
+        {
+          "name": "owner",
+          "type": "mut:NwFixtureOwner",
+          "direction": "in",
+          "nullable": false,
+          "borrow_end": "call",
+          "owner": "NwFixtureOwner",
+          "mutable": true,
+          "copy_before_accept": false,
+          "maximum_bytes": 8
+        },
+        {
+          "name": "callback",
+          "type": "usize",
+          "direction": "in",
+          "nullable": false,
+          "borrow_end": "none",
+          "owner": "",
+          "mutable": false,
+          "copy_before_accept": false,
+          "maximum_bytes": 0
+        },
+        {
+          "name": "cookie",
+          "type": "usize",
+          "direction": "in",
+          "nullable": false,
+          "borrow_end": "none",
+          "owner": "",
+          "mutable": false,
+          "copy_before_accept": false,
+          "maximum_bytes": 0
+        },
+        {
+          "name": "status",
+          "type": "u32",
+          "direction": "in",
+          "nullable": false,
+          "borrow_end": "none",
+          "owner": "",
+          "mutable": false,
+          "copy_before_accept": false,
+          "maximum_bytes": 0
+        }
+      ]
+    }
+  ],
+  "owners": [
+    {
+      "kind": "NwFixtureOwner",
+      "module": "nativeweave.exports.conformance",
+      "release": "nw_exports_release_v1",
+      "clone": "",
+      "parent": "",
+      "release_executor": "calling-thread",
+      "close_progress": "none"
+    }
+  ],
+  "operations": [
+    {
+      "name": "fixture",
+      "owner": "NwFixtureOwner",
+      "create": "nw_exports_create_v1",
+      "start": "nw_exports_start_v1",
+      "request_cancel": "nw_exports_close_v1",
+      "take_result": "nw_exports_read_v1",
+      "try_retire": "nw_exports_drain_v1",
+      "release": "nw_exports_release_v1",
+      "input_end": "copied-before-accept",
+      "state_profile": "D06-v1"
+    }
+  ],
+  "callbacks": [
+    {
+      "symbol": "nw_exports_notification_v1",
+      "cookie_index": 0,
+      "notification_owner": "NwFixtureOwner",
+      "reentrancy": "notification-only",
+      "close": "nw_exports_close_v1",
+      "drain": "nw_exports_drain_v1",
+      "profile": "D05-close-drain-v1"
+    }
+  ],
+  "managed_symbols": []
+}

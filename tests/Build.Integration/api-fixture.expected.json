@@ -1,0 +1,25 @@
+{
+  "assembly": "NativeWeave.Build.ApiFixture, Version=0.1.0.0, Culture=neutral, PublicKeyToken=null",
+  "symbols": [
+    {
+      "id": "M:NativeWeave.Build.Conformance.Fixture.Add(System.Int32,System.Int32)",
+      "signature": "public static int NativeWeave.Build.Conformance.Fixture.Add(int value, int offset = 37)",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Build.Conformance.Fixture.Echo\u0060\u00601(\u0060\u00600)",
+      "signature": "public static T NativeWeave.Build.Conformance.Fixture.Echo\u003CT\u003E(T value) where T : unmanaged",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Build.Conformance.Fixture.Nullable(System.String)",
+      "signature": "public static string? NativeWeave.Build.Conformance.Fixture.Nullable(string? value)",
+      "implicit_member": false
+    },
+    {
+      "id": "T:NativeWeave.Build.Conformance.Fixture",
+      "signature": "public static class NativeWeave.Build.Conformance.Fixture",
+      "implicit_member": false
+    }
+  ]
+}
