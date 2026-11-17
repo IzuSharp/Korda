@@ -1,0 +1,6 @@
+{
+  "task": "A08",
+  "design_commit": "c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9",
+  "symbols": [],
+  "applicability": "Internal opt-in Engine-local executor/admission/native-join implementation and managed close observation. No new public application scheduler, default runtime, Engine API or NuGet package is assigned. Exact domain Async methods retain their own capability and native operation mappings."
+}

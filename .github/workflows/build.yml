@@ -17,7 +17,7 @@ jobs:
   build:
     name: Build, package and Native AOT
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 60
     outputs:
       artifact: nativeweave-linux-${{ github.run_id }}-${{ github.run_attempt }}
     env:
@@ -36,7 +36,7 @@ jobs:
       - name: Install native build prerequisites and pinned Rust
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends clang zlib1g-dev
+          sudo apt-get install -y --no-install-recommends clang zlib1g-dev qemu-user
           rustup toolchain install 1.100.0 --profile minimal --component rustfmt --component clippy
       - name: Verify source, package, API documentation and actual AOT consumers
         run: python3 eng/build.py verify --version "$PACKAGE_VERSION"
@@ -49,6 +49,10 @@ jobs:
             bash eng/consume-linux.sh
       - name: Reject generated source or dependency drift
         run: git diff --exit-code
+      - name: Verify Task-04 Linux package closure and runtime transfer
+        run: bash eng/verify-task04-linux.sh
+      - name: Reject Task-04 source or dependency drift
+        run: git diff --exit-code
       - name: Retain verification logs and evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -59,6 +63,8 @@ jobs:
             artifacts/verification.json
             artifacts/consumer-result.json
             artifacts/pristine-consumer.json
+            artifacts/task04/
+            !artifacts/task04/**/cargo-target/**
           if-no-files-found: error
           retention-days: 14
       - name: Retain the exact verified candidate

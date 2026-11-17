@@ -1,5 +1,8 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/Engines.SyncProof/NativeWeave.Engines.SyncProof.csproj" />
+    <Project Path="src/Engines.AsyncProof/NativeWeave.Engines.AsyncProof.csproj" />
+    <Project Path="src/Verification.ExtensionProof/NativeWeave.Verification.ExtensionProof.csproj" />
     <Project Path="src/NativeWeave.HelloWorld/NativeWeave.HelloWorld.csproj" />
     <Project Path="src/Interop.Abi/Interop.Abi.csproj" />
     <Project Path="src/Data.Abstractions/NativeWeave.Data.csproj" />
@@ -17,6 +20,12 @@
     <Project Path="src/Analyzers/NativeWeave.Analyzers.csproj" />
   </Folder>
   <Folder Name="/samples/">
+    <Project Path="samples/api/interop-callbacks/Interop.Callbacks.Sample.csproj" />
+    <Project Path="samples/api/interop-async/Interop.Async.Sample.csproj" />
+    <Project Path="samples/api/engines-syncproof/Engines.SyncProof.Sample.csproj" />
+    <Project Path="samples/api/engines-asyncproof/Engines.AsyncProof.Sample.csproj" />
+    <Project Path="samples/api/verification-extensionproof/ExtensionProof.Sample.csproj" />
+    <Project Path="samples/api/interop-execution/Interop.Execution.Sample.csproj" />
     <Project Path="samples/HelloWorld/HelloWorld.csproj" />
     <Project Path="samples/api/interop-abi/Interop.Abi.Sample.csproj" />
     <Project Path="samples/api/benchmarks-harness/Managed/Managed.csproj" />
@@ -40,6 +49,13 @@
     <Project Path="samples/api/verification-compatibility/CompatibilitySample.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Interop.Callbacks/Interop.Callbacks.Tests.csproj" />
+    <Project Path="tests/Interop.Async/Interop.Async.Tests.csproj" />
+    <Project Path="tests/Engines.SyncProof/NativeWeave.Engines.SyncProof.Tests.csproj" />
+    <Project Path="tests/Engines.AsyncProof/NativeWeave.Engines.AsyncProof.Tests.csproj" />
+    <Project Path="tests/Verification.ExtensionProof/NativeWeave.Verification.ExtensionProof.Tests.csproj" />
+    <Project Path="tests/Interop.Execution/Interop.Execution.Tests.csproj" />
+    <Project Path="tests/Interop.Execution/ApiCheck/ApiCheck.csproj" />
     <Project Path="tests/NativeWeave.HelloWorld.Tests/NativeWeave.HelloWorld.Tests.csproj" />
     <Project Path="tests/Interop.Abi/Interop.Abi.Tests.csproj" />
     <Project Path="tests/Data.Abstractions/NativeWeave.Data.Tests.csproj" />
@@ -70,6 +86,12 @@
   <Folder Name="/tools/A05/">
     <Project Path="tests/Interop.Errors/ApiCheck/ApiCheck.csproj" />
   </Folder>
+  <Folder Name="/tools/A06/">
+    <Project Path="tests/Interop.Callbacks/ApiCheck/ApiCheck.csproj" />
+  </Folder>
+  <Folder Name="/tools/A07/">
+    <Project Path="tests/Interop.Async/ApiCheck/ApiCheck.csproj" />
+  </Folder>
   <Folder Name="/tools/A09/">
     <Project Path="tests/Generators.Model/ApiCheck/ApiCheck.csproj" />
   </Folder>
@@ -96,6 +118,10 @@
   </Folder>
   <Folder Name="/tools/A04/">
     <Project Path="tests/Interop.Memory/ApiCheck/ApiCheck.csproj" />
+  </Folder>
+  <Folder Name="/tools/A16/">
+    <Project Path="src/Packaging.Release/BuildTasks/NativeWeave.Packaging.Tasks.csproj" />
+    <Project Path="tests/Packaging.Release/ApiCheck/ApiCheck.csproj" />
   </Folder>
   <Folder Name="/tools/A13/">
     <Project Path="src/Build.Integration/ApiReference/ApiReference.csproj" />
