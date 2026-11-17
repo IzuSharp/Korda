@@ -43,7 +43,7 @@ def copy_sources(folder, output):
     files = []
     for path in sorted(folder.rglob("*.cs")):
         relative = path.relative_to(folder)
-        if any(part in {"bin", "obj", "ApiCheck", "InvalidUco"} for part in relative.parts):
+        if any(part in {"bin", "obj", "ApiCheck", "InvalidUco", "InvalidUcoCompile"} for part in relative.parts):
             continue
         target = output / relative
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -108,7 +108,8 @@ def main():
                 run("abi-native", ["rustc", "--edition=2024", "-Ctarget-cpu=x86-64-v2", "-Copt-level=3", "--extern", f"nativeweave_interop_abi={abi}", "--crate-type", "cdylib", ROOT / "tests/Interop.Abi/native/fixture.rs", "-o", native_dir / f"lib{library}.so"])
             else:
                 crate = library.replace("_", "-")
-                run(task + "-native", ["cargo", "build", "--release", "--locked", "-p", crate])
+                run(task + "-native", ["cargo", "build", "--release", "--locked", "-p", crate,
+                    *(["--features", "conformance"] if task in {"A06", "A07"} else [])])
                 shutil.copy2(cargo_target / "release" / f"lib{library}.so", native_dir)
             report["native"].append(inspect(native_dir / f"lib{library}.so", allowed_dependencies=SYSTEM_DEPENDENCIES))
         run("core-restore", ["dotnet", "restore", ROOT / "src/NativeWeave.Core/NativeWeave.Core.csproj", "--locked-mode", *options])

@@ -6,6 +6,26 @@ a newer distribution is useful development evidence; it does not certify that
 minimum distro. Windows, musl, other architectures, static linking and single-file
 extraction retain their separate task/profile requirements.
 
+The minimum CPU execution row uses the same published executable/native bytes
+under `qemu-x86_64 -cpu Nehalem`. An actual compiled CPUID probe must report every
+x86-64-v2 addition and no AVX, AVX2, AVX512F or FMA before any consumer is accepted.
+The receipt identifies CPU emulation separately from the physical host, records
+the actual host OS, and hashes the emulator, probe, transferred binaries and each
+command output. It is not physical CPU certification.
+
+After the complete package check, run this in the existing Ubuntu 24.04 Linux
+verification row with `qemu-user` installed:
+
+```sh
+python3 tests/Packaging.Linux/minimum_cpu.py \
+  artifacts/task04/A14/ci/runtime-transfer \
+  --output artifacts/task04/A14/minimum-cpu --require-baseline
+```
+
+The entrypoint requires all A01/A03/A04/A05/A06/A07 consumers, checks their original
+hashes, and executes each actual Native AOT program under the verified emulated
+profile. This is separate from the matching runtime-only transfer check.
+
 ## Ordinary application path
 
 Install the engine's validated facade package and use its typed factory. Restore
