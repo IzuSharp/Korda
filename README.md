@@ -4,7 +4,7 @@
 
 NativeWeave aims to let developers write complete applications in natural, strongly typed C# while deeply reusing mature Rust engines. Native AOT, low-overhead interop and precompiled NuGet assets connect the two ecosystems. Performance and memory improvements are engineering goals to measure against equivalent workloads, never unconditional claims of superiority over C# or Rust.
 
-> **Current state: experimental implementation.** The Hello World release loop is joined by Linux x64 Database Host, migrations, SeaQuery-backed Fluent queries, static DTO materialization and explicit relation/CRUD components. Their component evidence and ordinary NuGet/JIT/NativeAOT consumers are recorded in the Task-05 Plan handoff. Server work proceeds independently. The existing public preview release still packages Hello World on Linux x64; component validation does not imply that every module is publicly released or accepted on other platforms.
+> **Current state: experimental implementation.** Linux x64 components now include Database Host, migrations, SeaQuery-backed Fluent queries, static DTO materialization and explicit relation/CRUD operations, together with a Rust Server Host, strongly typed C# handlers, bounded streaming, gRPC, MCP and request diagnostics. Component evidence and ordinary NuGet/JIT/NativeAOT consumers are recorded in the [Task-05](https://github.com/IzuSharp/Plan/blob/main/ledger/evidence/batches/Task-05/handoff-linux.md) and [Task-06](https://github.com/IzuSharp/Plan/blob/main/ledger/evidence/batches/Task-06/handoff-linux.md) Plan handoffs. The existing public preview release still packages Hello World on Linux x64; component validation does not imply that every module is publicly released or accepted on other platforms.
 
 ## Product principles
 
@@ -76,6 +76,7 @@ The first [NuGet preview](https://www.nuget.org/packages/NativeWeave.HelloWorld/
 - [Background and implementation boundaries](docs/background.md)
 - [Getting started and troubleshooting](docs/getting-started.md)
 - [Generated API reference](docs/api-reference.md) and [interop contract](docs/interop.md)
+- [Server applications](docs/guides/server-application.md), [gRPC](docs/guides/protocols-grpc.md), [MCP](docs/guides/protocols-mcp.md) and [request diagnostics](docs/guides/server-diagnostics.md)
 - [Contributing](CONTRIBUTING.md), [security policy](SECURITY.md), [release setup](docs/releasing.md)
 - [NativeWeave-Design](https://github.com/IzuSharp/NativeWeave-Design): research, accepted specifications and API design
 - [Plan](https://github.com/IzuSharp/Plan): the existing research, documentation and delivery task graph

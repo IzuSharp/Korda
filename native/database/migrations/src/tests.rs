@@ -1,8 +1,14 @@
 use super::*;
 
+// These product counters cover both providers in this test process. Isolate
+// independent cases while retaining each case's actual concurrent operations.
+#[cfg(any(feature = "postgres", feature = "sqlite"))]
+static COUNTER_CASE: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 #[cfg(feature = "postgres")]
 #[tokio::test]
 async fn postgres_connection_deadline_is_independent_of_command_deadline() {
+    let _counters = COUNTER_CASE.lock().await;
     // A real TCP peer accepts PostgreSQL's startup packet but sends no greeting.
     // This isolates connect policy without a DNS/server failure racing the timer.
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -111,6 +117,7 @@ fn sqlite_options(path: &std::path::Path) -> sqlx::sqlite::SqliteConnectOptions 
 #[tokio::test]
 async fn sqlite_three_independent_upstream_depth_oracles_and_atomic_adapter() {
     use sqlx::{Connection, Executor};
+    let _counters = COUNTER_CASE.lock().await;
     let path = sqlite_path("depth");
     let _ = std::fs::remove_file(&path);
     let options = sqlite_options(&path);
@@ -182,6 +189,7 @@ async fn sqlite_three_independent_upstream_depth_oracles_and_atomic_adapter() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn sqlite_contention_idempotency_checksum_cancellation_and_limits() {
     use sqlx::Connection;
+    let _counters = COUNTER_CASE.lock().await;
     let path = sqlite_path("contention");
     let _ = std::fs::remove_file(&path);
     let options = sqlite_options(&path);
@@ -335,6 +343,7 @@ async fn sqlite_contention_idempotency_checksum_cancellation_and_limits() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn postgres_actual_lock_cleanup_permissions_cancel_and_partial_recovery() {
     use sqlx::{Connection, Executor, Row};
+    let _counters = COUNTER_CASE.lock().await;
     let uri = std::env::var("NW_TEST_POSTGRES")
         .expect("B08 PostgreSQL product test requires a real isolated server");
     let base: sqlx::postgres::PgConnectOptions = uri.parse().unwrap();
@@ -603,6 +612,7 @@ async fn postgres_actual_lock_cleanup_permissions_cancel_and_partial_recovery() 
 #[tokio::test]
 async fn sqlite_catalog_distinguishes_rowid_and_composite_primary_keys() {
     use sqlx::{Connection, Executor};
+    let _counters = COUNTER_CASE.lock().await;
     let path = sqlite_path("catalog");
     let _ = std::fs::remove_file(&path);
     let options = sqlite_options(&path);

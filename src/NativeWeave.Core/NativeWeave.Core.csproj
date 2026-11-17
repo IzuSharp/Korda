@@ -36,6 +36,14 @@
     <InternalsVisibleTo Include="NativeWeave.Interop.Memory.Sample" />
     <InternalsVisibleTo Include="NativeWeave.Generators.CSharp.Consumer" />
     <InternalsVisibleTo Include="NativeWeave.Generators.CSharp.Sample" />
+    <InternalsVisibleTo Include="NativeWeave.Server" />
+    <InternalsVisibleTo Include="NativeWeave.Server.Grpc" />
+    <InternalsVisibleTo Include="NativeWeave.Server.Mcp" />
+    <InternalsVisibleTo Include="NativeWeave.Server.Grpc.Tests" />
+    <InternalsVisibleTo Include="NativeWeave.Server.Mcp.Tests" />
+    <InternalsVisibleTo Include="NativeWeave.Server.Streaming.Tests" />
+    <InternalsVisibleTo Include="NativeWeave.Server.Application.Tests" />
+    <InternalsVisibleTo Include="NativeWeave.Server.Native.Tests" />
     <InternalsVisibleTo Include="NativeWeave.Database" />
     <InternalsVisibleTo Include="NativeWeave.Data.NativeHost.Tests" />
     <InternalsVisibleTo Include="NativeWeave.Data.Migrations.Tests" />
