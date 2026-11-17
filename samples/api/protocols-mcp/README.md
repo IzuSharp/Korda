@@ -19,7 +19,14 @@ example uses `X-Demo-Caller: local` only to demonstrate the authenticator seam.
 The only package reference is `NativeWeave.Server.Mcp`; its normal transitive closure
 contains the Server facade and the maintainer-precompiled native module. There is no
 ProjectReference, direct native path, runtime compiler or consumer Rust command.
+The same MCP package supplies the static layout analyzer automatically; the sample
+does not add a separate analyzer reference. It preserves private/inherited field
+metadata needed by JIT and NativeAOT budget checks while the supplied JSON context
+continues to perform the typed serialization.
 
 See [the guide](../../../docs/guides/protocols-mcp.md) for the exact modern MCP metadata,
 Host/Origin policy, bounded JSON profile, cancellation and disposal rules. Changing
 `AddInput`, `AddOutput` or a handler rebuilds C# while preserving the native asset.
+The independent package verifier also exercises a separate DTO/context project with
+no MCP reference. Adding only a private field leaves its public reference assembly
+unchanged but updates the application's generated layout proof and request budget.

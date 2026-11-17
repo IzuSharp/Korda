@@ -110,6 +110,17 @@ and nonpublic fields for every statically reachable class/base and emits a fixed
 proof helper. Before requesting field arrays, registration resolves that one helper in
 only the explicit context, DTO and entry assemblies and verifies its finite counts.
 There is no assembly scan, DTO instantiation, constructor execution or reflection codec.
+Accessible definitions use direct `typeof` identity checks. Private definitions use
+only generated fixed name literals against a statically known assembly; the helper
+never reads an incoming `Type.FullName` or assembly name. Its name-free
+`IdentityLookupBytes(Type)` comparison path supplies the complete fixed-candidate
+lookup cost before either count method can invoke the separate no-inline name resolver.
+Registration admits twice that cost, once for each count delegate, and retains the
+cumulative charge for every attempted helper assembly throughout export. Duplicate
+context/DTO/entry assemblies are not queried again. The complete scratch expression is
+checked before these calls and before each field/cache array request. Missing proof or
+identity-budget failure uses bounded tool/context wording, without formatting the
+unadmitted type name; root-shape diagnostics still name their offending type.
 
 For each class, the bound is its proven base storage (or a 128-byte header margin),
 plus twice every declared field's exact inline width, plus twice the greater of declared
@@ -204,7 +215,17 @@ For `T` distinct metadata types, `C` class/base layouts, `F` declared field slot
 `K` unique plus revisited attribute argument elements and `B` unique plus revisited
 property/default/name/path/attribute bytes, the pre-export reservation is:
 
-`66560 + 4096(T+C) + 1024(P+F) + 256Q + 8192E + 256A + 64K + 16B`.
+`66560 + I + 4096(T+C) + 1024(P+F) + 256Q + 8192E + 256A + 64K + 16B`,
+where `I` is the cumulative pre-admitted identity lookup cost.
+
+For one fixed private resolver invocation, the generated identity bound is a 16 KiB
+cold-helper margin plus, for every candidate it can visit,
+`16 KiB + 64*literalCharacterCount + 8192*(1+nestedSeparatorCount)`.
+The literal retention, parser copies and pinned NativeAOT nested-type lookup caches
+are included. `IdentityLookupBytes` returns zero for a direct covered definition;
+the private bound is checked twice before the two count calls. Bounds saturate to an
+unadmittable integer value instead of overflowing. This is an allocation bound for
+the executed resolver, not a quota on unrelated public descriptors.
 
 After proving that this complete derived bound fits 4 MiB, registration atomically
 reduces its existing grant to that amount. The grant includes retained prewalk state;
@@ -236,6 +257,15 @@ insufficient: wide256 used1,523,920 allocated bytes in Native AOT, exceeding its
 The new repeated32-by32 fixture fails before export based on its repeated visits even
 though its unique metadata stays within the type/property caps. This finding is retained
 as evidence; the failed receipt is never rewritten as a passed run.
+
+An independent check of the first CLR-layout correction found a separate identity
+corner: 60 private types at CLR nesting depth 70 still formed an admitted 62-type,
+120-property JSON graph. Their retained `FullName` UTF-16 payload alone was
+4,209,940 bytes, and registration allocated 9,361,464 bytes. Checking JSON depth did
+not bound CLR identity depth. This is why the final helper pre-admits fixed-literal
+name resolution and never materializes the incoming type's full name for lookup or
+failure reporting. Public direct identity paths do not acquire an unrelated private
+name charge; there is no arbitrary table-size cap or blanket private-DTO prohibition.
 
 `SchemaFixtures.cs` measures allocated bytes around the full repeated prewalk/export,
 checks the reservation and encoded cap, and separately verifies metadata boundary

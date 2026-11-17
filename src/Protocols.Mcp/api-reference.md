@@ -66,7 +66,7 @@ public NativeWeave.Server.Mcp.McpRegistry.McpRegistry()
 
 Creates an empty registry without opening native resources.
 
-Configuration is single threaded. MapMcp freezes registration; handlers and metadata remain rooted until the owning application retires. At most1024 entries of each kind and4MiB aggregate metadata are admitted; each schema is at most64KiB. Ordinary DTO/handler changes only rebuild C#. The authenticated endpoint policy applies to every automatic list and business call.
+Configuration is single threaded. MapMcp freezes registration; handlers and metadata remain rooted until the owning application retires. At most1024 entries of each kind and4MiB aggregate metadata are admitted; each schema is at most64KiB. The package's compiler analyzer preserves complete static DTO fields for bounded JIT and NativeAOT layout inspection; ordinary DTO/handler changes only rebuild C#. The authenticated endpoint policy applies to every automatic list and business call.
 
 
 ## `M:NativeWeave.Server.Mcp.McpRegistry.AddPrompt(System.String,System.String,System.Collections.Generic.IReadOnlyList{NativeWeave.Server.Mcp.McpPromptArgument},System.Func{System.Collections.Generic.IReadOnlyDictionary{System.String,System.String},NativeWeave.Server.Mcp.McpCallContext,System.Threading.Tasks.Task{System.Collections.Generic.IReadOnlyList{NativeWeave.Server.Mcp.McpPromptMessage}}})`
@@ -114,7 +114,7 @@ public NativeWeave.Server.Mcp.McpRegistry NativeWeave.Server.Mcp.McpRegistry.Add
 
 Registers one typed tool using explicit source-generated input/output JSON metadata.
 
-Schema export runs once under startup scratch admission. Root-only object normalization preserves nested nullability. Successful results produce both structuredContent and one JSON text item; unexpected business/output exceptions produce a redacted tool error.
+Schema export and complete CLR layout inspection run once under startup scratch admission. Private, ignored and inherited storage and value-type padding contribute to per-tool input/output admission before native SDK parsing, so sparse input can still exceed the request budget. Root-only object normalization preserves nested nullability; one nonsemantic root extension records the proven allocation terms in the exact registered schema. Successful results produce both structuredContent and one JSON text item; unexpected business/output exceptions produce a redacted tool error.
 
 - **TInput**: A non-null statically mapped object input DTO.
 - **TOutput**: A non-null statically mapped object output DTO.
@@ -124,7 +124,7 @@ Schema export runs once under startup scratch admission. Root-only object normal
 - **outputTypeInfo**: Explicit static output metadata; no reflection fallback.
 - **handler**: Typed callback invoked after one shared authorization gate and input validation.
 - **returns**: This registry for further registration before MapMcp.
-- **T:System.ArgumentException**: The identity/schema is invalid, duplicate or outside the finite subset; schema failures identify NWAPI-S004.
+- **T:System.ArgumentException**: The identity/schema is invalid, duplicate or outside the finite subset, or its complete static layout proof is absent or exceeds startup scratch; schema failures identify NWAPI-S004.
 - **T:System.InvalidOperationException**: Registration is already frozen.
 
 ## `M:NativeWeave.Server.Mcp.McpTextResource.#ctor(System.String,System.String,System.String)`
@@ -457,7 +457,7 @@ NativeWeave.Server.Mcp.McpRegistry | kind=Class;static=False;sealed=True;abstrac
 
 Registers finite static tools, fixed text resources and string-argument prompts.
 
-Configuration is single threaded. MapMcp freezes registration; handlers and metadata remain rooted until the owning application retires. At most1024 entries of each kind and4MiB aggregate metadata are admitted; each schema is at most64KiB. Ordinary DTO/handler changes only rebuild C#. The authenticated endpoint policy applies to every automatic list and business call.
+Configuration is single threaded. MapMcp freezes registration; handlers and metadata remain rooted until the owning application retires. At most1024 entries of each kind and4MiB aggregate metadata are admitted; each schema is at most64KiB. The package's compiler analyzer preserves complete static DTO fields for bounded JIT and NativeAOT layout inspection; ordinary DTO/handler changes only rebuild C#. The authenticated endpoint policy applies to every automatic list and business call.
 
 
 ## `T:NativeWeave.Server.Mcp.McpTextResource`

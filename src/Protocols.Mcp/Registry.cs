@@ -4,7 +4,7 @@ using System.Text.Json.Serialization.Metadata;
 namespace NativeWeave.Server.Mcp;
 
 /// <summary>Registers finite static tools, fixed text resources and string-argument prompts.</summary>
-/// <remarks>Configuration is single threaded. MapMcp freezes registration; handlers and metadata remain rooted until the owning application retires. At most1024 entries of each kind and4MiB aggregate metadata are admitted; each schema is at most64KiB. Ordinary DTO/handler changes only rebuild C#. The authenticated endpoint policy applies to every automatic list and business call.</remarks>
+/// <remarks>Configuration is single threaded. MapMcp freezes registration; handlers and metadata remain rooted until the owning application retires. At most1024 entries of each kind and4MiB aggregate metadata are admitted; each schema is at most64KiB. The package's compiler analyzer preserves complete static DTO fields for bounded JIT and NativeAOT layout inspection; ordinary DTO/handler changes only rebuild C#. The authenticated endpoint policy applies to every automatic list and business call.</remarks>
 public sealed class McpRegistry
 {
     private readonly List<McpEntry> _entries = [];
@@ -24,9 +24,9 @@ public sealed class McpRegistry
     /// <param name="outputTypeInfo">Explicit static output metadata; no reflection fallback.</param>
     /// <param name="handler">Typed callback invoked after one shared authorization gate and input validation.</param>
     /// <returns>This registry for further registration before MapMcp.</returns>
-    /// <exception cref="ArgumentException">The identity/schema is invalid, duplicate or outside the finite subset; schema failures identify NWAPI-S004.</exception>
+    /// <exception cref="ArgumentException">The identity/schema is invalid, duplicate or outside the finite subset, or its complete static layout proof is absent or exceeds startup scratch; schema failures identify NWAPI-S004.</exception>
     /// <exception cref="InvalidOperationException">Registration is already frozen.</exception>
-    /// <remarks>Schema export runs once under startup scratch admission. Root-only object normalization preserves nested nullability. Successful results produce both structuredContent and one JSON text item; unexpected business/output exceptions produce a redacted tool error.</remarks>
+    /// <remarks>Schema export and complete CLR layout inspection run once under startup scratch admission. Private, ignored and inherited storage and value-type padding contribute to per-tool input/output admission before native SDK parsing, so sparse input can still exceed the request budget. Root-only object normalization preserves nested nullability; one nonsemantic root extension records the proven allocation terms in the exact registered schema. Successful results produce both structuredContent and one JSON text item; unexpected business/output exceptions produce a redacted tool error.</remarks>
     public McpRegistry AddTool<TInput, TOutput>(string name, string description, JsonTypeInfo<TInput> inputTypeInfo, JsonTypeInfo<TOutput> outputTypeInfo, Func<TInput, McpCallContext, Task<McpToolResult<TOutput>>> handler)
     {
         Mutable(); McpValidation.Name(name, nameof(name)); McpValidation.Text(description, 4096, nameof(description), true); ArgumentNullException.ThrowIfNull(handler);

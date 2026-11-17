@@ -71,8 +71,11 @@ output = Generate("""
     """);
 Check(output.Contains("\"Container.Base`1\", \"LayoutFixture\"", StringComparison.Ordinal), "inaccessible generic base documentation target");
 Check(output.Contains("\"Container.Dto\", \"LayoutFixture\"", StringComparison.Ordinal), "inaccessible DTO documentation target");
-Check(output.Contains("name == \"Container+Base`1\"", StringComparison.Ordinal), "inaccessible generic proof uses reflection name");
+Check(output.Contains(".Assembly.GetType(\"Container+Base`1\", false, false)", StringComparison.Ordinal), "inaccessible generic proof uses fixed reflection name");
 Check(!output.Contains("typeof(global::Container.", StringComparison.Ordinal), "no inaccessible typeof expression");
+Check(!output.Contains(".FullName", StringComparison.Ordinal) && !output.Contains(".GetName()", StringComparison.Ordinal), "no incoming identity expansion");
+Check(output.Contains("MethodImplOptions.NoInlining", StringComparison.Ordinal), "private literal method is isolated from direct paths");
+Check(output.Contains("IdentityLookupBytes", StringComparison.Ordinal), "nonallocating lookup-cost proof is emitted");
 
 output = Generate("""
     internal sealed class Input { public Child? Child { get; set; } }

@@ -32,7 +32,9 @@ internal static class StaticSchema
         try
         {
             var layout = new ManagedLayout(name, context);
-            var walk = new MetadataWalk(name, context, layout); walk.Visit(typeInfo, 1); walk.CountExport(typeInfo);
+            var walk = new MetadataWalk(name, context, layout);
+            layout.ScratchUsed = () => walk.Scratch;
+            walk.Visit(typeInfo, 1); walk.CountExport(typeInfo);
             long nodeBytes = layout.NodeBytes, replyBytes = layout.ReplyBytes(typeInfo);
             if (nodeBytes > 1L << 40 || replyBytes > 1L << 40) throw McpValidation.Schema(name, typeInfo.Type, "managed layout terms exceed the finite native annotation range");
             long scratch = walk.Scratch;
@@ -83,7 +85,7 @@ internal static class StaticSchema
         private long _exportNodes, _exportBytes, _exportAttributes, _exportElements;
         private long _minimumEnumNodes;
         private int _constantElements;
-        internal long Scratch => checked(66_560L + 4096L * (Types + layout.LayoutTypes) + 1024L * (Properties + layout.Fields) + 256L * layout.ReflectionFields + 8192L * _exportNodes
+        internal long Scratch => checked(66_560L + layout.IdentityBytes + 4096L * (Types + layout.LayoutTypes) + 1024L * (Properties + layout.Fields) + 256L * layout.ReflectionFields + 8192L * _exportNodes
             + 16L * (Names + Constants + _exportBytes) + 256L * (Attributes + _exportAttributes) + 64L * (_constantElements + _exportElements));
         // Mirrors only the pinned exporter's cache/traversal cardinality, never
         // its JSON schema semantics. Scalar contexts are deliberately uncached.

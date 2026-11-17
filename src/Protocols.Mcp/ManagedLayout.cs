@@ -20,6 +20,8 @@ internal sealed class ManagedLayout(string name, JsonSerializerContext context)
     private long _maximumValue;
     internal int Fields { get; private set; }
     internal int ReflectionFields { get; private set; }
+    internal long IdentityBytes { get; private set; }
+    internal Func<long> ScratchUsed { private get; set; } = null!;
     internal int LayoutTypes => _classes.Count;
     internal long NodeBytes => Math.Max(4096, checked(4 * _maximumStorage));
 
@@ -43,8 +45,9 @@ internal sealed class ManagedLayout(string name, JsonSerializerContext context)
     {
         var proof = FieldProof(type);
         if (proof.Reflection > 4096 - ReflectionFields)
-            throw McpValidation.Schema(name, type, "enum reflection-cache metadata exceeds its finite prewalk bound");
+            throw McpValidation.SchemaScratch(name, "enum reflection-cache metadata exceeds its finite prewalk bound");
         ReflectionFields += proof.Reflection;
+        CheckScratch(0);
     }
 
     private long BoxingPath(JsonTypeInfo info)
@@ -68,15 +71,16 @@ internal sealed class ManagedLayout(string name, JsonSerializerContext context)
     private long ClassStorage(Type type)
     {
         if (_classes.TryGetValue(type, out long cached)) return cached;
-        if (_classes.Count >= 64) throw McpValidation.Schema(name, type, "class/base layout metadata exceeds64 types");
+        if (_classes.Count >= 64) throw McpValidation.SchemaScratch(name, "class/base layout metadata exceeds64 types");
         var proof = FieldProof(type);
         if (proof.Declared > 1024 - Fields || proof.Reflection > 4096 - ReflectionFields)
-            throw McpValidation.Schema(name, type, "complete layout/reflection-cache metadata exceeds its finite prewalk bound");
+            throw McpValidation.SchemaScratch(name, "complete layout/reflection-cache metadata exceeds its finite prewalk bound");
         Fields += proof.Declared; ReflectionFields += proof.Reflection;
         _classes.Add(type, 0);
+        CheckScratch(0);
         long bytes = type.BaseType is { } parent && parent != typeof(object) ? ClassStorage(parent) : 128;
         var fields = InstanceFields(type);
-        if (fields.Length > proof.Declared) throw McpValidation.Schema(name, type, "compiled instance field count exceeds its preserved static proof");
+        if (fields.Length > proof.Declared) throw McpValidation.SchemaScratch(name, "compiled instance field count exceeds its preserved static proof");
         long explicitEnd = 0;
         foreach (var field in fields)
         {
@@ -87,7 +91,7 @@ internal sealed class ManagedLayout(string name, JsonSerializerContext context)
             bytes = checked(bytes + 2 * width);
             if (field.GetCustomAttribute<FieldOffsetAttribute>() is { } offset)
             {
-                if (offset.Value < 0) throw McpValidation.Schema(name, type, "negative instance field offset");
+                if (offset.Value < 0) throw McpValidation.SchemaScratch(name, "negative instance field offset");
                 explicitEnd = Math.Max(explicitEnd, checked(offset.Value + width));
             }
         }
@@ -103,11 +107,13 @@ internal sealed class ManagedLayout(string name, JsonSerializerContext context)
 
     private (int Declared, int Reflection) FieldProof(Type type)
     {
-        var proof = Find(context.GetType().Assembly, type);
-        if (proof.Declared < 0) proof = Find(type.Assembly, type);
-        if (proof.Declared < 0 && Assembly.GetEntryAssembly() is { } entry) proof = Find(entry, type);
+        var contextAssembly = context.GetType().Assembly;
+        var typeAssembly = type.Assembly;
+        var proof = Find(contextAssembly, type);
+        if (proof.Declared < 0 && typeAssembly != contextAssembly) proof = Find(typeAssembly, type);
+        if (proof.Declared < 0 && Assembly.GetEntryAssembly() is { } entry && entry != contextAssembly && entry != typeAssembly) proof = Find(entry, type);
         if (proof.Declared >= 0 && proof.Reflection >= proof.Declared) return proof;
-        throw McpValidation.Schema(name, type, "complete CLR instance layout is not preserved; include the NativeWeave MCP compiler analyzer in the static-context project or register concrete tools in the entry project");
+        throw McpValidation.SchemaScratch(name, "complete CLR instance layout is not preserved; include the NativeWeave MCP compiler analyzer in the static-context project or register concrete tools in the entry project");
     }
 
     private (int Declared, int Reflection) Find(Assembly assembly, Type type)
@@ -116,10 +122,25 @@ internal sealed class ManagedLayout(string name, JsonSerializerContext context)
         {
             proof = Lookup(assembly); _proofs.Add(assembly, proof);
         }
-        return proof is null ? (-1, -1) : (proof.Declared(type), proof.Reflection(type));
+        if (proof is null) return (-1, -1);
+        // This generated method only compares Type identities. Fixed private
+        // name literals and Assembly.GetType execute in a separate no-inline
+        // method only after the complete source-proven lookup cost is admitted.
+        int identity = proof.Identity(type);
+        if (identity < 0) return (-1, -1);
+        long extra = 2L * identity; // Each count delegate performs one lookup.
+        CheckScratch(extra);
+        IdentityBytes += extra;
+        return (proof.Declared(type), proof.Reflection(type));
     }
 
-    private sealed record Proof(Func<Type, int> Declared, Func<Type, int> Reflection);
+    private void CheckScratch(long additional)
+    {
+        if (additional > 4 * 1024 * 1024L - ScratchUsed())
+            throw McpValidation.SchemaScratch(name, "generated layout identity/reflection proof exceeds4MiB startup scratch before name or field lookup");
+    }
+
+    private sealed record Proof(Func<Type, int> Identity, Func<Type, int> Declared, Func<Type, int> Reflection);
 
     [UnconditionalSuppressMessage("Trimming", "IL2026", Justification = "Only the one fixed compiler-generated helper type is queried; its reachable ModuleInitializer explicitly preserves that type and its exact lookup method. No assembly/type enumeration or runtime codec discovery occurs.")]
     [UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "The MCP generator roots this exact helper method and signature through DynamicDependency; an absent helper fails closed before any instance-field array is requested.")]
@@ -128,8 +149,9 @@ internal sealed class ManagedLayout(string name, JsonSerializerContext context)
         var type = assembly.GetType(ProofType, false, false);
         if (type is null) return null;
         const BindingFlags flags = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+        var identity = type.GetMethod("IdentityLookupBytes", flags)?.CreateDelegate<Func<Type, int>>();
         var declared = type.GetMethod("DeclaredInstanceFieldCount", flags)?.CreateDelegate<Func<Type, int>>();
         var reflection = type.GetMethod("ReflectionFieldCount", flags)?.CreateDelegate<Func<Type, int>>();
-        return declared is null || reflection is null ? null : new(declared, reflection);
+        return identity is null || declared is null || reflection is null ? null : new(identity, declared, reflection);
     }
 }

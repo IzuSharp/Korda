@@ -144,4 +144,7 @@ internal static class McpValidation
         if (value.Any(c => !(char.IsAsciiLetterOrDigit(c) || c is '_' or '-' or '.'))) throw new ArgumentException("An MCP name uses only ASCII letters, digits, underscore, hyphen or period.", name);
     }
     internal static ArgumentException Schema(string name, Type type, string reason) => new($"NWAPI-S004: tool '{name}' type '{type}' must use a finite static non-null object DTO: {reason}.");
+    // A rejected layout identity has not been admitted for name materialization.
+    // Root-shape errors above still name their offending type as specified.
+    internal static ArgumentException SchemaScratch(string name, string reason) => new($"NWAPI-S004: tool '{name}' explicit static context cannot supply a bounded layout proof: {reason}.");
 }

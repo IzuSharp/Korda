@@ -47,6 +47,23 @@ internal readonly struct LayoutProof(int declared, int reflection)
         ? MetadataName(parent) + "+" + type.MetadataName
         : (type.ContainingNamespace.IsGlobalNamespace ? "" : type.ContainingNamespace.ToDisplayString() + ".") + type.MetadataName;
 
+    internal static int IdentityCost(IEnumerable<string> names)
+    {
+        long bytes = 16 * 1024; bool any = false;
+        foreach (string name in names)
+        {
+            any = true;
+            // Actual SDK11 CoreCLR/NativeAOT Assembly.GetType: retained fixed
+            // literal + copied parser names/namespace fragments + per-name
+            // reflection caches and a 64-slot queried-member temporary for each
+            // new declaring component. Sum every candidate reachable when the
+            // private method is JIT-compiled/invoked; this is not a case cap.
+            bytes += 16 * 1024L + 64L * name.Length + 8192L * (1 + name.Count(static character => character == '+'));
+            if (bytes >= int.MaxValue) return int.MaxValue;
+        }
+        return any ? (int)bytes : -1;
+    }
+
     internal static LayoutProof Create(INamedTypeSymbol definition)
     {
         var declared = Members(definition);

@@ -56,14 +56,24 @@ Field(LocalContext.Default.PrimaryDto.Type, "Changed", IntPtr.Size);
 Check(proof.Reflection(typeof(ExampleKind)) >= 3, "enum cache proof covers constants and underlying field");
 Field(LocalContext.Default.RecordDto.Type, "<Text>k__BackingField", IntPtr.Size);
 Check(JsonSerializer.Deserialize("{\"Text\":\"record\"}"u8, LocalContext.Default.RecordDto) == new RecordDto("record"), "record static metadata and fieldless IEquatable proof");
+Application.Register(new McpRegistry());
+Check(true, "ordinary concrete external AddTool registration succeeds");
+try
+{
+    Application.RegisterGeneric(ExternalMetadata.Unmarked);
+    throw new InvalidOperationException("Missing proof must reject before field reflection.");
+}
+catch (ArgumentException error) when (error.Message.Contains("NWAPI-S004", StringComparison.Ordinal) && error.Message.Contains("layout", StringComparison.Ordinal))
+{ Check(true, "generic erased external registration fails closed through the public API"); }
 Console.WriteLine($"MCP layout preservation: {assertions} assertions passed; dynamic={RuntimeFeature.IsDynamicCodeSupported}; helper=bounded.");
 
 internal static class Application
 {
     // This is an actual product API call over a precompiled external context.
-    // Registration is not executed by this field-preservation-only witness.
     internal static void Register(McpRegistry registry) => registry.AddTool("external", "external context", ExternalMetadata.Root, ExternalMetadata.Root,
         static (ExternalRoot value, McpCallContext _) => Task.FromResult(McpToolResult<ExternalRoot>.Success(value)));
+    internal static void RegisterGeneric<T>(JsonTypeInfo<T> info) => new McpRegistry().AddTool("unmarked", "erased external context", info, info,
+        static (T value, McpCallContext _) => Task.FromResult(McpToolResult<T>.Success(value)));
 }
 
 internal static class Reflection

@@ -31,11 +31,12 @@ public sealed class LayoutProofAnalyzer : DiagnosticAnalyzer
             if (!analysis.SemanticModel.SyntaxTree.FilePath.EndsWith("NativeWeave.Mcp.Layout.g.cs", StringComparison.Ordinal)) return;
             var compilation = analysis.SemanticModel.Compilation;
             var helper = compilation.GetTypeByMetadataName("NativeWeave.Server.Mcp.Generated.LayoutPreservation");
-            var method = helper?.GetMembers("Proof").OfType<IMethodSymbol>().SingleOrDefault();
-            if (method?.DeclaringSyntaxReferences.SingleOrDefault()?.GetSyntax(analysis.CancellationToken) is not MethodDeclarationSyntax { Body: { } body }) return;
-            if (body.SyntaxTree != analysis.SemanticModel.SyntaxTree) return;
+            if (helper is null) return;
             var all = LayoutProof.AllMetadata(compilation);
-            foreach (var statement in body.Statements.OfType<IfStatementSyntax>())
+            var bodies = helper.GetMembers().OfType<IMethodSymbol>().Where(static method => method.Name is "DirectProof" or "PrivateProof")
+                .Select(method => method.DeclaringSyntaxReferences.SingleOrDefault()?.GetSyntax(analysis.CancellationToken)).OfType<MethodDeclarationSyntax>()
+                .Where(method => method.SyntaxTree == analysis.SemanticModel.SyntaxTree).Select(static method => method.Body!);
+            foreach (var statement in bodies.SelectMany(static body => body.Statements).OfType<IfStatementSyntax>())
             {
                 analysis.CancellationToken.ThrowIfCancellationRequested();
                 if (statement.Statement is not ReturnStatementSyntax { Expression: TupleExpressionSyntax tuple } || tuple.Arguments.Count != 2) continue;
@@ -46,9 +47,11 @@ public sealed class LayoutProofAnalyzer : DiagnosticAnalyzer
                     assemblyName = named.ContainingAssembly.Identity.Name;
                     metadata = LayoutProof.MetadataName(named.OriginalDefinition);
                 }
-                else if (statement.Condition is BinaryExpressionSyntax
-                    { Left: BinaryExpressionSyntax { Right: LiteralExpressionSyntax assembly }, Right: BinaryExpressionSyntax { Right: LiteralExpressionSyntax name } })
-                { assemblyName = assembly.Token.ValueText; metadata = name.Token.ValueText; }
+                else if (statement.Condition is BinaryExpressionSyntax { Right: InvocationExpressionSyntax
+                    { Expression: MemberAccessExpressionSyntax { Expression: MemberAccessExpressionSyntax { Expression: TypeOfExpressionSyntax anchor } }, ArgumentList.Arguments: var arguments } } &&
+                    arguments.Count == 3 && arguments[0].Expression is LiteralExpressionSyntax name &&
+                    analysis.SemanticModel.GetTypeInfo(anchor.Type, analysis.CancellationToken).Type is INamedTypeSymbol owner)
+                { assemblyName = owner.ContainingAssembly.Identity.Name; metadata = name.Token.ValueText; }
                 else continue;
                 var type = LayoutProof.Resolve(all, assemblyName, metadata);
                 int[] expected = tuple.Arguments.Select(static item => int.Parse(((LiteralExpressionSyntax)item.Expression).Token.ValueText, CultureInfo.InvariantCulture)).ToArray();

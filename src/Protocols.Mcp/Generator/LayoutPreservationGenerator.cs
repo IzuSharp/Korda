@@ -58,12 +58,23 @@ public sealed class LayoutPreservationGenerator : IIncrementalGenerator
         foreach (var call in calls) foreach (var type in call) roots.Add(type);
         var all = LayoutProof.AllMetadata(compilation);
         var preserved = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+        var observed = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
         foreach (var root in roots.OrderBy(static type => type.ToDisplayString(), StringComparer.Ordinal))
-            if (LayoutProof.Rebind(all, root) is { } completeRoot) Visit(output, completeRoot, preserved);
+            if (LayoutProof.Rebind(all, root) is { } completeRoot) Visit(output, completeRoot, preserved, observed);
         if (preserved.Count == 0) return;
 
+        var anchors = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var candidate in observed.OrderBy(static type => type.ToDisplayString(), StringComparer.Ordinal))
+        {
+            var definition = candidate.OriginalDefinition;
+            string assembly = definition.ContainingAssembly.Identity.Name;
+            if (anchors.ContainsKey(assembly) || !all.IsSymbolAccessibleWithin(definition, all.Assembly)) continue;
+            var reference = definition.IsGenericType ? definition.ConstructUnboundGenericType() : definition;
+            anchors.Add(assembly, reference.ToDisplayString(Full));
+        }
         var direct = new SortedDictionary<string, string>(StringComparer.Ordinal);
         var indirect = new SortedDictionary<string, string>(StringComparer.Ordinal);
+        var identities = new SortedDictionary<string, string>(StringComparer.Ordinal);
         var dependencies = new SortedSet<string>(StringComparer.Ordinal);
         foreach (var type in preserved)
         {
@@ -80,12 +91,21 @@ public sealed class LayoutPreservationGenerator : IIncrementalGenerator
                 var reference = definition.IsGenericType ? definition.ConstructUnboundGenericType() : definition;
                 direct[assembly + "|" + metadata] = "        if (definition == typeof(" + reference.ToDisplayString(Full) + ")" + result;
             }
-            else if (proof.Declared >= 0) indirect[assembly + "|" + metadata] = "        if (assembly == " + Literal(assembly) + " && name == " + Literal(metadata) + result;
+            else if (proof.Declared >= 0)
+            {
+                string? anchor = assembly == all.Assembly.Identity.Name ? "global::NativeWeave.Server.Mcp.Generated.LayoutPreservation" :
+                    anchors.TryGetValue(assembly, out string known) ? known : null;
+                if (anchor is not null)
+                {
+                    indirect[assembly + "|" + metadata] = "        if (definition == typeof(" + anchor + ").Assembly.GetType(" + Literal(metadata) + ", false, false)" + result;
+                    identities[assembly + "|" + metadata] = metadata;
+                }
+            }
             // typeof retains each accessible closed instantiation. A private
             // nested/base type cannot be named here; the documented string
             // overload retains its field definitions, including closed generic
             // substitutions. That overload uses documentation names (nested
-            // dots), unlike the reflection FullName marker (nested pluses).
+            // dots), unlike fixed Assembly.GetType names (nested pluses).
             // The actual NativeAOT witness covers this branch.
             string target = all.IsSymbolAccessibleWithin(type, all.Assembly)
                 ? "typeof(" + type.ToDisplayString(Full) + ")"
@@ -96,14 +116,18 @@ public sealed class LayoutPreservationGenerator : IIncrementalGenerator
         code.Append("namespace NativeWeave.Server.Mcp.Generated\n{\ninternal static class LayoutPreservation\n{\n");
         code.Append("    internal static int DeclaredInstanceFieldCount(global::System.Type type) => Proof(type).Item1;\n")
             .Append("    internal static int ReflectionFieldCount(global::System.Type type) => Proof(type).Item2;\n")
+            .Append("    internal static int IdentityLookupBytes(global::System.Type type) => DirectProof(type).Item1 >= 0 ? 0 : ").Append(LayoutProof.IdentityCost(identities.Values)).Append(";\n")
             .Append("    private static (int, int) Proof(global::System.Type type)\n    {\n")
+            .Append("        var direct = DirectProof(type);\n        return direct.Item1 >= 0 ? direct : PrivateProof(type);\n    }\n")
+            .Append("    private static (int, int) DirectProof(global::System.Type type)\n    {\n")
             .Append("        var definition = type.IsGenericType ? type.GetGenericTypeDefinition() : type;\n");
         foreach (string proof in direct.Values) code.Append(proof);
-        if (indirect.Count != 0)
-        {
-            code.Append("        string? name = definition.FullName;\n        string? assembly = definition.Assembly.GetName().Name;\n");
-            foreach (string proof in indirect.Values) code.Append(proof);
-        }
+        code.Append("        return (-1, -1);\n    }\n");
+        code.Append("    [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]\n")
+            .Append("    [global::System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(\"Trimming\", \"IL2026\", Justification = \"Only fixed compiler-discovered type names on statically anchored assemblies are resolved. The reachable module initializer preserves their exact fields; callers pre-admit IdentityLookupBytes before this separate non-inlined method can materialize literals or lookup caches.\")]\n")
+            .Append("    private static (int, int) PrivateProof(global::System.Type type)\n    {\n")
+            .Append("        var definition = type.IsGenericType ? type.GetGenericTypeDefinition() : type;\n");
+        foreach (string proof in indirect.Values) code.Append(proof);
         code.Append("        return (-1, -1);\n    }\n");
         foreach (string dependency in dependencies) code.Append(dependency);
         code.Append("    [global::System.Diagnostics.CodeAnalysis.DynamicDependency(global::System.Diagnostics.CodeAnalysis.DynamicallyAccessedMemberTypes.NonPublicMethods, typeof(LayoutPreservation))]\n");
@@ -111,7 +135,7 @@ public sealed class LayoutPreservationGenerator : IIncrementalGenerator
         output.AddSource("NativeWeave.Mcp.Layout.g.cs", SourceText.From(code.ToString(), Encoding.UTF8));
     }
 
-    private static void Visit(SourceProductionContext output, ITypeSymbol root, HashSet<INamedTypeSymbol> preserved)
+    private static void Visit(SourceProductionContext output, ITypeSymbol root, HashSet<INamedTypeSymbol> preserved, HashSet<INamedTypeSymbol> observed)
     {
         var seen = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
         var queue = new Queue<(ITypeSymbol Type, int Depth)>();
@@ -122,6 +146,7 @@ public sealed class LayoutPreservationGenerator : IIncrementalGenerator
             var item = queue.Dequeue();
             var type = item.Type.WithNullableAnnotation(NullableAnnotation.None);
             if (!Closed(type) || !seen.Add(type)) continue;
+            if (type is INamedTypeSymbol known) observed.Add(known);
             if (type is INamedTypeSymbol { TypeKind: TypeKind.Enum } enumeration)
             { preserved.Add(enumeration); continue; }
             if (Scalar(type)) continue;
@@ -139,6 +164,7 @@ public sealed class LayoutPreservationGenerator : IIncrementalGenerator
             if (named.TypeKind is not (TypeKind.Class or TypeKind.Struct) || FrameworkContainer(named)) continue;
             for (var owner = named; owner is not null && owner.SpecialType is not (SpecialType.System_Object or SpecialType.System_ValueType); owner = owner.BaseType)
             {
+                observed.Add(owner);
                 if (owner.IsReferenceType) preserved.Add(owner);
                 foreach (var member in owner.GetMembers())
                 {

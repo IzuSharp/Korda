@@ -27,13 +27,35 @@ The generated internal helper has one fixed name:
 `NativeWeave.Server.Mcp.Generated.LayoutPreservation`. Its
 `DeclaredInstanceFieldCount(Type)` and `ReflectionFieldCount(Type)` methods
 return conservative upper bounds, or `-1` when coverage is absent. The runtime
-binds these two exact methods as typed delegates in explicitly known assemblies;
+binds these exact methods as typed delegates in explicitly known assemblies;
 it does not enumerate assembly attributes or load a registration table. These
 methods are themselves retained by the reachable module initializer. Accessible
-types compare the generic definition directly with `typeof`; inaccessible
-definitions compare their full metadata name and assembly simple name. That
-fallback can allocate identity strings and is covered by the runtime's reserved
-prewalk scratch; the helper is not universally allocation-free.
+types compare the generic definition directly with `typeof`. Inaccessible
+definitions compare against `Assembly.GetType` using fixed emitted metadata
+names on a statically accessible assembly anchor. They never expand the incoming
+type's `FullName`, `ToString` or assembly identity. Unknown types only traverse
+the same finite known candidates.
+
+`IdentityLookupBytes(Type)` is queried before either field-count method. It
+returns zero for a direct `typeof` match, `-1` when no private lookup exists, or
+a conservative byte allowance for one private lookup. A separate `NoInlining`
+method contains the private literals, so direct lookup and the cost query cannot
+cause that method's literals to materialize during JIT compilation. For each
+private candidate, `L` is its fixed UTF16 literal length and `D` the number of
+nested `+` separators. The allowance is:
+
+`16 KiB helper cold margin + sum(16 KiB + 64L + 8 KiB * (D + 1))`.
+
+The runtime checks twice this allowance before the two count calls, retains it
+in the complete startup scratch calculation, and reports missing/oversized
+proof without formatting an incoming type identity. The formula covers actual
+retained literals, parser/name/namespace copies, and the fixed NativeAOT lookup
+cache/temporary layouts. It overcounts shared parents and warm candidates; it
+is neither an exact allocation measurement nor an arbitrary catalog-count cap.
+The actual-runtime URLs, hashes and component inputs are recorded in
+`runtime-identity-sources.json`. A public `AddTool` regression with long legal
+private identities verifies rejection before identity expansion under JIT and
+NativeAOT, while ordinary private/generic/external fixtures remain admitted.
 
 The compiler resolves only the discovered definitions through Roslyn's public
 `MetadataImportOptions.All` view. Its default imported view can omit private
