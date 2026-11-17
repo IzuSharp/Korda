@@ -12,6 +12,9 @@ internal abstract unsafe class AsyncNativeCalls
     internal abstract uint Start(nint operation, in NwOperationCallbacksV1 callbacks);
     internal abstract uint RequestCancel(nint operation);
     internal abstract uint TryRetire(nint operation);
+    /// <summary>Maps a terminal domain failure while a cleanup control lease still protects the operation.</summary>
+    internal virtual Exception MapFailure(nint operation, uint status, in NwErrorInfoV1 error, CancellationToken token) =>
+        NativeError.Create("async", "terminal", status, in error, token);
     /// <summary>Nonthrowingly closes the owning engine's ordinary admission, preserving trusted cleanup.</summary>
     internal abstract void Poison();
 }
@@ -68,6 +71,8 @@ internal abstract class AsyncOperation : CoordinatedCallback, IDisposable, IAsyn
     private uint _nativeStatus;
     private NwErrorInfoV1 _error = new() { StructSize = 24 };
     private Exception? _localFailure;
+    private Exception? _terminalFailure;
+    internal Exception? TerminalFailure => Volatile.Read(ref _terminalFailure);
     private bool _localCanceled;
     private uint _cancelFailureStatus;
     private AsyncStartOutcome _startOutcome;
@@ -470,11 +475,21 @@ internal abstract class AsyncOperation : CoordinatedCallback, IDisposable, IAsyn
                     PublishFailure(failure);
                     MarkResultProcessed();
                 }
-                else if (_nativeStatus == NativeStatus.Canceled) { PublishCanceled(_token); MarkResultProcessed(); }
                 else if (_nativeStatus != NativeStatus.Ok)
                 {
-                    PublishFailure(NativeError.Create("async", "terminal", _nativeStatus, in _error, _token));
-                    MarkResultProcessed();
+                    bool lease = false;
+                    AsyncOperation? previous = s_callbackScope;
+                    s_callbackScope = this;
+                    try
+                    {
+                        nint pointer = AcquireControl(ref lease, cleanup: true);
+                        Exception failure = _native.MapFailure(pointer, _nativeStatus, in _error, _token);
+                        Volatile.Write(ref _terminalFailure, failure);
+                        if (_nativeStatus == NativeStatus.Canceled && failure is OperationCanceledException) PublishCanceled(_token);
+                        else PublishFailure(failure);
+                    }
+                    catch (Exception error) { PublishFailure(error); }
+                    finally { ReleaseControl(ref lease, notify: false); s_callbackScope = previous; MarkResultProcessed(); }
                 }
                 else
                 {

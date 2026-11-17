@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
+    <IsPackable>true</IsPackable>
     <AssemblyName>NativeWeave.Database.Transactions</AssemblyName>
     <RootNamespace>NativeWeave.Database</RootNamespace>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>

@@ -2,7 +2,8 @@ use crate::{ErrorKind, ProviderError, Result, SessionConfig};
 use nativeweave_data_codecs::Parameters;
 use sqlx::{
     AssertSqlSafe, Column, Connection, Executor, Postgres, Statement, TypeInfo,
-    pool::PoolConnection, postgres::PgArguments,
+    pool::PoolConnection,
+    postgres::{PgArguments, PgTypeInfo},
 };
 use sqlx_core::sql_str::SqlSafeStr;
 use std::sync::{
@@ -338,6 +339,28 @@ impl Session {
     }
     /// Prepares through SQLx and snapshots types even when the result has no rows.
     pub async fn describe(&self, command: Command) -> Result<Vec<ColumnMetadata>> {
+        let types = command
+            .parameters
+            .as_ref()
+            .map(Parameters::postgres_types)
+            .transpose()?
+            .unwrap_or_default();
+        self.describe_typed(command, types).await
+    }
+    /// Describes with the same SQLx scalar type identities used by execution. The
+    /// caller can retain its validated Parameters owner for the later stream; only
+    /// the bounded type vector and SQL snapshot move into this metadata worker.
+    pub async fn describe_typed(
+        &self,
+        command: Command,
+        types: Vec<PgTypeInfo>,
+    ) -> Result<Vec<ColumnMetadata>> {
+        if types.len() > nativeweave_data_contracts::MAX_NODES {
+            return Err(ProviderError::new(
+                ErrorKind::Configuration,
+                "PostgreSQL description parameter limit",
+            ));
+        }
         self.inner.validate(&command)?;
         let operation = self.inner.admit()?;
         let inner = Arc::clone(&self.inner);
@@ -346,7 +369,7 @@ impl Session {
             let mut guard = inner.conn.lock().await;
             let result = if let Some(connection) = guard.as_mut() {
                 (&mut **connection)
-                    .prepare(AssertSqlSafe(command.sql).into_sql_str())
+                    .prepare_with(AssertSqlSafe(command.sql).into_sql_str(), &types)
                     .await
                     .map(|d| {
                         d.columns()

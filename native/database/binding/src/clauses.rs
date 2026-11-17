@@ -460,9 +460,6 @@ impl QueryArena {
             22 => {
                 let f = parse(&[(1, 3, true)])?;
                 let timeout = f.u64(1)?;
-                if timeout == 0 {
-                    return Err(invalid("timeout must be finite and positive"));
-                }
                 self.marker(borrowed.len())?;
                 self.timeout_ns = timeout;
                 Ok(0)

@@ -4,12 +4,16 @@ namespace NativeWeave.Data;
 /// <typeparam name="T">The result value or entity type.</typeparam>
 /// <param name="row">A borrowed stack-only reader valid only for the call.</param>
 /// <returns>The owned result; no row borrow may escape.</returns>
+/// <remarks>The callback runs synchronously while its batch lease is live. Decoding and the application
+/// constructor create owned CLR values; borrowed reader state must not escape or cross an await.</remarks>
 public delegate T RowMaterializer<T>(RowReader row);
 
 /// <summary>Synchronously extracts typed entity values before native dispatch.</summary>
 /// <typeparam name="T">The application entity type.</typeparam>
 /// <param name="row">A stack-only writer valid only for this snapshot.</param>
 /// <param name="value">The application entity.</param>
+/// <remarks>The callback runs synchronously during a finite input snapshot. Typed writes copy encoded
+/// values into owned buffers before native dispatch; the stack-only writer must not be retained.</remarks>
 public delegate void EntityWriter<T>(RowWriter row, T value);
 
 internal interface IRowLease
@@ -132,6 +136,8 @@ public readonly struct ResultColumn<T>
 }
 
 /// <summary>An immutable exact result alias, logical codec configuration and SQL nullability.</summary>
+/// <remarks>Creating a field allocates one managed metadata object with no native resource. It can be
+/// retained in a static projection; source-specific codec binding occurs separately at registration.</remarks>
 public sealed class ResultField
 {
     internal ResultField(string name, CodecDescriptor descriptor) { Name = name; Descriptor = descriptor; }
@@ -159,8 +165,9 @@ public sealed class ResultField
 /// no CLR delegate or function pointer is encoded in metadata. Instances are shareable if their delegates are.</remarks>
 public sealed class Projection<T>
 {
-    internal Projection(ResultField[] fields, RowMaterializer<T> materializer, TableIdentity? table = null, bool scalar = false)
-    { Fields = fields; Materializer = materializer; Table = table; IsScalar = scalar; CanonicalBytes = Canonical.Projection(fields); ShapeHash = Canonical.Hash(CanonicalBytes); }
+    internal Projection(ResultField[] fields, RowMaterializer<T> materializer, TableIdentity? table = null, bool scalar = false, object? tokenIdentity = null)
+    { Fields = fields; Materializer = materializer; Table = table; IsScalar = scalar; TokenIdentity = tokenIdentity ?? this; CanonicalBytes = Canonical.Projection(fields); ShapeHash = Canonical.Hash(CanonicalBytes); }
+    private object TokenIdentity { get; }
     internal ResultField[] Fields { get; }
     internal RowMaterializer<T> Materializer { get; }
     internal TableIdentity? Table { get; }
@@ -199,12 +206,12 @@ public sealed class Projection<T>
                 throw new DatabaseException("The complete ordered row shape differs from its projection.", DatabaseErrorKind.ShapeMismatch);
             if (lease.Value(i) is null && !expected.IsNullable) throw new DatabaseException("A non-null column contains SQL NULL.", DatabaseErrorKind.Conversion);
         }
-        return Materializer(new RowReader(lease, this, Table));
+        return Materializer(new RowReader(lease, TokenIdentity, Table));
     }
 }
 
 internal sealed record ColumnValue(IColumn Column, byte[]? Bytes);
-internal sealed class RowSnapshot(TableIdentity table)
+internal sealed class RowSnapshot(TableIdentity table, int? remainingBytes = null)
 {
     private readonly Dictionary<uint, ColumnValue> _values = [];
     private bool _complete;
@@ -214,7 +221,13 @@ internal sealed class RowSnapshot(TableIdentity table)
         if (!ReferenceEquals(table, column.Identity)) throw new ArgumentException("The column belongs to another table.", nameof(column));
         if (_values.ContainsKey(column.Id)) throw new ArgumentException("The writer assigned a column twice.", nameof(column));
         if (column.Definition.Options.IsGenerated) { _values.Add(column.Id, new(column.Binding, null)); return; }
-        var bytes = column.Snapshot(value);
+        var bytes = remainingBytes is { } available ? column.Codec.EncodeBounded(value, available) : column.Snapshot(value);
+        if (remainingBytes is { } remaining)
+        {
+            if (bytes is not null && column.Definition.Options.MaxLength is { } maximum && bytes.Length > maximum)
+                throw new ArgumentException("The value exceeds its declared byte capacity.", nameof(value));
+            remainingBytes = checked(remaining - (bytes?.Length ?? 0));
+        }
         _values.Add(column.Id, new(column.Binding, bytes));
     }
     internal ColumnValue[] Complete(IColumn[] columns)
@@ -223,9 +236,15 @@ internal sealed class RowSnapshot(TableIdentity table)
         if (columns.Any(c => !c.Definition.Options.IsGenerated && !_values.ContainsKey(c.Definition.Id))) throw new ArgumentException("The writer omitted a required column.");
         return columns.Where(c => !c.Definition.Options.IsGenerated).Select(c => _values[c.Definition.Id]).ToArray();
     }
-    internal static ColumnValue[] Capture<TEntity>(Table<TEntity> table, TEntity value) where TEntity : class
+    internal static ColumnValue[] Capture<TEntity>(Table<TEntity> table, TEntity value) where TEntity : class => CaptureCore(table, value, null);
+    internal static ColumnValue[] Capture<TEntity>(Table<TEntity> table, TEntity value, int maximumBytes) where TEntity : class
     {
-        ArgumentNullException.ThrowIfNull(value); var snapshot = new RowSnapshot(table.Identity);
+        if (maximumBytes < 0 || maximumBytes > DbWire.MaxEncodedBytes) throw ValueCodec<byte>.Capacity();
+        return CaptureCore(table, value, maximumBytes);
+    }
+    private static ColumnValue[] CaptureCore<TEntity>(Table<TEntity> table, TEntity value, int? maximumBytes) where TEntity : class
+    {
+        ArgumentNullException.ThrowIfNull(value); var snapshot = new RowSnapshot(table.Identity, maximumBytes);
         try { table.Writer(new RowWriter(snapshot), value); return snapshot.Complete(table.Columns); }
         finally { snapshot._complete = true; }
     }

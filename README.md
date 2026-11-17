@@ -4,7 +4,7 @@
 
 NativeWeave aims to let developers write complete applications in natural, strongly typed C# while deeply reusing mature Rust engines. Native AOT, low-overhead interop and precompiled NuGet assets connect the two ecosystems. Performance and memory improvements are engineering goals to measure against equivalent workloads, never unconditional claims of superiority over C# or Rust.
 
-> **Current state: experimental bootstrap.** This repository implements a real C# → Rust Hello World, package consumption and Native AOT verification. Database, ORM, Server and the broader engine ecosystem remain planned. Public preview packages currently support Linux x64 only.
+> **Current state: experimental implementation.** The Hello World release loop is joined by Linux x64 Database Host, migrations, SeaQuery-backed Fluent queries, static DTO materialization and explicit relation/CRUD components. Their component evidence and ordinary NuGet/JIT/NativeAOT consumers are recorded in the Task-05 Plan handoff. Server work proceeds independently. The existing public preview release still packages Hello World on Linux x64; component validation does not imply that every module is publicly released or accepted on other platforms.
 
 ## Product principles
 
@@ -43,7 +43,15 @@ Console.WriteLine(RustGreeting.Greet());
 
 ## Verify the complete local loop
 
+The composed database workspace tests require an isolated PostgreSQL 18.0 test
+server. Set `NW_TEST_POSTGRES` to its URI before verification; its test account
+must be able to create/drop temporary databases and roles. The Linux workflow
+starts a digest-pinned local PostgreSQL service for these tests. Use a disposable
+test database, as the migration tests deliberately exercise permission failures,
+partial migrations and recovery.
+
 ```sh
+export NW_TEST_POSTGRES=postgresql://nativeweave@127.0.0.1:5432/postgres
 python3 eng/build.py verify
 ```
 

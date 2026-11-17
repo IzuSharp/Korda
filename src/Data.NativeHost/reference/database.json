@@ -1,0 +1,315 @@
+{
+  "assembly": "NativeWeave.Database, Version=0.1.0.0, Culture=neutral, PublicKeyToken=null",
+  "symbols": [
+    {
+      "id": "F:NativeWeave.Database.DatabaseProvider.PostgreSql",
+      "signature": "NativeWeave.Database.DatabaseProvider.PostgreSql = 0",
+      "implicit_member": false
+    },
+    {
+      "id": "F:NativeWeave.Database.DatabaseProvider.Sqlite",
+      "signature": "NativeWeave.Database.DatabaseProvider.Sqlite = 1",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Database.DataSession.BeginTransactionAsync(NativeWeave.Database.TransactionOptions,System.Threading.CancellationToken)",
+      "signature": "public System.Threading.Tasks.Task\u003CNativeWeave.Database.DataTransaction\u003E NativeWeave.Database.DataSession.BeginTransactionAsync(NativeWeave.Database.TransactionOptions options, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Database.DataSession.BeginTransactionAsync(System.Threading.CancellationToken)",
+      "signature": "public System.Threading.Tasks.Task\u003CNativeWeave.Database.DataTransaction\u003E NativeWeave.Database.DataSession.BeginTransactionAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Database.DataSession.CloseAsync(System.TimeSpan,System.Threading.CancellationToken)",
+      "signature": "public System.Threading.Tasks.Task\u003CNativeWeave.Database.DatabaseCloseResult\u003E NativeWeave.Database.DataSession.CloseAsync(System.TimeSpan waitBudget, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Database.DataSession.Dispose",
+      "signature": "public void NativeWeave.Database.DataSession.Dispose()",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Database.DataSession.DisposeAsync",
+      "signature": "public System.Threading.Tasks.ValueTask NativeWeave.Database.DataSession.DisposeAsync()",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Database.DataSession.ExecuteAsync(NativeWeave.Data.SqlCommand,System.Threading.CancellationToken)",
+      "signature": "public System.Threading.Tasks.Task\u003Clong\u003E NativeWeave.Database.DataSession.ExecuteAsync(NativeWeave.Data.SqlCommand command, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Database.DataSession.QueryAsync\u0060\u00601(NativeWeave.Data.SqlCommand,NativeWeave.Data.Projection{\u0060\u00600},System.Threading.CancellationToken)",
+      "signature": "public System.Threading.Tasks.Task\u003CSystem.Collections.Generic.IReadOnlyList\u003CT\u003E\u003E NativeWeave.Database.DataSession.QueryAsync\u003CT\u003E(NativeWeave.Data.SqlCommand command, NativeWeave.Data.Projection\u003CT\u003E projection, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Database.DataSession.ScalarAsync\u0060\u00601(NativeWeave.Data.SqlCommand,NativeWeave.Data.ValueCodec{\u0060\u00600},System.Threading.CancellationToken)",
+      "signature": "public System.Threading.Tasks.Task\u003CT\u003E NativeWeave.Database.DataSession.ScalarAsync\u003CT\u003E(NativeWeave.Data.SqlCommand command, NativeWeave.Data.ValueCodec\u003CT\u003E codec, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Database.DataSession.StreamAsync\u0060\u00601(NativeWeave.Data.SqlCommand,NativeWeave.Data.Projection{\u0060\u00600},System.Threading.CancellationToken)",
+      "signature": "public System.Collections.Generic.IAsyncEnumerable\u003CT\u003E NativeWeave.Database.DataSession.StreamAsync\u003CT\u003E(NativeWeave.Data.SqlCommand command, NativeWeave.Data.Projection\u003CT\u003E projection, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Database.DataSource.CanConnectAsync(System.Threading.CancellationToken)",
+      "signature": "public System.Threading.Tasks.Task\u003Cbool\u003E NativeWeave.Database.DataSource.CanConnectAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Database.DataSource.CloseAsync(System.TimeSpan,System.Threading.CancellationToken)",
+      "signature": "public System.Threading.Tasks.Task\u003CNativeWeave.Database.DatabaseCloseResult\u003E NativeWeave.Database.DataSource.CloseAsync(System.TimeSpan waitBudget, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Database.DataSource.Dispose",
+      "signature": "public void NativeWeave.Database.DataSource.Dispose()",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Database.DataSource.DisposeAsync",
+      "signature": "public System.Threading.Tasks.ValueTask NativeWeave.Database.DataSource.DisposeAsync()",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Database.DataSource.OpenSessionAsync(System.Threading.CancellationToken)",
+      "signature": "public System.Threading.Tasks.Task\u003CNativeWeave.Database.DataSession\u003E NativeWeave.Database.DataSource.OpenSessionAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Database.DataSourceBuilder.#ctor",
+      "signature": "public NativeWeave.Database.DataSourceBuilder.DataSourceBuilder()",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Database.DataSourceBuilder.Build",
+      "signature": "public NativeWeave.Database.DataSource NativeWeave.Database.DataSourceBuilder.Build()",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Database.DataSourceBuilder.ConfigureLimits(NativeWeave.Database.DatabaseLimits)",
+      "signature": "public NativeWeave.Database.DataSourceBuilder NativeWeave.Database.DataSourceBuilder.ConfigureLimits(NativeWeave.Database.DatabaseLimits limits)",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Database.DataSourceBuilder.WithName(System.String)",
+      "signature": "public NativeWeave.Database.DataSourceBuilder NativeWeave.Database.DataSourceBuilder.WithName(string name)",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Database.DatabaseCapabilities.Supports(System.String)",
+      "signature": "public bool NativeWeave.Database.DatabaseCapabilities.Supports(string capability)",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Database.DatabaseLimits.#ctor",
+      "signature": "public NativeWeave.Database.DatabaseLimits.DatabaseLimits()",
+      "implicit_member": true
+    },
+    {
+      "id": "M:NativeWeave.Database.DatabaseLimits.Equals(NativeWeave.Database.DatabaseLimits)",
+      "signature": "public bool NativeWeave.Database.DatabaseLimits.Equals(NativeWeave.Database.DatabaseLimits? other)",
+      "implicit_member": true
+    },
+    {
+      "id": "M:NativeWeave.Database.DatabaseLimits.Equals(System.Object)",
+      "signature": "public override bool NativeWeave.Database.DatabaseLimits.Equals(object? obj)",
+      "implicit_member": true
+    },
+    {
+      "id": "M:NativeWeave.Database.DatabaseLimits.GetHashCode",
+      "signature": "public override int NativeWeave.Database.DatabaseLimits.GetHashCode()",
+      "implicit_member": true
+    },
+    {
+      "id": "M:NativeWeave.Database.DatabaseLimits.ToString",
+      "signature": "public override string NativeWeave.Database.DatabaseLimits.ToString()",
+      "implicit_member": true
+    },
+    {
+      "id": "M:NativeWeave.Database.DatabaseLimits.op_Equality(NativeWeave.Database.DatabaseLimits,NativeWeave.Database.DatabaseLimits)",
+      "signature": "public static bool NativeWeave.Database.DatabaseLimits.operator ==(NativeWeave.Database.DatabaseLimits? left, NativeWeave.Database.DatabaseLimits? right)",
+      "implicit_member": true
+    },
+    {
+      "id": "M:NativeWeave.Database.DatabaseLimits.op_Inequality(NativeWeave.Database.DatabaseLimits,NativeWeave.Database.DatabaseLimits)",
+      "signature": "public static bool NativeWeave.Database.DatabaseLimits.operator !=(NativeWeave.Database.DatabaseLimits? left, NativeWeave.Database.DatabaseLimits? right)",
+      "implicit_member": true
+    },
+    {
+      "id": "M:NativeWeave.Database.DatabaseLimits.{Clone}$",
+      "signature": "public NativeWeave.Database.DatabaseLimits NativeWeave.Database.DatabaseLimits.\u003CClone\u003E$()",
+      "implicit_member": true
+    },
+    {
+      "id": "M:NativeWeave.Database.DatabaseProvider.#ctor",
+      "signature": "public NativeWeave.Database.DatabaseProvider.DatabaseProvider()",
+      "implicit_member": true
+    },
+    {
+      "id": "P:NativeWeave.Database.DataSession.Cleanup",
+      "signature": "public NativeWeave.Database.DatabaseCloseResult NativeWeave.Database.DataSession.Cleanup { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Database.DataSession.Source",
+      "signature": "public NativeWeave.Database.DataSource NativeWeave.Database.DataSession.Source { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Database.DataSession.Transaction",
+      "signature": "public NativeWeave.Database.DataTransaction? NativeWeave.Database.DataSession.Transaction { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Database.DataSource.Capabilities",
+      "signature": "public NativeWeave.Database.DatabaseCapabilities NativeWeave.Database.DataSource.Capabilities { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Database.DataSource.Cleanup",
+      "signature": "public NativeWeave.Database.DatabaseCloseResult NativeWeave.Database.DataSource.Cleanup { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Database.DataSource.Limits",
+      "signature": "public NativeWeave.Database.DatabaseLimits NativeWeave.Database.DataSource.Limits { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Database.DataSource.Name",
+      "signature": "public string NativeWeave.Database.DataSource.Name { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Database.DataSource.Provider",
+      "signature": "public NativeWeave.Database.DatabaseProvider NativeWeave.Database.DataSource.Provider { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Database.DatabaseCapabilities.Names",
+      "signature": "public System.Collections.Generic.IReadOnlyList\u003Cstring\u003E NativeWeave.Database.DatabaseCapabilities.Names { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Database.DatabaseCapabilities.Profile",
+      "signature": "public string NativeWeave.Database.DatabaseCapabilities.Profile { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Database.DatabaseCapabilities.Provider",
+      "signature": "public NativeWeave.Database.DatabaseProvider NativeWeave.Database.DatabaseCapabilities.Provider { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Database.DatabaseLimits.AdmissionTimeout",
+      "signature": "public System.TimeSpan NativeWeave.Database.DatabaseLimits.AdmissionTimeout { get; init; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Database.DatabaseLimits.CommandTimeout",
+      "signature": "public System.TimeSpan NativeWeave.Database.DatabaseLimits.CommandTimeout { get; init; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Database.DatabaseLimits.MaxBatchBytes",
+      "signature": "public long NativeWeave.Database.DatabaseLimits.MaxBatchBytes { get; init; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Database.DatabaseLimits.MaxBatchRows",
+      "signature": "public int NativeWeave.Database.DatabaseLimits.MaxBatchRows { get; init; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Database.DatabaseLimits.MaxBufferedBytes",
+      "signature": "public long NativeWeave.Database.DatabaseLimits.MaxBufferedBytes { get; init; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Database.DatabaseLimits.MaxBufferedRows",
+      "signature": "public int NativeWeave.Database.DatabaseLimits.MaxBufferedRows { get; init; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Database.DatabaseLimits.MaxConnections",
+      "signature": "public int NativeWeave.Database.DatabaseLimits.MaxConnections { get; init; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Database.DatabaseLimits.MaxFieldBytes",
+      "signature": "public long NativeWeave.Database.DatabaseLimits.MaxFieldBytes { get; init; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Database.DatabaseLimits.MaxParameterBytes",
+      "signature": "public long NativeWeave.Database.DatabaseLimits.MaxParameterBytes { get; init; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Database.DatabaseLimits.MaxParameters",
+      "signature": "public int NativeWeave.Database.DatabaseLimits.MaxParameters { get; init; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Database.DatabaseLimits.MaxPreparedPlanBytes",
+      "signature": "public long NativeWeave.Database.DatabaseLimits.MaxPreparedPlanBytes { get; init; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Database.DatabaseLimits.MaxPreparedPlans",
+      "signature": "public int NativeWeave.Database.DatabaseLimits.MaxPreparedPlans { get; init; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Database.DatabaseLimits.MaxQueryDepth",
+      "signature": "public int NativeWeave.Database.DatabaseLimits.MaxQueryDepth { get; init; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Database.DatabaseLimits.MaxQueryNodes",
+      "signature": "public int NativeWeave.Database.DatabaseLimits.MaxQueryNodes { get; init; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Database.DatabaseLimits.MaxWaiters",
+      "signature": "public int NativeWeave.Database.DatabaseLimits.MaxWaiters { get; init; }",
+      "implicit_member": false
+    },
+    {
+      "id": "T:NativeWeave.Database.DataSession",
+      "signature": "public sealed class NativeWeave.Database.DataSession : System.IDisposable, System.IAsyncDisposable",
+      "implicit_member": false
+    },
+    {
+      "id": "T:NativeWeave.Database.DataSource",
+      "signature": "public sealed class NativeWeave.Database.DataSource : System.IDisposable, System.IAsyncDisposable",
+      "implicit_member": false
+    },
+    {
+      "id": "T:NativeWeave.Database.DataSourceBuilder",
+      "signature": "public sealed class NativeWeave.Database.DataSourceBuilder",
+      "implicit_member": false
+    },
+    {
+      "id": "T:NativeWeave.Database.DatabaseCapabilities",
+      "signature": "public sealed class NativeWeave.Database.DatabaseCapabilities",
+      "implicit_member": false
+    },
+    {
+      "id": "T:NativeWeave.Database.DatabaseLimits",
+      "signature": "public sealed record class NativeWeave.Database.DatabaseLimits : System.IEquatable\u003CNativeWeave.Database.DatabaseLimits\u003E",
+      "implicit_member": false
+    },
+    {
+      "id": "T:NativeWeave.Database.DatabaseProvider",
+      "signature": "public enum NativeWeave.Database.DatabaseProvider : int",
+      "implicit_member": false
+    }
+  ]
+}

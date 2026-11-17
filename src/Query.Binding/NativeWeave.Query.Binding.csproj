@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
+    <IsPackable>true</IsPackable>
     <AssemblyName>NativeWeave.Query.Binding</AssemblyName>
     <RootNamespace>NativeWeave.Query.Internal</RootNamespace>
     <IsAotCompatible>true</IsAotCompatible>
@@ -14,5 +15,11 @@
     <InternalsVisibleTo Include="NativeWeave.Query.Binding.Tests" />
     <InternalsVisibleTo Include="NativeWeave.Query.Binding.Sample" />
     <InternalsVisibleTo Include="NativeWeave.Database" />
+    <InternalsVisibleTo Include="NativeWeave.Query.Native.Tests" />
+    <InternalsVisibleTo Include="NativeWeave.Data.Materialization.Tests" />
+    <InternalsVisibleTo Include="NativeWeave.Data.NativeHost.Tests" />
+    <InternalsVisibleTo Include="NativeWeave.Data.Migrations.Tests" />
+    <InternalsVisibleTo Include="NativeWeave.Orm.Relations.Tests" />
+    <InternalsVisibleTo Include="NativeWeave.Query.Fluent.Tests" />
   </ItemGroup>
 </Project>
