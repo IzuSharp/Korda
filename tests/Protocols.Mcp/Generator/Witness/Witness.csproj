@@ -5,6 +5,7 @@
     <IsAotCompatible>true</IsAotCompatible>
     <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
     <CompilerGeneratedFilesOutputPath>$(BaseIntermediateOutputPath)generated</CompilerGeneratedFilesOutputPath>
+    <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifiers)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifiers).aot.lock.json</NuGetLockFilePath>
     <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifier)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifier).aot.lock.json</NuGetLockFilePath>
   </PropertyGroup>
   <ItemGroup>
