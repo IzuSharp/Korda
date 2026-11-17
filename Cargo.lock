@@ -900,6 +900,14 @@ name = "nativeweave-interop-abi"
 version = "0.1.0"
 
 [[package]]
+name = "nativeweave-interop-callbacks"
+version = "0.1.0"
+dependencies = [
+ "nativeweave-interop-abi",
+ "nativeweave-interop-errors",
+]
+
+[[package]]
 name = "nativeweave-interop-errors"
 version = "0.1.0"
 dependencies = [
