@@ -27,6 +27,10 @@
     <InternalsVisibleTo Include="NativeWeave.Interop.Callbacks.Tests" />
     <InternalsVisibleTo Include="NativeWeave.Interop.Callbacks.Sample" />
     <InternalsVisibleTo Include="NativeWeave.Server" />
+    <InternalsVisibleTo Include="NativeWeave.Server.Grpc" />
+    <InternalsVisibleTo Include="NativeWeave.Server.Mcp" />
+    <InternalsVisibleTo Include="NativeWeave.Server.Grpc.Tests" />
+    <InternalsVisibleTo Include="NativeWeave.Server.Mcp.Tests" />
     <InternalsVisibleTo Include="NativeWeave.Server.Streaming.Tests" />
     <InternalsVisibleTo Include="NativeWeave.Server.Application.Tests" />
     <InternalsVisibleTo Include="NativeWeave.Server.Native.Tests" />

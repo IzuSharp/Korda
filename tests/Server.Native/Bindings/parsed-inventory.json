@@ -1,5 +1,5 @@
 {
-  "adapter_sha256": "d962b9b5361fb7db29b43b4cd22f7ed85e2f6ee698a8fbe8ea12b30513aa576c",
+  "adapter_sha256": "e6fb6e1ed3f3367ba2ec740cc97cd11fa836d8488a419050aec6b0ae7387d70d",
   "exports": [
     {
       "calling_convention": "C",

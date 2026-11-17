@@ -18,8 +18,8 @@
   },
   "binding": "docs/interop.md",
   "input_sha256": {
-    "Cargo.toml": "f7d049ffcbbec9ee1617e377380092c261a8a83b362f9299f8ef2d6cbb0e9559",
-    "Cargo.lock": "7afa410c0392a67769a077d09b71a6826411e461503f56ba3e63aa28cb87a1f4",
+    "Cargo.toml": "01837c3e4106f2eb1948765cdc7666896783c9a4a42dd83fc26eea6d35116e0c",
+    "Cargo.lock": "75ac0a849eb88332146b6dcd5679d3bdfc71ff23148dbb860199fe3c25222c10",
     "native/hello-world/Cargo.toml": "d8a3bed0ad443a3681b5d3762aa26614046192de18f812a3af8342f21ce20381",
     "native/hello-world/src/lib.rs": "219e7b07d23f942a763251953fceb152b42cd8ce7830e026ba7141881ca1d70c",
     "docs/interop.md": "9f97ccad09b89286f35fa851dbbeeac82267993516e4eb53824854edad7f8b58",

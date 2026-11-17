@@ -30,8 +30,12 @@
     <InternalsVisibleTo Include="NativeWeave.Server.Streaming.Tests" />
     <InternalsVisibleTo Include="NativeWeave.Server.Hosting" />
     <InternalsVisibleTo Include="NativeWeave.Server.Grpc" />
+    <InternalsVisibleTo Include="NativeWeave.Server.Grpc.Tests" />
     <InternalsVisibleTo Include="NativeWeave.Server.Mcp" />
+    <InternalsVisibleTo Include="NativeWeave.Server.Mcp.Tests" />
     <InternalsVisibleTo Include="NativeWeave.Server.Diagnostics" />
+    <InternalsVisibleTo Include="NativeWeave.Server.Diagnostics.Tests" />
+    <Compile Include="../Server.Diagnostics/**/*.cs" Exclude="../Server.Diagnostics/**/obj/**/*.cs;../Server.Diagnostics/**/bin/**/*.cs" />
   </ItemGroup>
   <Target Name="GenerateServerNativeIdentity" BeforeTargets="PrepareResources;CoreCompile">
     <Error Condition="!Exists('$(NativeWeaveServerAssetPath)')" Text="Build the maintainer Rust Server Host first or supply NativeWeaveServerAssetPath. Consumer builds never invoke Cargo." />

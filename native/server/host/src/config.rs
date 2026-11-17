@@ -50,6 +50,7 @@ pub struct Route {
     pub timeout: Duration,
     pub max_request_bytes: u64,
     pub max_json_bytes: u32,
+    pub mcp: Option<Arc<nativeweave_protocol_mcp::profile::Profile>>,
 }
 
 /// Caller guarantees live ABI storage. Bounds are checked before forming slices.
@@ -381,7 +382,7 @@ pub unsafe fn route(value: *const NwServerRouteV1) -> Result<Route> {
     if v.version != 1 || v.reserved != 0 || v.flags & !1 != 0 || v.handler_id == 0 {
         return Err(invalid());
     }
-    if v.kind != 0 {
+    if v.kind != 0 && v.kind != 2 {
         return Err(ApiError::status(nativeweave_interop_abi::NW_NOT_SUPPORTED));
     }
     // SAFETY: bounded registration text is copied while borrowed.
@@ -395,7 +396,7 @@ pub unsafe fn route(value: *const NwServerRouteV1) -> Result<Route> {
     if !pattern.starts_with('/')
         || pattern.contains(['?', '#'])
         || name.chars().any(char::is_control)
-        || v.protocol_descriptor.length != 0
+        || (v.kind == 0 && v.protocol_descriptor.length != 0)
         || methods.is_empty()
     {
         return Err(invalid());
@@ -446,11 +447,28 @@ pub unsafe fn route(value: *const NwServerRouteV1) -> Result<Route> {
         parsed.push(m);
     }
     if v.max_request_bytes == 0
-        || v.max_json_bytes == 0
+        || (v.kind == 0 && v.max_json_bytes == 0)
         || v.max_json_bytes as u64 > v.max_request_bytes
     {
         return Err(invalid());
     }
+    let mcp = if v.kind == 2 {
+        if !parameters.is_empty() || parsed != [Method::POST] || v.max_json_bytes != 0 {
+            return Err(invalid());
+        }
+        // SAFETY: exact bounded registration bytes are consumed synchronously.
+        let profile = nativeweave_protocol_mcp::profile::Profile::parse(
+            unsafe { bytes(v.protocol_descriptor, 4 * 1024 * 1024)? },
+            v.handler_id,
+        )
+        .map_err(|_| invalid())?;
+        if profile.limits.wire as u64 != v.max_request_bytes {
+            return Err(invalid());
+        }
+        Some(profile)
+    } else {
+        None
+    };
     Ok(Route {
         id: v.handler_id,
         kind: v.kind,
@@ -460,5 +478,6 @@ pub unsafe fn route(value: *const NwServerRouteV1) -> Result<Route> {
         timeout: duration(v.timeout_ns, false)?,
         max_request_bytes: v.max_request_bytes,
         max_json_bytes: v.max_json_bytes,
+        mcp,
     })
 }

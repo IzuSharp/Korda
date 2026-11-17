@@ -28,6 +28,9 @@ internal static partial class NativeHostFactory
 
 internal abstract class HostRequest
 {
+    internal volatile Func<ulong, Task>? ProtocolContinuation;
+    internal Func<Task>? ProtocolJoin { get; set; }
+    internal Task JoinProtocolContinuationAsync() => ProtocolJoin?.Invoke() ?? Task.CompletedTask;
     internal abstract long RouteId { get; }
     internal abstract int Kind { get; }
     internal abstract ServerBodyTransport Body { get; }

@@ -5,7 +5,7 @@ namespace NativeWeave.Server;
 
 /// <summary>Owns one Rust Host, frozen application routing and optionally owned application services.</summary>
 /// <remarks>Single required Rust host; no physical unload; optional capabilities negotiated before use. One app/provider/runtime; Core operation/cancellation records; Pending retains all owners/credits; DisposeAsync joins without a time limit. This policy applies to members unless their documentation states a narrower rule. Configuration is single-threaded before freeze; borrowed request members expire after dispatch cleanup, and asynchronous operations retain native owners until retirement.</remarks>
-public sealed class NativeServerApplication : ServerRoutes, IAsyncDisposable
+public sealed partial class NativeServerApplication : ServerRoutes, IAsyncDisposable
 {
     private readonly ServerHost _host;
     private readonly bool _ownsServices;
@@ -18,7 +18,7 @@ public sealed class NativeServerApplication : ServerRoutes, IAsyncDisposable
     internal ServerConfiguration Configuration { get; }
     internal NativeServerApplication(ServerConfiguration configuration, ServerHost host, IServiceProvider services, bool ownsServices)
         : base(new(), new(null, string.Empty))
-    { Configuration = configuration; _host = host; Services = services; _ownsServices = ownsServices; }
+    { Configuration = configuration; _host = host; Services = services; _ownsServices = ownsServices; InitializeDiagnostics(); }
     /// <summary>Gets application services; request-scoped services are resolved through RequestContext.</summary>
     /// <inheritdoc cref="T:NativeWeave.Server.NativeServerApplication" path="/member/remarks" />
     public IServiceProvider Services { get; }
@@ -142,6 +142,7 @@ public sealed class NativeServerApplication : ServerRoutes, IAsyncDisposable
         await Task.Yield();
         Volatile.Write(ref _state, (int)ServerState.Stopping);
         await _host.DisposeAsync().ConfigureAwait(false);
+        await FlushDiagnosticsAsync().ConfigureAwait(false);
         try
         {
             if (_ownsServices)
@@ -155,11 +156,12 @@ public sealed class NativeServerApplication : ServerRoutes, IAsyncDisposable
     internal async Task DispatchAsync(HostRequest request)
     {
         var previous = Executing.Value; Executing.Value = this;
-        RequestContext? context = null; Exception? failure = null;
+        RequestContext? context = null; Exception? failure = null; ServerRequestDiagnostics? diagnostics = null;
         try
         {
             var route = Registry.Routes.SingleOrDefault(x => x.Id == request.RouteId) ?? throw new InvalidOperationException("Native dispatch supplied an unknown route identity.");
             context = new(this, request, route);
+            diagnostics = BeginDiagnostics(context);
             RequestHandler next = InvokeEndpointAsync;
             for (int i = _middleware.Count - 1; i >= 0; i--)
             {
@@ -167,12 +169,12 @@ public sealed class NativeServerApplication : ServerRoutes, IAsyncDisposable
                 next = (ctx, token) => InvokeMiddlewareAsync(layer, inner, ctx, token);
             }
             await next(context, request.RequestAborted).ConfigureAwait(false);
-            if (request.Kind == 0 || request.Kind == 2) await context.Response.CompleteAsync(request.RequestAborted).ConfigureAwait(false);
+            if (request.Kind == 0) await context.Response.CompleteAsync(request.RequestAborted).ConfigureAwait(false);
         }
         catch (Exception error)
         {
             failure = error;
-            if (context is not null && request.Kind is 0 or 2)
+            if (context is not null && request.Kind == 0)
                 await context.Response.FailAsync(error switch
                 {
                     RequestBindingException => 400,
@@ -181,16 +183,23 @@ public sealed class NativeServerApplication : ServerRoutes, IAsyncDisposable
                     ServerException { Code: "resource_limit" } => 503,
                     _ => 500
                 }).ConfigureAwait(false);
-            else request.Abort();
+            else if (context?.Route.ProtocolDescriptor is not INativeServerProtocolDescriptor) request.Abort();
         }
         finally
         {
+            try
+            {
+                if (context?.Route.ProtocolDescriptor is INativeServerProtocolDescriptor protocol)
+                    await protocol.CompleteDispatchAsync(context, failure).ConfigureAwait(false);
+            }
+            catch (Exception protocolFailure) { failure ??= protocolFailure; request.Abort(); }
+            diagnostics?.ManagedCompleted(context?.Response.DiagnosticStatus ?? 500);
             try { if (context is not null) failure = await context.Response.CleanupAsync(failure).ConfigureAwait(false); }
             finally
             {
                 try { await request.CompleteDispatchAsync().ConfigureAwait(false); }
                 catch { request.Abort(); }
-                finally { Executing.Value = previous; }
+                finally { diagnostics?.Complete(failure); Executing.Value = previous; }
             }
         }
     }

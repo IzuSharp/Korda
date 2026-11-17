@@ -7,7 +7,7 @@ using NativeWeave.Server.Native;
 
 namespace NativeWeave.Server;
 
-internal sealed class NativeRequest : HostRequest
+internal sealed partial class NativeRequest : HostRequest
 {
     internal readonly NativeHost Engine;
     internal NativeResourceOwner Owner = null!;
@@ -23,6 +23,8 @@ internal sealed class NativeRequest : HostRequest
     private TimeSpan _remaining;
     private byte[] _trailers = [0, 0, 0, 0];
     internal Exception? InitializationFailure;
+    internal byte[] GrpcMetadataBytes { get; private set; } = [];
+    private IDisposable? _grpcMetadataCredit;
     private NativeRequest(NativeHost host) { Engine = host; _body = new(this); }
     internal static unsafe NativeRequest Take(NativeHost host, ulong ticket, ulong handler, uint kind)
     {
@@ -36,11 +38,20 @@ internal sealed class NativeRequest : HostRequest
             ServerError.Check(host.Native.nw_server_metadata_read(metadata, &info, &error), in error);
             if (info.request_id != ticket || info.handler_id != handler || info.kind != kind) throw new InvalidOperationException("Native request identity changed across typed take.");
             request._routeId = checked((long)info.handler_id); request._kind = checked((int)info.kind);
+            if (kind == 1)
+            {
+                NwBytesViewV1 decoded = default;
+                ServerError.Check(host.Native.nw_server_metadata_grpc_headers(metadata, &decoded, &error), in error);
+                if (decoded.Length < 4 || decoded.Length > (ulong)Math.Min(32_768, host.Configuration.Options.MaxHeaderBytes) || decoded.Data == null) throw new InvalidOperationException("Invalid native gRPC metadata bounds.");
+                request._grpcMetadataCredit = request._body.AcquireManagedCredit(checked((int)decoded.Length));
+                request.GrpcMetadataBytes = new ReadOnlySpan<byte>(decoded.Data, checked((int)decoded.Length)).ToArray();
+            }
             request._method = NativeCodec.Text(info.method, 256); request._scheme = NativeCodec.Text(info.scheme, 16); request.HostName = NativeCodec.Text(info.authority, 16_384);
             request._path = NativeCodec.Text(info.path, 16_384); request._queryString = NativeCodec.Text(info.raw_query, 16_385); request._protocol = info.protocol switch { 1 => "HTTP/1.1", 2 => "HTTP/2", _ => throw new InvalidOperationException("Invalid native protocol.") };
             request._headers = NativeCodec.Decode(info.headers, host.Configuration.Options.MaxHeaderBytes); request._routeValues = NativeCodec.Decode(info.route_values, 1_048_576, false); request._query = NativeCodec.Decode(info.query_values, 1_048_576, false);
             request._remoteEndPoint = info.peer_family switch { 0 => null, 4 => new IPEndPoint(new IPAddress(new ReadOnlySpan<byte>(info.peer_address, 4)), checked((int)info.peer_port)), 6 => new IPEndPoint(new IPAddress(new ReadOnlySpan<byte>(info.peer_address, 16)), checked((int)info.peer_port)), _ => throw new InvalidOperationException("Invalid native peer family.") };
             request._traceIdentifier = ticket.ToString("x16", System.Globalization.CultureInfo.InvariantCulture);
+            request.PopulateDiagnostics(info.trace_context, info.trace_state);
             request._remaining = TimeSpan.FromTicks(checked((long)(info.remaining_timeout_ns / 100))); request._observed = Stopwatch.GetTimestamp();
             if (info.cancellation_status != 0) request.NotifyCancellation(info.cancellation_status);
             return request;
@@ -62,6 +73,8 @@ internal sealed class NativeRequest : HostRequest
     private int _kind = 0;
     internal override int Kind => _kind;
     internal override ServerBodyTransport Body => _body;
+    internal Task<ServerHandle> ReserveProtocolWriteAsync(int capacity, uint kind, CancellationToken token) => _body.ReserveAndJoinAsync(capacity, kind, token);
+    internal IDisposable AcquireProtocolManagedCredit(int capacity) => _body.AcquireManagedCredit(capacity);
     private string _method = "";
     internal override string Method => _method;
     private string _scheme = "";
@@ -91,6 +104,7 @@ internal sealed class NativeRequest : HostRequest
     internal void NotifyCancellation(uint status)
     {
         if (status is not (2 or 12)) return;
+        RecordCancellationDiagnostics(status);
         lock (_gate) if (!_cancelClosed && !_aborted.IsCancellationRequested) _cancellation = _aborted.CancelAsync();
     }
     internal Task CancellationDrain() { lock (_gate) return _cancellation; }
@@ -159,6 +173,8 @@ internal sealed class NativeRequest : HostRequest
     private async Task CompleteCoreAsync()
     {
         await Task.Yield(); Volatile.Write(ref _ended, 1);
+        GrpcMetadataBytes = [];
+        Interlocked.Exchange(ref _grpcMetadataCredit, null)?.Dispose();
         CompleteNativeDispatch();
         while (true)
         {
@@ -227,6 +243,12 @@ internal sealed class NativeRequest : HostRequest
             using ServerHandle reservation = await ReserveAsync(data.Length, 0, token).ConfigureAwait(false);
             nint operation = CreateWrite(reservation, data);
             await request.Engine.Begin(operation, request.Engine.TakeVoid, token, request).Task.ConfigureAwait(false);
+        }
+        internal async Task<ServerHandle> ReserveAndJoinAsync(int capacity, uint kind, CancellationToken token)
+        {
+            var operation = request.Engine.Begin(CreateReserve(capacity, kind), TakeReservation, token, request);
+            try { return await operation.Task.ConfigureAwait(false); }
+            finally { await operation.Retirement.ConfigureAwait(false); }
         }
         internal Task<ServerHandle> ReserveAsync(int capacity, uint kind, CancellationToken token) => request.Engine.Begin(CreateReserve(capacity, kind), TakeReservation, token, request).Task;
         private unsafe nint CreateReserve(int capacity, uint kind) => request.Engine.Create(request.Owner,

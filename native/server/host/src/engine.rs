@@ -22,6 +22,7 @@ use hyper_util::{
 };
 use nativeweave_interop_abi::*;
 use nativeweave_interop_async::{Operation, WorkLease};
+use nativeweave_server_diagnostics::{Diagnostics, RequestTrace};
 use nativeweave_server_streaming::{
     BodyReader, BodySender, BoundedBody, Budget, Cancellation, OwnedBuffer, PreparedWrite,
     ReadFrame, RequestBudget, StreamError, WriteReservation, body_channel,
@@ -47,7 +48,11 @@ use tokio::{
 };
 use tower::ServiceExt;
 
+#[path = "../../../protocols/mcp/host.rs"]
+pub mod mcp;
+
 pub struct Host {
+    pub diagnostics: Diagnostics,
     pub config: Config,
     pub dispatch: NwServerDispatchV1,
     pub state: AtomicU32,
@@ -86,6 +91,7 @@ impl Host {
             .filter(|x| *x <= Semaphore::MAX_PERMITS)
             .ok_or(invalid())?;
         Ok(Arc::new(Self {
+            diagnostics: Diagnostics::new(),
             config,
             dispatch,
             state: AtomicU32::new(0),
@@ -186,7 +192,10 @@ impl Host {
                         .build()
                         .map_err(|_| ApiError::domain(3))?;
                     *lock(&host.runtime) = Some(runtime.handle().clone());
-                    runtime.block_on(host.clone().run(operation, source));
+                    runtime.block_on(
+                        host.diagnostics
+                            .instrument(host.clone().run(operation, source)),
+                    );
                     drop(runtime);
                     Ok::<(), ApiError>(())
                 }));
@@ -255,7 +264,10 @@ impl Host {
         for (index, listener, _) in listeners {
             let host = self.clone();
             let router = router.clone();
-            acceptors.spawn(async move { host.accept(index, listener, router).await });
+            acceptors.spawn(
+                self.diagnostics
+                    .instrument(async move { host.accept(index, listener, router).await }),
+            );
         }
         self.state.store(2, Ordering::Release);
         operation.complete(Ok(OpResult::Void));
@@ -308,7 +320,7 @@ impl Host {
                     if stream.set_nodelay(true).is_err() { drop(stream); continue; }
                     let Ok(permit)=self.connections.clone().try_acquire_owned()else{self.rejected.fetch_add(1,Ordering::Relaxed);drop(stream);continue;};
                     let tls=self.config.listeners[index].tls.read().unwrap_or_else(|p|p.into_inner()).clone();let host=self.clone();let router=router.clone();
-                    connections.spawn(async move{
+                    connections.spawn(self.diagnostics.instrument(async move{
                         let _permit=permit;
                         if let Some(tls)=tls{
                             let Ok(_handshake)=tls.handshakes.clone().try_acquire_owned()else{return;};
@@ -318,7 +330,7 @@ impl Host {
                             if protocols==2 && negotiated!=Some(b"h2".as_slice()){return;}
                             host.serve(stream,peer,index,true,router).await;
                         }else{host.serve(stream,peer,index,false,router).await;}
-                    });
+                    }));
                 },
                 _=connections.join_next(),if !connections.is_empty()=>{},
             }
@@ -443,6 +455,11 @@ impl Host {
             return response;
         };
         let deadline = Instant::now() + route.timeout;
+        if let Some(profile) = &route.mcp
+            && let Err(status) = mcp::headers(&self, profile, &request)
+        {
+            return simple(status);
+        }
         let peer = request
             .extensions()
             .get::<Peer>()
@@ -457,7 +474,7 @@ impl Host {
             self.fault(NW_CONTRACT_VIOLATION);
             return simple(StatusCode::SERVICE_UNAVAILABLE);
         }
-        let head = match metadata::head(
+        let mut head = match metadata::head(
             &request,
             route,
             &self.config,
@@ -495,19 +512,40 @@ impl Host {
         };
         // SSE formatter backing/growth has a conservative peak above its visible
         // chunk length. Raw operations independently enforce MaxChunkBytes.
-        let write_capacity = self
-            .config
-            .max_chunk_bytes
-            .saturating_mul(3)
-            .min(self.config.request_retained_bytes as usize);
+        let write_capacity = if route.kind == 2 {
+            self.config.request_retained_bytes as usize
+        } else {
+            self.config
+                .max_chunk_bytes
+                .saturating_mul(3)
+                .min(self.config.request_retained_bytes as usize)
+        };
         let (sender, body) = match body_channel(budget.clone(), write_capacity, 1) {
             Ok(v) => v,
             Err(_) => return simple(StatusCode::SERVICE_UNAVAILABLE),
         };
+        let captured = self.diagnostics.capture(request.headers());
+        let diagnostics = self.diagnostics.request(
+            &route.canonical,
+            if head.protocol == 2 {
+                "HTTP/2"
+            } else {
+                "HTTP/1.1"
+            },
+            captured.context,
+        );
+        let mutable_head = Arc::get_mut(&mut head).expect("unshared admitted request metadata");
+        mutable_head.trace = captured.encoded();
+        mutable_head.trace_state = captured.state;
+        let (parts, input_body) = request.into_parts();
+        let mcp = route
+            .mcp
+            .as_ref()
+            .map(|profile| mcp::State::new(profile.clone(), parts));
         let body_limit = Arc::new(AtomicBool::new(false));
         let reader = BodyReader::new(
             ChunkedInput {
-                body: request.into_body(),
+                body: input_body,
                 pending: None,
                 maximum: self.config.max_chunk_bytes,
                 received: 0,
@@ -523,6 +561,7 @@ impl Host {
         peer.life.changed.notify_waiters();
         let request = Arc::new(RequestState {
             host: Arc::downgrade(&self),
+            diagnostics,
             body_limit,
             head,
             reader: tokio::sync::Mutex::new(Some(reader)),
@@ -554,9 +593,14 @@ impl Host {
             }),
             _active: active,
             life: peer.life,
+            mcp,
         });
         lock(&self.requests).insert(id, request.clone());
-        if self.notify_request(&request) != NW_OK {
+        if request
+            .diagnostics
+            .in_scope(|| self.notify_request(&request))
+            != NW_OK
+        {
             request.mark_dispatch_done();
             request.retired.store(true, Ordering::Release);
             request.cancel.cancel();
@@ -567,14 +611,19 @@ impl Host {
         let timer_request = Arc::downgrade(&request);
         let timer_host = self.clone();
         let finished = request.finished.clone();
-        tokio::spawn(async move {
+        tokio::spawn(request.diagnostics.instrument(async move {
             tokio::select! {()=tokio::time::sleep_until(deadline.into())=>{if let Some(r)=timer_request.upgrade(){r.abort(NW_TIMEOUT);}},()=timer_host.abort.cancelled()=>{if let Some(r)=timer_request.upgrade(){r.abort(NW_CANCELED);}},()=finished.cancelled()=>{}}
-        });
+        }));
         let mut waiting = Waiting {
             request: request.clone(),
             committed: false,
         };
-        let head = tokio::select! {result=rx=>result.ok(),()=request.cancel.cancelled()=>None};
+        let head = request
+            .diagnostics
+            .instrument(async {
+                tokio::select! {result=rx=>result.ok(),()=request.cancel.cancelled()=>None}
+            })
+            .await;
         let Some((status, headers)) = head else {
             request.body_ended();
             return simple(
@@ -697,6 +746,8 @@ impl Drop for Waiting {
     }
 }
 pub struct RequestState {
+    pub mcp: Option<mcp::State>,
+    pub diagnostics: RequestTrace,
     body_limit: Arc<AtomicBool>,
     pub host: Weak<Host>,
     pub head: Arc<Head>,
@@ -729,6 +780,9 @@ impl RequestState {
     pub fn mark_dispatch_done(&self) -> bool {
         if self.dispatch_done.swap(true, Ordering::AcqRel) {
             return false;
+        }
+        if let Some(mcp) = &self.mcp {
+            mcp.close();
         }
         if let Some(host) = self.host.upgrade() {
             host.retiring.fetch_add(1, Ordering::AcqRel);
@@ -800,10 +854,10 @@ impl RequestState {
         {
             self.live_ops.fetch_add(1, Ordering::AcqRel);
             let guard = InputDiscard(self.clone());
-            runtime.spawn(async move {
+            runtime.spawn(self.diagnostics.instrument(async move {
                 guard.0.reader.lock().await.take();
                 drop(guard);
-            });
+            }));
         }
     }
     pub fn try_retire(&self) -> u32 {
@@ -906,6 +960,14 @@ pub enum Job {
     Write(Arc<RequestState>, PreparedWrite, usize, SideGuard),
     Flush(Arc<RequestState>, SideGuard),
     Finish(Arc<RequestState>, HeaderMap, SideGuard),
+    McpGate(Arc<RequestState>, u32),
+    McpReply(
+        Arc<RequestState>,
+        u32,
+        nativeweave_protocol_mcp::serde_json::Value,
+        WriteReservation,
+        SideGuard,
+    ),
 }
 pub struct OpState {
     pub operation: Arc<Operation<OpResult>>,
@@ -961,6 +1023,12 @@ impl OpState {
     }
     pub fn execute(self: &Arc<Self>, job: Job) -> Result<()> {
         let source = self.operation.reserve_source().map_err(ApiError::status)?;
+        if let Job::McpGate(request, decision) = &job {
+            if self.cancel.is_canceled() {
+                return Err(ApiError::status(NW_CANCELED));
+            }
+            mcp::commit(request, *decision)?;
+        }
         if matches!(job, Job::Start) {
             self.host.start(self.clone(), source)?;
             return Ok(());
@@ -1004,7 +1072,15 @@ impl OpState {
         handle.spawn(async move {
             let _source = source;
             let future = state.run_job(job);
-            let result = std::panic::AssertUnwindSafe(future).catch_unwind().await;
+            let result = if let Some(request) = &state.request {
+                std::panic::AssertUnwindSafe(request.diagnostics.instrument(future))
+                    .catch_unwind()
+                    .await
+            } else {
+                std::panic::AssertUnwindSafe(state.host.diagnostics.instrument(future))
+                    .catch_unwind()
+                    .await
+            };
             match result {
                 Ok(value) => state.complete(value),
                 Err(payload) => {
@@ -1022,6 +1098,10 @@ impl OpState {
         }
         let work = async {
             match job {
+                Job::McpGate(request, decision) => mcp::gate(request, decision).await,
+                Job::McpReply(request, kind, value, reservation, _side) => {
+                    mcp::reply(&request, kind, value, reservation)
+                }
                 Job::Reload(index, tls) => {
                     if self.host.state.load(Ordering::Acquire) != 2 {
                         return Err(ApiError::status(NW_INVALID_STATE));
@@ -1076,6 +1156,9 @@ impl OpState {
                 }
                 Job::Begin(request, status, headers, _side) => {
                     request.business()?;
+                    if !mcp::raw_output(&request) {
+                        return Err(ApiError::status(NW_INVALID_STATE));
+                    }
                     let length = content_length(&headers)?;
                     if status == 204 && length.is_some()
                         || status == 205 && length.is_some_and(|x| x != 0)
@@ -1128,6 +1211,9 @@ impl OpState {
                 }
                 Job::Flush(request, _side) => {
                     request.business()?;
+                    if !mcp::raw_output(&request) {
+                        return Err(ApiError::status(NW_INVALID_STATE));
+                    }
                     if lock(&request.response).phase != 1 {
                         return Err(ApiError::status(NW_INVALID_STATE));
                     }
@@ -1136,7 +1222,11 @@ impl OpState {
                 }
                 Job::Finish(request, trailers, _side) => {
                     request.business()?;
-                    {
+                    if !mcp::raw_output(&request) {
+                        return Err(ApiError::status(NW_INVALID_STATE));
+                    }
+                    let no_trailers = trailers.is_empty();
+                    let declared_complete = {
                         let mut response = lock(&request.response);
                         if response.phase != 1 {
                             return Err(ApiError::status(NW_INVALID_STATE));
@@ -1161,18 +1251,32 @@ impl OpState {
                             response.phase = 3;
                             return Ok(OpResult::Void);
                         }
-                    }
-                    request
+                        response
+                            .length
+                            .is_some_and(|length| length == response.written)
+                    };
+                    let completed = request
                         .sender
                         .finish(
-                            if trailers.is_empty() {
-                                None
-                            } else {
-                                Some(trailers)
-                            },
+                            if no_trailers { None } else { Some(trailers) },
                             &request.cancel,
                         )
-                        .await?;
+                        .await;
+                    if let Err(error) = completed {
+                        // Hyper may finish a Content-Length body without polling
+                        // an additional End frame. Drop marks body_done before
+                        // closing its receiver. Accept only that already-complete
+                        // local framing case, never a reset, a short body, or
+                        // discarded trailers. This is not peer acknowledgement.
+                        if !matches!(error, StreamError::Closed)
+                            || !no_trailers
+                            || !declared_complete
+                            || !request.body_done.load(Ordering::Acquire)
+                            || request.cancel.is_canceled()
+                        {
+                            return Err(error.into());
+                        }
+                    }
                     lock(&request.response).phase = 3;
                     Ok(OpResult::Void)
                 }
@@ -1280,47 +1384,50 @@ impl Body for OutputBody {
         mut self: Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Option<std::result::Result<Frame<Bytes>, StreamError>>> {
-        if self.ended {
-            return Poll::Ready(None);
-        }
-        // Register before checking the sticky flag: abort must wake a pending
-        // empty Body queue, including failure after headers have been committed.
-        self.request.output_waker.register(cx.waker());
-        if self.request.cancel.is_canceled() {
-            self.end();
-            return Poll::Ready(Some(Err(StreamError::Canceled)));
-        }
-        loop {
-            match Pin::new(&mut self.body).poll_frame(cx) {
-                Poll::Ready(Some(Ok(frame))) => {
-                    if let Some(data) = frame.data_ref() {
-                        self.sent = self.sent.saturating_add(data.len() as u64);
-                        if self.expected.is_some_and(|x| self.sent > x) {
-                            self.request.abort(NW_DOMAIN_ERROR);
-                            self.end();
-                            return Poll::Ready(Some(Err(StreamError::Transport)));
-                        }
-                        if self.suppress {
-                            continue;
-                        }
-                    }
-                    return Poll::Ready(Some(Ok(frame)));
-                }
-                Poll::Ready(None) => {
-                    self.end();
-                    return if self.expected.is_some_and(|x| x != self.sent) {
-                        Poll::Ready(Some(Err(StreamError::Transport)))
-                    } else {
-                        Poll::Ready(None)
-                    };
-                }
-                Poll::Ready(Some(Err(error))) => {
-                    self.end();
-                    return Poll::Ready(Some(Err(error)));
-                }
-                Poll::Pending => return Poll::Pending,
+        let request = self.request.clone();
+        request.diagnostics.in_scope(|| {
+            if self.ended {
+                return Poll::Ready(None);
             }
-        }
+            // Register before checking the sticky flag: abort must wake a pending
+            // empty Body queue, including failure after headers have been committed.
+            self.request.output_waker.register(cx.waker());
+            if self.request.cancel.is_canceled() {
+                self.end();
+                return Poll::Ready(Some(Err(StreamError::Canceled)));
+            }
+            loop {
+                match Pin::new(&mut self.body).poll_frame(cx) {
+                    Poll::Ready(Some(Ok(frame))) => {
+                        if let Some(data) = frame.data_ref() {
+                            self.sent = self.sent.saturating_add(data.len() as u64);
+                            if self.expected.is_some_and(|x| self.sent > x) {
+                                self.request.abort(NW_DOMAIN_ERROR);
+                                self.end();
+                                return Poll::Ready(Some(Err(StreamError::Transport)));
+                            }
+                            if self.suppress {
+                                continue;
+                            }
+                        }
+                        return Poll::Ready(Some(Ok(frame)));
+                    }
+                    Poll::Ready(None) => {
+                        self.end();
+                        return if self.expected.is_some_and(|x| x != self.sent) {
+                            Poll::Ready(Some(Err(StreamError::Transport)))
+                        } else {
+                            Poll::Ready(None)
+                        };
+                    }
+                    Poll::Ready(Some(Err(error))) => {
+                        self.end();
+                        return Poll::Ready(Some(Err(error)));
+                    }
+                    Poll::Pending => return Poll::Pending,
+                }
+            }
+        })
     }
     fn is_end_stream(&self) -> bool {
         self.ended

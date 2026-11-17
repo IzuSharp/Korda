@@ -18,6 +18,8 @@ public sealed class RequestContext
     private ClaimsPrincipal _user = new(new ClaimsIdentity());
     internal HostRequest Native { get; }
     internal RouteDefinition Route { get; }
+    internal object? ProtocolState { get; set; }
+    internal bool ProtocolHttpAllowed { get; set; } = true;
     internal ServerConfiguration Configuration => _application.Configuration;
     internal RequestContext(NativeServerApplication application, HostRequest native, RouteDefinition route)
     {
@@ -53,7 +55,8 @@ public sealed class RequestContext
     public void Abort() { Alive(); Native.Abort(); }
     internal void SetUser(ClaimsPrincipal user) { Alive(); _user = user; }
     internal void Alive() { ObjectDisposedException.ThrowIf(_ended, this); }
-    internal void Http() { Alive(); if (Native.Kind != 0 && Native.Kind != 2) throw new InvalidOperationException("Raw HTTP access is unavailable after protocol admission."); }
+    internal void Http() { Alive(); if (Native.Kind != 0) throw new InvalidOperationException("Raw HTTP input is unavailable for protocol requests."); }
+    internal void HttpResponse() { Alive(); if (Native.Kind != 0 && !(Native.Kind == 2 && ProtocolHttpAllowed)) throw new InvalidOperationException("Raw HTTP output is unavailable after protocol admission."); }
     internal async ValueTask EndScopeAsync()
     { try { if (_scope is { } scope) await scope.DisposeAsync().ConfigureAwait(false); } finally { _ended = true; } }
 }

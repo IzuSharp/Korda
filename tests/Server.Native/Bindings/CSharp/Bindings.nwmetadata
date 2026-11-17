@@ -1,9 +1,9 @@
 nativeweave-metadata-v1
 module	nativeweave.server
-digest	ece711abc990057b03ea61a27313293bded5f17cfaf8d45405c856e3adff11cd
+digest	267fd2fad8bc8aff78b8560f35fc3de3649ffb54e6ab0ab6fbab130802b92d5d
 namespace	NativeWeave.Server.Native.Generated
 library	nativeweave_server
-source_sha256	5d5c9ec0902c90b3bf4f289bdf4457dd7107e4cc740628c0b5797afe04d0b972
+source_sha256	b56105dc46f270b10c580241732e8981efcdd61fced62fc2f39b2d2807bbacfc
 record	NwAbiInfoV1	32	8
 field	NwAbiInfoV1	struct_size	u32	0
 field	NwAbiInfoV1	abi_major	u32	4

@@ -141,7 +141,7 @@ pub unsafe extern "C" fn nw_server_get_abi_v1(
             abi_major: 1,
             abi_minor: 0,
             pointer_width_bits: 64,
-            capabilities: 79,
+            capabilities: 111,
             reserved: 0,
         })
     };
@@ -322,7 +322,7 @@ pub unsafe extern "C" fn nw_server_get_snapshot(
             retained_native_bytes: native,
             rejected_requests: host.rejected.load(Ordering::Relaxed),
             callback_failures: host.callback_failures.load(Ordering::Relaxed),
-            diagnostic_drops: 0,
+            diagnostic_drops: host.diagnostics.dropped(),
         };
         // SAFETY: complete v1 output fits the caller's declared record; no tail write.
         unsafe { out_snapshot.write(value) };
@@ -795,12 +795,16 @@ pub unsafe extern "C" fn nw_server_write_reserve_create(
         // SAFETY: The caller leases the creator-owned handle and supplies live synchronous input/output storage; this entry preserves its typed owner contract.
         let request = unsafe { request(request_ptr)? };
         let host = request.host()?;
-        if kind != 0 && kind != 2 {
+        if kind != 0 && kind != 2 && kind != 3 {
             return Err(ApiError::status(NW_NOT_SUPPORTED));
         }
-        let maximum = (host.config.max_chunk_bytes as u64)
-            .checked_mul(if kind == 2 { 3 } else { 1 })
-            .ok_or(invalid())?;
+        let maximum = if kind == 3 {
+            host.config.request_retained_bytes
+        } else {
+            (host.config.max_chunk_bytes as u64)
+                .checked_mul(if kind == 2 { 3 } else { 1 })
+                .ok_or(invalid())?
+        };
         if native_capacity == 0 || native_capacity > maximum {
             return Err(invalid());
         }
@@ -808,7 +812,12 @@ pub unsafe extern "C" fn nw_server_write_reserve_create(
             return Err(ApiError::domain(1));
         }
         let response = lock(&request.response);
-        if response.phase != 1 || (kind == 2 && !response.sse) {
+        if (kind == 3 && !crate::engine::mcp::state(&request)?.can_reply())
+            || (kind != 3
+                && (!crate::engine::mcp::raw_output(&request)
+                    || response.phase != 1
+                    || (kind == 2 && !response.sse)))
+        {
             return Err(ApiError::status(NW_INVALID_STATE));
         }
         drop(response);
@@ -1059,7 +1068,7 @@ pub unsafe extern "C" fn nw_server_response_begin_create(
             host.config.max_header_bytes,
             false,
         )?;
-        if request.head.kind != 0 || lock(&request.response).phase != 0 {
+        if !crate::engine::mcp::raw_output(&request) || lock(&request.response).phase != 0 {
             return Err(ApiError::status(NW_INVALID_STATE));
         }
         let side = SideGuard::acquire(&request.write_active)?;
@@ -1445,15 +1454,30 @@ pub unsafe extern "C" fn nw_server_grpc_status_create(
 /// Every input record/view must remain valid for the synchronous call; initialized output capacities must be truthful, naturally aligned, exclusive and nonoverlapping. Opaque handles must come from this creating module and remain leased.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_mcp_gate_resume_create(
-    _request: *mut NwServerRequest,
-    _decision: u32,
+    request_ptr: *mut NwServerRequest,
+    decision: u32,
     out_op: *mut *mut NwServerOperation,
     error: *mut NwErrorInfoV1,
 ) -> u32 {
     ffi(error, || {
-        // SAFETY: unsupported optional protocols transfer no owner and always initialize the output.
+        // SAFETY: output is initialized before validating the leased input owner.
         unsafe { output(out_op)? };
-        Err(ApiError::status(NW_NOT_SUPPORTED))
+        // SAFETY: caller holds the creator-owned request for this synchronous create.
+        let request = unsafe { request(request_ptr)? };
+        if decision > 1 {
+            return Err(invalid());
+        }
+        if !crate::engine::mcp::state(&request)?.awaiting() || lock(&request.response).phase != 0 {
+            return Err(ApiError::status(NW_INVALID_STATE));
+        }
+        let op = OpState::new(
+            request.host()?,
+            Some(request.clone()),
+            Job::McpGate(request, decision),
+        )?;
+        // SAFETY: create transfers only an unstarted operation; decision commits at start.
+        unsafe { publish(out_op, op) };
+        Ok(())
     })
 }
 
@@ -1463,17 +1487,52 @@ pub unsafe extern "C" fn nw_server_mcp_gate_resume_create(
 /// Every input record/view must remain valid for the synchronous call; initialized output capacities must be truthful, naturally aligned, exclusive and nonoverlapping. Opaque handles must come from this creating module and remain leased.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_mcp_reply_create(
-    _request: *mut NwServerRequest,
-    _reservation: *mut NwServerWriteReservation,
-    _reply_kind: u32,
-    _result_json: NwBytesViewV1,
+    request_ptr: *mut NwServerRequest,
+    reservation: *mut NwServerWriteReservation,
+    reply_kind: u32,
+    result_json: NwBytesViewV1,
     out_op: *mut *mut NwServerOperation,
     error: *mut NwErrorInfoV1,
 ) -> u32 {
     ffi(error, || {
-        // SAFETY: unsupported optional protocols transfer no owner and always initialize the output.
+        // SAFETY: no owner transfer occurs before validation and slot admission.
         unsafe { output(out_op)? };
-        Err(ApiError::status(NW_NOT_SUPPORTED))
+        // SAFETY: caller leases both creator-owned opaque handles synchronously.
+        let request = unsafe { request(request_ptr)? };
+        let host = request.host()?;
+        // SAFETY: this borrowed reservation remains caller-owned until all checks pass.
+        let token = unsafe { owner(reservation)? }
+            .inner
+            .as_ref()
+            .ok_or(ApiError::status(NW_INVALID_STATE))?;
+        if !Arc::ptr_eq(&token.request, &request) || token.kind != 3 {
+            return Err(ApiError::status(NW_INVALID_STATE));
+        }
+        // SAFETY: input byte view is consumed under the already-owned native peak reservation.
+        let data = unsafe { config::bytes(result_json, 262144)? };
+        let value = crate::engine::mcp::validate_reply(
+            &request,
+            reply_kind,
+            data,
+            token.reservation.capacity(),
+        )?;
+        let slot = host
+            .operation_slots
+            .clone()
+            .try_acquire_owned()
+            .map_err(|_| ApiError::domain(1))?;
+        // SAFETY: every recoverable rejection is complete; move the unique token now.
+        let mut wrapper = unsafe { Box::from_raw(reservation) };
+        let token = wrapper.inner.take().expect("validated reservation");
+        let op = OpState::with_slot(
+            host,
+            Some(request.clone()),
+            Job::McpReply(request, reply_kind, value, token.reservation, token.side),
+            slot,
+        );
+        // SAFETY: operation owns the native value and full reservation until start/release.
+        unsafe { publish(out_op, op) };
+        Ok(())
     })
 }
 
@@ -1483,18 +1542,30 @@ pub unsafe extern "C" fn nw_server_mcp_reply_create(
 /// Every input record/view must remain valid for the synchronous call; initialized output capacities must be truthful, naturally aligned, exclusive and nonoverlapping. Opaque handles must come from this creating module and remain leased.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_mcp_call_take(
-    _request: *mut NwServerRequest,
+    request_ptr: *mut NwServerRequest,
     out_call_kind: *mut u32,
     out_arguments: *mut *mut NwServerBuffer,
     error: *mut NwErrorInfoV1,
 ) -> u32 {
     ffi(error, || {
-        // SAFETY: unsupported protocol output remains null; no argument owner is transferred.
+        // SAFETY: failed take initializes null and leaves the native argument owner in place.
         unsafe { output(out_arguments)? };
         if out_call_kind.is_null() || !out_call_kind.is_aligned() {
             return Err(invalid());
         }
-        Err(ApiError::status(NW_NOT_SUPPORTED))
+        // SAFETY: caller owns the request lease and writable scalar/output slots.
+        let request = unsafe { request(request_ptr)? };
+        let (kind, buffer) = crate::engine::mcp::state(&request)?.take()?;
+        let buffer = Box::new(NwServerBuffer {
+            buffer: Some(buffer),
+            host: request.host.clone(),
+        });
+        // SAFETY: exact-once ownership transfer follows all fallible checks.
+        unsafe {
+            out_call_kind.write(kind);
+            out_arguments.write(Box::into_raw(buffer));
+        }
+        Ok(())
     })
 }
 /// Exact Server ABI entry `nw_server_metadata_grpc_headers`.

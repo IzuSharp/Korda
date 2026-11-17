@@ -101,7 +101,7 @@ pub unsafe extern "C" fn nw_server_get_snapshot(
             retained_native_bytes: native,
             rejected_requests: host.rejected.load(Ordering::Relaxed),
             callback_failures: host.callback_failures.load(Ordering::Relaxed),
-            diagnostic_drops: 0,
+            diagnostic_drops: host.diagnostics.dropped(),
         };
         // SAFETY: complete v1 output fits the caller's declared record; no tail write.
         unsafe { out_snapshot.write(value) };

@@ -425,3 +425,6 @@ fn cancel_before_start_copies_status_and_still_joins_worker() {
     retire_op(raw);
     close(&host, &state);
 }
+
+#[path = "../../../../tests/Server.Diagnostics/native_host.rs"]
+mod diagnostics;

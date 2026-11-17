@@ -268,9 +268,9 @@ internal sealed class RouteDefinition(long id, GroupPolicy group, string pattern
     internal List<string> Tags { get; } = [];
     internal List<ServerFilter> Filters { get; } = [];
     internal List<Action<ServerConfiguration>> ValidateActions { get; } = [];
-    internal TimeSpan EffectiveTimeout { get; private set; }
-    internal long EffectiveMaxRequestBytes { get; private set; }
-    internal int EffectiveMaxJsonBytes { get; private set; }
+    internal TimeSpan EffectiveTimeout { get; set; }
+    internal long EffectiveMaxRequestBytes { get; set; }
+    internal int EffectiveMaxJsonBytes { get; set; }
     internal string[] EffectivePolicies { get; private set; } = [];
     internal ServerFilter[] EffectiveFilters { get; private set; } = [];
     internal object? ProtocolDescriptor { get; set; }
@@ -285,6 +285,7 @@ internal sealed class RouteDefinition(long id, GroupPolicy group, string pattern
         EffectiveMaxRequestBytes = MaxRequestBytes ?? configuration.Options.MaxRequestBodyBytes;
         EffectiveMaxJsonBytes = Kind == 0 ? MaxJsonBytes ?? configuration.Options.MaxJsonBytes : 0;
         if (EffectiveMaxJsonBytes > EffectiveMaxRequestBytes || checked(3L * EffectiveMaxJsonBytes) > Math.Min(configuration.Options.Budget.ManagedPayloadBytes, configuration.Options.Budget.RetainedBytesPerRequest)) throw new InvalidOperationException("The route JSON budget exceeds the body or materialization peak cap.");
+        if (ProtocolDescriptor is INativeServerProtocolDescriptor protocol) protocol.Freeze(this, configuration);
         foreach (var action in ValidateActions) action(configuration);
     }
 }

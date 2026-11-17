@@ -17,6 +17,11 @@ public sealed class ServerResponse
     private Task? _completeTask;
     private Stream? _body;
     private int _status = 200;
+    private readonly HeaderCollection _headers;
+    private readonly HeaderCollection _trailers;
+    private bool _statusConfigured;
+    internal bool HasPendingConfiguration => _statusConfigured || _headers.Count != 0 || _trailers.Count != 0 || _starting.Count != 0 || _startTask is not null;
+    internal int DiagnosticStatus => _status;
     private int _writer;
     private long _written;
     private bool _committed;
@@ -25,34 +30,34 @@ public sealed class ServerResponse
     internal ServerResponse(RequestContext context)
     {
         _context = context;
-        Headers = new(context.Http, HeaderMutable, context.Configuration.Options.MaxHeaderBytes);
-        Trailers = new(context.Http, TrailerMutable, context.Configuration.Options.MaxHeaderBytes, true);
+        _headers = new(context.HttpResponse, HeaderMutable, context.Configuration.Options.MaxHeaderBytes);
+        _trailers = new(context.HttpResponse, TrailerMutable, context.Configuration.Options.MaxHeaderBytes, true);
     }
     /// <summary>Gets or sets a final status in 200..599 before headers commit.</summary>
     /// <inheritdoc cref="T:NativeWeave.Server.ServerResponse" path="/member/remarks" />
-    public int StatusCode { get { _context.Http(); return _status; } set { HeaderMutable(); ServerValidation.Status(value); _status = value; } }
+    public int StatusCode { get { _context.HttpResponse(); return _status; } set { HeaderMutable(); ServerValidation.Status(value); _status = value; _statusConfigured = true; } }
     /// <summary>Gets response headers mutable before their commit.</summary>
     /// <inheritdoc cref="T:NativeWeave.Server.ServerResponse" path="/member/remarks" />
-    public HeaderCollection Headers { get; }
+    public HeaderCollection Headers { get { _context.HttpResponse(); return _headers; } }
     /// <summary>Gets trailers mutable before completion; transport capability remains native-authoritative.</summary>
     /// <inheritdoc cref="T:NativeWeave.Server.ServerResponse" path="/member/remarks" />
-    public HeaderCollection Trailers { get; }
+    public HeaderCollection Trailers { get { _context.HttpResponse(); return _trailers; } }
     /// <summary>Gets or sets Content-Type in the same header map.</summary>
     /// <inheritdoc cref="T:NativeWeave.Server.ServerResponse" path="/member/remarks" />
-    public string? ContentType { get { _context.Http(); return Headers.GetSingle("Content-Type"); } set { HeaderMutable(); if (value is null) Headers.Remove("Content-Type"); else Headers.Set("Content-Type", value); } }
+    public string? ContentType { get { _context.HttpResponse(); return Headers.GetSingle("Content-Type"); } set { HeaderMutable(); if (value is null) Headers.Remove("Content-Type"); else Headers.Set("Content-Type", value); } }
     /// <summary>Gets or sets a fixed body length; write mismatch aborts instead of truncating or padding.</summary>
     /// <inheritdoc cref="T:NativeWeave.Server.ServerResponse" path="/member/remarks" />
     public long? ContentLength
     {
-        get { _context.Http(); return Headers.GetSingle("Content-Length") is { } value ? long.Parse(value, CultureInfo.InvariantCulture) : null; }
+        get { _context.HttpResponse(); return Headers.GetSingle("Content-Length") is { } value ? long.Parse(value, CultureInfo.InvariantCulture) : null; }
         set { HeaderMutable(); if (value is < 0) throw new ArgumentOutOfRangeException(nameof(value)); if (value is null) Headers.Remove("Content-Length"); else Headers.Set("Content-Length", value.Value.ToString(CultureInfo.InvariantCulture)); }
     }
     /// <summary>Gets whether native final response headers have committed.</summary>
     /// <inheritdoc cref="T:NativeWeave.Server.ServerResponse" path="/member/remarks" />
-    public bool HasStarted { get { _context.Http(); return _committed; } }
+    public bool HasStarted { get { _context.HttpResponse(); return _committed; } }
     /// <summary>Gets the borrowed asynchronous output stream.</summary>
     /// <inheritdoc cref="T:NativeWeave.Server.ServerResponse" path="/member/remarks" />
-    public Stream Body { get { _context.Http(); return _body ??= new ServerWriteStream(_context.Native.Body, WriteAsync, FlushAsync); } }
+    public Stream Body { get { _context.HttpResponse(); return _body ??= new ServerWriteStream(_context.Native.Body, WriteAsync, FlushAsync); } }
     internal bool BodySuppressed => _context.Native.Method == "HEAD";
     internal bool Started => _committed;
     internal bool IsComplete => _complete;
@@ -62,13 +67,15 @@ public sealed class ServerResponse
     /// <returns>An awaitable operation; caller completion is distinct from safe native retirement as specified by the declaring type.</returns>
     public Task StartAsync(CancellationToken cancellationToken = default)
     {
-        _context.Http(); cancellationToken.ThrowIfCancellationRequested();
+        _context.HttpResponse(); cancellationToken.ThrowIfCancellationRequested();
         lock (_terminalLock) return _startTask ??= StartCoreAsync(cancellationToken);
     }
     private async Task StartCoreAsync(CancellationToken cancellationToken)
     {
         // Never invoke application callbacks while holding the coalescing lock.
         await Task.Yield();
+        if (_context.Route.ProtocolDescriptor is INativeServerProtocolDescriptor protocol)
+            await protocol.BeforeHttpResponseStartAsync(_context, cancellationToken).ConfigureAwait(false);
         for (int i = _starting.Count - 1; i >= 0; i--) await _starting[i](cancellationToken).ConfigureAwait(false);
         ValidateFraming();
         await _context.Native.CommitHeadersAsync(_status, Headers.ToDictionary(), cancellationToken).ConfigureAwait(false);
@@ -81,7 +88,7 @@ public sealed class ServerResponse
     /// <returns>An awaitable operation; caller completion is distinct from safe native retirement as specified by the declaring type.</returns>
     public Task WriteAsync(ReadOnlyMemory<byte> data, CancellationToken cancellationToken = default)
     {
-        _context.Http(); cancellationToken.ThrowIfCancellationRequested();
+        _context.HttpResponse(); cancellationToken.ThrowIfCancellationRequested();
         if (_complete || _completeTask is not null) throw new InvalidOperationException("Response completion has started.");
         if (data.Length != 0 && _status is 204 or 205 or 304) throw new InvalidOperationException("This final status forbids body content.");
         if (Interlocked.CompareExchange(ref _writer, 1, 0) != 0) throw new InvalidOperationException("Only one response write may be pending.");
@@ -110,7 +117,7 @@ public sealed class ServerResponse
     /// <returns>An awaitable operation; caller completion is distinct from safe native retirement as specified by the declaring type.</returns>
     public Task FlushAsync(CancellationToken cancellationToken = default)
     {
-        _context.Http(); cancellationToken.ThrowIfCancellationRequested();
+        _context.HttpResponse(); cancellationToken.ThrowIfCancellationRequested();
         if (_complete || _completeTask is not null) throw new InvalidOperationException("Response completion has started.");
         if (Interlocked.CompareExchange(ref _writer, 1, 0) != 0) throw new InvalidOperationException("Only one response operation may be pending.");
         return FlushCoreAsync(cancellationToken);
@@ -126,7 +133,7 @@ public sealed class ServerResponse
     /// <returns>An awaitable operation; caller completion is distinct from safe native retirement as specified by the declaring type.</returns>
     public Task WriteJsonAsync<T>(T value, JsonTypeInfo<T> typeInfo, CancellationToken cancellationToken = default)
     {
-        _context.Http(); ArgumentNullException.ThrowIfNull(typeInfo); cancellationToken.ThrowIfCancellationRequested();
+        _context.HttpResponse(); ArgumentNullException.ThrowIfNull(typeInfo); cancellationToken.ThrowIfCancellationRequested();
         HeaderMutable(); ServerValidation.ContentStatus(_status);
         if (_complete || _completeTask is not null) throw new InvalidOperationException("Response completion has started.");
         if (Interlocked.CompareExchange(ref _writer, 1, 0) != 0) throw new InvalidOperationException("Only one response write may be pending.");
@@ -152,7 +159,7 @@ public sealed class ServerResponse
     /// <returns>An awaitable operation; caller completion is distinct from safe native retirement as specified by the declaring type.</returns>
     public Task CompleteAsync(CancellationToken cancellationToken = default)
     {
-        _context.Http(); cancellationToken.ThrowIfCancellationRequested();
+        _context.HttpResponse(); cancellationToken.ThrowIfCancellationRequested();
         lock (_terminalLock)
         {
             if (_completeTask is not null) return _completeTask;
@@ -178,7 +185,7 @@ public sealed class ServerResponse
     /// <param name="callback">An awaited lifecycle callback registered before the corresponding bounded list freezes.</param>
     public void OnStarting(Func<CancellationToken, Task> callback)
     {
-        _context.Http(); ArgumentNullException.ThrowIfNull(callback);
+        _context.HttpResponse(); ArgumentNullException.ThrowIfNull(callback);
         if (_startTask is not null || _cleaning || _starting.Count >= 32) throw new InvalidOperationException("Starting callbacks are frozen or full.");
         _starting.Add(callback);
     }
@@ -220,8 +227,8 @@ public sealed class ServerResponse
         }
         catch { _context.Native.Abort(); }
     }
-    private void HeaderMutable() { _context.Http(); if (_committed || _cleaning) throw new InvalidOperationException("Response headers have committed or cleanup has begun."); }
-    private void TrailerMutable() { _context.Http(); if (_completeTask is not null || _cleaning) throw new InvalidOperationException("Response trailers have frozen."); }
+    private void HeaderMutable() { _context.HttpResponse(); if (_committed || _cleaning) throw new InvalidOperationException("Response headers have committed or cleanup has begun."); }
+    private void TrailerMutable() { _context.HttpResponse(); if (_completeTask is not null || _cleaning) throw new InvalidOperationException("Response trailers have frozen."); }
     private void ValidateFraming()
     {
         ServerValidation.Status(_status);

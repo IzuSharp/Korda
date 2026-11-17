@@ -14,9 +14,15 @@ internal static partial class NativeHostFactory
 }
 
 /// <summary>Private typed protocol registration; adapters compose this same instance and executor.</summary>
-internal interface INativeServerProtocolDescriptor { byte[] RegistrationUtf8 { get; } }
+internal interface INativeServerProtocolDescriptor
+{
+    byte[] RegistrationUtf8 { get; }
+    void Freeze(RouteDefinition route, ServerConfiguration configuration);
+    Task CompleteDispatchAsync(RequestContext context, Exception? failure);
+    Task BeforeHttpResponseStartAsync(RequestContext context, CancellationToken cancellationToken) => Task.CompletedTask;
+}
 
-internal sealed class NativeHost : ServerHost
+internal sealed partial class NativeHost : ServerHost
 {
     internal readonly ServerNativeCalls Native;
     internal readonly ServerConfiguration Configuration;
@@ -42,7 +48,7 @@ internal sealed class NativeHost : ServerHost
         Configuration = configuration;
         Capabilities = NativePackage.Inspect(); Native = NativePackage.Calls.Value;
         int active = configuration.Options.Budget.MaxActiveRequests;
-        _tickets = new(active); _coordinator = new(checked(active * 9 + 33));
+        _tickets = new(active); _coordinator = new(checked(active * 10 + 33));
         _control = new(this); _controlSlot = _coordinator.Reserve(_control);
         _root = GCHandle.Alloc(this, GCHandleType.Normal);
         nint pointer = 0;
@@ -251,6 +257,7 @@ internal sealed class NativeHost : ServerHost
             if (managed && Volatile.Read(ref _callbackEntries) == 0 && TryRetire() == 0) break;
             await Task.Delay(5).ConfigureAwait(false);
         }
+        FreezeDiagnostics();
         await Owner.DisposeAsync().ConfigureAwait(false);
         lock (_gate) _released = true;
         _control.Stop(); _coordinator.Release(_controlSlot, _control); _coordinator.Dispose();
@@ -267,9 +274,15 @@ internal sealed class NativeHost : ServerHost
     private uint Notify(ulong id, ulong handler, uint kind)
     {
         HostTicket ticket;
+        if (kind == 3)
+        {
+            lock (_gate) { if (_released || !_tickets.TryGetValue(id, out ticket!)) return 8; }
+            return ticket.NotifyContinuation(handler) ? 0u : 8u;
+        }
         lock (_gate)
         {
-            if (_released || _tickets.Count >= Configuration.Options.Budget.MaxActiveRequests || _tickets.ContainsKey(id) || kind != 0) return 8;
+            if (_released) return 8;
+            if (_tickets.Count >= Configuration.Options.Budget.MaxActiveRequests || _tickets.ContainsKey(id) || kind > 2) return 8;
             ticket = new(this, id, handler, kind); _tickets.Add(id, ticket);
         }
         ticket.Signal(); return 0;
@@ -282,18 +295,18 @@ internal sealed class NativeHost : ServerHost
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static uint OnRequest(nuint cookie, ulong id, ulong handler, uint kind)
     {
-        NativeHost? host = null;
-        try { host = (NativeHost?)GCHandle.FromIntPtr((nint)cookie).Target; if (host is null) return 8; Interlocked.Increment(ref host._callbackEntries); return host.Notify(id, handler, kind); }
+        NativeHost? host = null; long diagnosticsStarted = 0;
+        try { host = (NativeHost?)GCHandle.FromIntPtr((nint)cookie).Target; if (host is null) return 8; Interlocked.Increment(ref host._callbackEntries); diagnosticsStarted = host.BeginCallbackDiagnostics(); return host.Notify(id, handler, kind); }
         catch { return 8; }
-        finally { if (host is not null) Interlocked.Decrement(ref host._callbackEntries); }
+        finally { if (host is not null) { host.RecordCallbackDiagnostics(diagnosticsStarted); Interlocked.Decrement(ref host._callbackEntries); } }
     }
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe uint OnControl(nuint cookie, uint kind, uint status, ulong id, NwErrorInfoV1* error)
     {
-        NativeHost? host = null;
+        NativeHost? host = null; long diagnosticsStarted = 0;
         try
         {
-            host = (NativeHost?)GCHandle.FromIntPtr((nint)cookie).Target; if (host is null) return 8; Interlocked.Increment(ref host._callbackEntries);
+            host = (NativeHost?)GCHandle.FromIntPtr((nint)cookie).Target; if (host is null) return 8; Interlocked.Increment(ref host._callbackEntries); diagnosticsStarted = host.BeginCallbackDiagnostics();
             if (kind == 1 && status is 2 or 12) host.Cancel(id, status);
             else if (kind == 2 && status > 1)
             {
@@ -304,7 +317,7 @@ internal sealed class NativeHost : ServerHost
             return 0;
         }
         catch { return 8; }
-        finally { if (host is not null) Interlocked.Decrement(ref host._callbackEntries); }
+        finally { if (host is not null) { host.RecordCallbackDiagnostics(diagnosticsStarted); Interlocked.Decrement(ref host._callbackEntries); } }
     }
 
     private sealed class HostControl(NativeHost host) : CoordinatedCallback(null)
@@ -323,12 +336,55 @@ internal sealed class NativeHost : ServerHost
         private bool _started, _ended;
         private uint _cancellation;
         private NativeRequest? _request;
+        private readonly NestedContinuation? _nested;
+        private bool _nestedClosed, _nestedSeen;
+        private TaskCompletionSource? _nestedCompletion;
+        private ulong _nestedHandler;
         internal readonly ulong Id;
         internal readonly int Slot;
         internal HostTicket(NativeHost host, ulong id, ulong handler, uint kind) : base(null)
-        { _host = host; Id = id; _handler = handler; _kind = kind; Slot = host._coordinator.Reserve(this); }
+        {
+            _host = host; Id = id; _handler = handler; _kind = kind; Slot = host._coordinator.Reserve(this);
+            if (kind == 2)
+            {
+                try { _nestedCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously); _nested = new(this); }
+                catch { host._coordinator.Release(Slot, this); throw; }
+            }
+        }
+        internal bool NotifyContinuation(ulong handler)
+        {
+            lock (_gate)
+            {
+                if (_kind != 2 || _ended || _nestedClosed || _request is null || _request.ProtocolContinuation is null || _nestedSeen || handler == 0) return false;
+                _nestedHandler = handler; _nestedSeen = true;
+            }
+            _nested!.Signal(); return true;
+        }
+        private Task JoinContinuationAsync()
+        { lock (_gate) { _nestedClosed = true; return _nestedSeen ? _nestedCompletion!.Task : Task.CompletedTask; } }
+        private async Task InvokeContinuationAsync()
+        {
+            TaskCompletionSource completion; NativeRequest request; ulong handler;
+            lock (_gate) { completion = _nestedCompletion!; request = _request!; handler = _nestedHandler; }
+            try { await request.ProtocolContinuation!(handler).ConfigureAwait(false); completion.TrySetResult(); }
+            catch (Exception error) { request.Abort(); completion.TrySetException(error); }
+        }
+        private sealed class NestedContinuation : CoordinatedCallback
+        {
+            private readonly HostTicket _ticket;
+            private int _started;
+            internal readonly int Slot;
+            internal NestedContinuation(HostTicket ticket) : base(null) { _ticket = ticket; Slot = ticket._host._coordinator.Reserve(this); }
+            protected override void Process() { if (Interlocked.Exchange(ref _started, 1) == 0) _ = _ticket.InvokeContinuationAsync(); }
+            protected override void SchedulingFault(Exception error)
+            {
+                lock (_ticket._gate) _ticket._nestedCompletion?.TrySetException(error);
+                _ticket._host.Fatal(error); _ticket.Fail();
+            }
+            internal void Stop() { CompleteScheduling(); _ticket._host._coordinator.Release(Slot, this); }
+        }
         internal void Cancel(uint status) { lock (_gate) { if (_ended) return; if (_cancellation == 0) _cancellation = status; } Signal(); }
-        internal void Fail() { lock (_gate) _request?.Abort(); Cancel(2); }
+        internal void Fail() { NativeRequest? request; lock (_gate) request = _request; request?.Abort(); Cancel(2); }
         protected override void Process()
         {
             bool start; NativeRequest? request; uint cancellation;
@@ -343,6 +399,7 @@ internal sealed class NativeHost : ServerHost
             try
             {
                 request = NativeRequest.Take(_host, Id, _handler, _kind);
+                request.ProtocolJoin = JoinContinuationAsync;
                 if (request.InitializationFailure is { } failure) throw failure;
                 uint cancellation; lock (_gate) { _request = request; cancellation = _cancellation; }
                 if (cancellation != 0) request.NotifyCancellation(cancellation);
@@ -352,9 +409,13 @@ internal sealed class NativeHost : ServerHost
             catch (Exception error) { if (request is null) _host.Fatal(error); else request.Abort(); }
             finally
             {
-                try { if (request is not null) await request.CompleteDispatchAsync().ConfigureAwait(false); }
+                try
+                {
+                    try { await JoinContinuationAsync().ConfigureAwait(false); }
+                    finally { if (request is not null) await request.CompleteDispatchAsync().ConfigureAwait(false); }
+                }
                 catch (Exception error) { _host.Fatal(error); }
-                finally { lock (_gate) { _ended = true; _request = null; } CompleteScheduling(); _host.Remove(this); }
+                finally { lock (_gate) { _ended = true; _request = null; } _nested?.Stop(); CompleteScheduling(); _host.Remove(this); }
             }
         }
     }

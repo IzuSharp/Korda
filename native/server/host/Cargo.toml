@@ -14,6 +14,8 @@ nativeweave-interop-abi = { path = "../../interop/abi" }
 nativeweave-interop-async = { path = "../../interop/async" }
 nativeweave-interop-errors = { path = "../../interop/errors" }
 nativeweave-server-streaming = { path = "../streaming" }
+nativeweave-server-diagnostics = { path = "../diagnostics" }
+nativeweave-protocol-mcp = { path = "../../protocols/mcp" }
 bytes = "=1.12.1"
 http = "=1.5.0"
 http-body = "=1.1.0"
