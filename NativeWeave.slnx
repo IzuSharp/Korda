@@ -5,6 +5,7 @@
     <Project Path="src/Server.Application/Generator/NativeWeave.Server.Generator.csproj" />
     <Project Path="src/Protocols.Grpc/NativeWeave.Server.Grpc.csproj" />
     <Project Path="src/Protocols.Mcp/NativeWeave.Server.Mcp.csproj" />
+    <Project Path="src/Protocols.Mcp/Generator/NativeWeave.Server.Mcp.Generator.csproj" />
     <Project Path="src/Data.NativeHost/NativeWeave.Database.csproj" />
     <Project Path="src/Data.NativeHost/DependencyInjection/NativeWeave.Database.DependencyInjection.csproj" />
     <Project Path="src/Query.Generator/NativeWeave.Query.Generator.csproj" />
@@ -177,5 +178,10 @@
   </Folder>
   <Folder Name="/tools/B13/">
     <Project Path="tests/Query.Fluent/ApiCheck/ApiCheck.csproj" />
+  </Folder>
+  <Folder Name="/tests/B19/">
+    <Project Path="tests/Protocols.Mcp/Generator/Driver/Driver.csproj" />
+    <Project Path="tests/Protocols.Mcp/Generator/External/External.csproj" />
+    <Project Path="tests/Protocols.Mcp/Generator/Witness/Witness.csproj" />
   </Folder>
 </Solution>

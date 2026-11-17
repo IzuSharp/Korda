@@ -9,6 +9,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/Protocols.Mcp/NativeWeave.Server.Mcp.csproj" />
-    <Compile Remove="ApiCheck/**/*.cs" />
+    <ProjectReference Include="../../src/Protocols.Mcp/Generator/NativeWeave.Server.Mcp.Generator.csproj" ReferenceOutputAssembly="false" OutputItemType="Analyzer" PrivateAssets="all" />
+    <Compile Remove="ApiCheck/**/*.cs;Generator/**/*.cs" />
   </ItemGroup>
 </Project>

@@ -10,7 +10,10 @@
     <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifier)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifier).aot.lock.json</NuGetLockFilePath>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Remove="Generator/**/*.cs" />
     <ProjectReference Include="../Server.Application/NativeWeave.Server.csproj" />
+    <ProjectReference Include="Generator/NativeWeave.Server.Mcp.Generator.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
+    <None Include="Generator/bin/$(Configuration)/netstandard2.0/NativeWeave.Server.Mcp.Generator.dll" Pack="true" PackagePath="analyzers/dotnet/cs/" Visible="false" />
     <InternalsVisibleTo Include="NativeWeave.Server.Mcp.Tests" />
   </ItemGroup>
 </Project>

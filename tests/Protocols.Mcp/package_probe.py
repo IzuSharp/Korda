@@ -68,6 +68,8 @@ for identity, (folder, dependencies) in registry.items():
         for suffix in ['.dll', '.xml']: entries['lib/net11.0/' + identity + suffix] = directory / 'bin/Release/net11.0' / (identity + suffix)
     if identity == 'NativeWeave.Server':
         entries['runtimes/linux-x64/native/libnativeweave_server.so'] = native
+    if identity == 'NativeWeave.Server.Mcp':
+        entries['analyzers/dotnet/cs/NativeWeave.Server.Mcp.Generator.dll'] = directory / 'Generator/bin/Release/netstandard2.0/NativeWeave.Server.Mcp.Generator.dll'
     if identity in ['NativeWeave.Server', 'NativeWeave.Server.Mcp']:
         entries['buildTransitive/' + identity + '.targets'] = ROOT / 'src/Packaging.Release/buildTransitive/NativeWeave.Packaging.targets'
         selected = records if identity.endswith('.Mcp') else [r for r in records if r['id'] != 'NativeWeave.Server.Mcp']
