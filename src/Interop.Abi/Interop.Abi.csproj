@@ -25,5 +25,7 @@
     <InternalsVisibleTo Include="NativeWeave.Interop.Async.Sample" />
     <InternalsVisibleTo Include="NativeWeave.Interop.Callbacks.Tests" />
     <InternalsVisibleTo Include="NativeWeave.Interop.Callbacks.Sample" />
+    <InternalsVisibleTo Include="NativeWeave.Database" />
+    <InternalsVisibleTo Include="NativeWeave.Data.NativeHost.Tests" />
   </ItemGroup>
 </Project>

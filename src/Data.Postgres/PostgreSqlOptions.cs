@@ -34,7 +34,7 @@ public sealed class PostgreSqlOptions
 
 /// <summary>Exposes the stateless PostgreSQL provider component descriptor.</summary>
 /// <remarks>The current component assembly publishes Engine preflight plus exact standalone options. The downstream B04 host composes the pinned Create and UsePostgreSql factories with the actual datasource/session owners. This component does not advertise host operation exports. Reading Engine is thread-safe and performs no file access, native call, executor creation or connection opening; Inspect hashes and loads the exact maintainer-built component and starts no runtime.</remarks>
-public static class PostgreSqlDataSource
+public static partial class PostgreSqlDataSource
 {
     /// <summary>Gets the immutable descriptor for the maintainer-built PostgreSQL component.</summary>
     /// <remarks>Only postgres.component.v1 is advertised. Native adapter operations are Rust-local hooks for B04, not callable datasource exports. The native asset stays resident after Inspect; the descriptor has no disposal operation. Missing or mismatched assets are reported by Inspect using EngineLoadException.</remarks>

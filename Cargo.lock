@@ -971,6 +971,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "nativeweave-database-host"
+version = "0.1.0"
+dependencies = [
+ "futures-util",
+ "nativeweave-data-codecs",
+ "nativeweave-data-contracts",
+ "nativeweave-data-postgres",
+ "nativeweave-data-sqlite",
+ "nativeweave-data-streaming",
+ "nativeweave-data-transactions",
+ "nativeweave-interop-abi",
+ "nativeweave-interop-async",
+ "nativeweave-interop-errors",
+ "nativeweave-query-binding",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx",
+ "tokio",
+]
+
+[[package]]
 name = "nativeweave-engine-asyncproof"
 version = "0.1.0"
 dependencies = [
@@ -1081,6 +1102,18 @@ version = "0.1.0"
 dependencies = [
  "nativeweave-data-contracts",
  "nativeweave-interop-abi",
+ "serde_json",
+ "sha2 0.10.9",
+]
+
+[[package]]
+name = "nativeweave-query-native"
+version = "0.1.0"
+dependencies = [
+ "nativeweave-data-contracts",
+ "nativeweave-interop-abi",
+ "nativeweave-query-binding",
+ "sea-query",
  "serde_json",
  "sha2 0.10.9",
 ]

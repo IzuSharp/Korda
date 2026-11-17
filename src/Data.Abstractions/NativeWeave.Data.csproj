@@ -23,5 +23,6 @@
     <InternalsVisibleTo Include="NativeWeave.Query.Binding" />
     <InternalsVisibleTo Include="NativeWeave.Query.Binding.Tests" />
     <InternalsVisibleTo Include="NativeWeave.Query.Binding.Sample" />
+    <InternalsVisibleTo Include="NativeWeave.Query.Native.Tests" />
   </ItemGroup>
 </Project>

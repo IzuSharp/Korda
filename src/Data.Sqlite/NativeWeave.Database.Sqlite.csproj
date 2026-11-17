@@ -17,6 +17,8 @@
     <Compile Include="$(IntermediateOutputPath)EngineProfile.g.cs" />
     <None Include="$(NativeWeaveSqliteAssetPath)" Link="runtimes/$(NativeWeaveSqliteRuntimeIdentifier)/native/$(NativeWeaveSqliteAssetName)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <None Include="$(IntermediateOutputPath)NativeWeave.nativeweave.database.sqlite.assets.json" Link="NativeWeave.nativeweave.database.sqlite.assets.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <ProjectReference Include="../Data.NativeHost/NativeWeave.Database.csproj" />
+    <Compile Include="../Data.NativeHost/Providers/Sqlite/**/*.cs" />
   </ItemGroup>
   <Target Name="GenerateSqliteEngineProfile" BeforeTargets="CoreCompile">
     <Error Condition="!Exists('$(NativeWeaveSqliteAssetPath)')" Text="Build the maintainer SQLite native component first or supply NativeWeaveSqliteAssetPath. Consumer builds never invoke Cargo." />

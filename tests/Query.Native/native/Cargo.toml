@@ -1,0 +1,22 @@
+[workspace]
+[package]
+name = "nativeweave-query-native-tests"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.100"
+publish = false
+
+[dev-dependencies]
+nativeweave-query-native = { path = "../../../native/database/query" }
+nativeweave-query-binding = { path = "../../../native/database/binding" }
+nativeweave-data-contracts = { path = "../../../native/database/interfaces" }
+nativeweave-data-codecs = { path = "../../../native/database/codecs" }
+nativeweave-interop-abi = { path = "../../../native/interop/abi" }
+sea-query = { version = "=1.0.2", default-features = false, features = ["backend-postgres", "backend-sqlite", "thread-safe", "with-chrono", "with-rust_decimal", "with-uuid", "with-json"] }
+serde_json = "=1.0.154"
+sha2 = "=0.10.9"
+sqlx = { version = "=0.9.0", default-features = false, features = ["runtime-tokio", "sqlite", "postgres"] }
+tokio = { version = "=1.54.1", features = ["rt-multi-thread", "macros", "time"] }
+
+[profile.release]
+panic = "unwind"

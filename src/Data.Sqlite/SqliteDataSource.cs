@@ -5,7 +5,7 @@ namespace NativeWeave.Database.Sqlite;
 
 /// <summary>Provides immutable metadata for the maintainer-built SQLite provider component.</summary>
 /// <remarks>This component declaration contributes Engine and the exact provider options. The Create factory and UseSqlite extension compose with B04's DataSource/DataSourceBuilder; their exact signatures and ownership mapping are recorded in the component guide. Engine inspection starts no SQLite connection or runtime.</remarks>
-public static class SqliteDataSource
+public static partial class SqliteDataSource
 {
     /// <summary>Gets the immutable descriptor for the actual precompiled component asset.</summary>
     /// <remarks>Property access constructs cached metadata only. Inspect verifies the generated asset hash and canonical bootstrap, advertising only db.sqlite.profile.v1. This component asset is not a complete database host or an independently published package. The manifest states only RIDs actually present in this build.</remarks>

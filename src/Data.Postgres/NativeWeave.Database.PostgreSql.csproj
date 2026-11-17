@@ -16,6 +16,8 @@
     <ProjectReference Include="../Data.Abstractions/NativeWeave.Data.csproj" />
     <InternalsVisibleTo Include="NativeWeave.Database.PostgreSql.Tests" />
     <InternalsVisibleTo Include="NativeWeave.Database" />
+    <ProjectReference Include="../Data.NativeHost/NativeWeave.Database.csproj" />
+    <Compile Include="../Data.NativeHost/Providers/PostgreSql/**/*.cs" />
   </ItemGroup>
   <Target Name="GeneratePostgreSqlAssetIdentity" BeforeTargets="CoreCompile">
     <Error Condition="!Exists('$(NativeWeavePostgresAssetPath)')" Text="Build the maintainer PostgreSQL native component first or supply NativeWeavePostgresAssetPath. Consumer builds never invoke Cargo." />
