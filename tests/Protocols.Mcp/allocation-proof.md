@@ -23,6 +23,10 @@ Only the profile actually configured in `native/protocols/mcp/src/runtime.rs` is
   the SDK implementation-reference selector are recorded in
   [runtime-layout-sources.json](runtime-layout-sources.json). The relevant CoreCLR
   reflection source is byte-identical at the Design runtime reference and this VMR.
+- Fixed private identity resolution and the fieldless framework interfaces use the
+  [23 exact runtime identity sources](../../src/Protocols.Mcp/Generator/runtime-identity-sources.json)
+  checked by the compiler witness, including both runtime lookup/cache paths and
+  `IEquatable<T>` used by ordinary C# records.
 
 The ledger measures requested backing capacities and controlled ownership, not allocator
 headers, fragmentation, runtime/JIT caches or arbitrary application code allocations.
