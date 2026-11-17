@@ -9,7 +9,7 @@ are reused from Core; their exact declarations and XML remain owned there.
 
 Supply a versioned descriptor containing exact engine/package/ABI identities,
 capability bits, explicitly selected common components, execution profile, one
-Linux x64-v2 GNU asset, A09 sidecar/parsed inventory/adapter/linked symbol inputs,
+Linux x64 GNU asset, A09 sidecar/parsed inventory/adapter/linked symbol inputs,
 upstream commits/crate checksums/features/patches/licenses, source coverage, reviewed
 facade/sample sources and the accepted compiled API baseline. All file inputs are
 SHA-256 bound and relative to the maintainer source root. Generation rejects unknown

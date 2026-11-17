@@ -22,8 +22,10 @@ class DescriptorTests(unittest.TestCase):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content)
             return {"path": name, "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
-        sidecar = {"schema_version": 1, "module": {"id": "nativeweave.scaffold.test", "abi_major": 1, "abi_minor": 0},
-                   "capabilities": ["codec.test.v1"], "exports": [{"symbol": "nw_test_get_abi_v1"}], "owners": [], "operations": []}
+        sidecar = {"schema_version": 1, "module": {"id": "nativeweave.scaffold.test", "abi_major": 1, "abi_minor": 0,
+                   "rid": "linux-x64", "target": "x86_64-unknown-linux-gnu", "pointer_width_bits": 64},
+                   "capabilities": ["codec.test.v1"], "exports": [{"symbol": "nw_test_get_abi_v1"}],
+                   "owners": [], "operations": [], "callbacks": []}
         self.data = {"schema_version": 1, "engine_id": "nativeweave.scaffold.test",
             "package": {"id": "NativeWeave.Scaffold.Test", "assembly": "NativeWeave.Scaffold.Test",
                         "namespace": "NativeWeave.Scaffold.Test", "version": "0.1.0-proof.1"},
@@ -31,7 +33,7 @@ class DescriptorTests(unittest.TestCase):
             "threading": "Synchronous", "components": ["abi", "error"],
             "capabilities": [{"name": "codec.test.v1", "bit": 0}],
             "native": {"asset": source("fixture.so", "validation-only fixture, never loaded"), "filename": "libfixture.so",
-                       "rid": "linux-x64", "target": "x86_64-unknown-linux-gnu", "cpu": "x64-v2", "link_mode": "dynamic"},
+                       "rid": "linux-x64", "target": "x86_64-unknown-linux-gnu", "cpu": "x86-64-v2", "link_mode": "dynamic"},
             "binding": {"sidecar": source("binding.json", json.dumps(sidecar)), "inventory": source("inventory.json", "{}"),
                         "adapter": source("adapter.rs", ""), "linked_symbols": source("symbols.txt", "nw_test_get_abi_v1\n"), "library": "fixture"},
             "upstream": [{"repository": "https://github.com/example/fixture", "commit": "1" * 40,
@@ -96,6 +98,35 @@ class DescriptorTests(unittest.TestCase):
         self.reject(lambda d: d["files"].pop("samples/Consumer/Program.cs"))
         self.reject(lambda d: d.update(upstream=[]))
         self.reject(lambda d: d["dependencies"].update({"NativeWeave.Core": "*"}))
+
+    def test_cpu_vocabulary_matches_core(self):
+        for cpu in ("x86-64", "x86-64-v2"):
+            value = copy.deepcopy(self.data)
+            value["native"]["cpu"] = cpu
+            self.assertEqual(self.read(value)["native"]["cpu"], cpu)
+        self.reject(lambda d: d["native"].update(cpu="x64-v2"))
+        self.reject(lambda d: d["native"].update(cpu="x86-64-v3"))
+
+    def test_binding_target_must_match_native(self):
+        path = self.root / "binding.json"
+        original = json.loads(path.read_text())
+        for mutation in ({"rid": "win-x64", "target": "x86_64-pc-windows-msvc"},
+                         {"pointer_width_bits": 32}, {"target": "aarch64-unknown-linux-gnu"}):
+            model = copy.deepcopy(original)
+            model["module"].update(mutation)
+            path.write_text(json.dumps(model))
+            self.data["binding"]["sidecar"]["sha256"] = scaffold.digest(path)
+            with self.assertRaisesRegex(scaffold.ScaffoldError, "target profiles differ"):
+                self.read(self.data)
+
+    def test_sidecar_callback_requires_opt_in(self):
+        path = self.root / "binding.json"
+        model = json.loads(path.read_text())
+        model["callbacks"] = [{"symbol": "on_event", "contract": "notification"}]
+        path.write_text(json.dumps(model))
+        self.data["binding"]["sidecar"]["sha256"] = scaffold.digest(path)
+        with self.assertRaisesRegex(scaffold.ScaffoldError, "callbacks and opted-in"):
+            self.read(self.data)
 
 
 if __name__ == "__main__":

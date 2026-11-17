@@ -64,7 +64,7 @@ public sealed class PackageClosure : Microsoft.Build.Utilities.Task
                 Records = WriteRecords(packages, rid);
             return true;
         }
-        catch (Exception error) when (error is PackageRejected or IOException or UnauthorizedAccessException or JsonException or ArgumentException or InvalidOperationException or KeyNotFoundException)
+        catch (Exception error) when (error is PackageRejected or IOException or UnauthorizedAccessException or JsonException or ArgumentException or InvalidOperationException or KeyNotFoundException or FormatException or OverflowException)
         {
             string code = error is PackageRejected rejected ? rejected.Code : "NWPKG002";
             Log.LogError(null, code, null, null, 0, 0, 0, 0, error.Message);
@@ -104,7 +104,7 @@ public sealed class PackageClosure : Microsoft.Build.Utilities.Task
                         Require(nativeRid == "linux-x64" || nativeRid == "win-x64", "NWPKG003", "Unknown supported native profile.");
                         string path = Relative(Text(native, "sourcePath", 4096));
                         Require(path.StartsWith($"runtimes/{nativeRid}/native/", StringComparison.Ordinal), "NWPKG002", "Native source path disagrees with its RID.");
-                        string engine = Text(native, "engineId");
+                        string engine = Text(native, "engineId", 128);
                         Require(Regex.IsMatch(engine, "^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$", RegexOptions.CultureInvariant), "NWPKG002", "Invalid engine identity.");
                         string digest = Text(native, "sha256");
                         Require(Regex.IsMatch(digest, "^[0-9a-f]{64}$", RegexOptions.CultureInvariant), "NWPKG004", "Native SHA-256 must be exact lowercase hexadecimal.");

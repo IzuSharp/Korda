@@ -138,6 +138,8 @@ def rollback(record, package_map, prior_consumption, active_processes):
     compat.require(active_processes == 0, "NWPKG017", "Rollback requires a new deployment; no native hot replacement")
     compat.validate_closure(record, package_map)
     compat.require(prior_consumption.get("passed") is True
+                   and prior_consumption.get("rid") == record["rid"]
+                   and prior_consumption.get("source_commit") == record["source_commit"]
                    and prior_consumption.get("packages") == {name: compat.file_hash(path) for name, path in package_map.items()},
-                   "NWPKG001", "The whole rollback package set must have actual consumption evidence")
+                   "NWPKG001", "The whole rollback package set, RID and source must match actual consumption evidence")
     return {"complete": True, "deployment": "new-process-only", "packages": prior_consumption["packages"]}

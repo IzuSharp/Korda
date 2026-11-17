@@ -15,6 +15,24 @@ def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def native_output(directory, descriptor):
+    """Resolve the SDK-selected output from the mandatory A16 asset record."""
+    record = json.loads((directory / ("NativeWeave." + descriptor["engine_id"] + ".assets.json")).read_text())
+    expected = {"schemaVersion": 1, "engineId": descriptor["engine_id"],
+                "packageId": descriptor["package"]["id"], "packageVersion": descriptor["package"]["version"],
+                "rid": descriptor["native"]["rid"], "sha256": descriptor["native"]["asset"]["sha256"],
+                "sourcePath": "runtimes/" + descriptor["native"]["rid"] + "/native/" + descriptor["native"]["filename"]}
+    if any(record.get(k) != v for k, v in expected.items()):
+        raise ValueError("The selected native output record differs from the descriptor")
+    relative = record.get("outputPath")
+    if not isinstance(relative, str) or not relative or "\\" in relative or ":" in relative or any(p in ("", ".", "..") for p in relative.split("/")):
+        raise ValueError("The selected native output path is not canonical")
+    path = (directory / relative).resolve()
+    if not path.is_relative_to(directory.resolve()) or not path.is_file() or sha(path) != expected["sha256"]:
+        raise ValueError("The selected native output is absent, changed or outside its output directory")
+    return path
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--feed", type=Path, required=True)
@@ -94,8 +112,7 @@ def main():
         run("consumer-build", ["dotnet", "build", project, "-c", "Release", "--no-restore", *common], scratch)
         name = descriptor["package"]["assembly"] + ".Conformance"
         run("consumer-jit", ["dotnet", consumer / ("bin/Release/net11.0/" + name + ".dll")], scratch)
-        native_name = descriptor["native"]["filename"]
-        native = consumer / ("bin/Release/net11.0/" + native_name)
+        native = native_output(consumer / "bin/Release/net11.0", descriptor)
         before = sha(native)
         if before != descriptor["native"]["asset"]["sha256"]:
             raise ValueError("Restored native bytes differ")
@@ -107,7 +124,7 @@ def main():
             "--configfile", config, "-o", output / "aot", *common], scratch)
         env["NATIVEWEAVE_REQUIRE_AOT"] = "1"
         run("consumer-aot-execute", [output / "aot" / name, "--require-aot"], scratch)
-        if marker.exists() or sha(output / "aot" / native_name) != before:
+        if marker.exists() or sha(native_output(output / "aot", descriptor)) != before:
             raise ValueError("Native package changed or Rust was invoked")
         receipt.update(status="passed", native_sha256=before,
             executable_sha256=sha(output / "aot" / name), managed_edit_native_unchanged=True,

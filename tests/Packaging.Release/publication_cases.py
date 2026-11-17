@@ -104,6 +104,10 @@ def main():
     incomplete = dict(package_map)
     incomplete.pop(next(iter(incomplete)))
     reject("incomplete-rollback", lambda: release.rollback(previous, incomplete, receipts["0.1.0-task04.1"], 0), "NWPKG011")
+    for field, value in [("rid", "win-x64"), ("source_commit", "0" * 40)]:
+        wrong_receipt = copy.deepcopy(receipts["0.1.0-task04.1"])
+        wrong_receipt[field] = value
+        reject("rollback-wrong-" + field, lambda: release.rollback(previous, package_map, wrong_receipt, 0), "NWPKG001")
     unknown = copy.deepcopy(previous)
     unknown["builder_identity"] = "unknown-builder"
     reject("unknown-builder", lambda: release.publish(unknown, prepared / "feed", output / "unknown", output / "unknown.json", output / "unknown-catalog.json", release.verify_local, lambda *_: {}), "NWPKG015")

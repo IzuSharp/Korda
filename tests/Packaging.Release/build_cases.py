@@ -63,7 +63,10 @@ def main():
         cases.append({"name": name, "passed": passed, "exit": result.returncode, "expected": expected,
                       "stdout_sha256": hashlib.sha256(result.stdout).hexdigest(), "stderr_sha256": hashlib.sha256(result.stderr).hexdigest()})
         (output / "result.json").write_text(json.dumps({"passed": all(x["passed"] for x in cases), "cases": cases,
-            "source_commit": receipt["source_commit"], "task_sha256": hashlib.sha256(task.read_bytes()).hexdigest(),
+            "package_source_commit": receipt["source_commit"],
+            "task_source_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
+            "task_source_dirty": bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True).strip()),
+            "task_sha256": hashlib.sha256(task.read_bytes()).hexdigest(),
             "closure_sha256": hashlib.sha256((args.prepared / "build-closure-0.1.0-task04.1.json").read_bytes()).hexdigest()}, indent=2) + "\n")
         print(name, result.returncode, flush=True)
         if not passed:
@@ -80,6 +83,12 @@ def main():
     changed = copy.deepcopy(closure)
     next(x for x in changed["packages"] if "nativeAssets" in x)["nativeAssets"][0]["cpuBaseline"] = "x86-64-v4"
     run("unsupported-cpu-baseline", changed, "NWPKG003")
+    changed = copy.deepcopy(closure)
+    next(x for x in changed["packages"] if "nativeAssets" in x)["nativeAssets"][0]["abiMajor"] = -1
+    run("malformed-abi-integer", changed, "NWPKG002")
+    changed = copy.deepcopy(closure)
+    next(x for x in changed["packages"] if "nativeAssets" in x)["nativeAssets"][0]["engineId"] = "a" * 129
+    run("oversized-engine-identity", changed, "NWPKG002")
     relaxed_assets = json.loads(assets.read_text())
     for target in relaxed_assets["targets"].values():
         target["NativeWeave.Conformance.Packaging/0.1.0-task04.1"]["dependencies"]["NativeWeave.Core"] = "0.1.0-task04.1"

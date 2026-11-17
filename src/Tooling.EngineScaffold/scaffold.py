@@ -91,9 +91,10 @@ def load(root, descriptor):
     fail(len({c["name"] for c in caps}) != len(caps) or len({c["bit"] for c in caps}) != len(caps), "Duplicate capability")
     native = data["native"]
     fail(set(native) != {"asset", "filename", "rid", "target", "cpu", "link_mode"}, "Incomplete native asset")
-    fail((native["rid"], native["target"], native["cpu"], native["link_mode"]) !=
-         ("linux-x64", "x86_64-unknown-linux-gnu", "x64-v2", "dynamic"),
-         "This scaffold is validated only for Linux x64-v2 GNU dynamic assets")
+    fail((native["rid"], native["target"], native["link_mode"]) !=
+         ("linux-x64", "x86_64-unknown-linux-gnu", "dynamic") or
+         native["cpu"] not in {"x86-64", "x86-64-v2"},
+         "This scaffold requires a supported Linux x64 GNU dynamic CPU profile")
     fail(not re.fullmatch(r"lib[A-Za-z0-9_]+\.so", native["filename"]), "Invalid Linux native filename")
     checked_file(root, native["asset"])
     binding = data["binding"]
@@ -105,6 +106,9 @@ def load(root, descriptor):
     fail(sidecar.get("schema_version") != 1, "Unsupported A09 binding schema")
     fail(sidecar["module"]["id"] != data["engine_id"] or sidecar["module"]["abi_major"] != abi["major"]
          or sidecar["module"]["abi_minor"] != abi["minor"], "Engine and binding identities differ")
+    fail((sidecar["module"].get("rid"), sidecar["module"].get("target"),
+          sidecar["module"].get("pointer_width_bits")) !=
+         (native["rid"], native["target"], 64), "Native and binding target profiles differ")
     fail(set(sidecar["capabilities"]) != {c["name"] for c in caps}, "Capability and binding inventories differ")
     symbols = {e["symbol"] for e in sidecar["exports"]}
     fail(abi["bootstrap"] not in symbols, "The bootstrap is absent from the static export inventory")
@@ -112,6 +116,9 @@ def load(root, descriptor):
         fail(owner["release"] not in symbols, "A native owner has no creator release")
     fail(bool(sidecar["owners"]) and "ownership" not in components, "Owners require the ownership component")
     fail(bool(sidecar["operations"]) != ("async" in components), "Async operations and opted-in components differ")
+    fail(not isinstance(sidecar.get("callbacks"), list) or
+         bool(sidecar["callbacks"]) != ("callback" in components),
+         "Native callbacks and opted-in components differ")
     fail(not data["upstream"], "Exact upstream provenance is required")
     for source in data["upstream"]:
         fail(set(source) != {"repository", "commit", "crate", "version", "checksum", "features", "patches", "license"},
@@ -206,12 +213,12 @@ internal static class ScaffoldPackage
     internal static EngineDescriptor Descriptor { get; } = EnginePackage.CreateDescriptor(
         new EnginePackageManifest(%s, %s, %s,
             new AbiVersion(%d, %d), %s, EngineThreadingModel.%s,
-            [new NativeAssetDescriptor("linux-x64", %s, %s, "x64-v2")],
+            [new NativeAssetDescriptor("linux-x64", %s, %s, %s)],
             [%s]), typeof(ScaffoldPackage).Assembly);
 }
 ''' % (p["namespace"], json.dumps(data["engine_id"]), json.dumps(p["id"]), json.dumps(p["version"]),
        a["major"], a["minor"], json.dumps(a["bootstrap"]), data["threading"], json.dumps(asset_path),
-       json.dumps(native["asset"]["sha256"]), capabilities)
+       json.dumps(native["asset"]["sha256"]), json.dumps(native["cpu"]), capabilities)
         (staging / "src/Engine/ScaffoldPackage.g.cs").write_text(source)
         (staging / "native-sha256").write_text(native["asset"]["sha256"] + "\n")
         references = "\n".join('    <PackageReference Include="' + escape(k) + '" Version="[' + escape(v) + ']" />' for k, v in sorted(data["dependencies"].items()))

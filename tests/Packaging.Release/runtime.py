@@ -20,6 +20,7 @@ def main():
     parser.add_argument("--receipt", type=Path, required=True)
     parser.add_argument("--require-tool-absence", action="store_true")
     args = parser.parse_args()
+    args.directory = args.directory.resolve()
     absent = {name: shutil.which(name) is None for name in ["dotnet", "cargo", "rustc", "rustup", "clang", "gcc", "cc"]}
     if args.require_tool_absence and not all(absent.values()):
         raise ValueError("The runtime-only environment contains a compiler or SDK")

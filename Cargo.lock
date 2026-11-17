@@ -924,6 +924,15 @@ name = "nativeweave-interop-abi"
 version = "0.1.0"
 
 [[package]]
+name = "nativeweave-interop-async"
+version = "0.1.0"
+dependencies = [
+ "nativeweave-interop-abi",
+ "nativeweave-interop-errors",
+ "nativeweave-interop-memory",
+]
+
+[[package]]
 name = "nativeweave-interop-callbacks"
 version = "0.1.0"
 dependencies = [
