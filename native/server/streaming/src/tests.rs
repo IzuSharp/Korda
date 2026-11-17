@@ -15,6 +15,36 @@ async fn frame(body: &mut BoundedBody) -> Option<Result<Frame<Bytes>, StreamErro
 }
 
 #[tokio::test(flavor = "current_thread")]
+async fn prepared_formatter_credit_survives_last_nonempty_slice() {
+    let (global, request) = request(128);
+    let (sender, mut body) = body_channel(request.clone(), 64, 1).unwrap();
+    let cancellation = Cancellation::default();
+    let reservation = sender.reserve(64, &cancellation).await.unwrap();
+    // The pregrant precedes a known 32-byte allocation with no growth or alias.
+    let mut formatting = bytes::BytesMut::with_capacity(32);
+    formatting.extend_from_slice(b"formatted");
+    // SAFETY: the 64-byte grant covers the complete 32-byte formatter backing;
+    // freeze allocates no second payload, and there are no pre-adoption aliases.
+    let prepared = unsafe { reservation.prepare_admitted(formatting.freeze()) }.unwrap();
+    request.close();
+    body.close();
+    assert_eq!(global.snapshot(), (64, 0));
+    prepared.commit();
+    let output = frame(&mut body)
+        .await
+        .unwrap()
+        .unwrap()
+        .into_data()
+        .unwrap();
+    let retained = output.slice(1..2);
+    drop((body, output));
+    assert_eq!(&retained[..], b"o");
+    assert_eq!(global.snapshot(), (64, 0));
+    drop(retained);
+    assert_eq!(global.snapshot(), (0, 0));
+}
+
+#[tokio::test(flavor = "current_thread")]
 async fn prepared_write_unstarted_drop_rolls_back_queue_and_payload() {
     let (global, request) = request(64);
     let (sender, mut body) = body_channel(request, 32, 1).unwrap();

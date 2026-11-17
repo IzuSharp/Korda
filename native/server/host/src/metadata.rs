@@ -124,6 +124,10 @@ pub fn validate_request<B>(request: &Request<B>, config: &Config) -> Result<()> 
     }
     Ok(())
 }
+#[expect(
+    clippy::too_many_arguments,
+    reason = "the fixed native metadata projection keeps peer, route and monotonic deadline inputs explicit"
+)]
 pub fn head<B>(
     request: &Request<B>,
     route: &Route,

@@ -4,6 +4,7 @@ using Microsoft.Extensions.Hosting;
 namespace NativeWeave.Server.Hosting;
 
 /// <summary>Optional Generic Host lifecycle integration; Rust remains the only network Host.</summary>
+/// <remarks>Optional Hosting package; one IHostedService; borrows host provider; asynchronous disposal required. One singleton adapter; no Kestrel; stop budget returns explicit Pending and final async disposal joins retained owners. This policy applies to members unless their documentation states a narrower rule. Configuration is single-threaded before freeze; borrowed request members expire after dispatch cleanup, and asynchronous operations retain native owners until retirement.</remarks>
 public static class NativeServerServiceCollectionExtensions
 {
     /// <summary>Registers one application singleton and hosted lifecycle adapter; host async disposal owns the final safe join.</summary>

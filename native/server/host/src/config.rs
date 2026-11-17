@@ -10,12 +10,12 @@ use std::{
 };
 
 pub struct Config {
-    pub request_timeout: Duration,
-    pub shutdown_timeout: Duration,
+    pub _request_timeout: Duration,
+    pub _shutdown_timeout: Duration,
     pub header_timeout: Duration,
     pub keepalive: Duration,
-    pub max_request_bytes: u64,
-    pub max_json_bytes: u32,
+    pub _max_request_bytes: u64,
+    pub _max_json_bytes: u32,
     pub max_header_bytes: usize,
     pub max_chunk_bytes: usize,
     pub max_connections: usize,
@@ -33,15 +33,17 @@ pub struct Listener {
     pub name: String,
     pub address: SocketAddr,
     pub protocols: u32,
-    pub tls: RwLock<Option<Arc<rustls::ServerConfig>>>,
+    pub tls: RwLock<Option<Arc<TlsSnapshot>>>,
+}
+pub struct TlsSnapshot {
+    pub config: Arc<rustls::ServerConfig>,
     pub handshake_timeout: Duration,
-    pub max_handshakes: usize,
+    pub handshakes: Arc<tokio::sync::Semaphore>,
 }
 #[derive(Clone)]
 pub struct Route {
     pub id: u64,
     pub kind: u32,
-    pub pattern: String,
     pub canonical: String,
     pub parameters: Vec<String>,
     pub methods: Vec<Method>,
@@ -99,7 +101,7 @@ pub unsafe fn config(value: *const NwServerConfigV1) -> Result<Config> {
     let c = unsafe { record(value)? };
     if c.version != 1
         || c.reserved != 0
-        || !(1..=256).contains(&c.listener_count)
+        || c.listener_count == 0
         || c.listeners.is_null()
         || !c.listeners.is_aligned()
         || c.max_request_bytes == 0
@@ -118,9 +120,6 @@ pub unsafe fn config(value: *const NwServerConfigV1) -> Result<Config> {
             .checked_mul(3)
             .and_then(|x| x.checked_add(c.max_chunk_bytes as u64))
             .is_none_or(|x| x > c.managed_payload_bytes.min(c.request_retained_bytes))
-        || c.active_requests as u64 + c.queued_requests as u64 > 1_048_576
-        || c.max_connections > 1_048_576
-        || c.max_h2_streams > 1_048_576
         || !(1..=16).contains(&c.forward_limit)
     {
         return Err(invalid());
@@ -146,12 +145,12 @@ pub unsafe fn config(value: *const NwServerConfigV1) -> Result<Config> {
         }
     }
     Ok(Config {
-        request_timeout: duration(c.request_timeout_ns, false)?,
-        shutdown_timeout: duration(c.shutdown_timeout_ns, true)?,
+        _request_timeout: duration(c.request_timeout_ns, false)?,
+        _shutdown_timeout: duration(c.shutdown_timeout_ns, true)?,
         header_timeout: duration(c.header_timeout_ns, false)?,
         keepalive: duration(c.keepalive_ns, false)?,
-        max_request_bytes: c.max_request_bytes,
-        max_json_bytes: c.max_json_bytes,
+        _max_request_bytes: c.max_request_bytes,
+        _max_json_bytes: c.max_json_bytes,
         max_header_bytes: c.max_header_bytes as usize,
         max_chunk_bytes: c.max_chunk_bytes as usize,
         max_connections: c.max_connections as usize,
@@ -195,6 +194,7 @@ pub unsafe fn listener(value: *const NwServerListenerV1) -> Result<Listener> {
         return Err(invalid());
     }
     let tls = if v.flags & 1 != 0 {
+        // SAFETY: The fixed listener was copied from a complete live record; its borrowed file views remain valid until this synchronous validation returns.
         Some(unsafe { tls(&v)? })
     } else {
         if v.certificate_chain_file.length != 0
@@ -205,24 +205,18 @@ pub unsafe fn listener(value: *const NwServerListenerV1) -> Result<Listener> {
         }
         None
     };
-    let handshake_timeout = if tls.is_some() {
-        duration(v.handshake_timeout_ns, false)?
-    } else {
-        Duration::from_secs(10)
-    };
-    if tls.is_some() && (v.max_handshakes == 0 || v.max_handshakes > 1_048_576) {
-        return Err(invalid());
-    }
     Ok(Listener {
         name,
         address: SocketAddr::new(ip, v.port as u16),
         protocols: v.protocols,
         tls: RwLock::new(tls),
-        handshake_timeout,
-        max_handshakes: v.max_handshakes.max(1) as usize,
     })
 }
-pub unsafe fn tls(value: &NwServerListenerV1) -> Result<Arc<rustls::ServerConfig>> {
+pub unsafe fn tls(value: &NwServerListenerV1) -> Result<Arc<TlsSnapshot>> {
+    let handshake_timeout = duration(value.handshake_timeout_ns, false)?;
+    if value.max_handshakes == 0 {
+        return Err(invalid());
+    }
     // SAFETY: all file names are copied from bounded ABI input before filesystem access.
     let (cert, key, ca) = unsafe {
         (
@@ -281,7 +275,11 @@ pub unsafe fn tls(value: &NwServerListenerV1) -> Result<Arc<rustls::ServerConfig
         3 => vec![b"h2".to_vec(), b"http/1.1".to_vec()],
         _ => return Err(invalid()),
     };
-    Ok(Arc::new(result))
+    Ok(Arc::new(TlsSnapshot {
+        config: Arc::new(result),
+        handshake_timeout,
+        handshakes: Arc::new(tokio::sync::Semaphore::new(value.max_handshakes as usize)),
+    }))
 }
 
 pub fn decode(
@@ -456,7 +454,6 @@ pub unsafe fn route(value: *const NwServerRouteV1) -> Result<Route> {
     Ok(Route {
         id: v.handler_id,
         kind: v.kind,
-        pattern,
         canonical: canonical.join("/"),
         parameters,
         methods: parsed,

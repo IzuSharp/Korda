@@ -5,6 +5,7 @@ using System.Text.Json.Serialization.Metadata;
 namespace NativeWeave.Server;
 
 /// <summary>Request-scoped HTTP response with one writer, one completion attempt and deterministic cleanup.</summary>
+/// <remarks>Single output writer; static codecs; direct Pipelines/static-file/range policies outside initial profile. Final status200..599, explicit HEAD/204/205/304 suppression/framing; LIFO failure-isolated cleanup and execution-admission stream ownership. Every successful HTTP MapRaw/generated void/custom result/middleware path awaits one CompleteAsync/response_finish before lifecycle cleanup; preserve selected status/headers, untouched200. gRPC/Allowed MCP permit only lifecycle hooks on this facade. Bounded metadata-only queue admission may wait; native request/global payload grant and managed overlap grant are nonwaiting with all-or-none rollback. Serialized output chunks; results delay I/O until execution; streams/enumerables single-use; metadata callbacks bounded. Payload-free completion uses reserved control metadata. This policy applies to members unless their documentation states a narrower rule. Configuration is single-threaded before freeze; borrowed request members expire after dispatch cleanup, and asynchronous operations retain native owners until retirement.</remarks>
 public sealed class ServerResponse
 {
     private readonly RequestContext _context;
@@ -28,27 +29,37 @@ public sealed class ServerResponse
         Trailers = new(context.Http, TrailerMutable, context.Configuration.Options.MaxHeaderBytes, true);
     }
     /// <summary>Gets or sets a final status in 200..599 before headers commit.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.ServerResponse" path="/member/remarks" />
     public int StatusCode { get { _context.Http(); return _status; } set { HeaderMutable(); ServerValidation.Status(value); _status = value; } }
     /// <summary>Gets response headers mutable before their commit.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.ServerResponse" path="/member/remarks" />
     public HeaderCollection Headers { get; }
     /// <summary>Gets trailers mutable before completion; transport capability remains native-authoritative.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.ServerResponse" path="/member/remarks" />
     public HeaderCollection Trailers { get; }
     /// <summary>Gets or sets Content-Type in the same header map.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.ServerResponse" path="/member/remarks" />
     public string? ContentType { get { _context.Http(); return Headers.GetSingle("Content-Type"); } set { HeaderMutable(); if (value is null) Headers.Remove("Content-Type"); else Headers.Set("Content-Type", value); } }
     /// <summary>Gets or sets a fixed body length; write mismatch aborts instead of truncating or padding.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.ServerResponse" path="/member/remarks" />
     public long? ContentLength
     {
         get { _context.Http(); return Headers.GetSingle("Content-Length") is { } value ? long.Parse(value, CultureInfo.InvariantCulture) : null; }
         set { HeaderMutable(); if (value is < 0) throw new ArgumentOutOfRangeException(nameof(value)); if (value is null) Headers.Remove("Content-Length"); else Headers.Set("Content-Length", value.Value.ToString(CultureInfo.InvariantCulture)); }
     }
     /// <summary>Gets whether native final response headers have committed.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.ServerResponse" path="/member/remarks" />
     public bool HasStarted { get { _context.Http(); return _committed; } }
     /// <summary>Gets the borrowed asynchronous output stream.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.ServerResponse" path="/member/remarks" />
     public Stream Body { get { _context.Http(); return _body ??= new ServerWriteStream(_context.Native.Body, WriteAsync, FlushAsync); } }
     internal bool BodySuppressed => _context.Native.Method == "HEAD";
     internal bool Started => _committed;
     internal bool IsComplete => _complete;
     /// <summary>Runs starting callbacks in reverse order and commits headers once.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.ServerResponse" path="/member/remarks" />
+    /// <param name="cancellationToken">Caller cancellation intent; cancellation never releases native owners before their retirement join.</param>
+    /// <returns>An awaitable operation; caller completion is distinct from safe native retirement as specified by the declaring type.</returns>
     public Task StartAsync(CancellationToken cancellationToken = default)
     {
         _context.Http(); cancellationToken.ThrowIfCancellationRequested();
@@ -64,6 +75,10 @@ public sealed class ServerResponse
         _committed = true;
     }
     /// <summary>Writes bounded chunks with one pending writer; native payload admission never waits for byte credit.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.ServerResponse" path="/member/remarks" />
+    /// <param name="data">The payload or finite byte limit described in the summary; application-owned input is not an unbounded framework allocation.</param>
+    /// <param name="cancellationToken">Caller cancellation intent; cancellation never releases native owners before their retirement join.</param>
+    /// <returns>An awaitable operation; caller completion is distinct from safe native retirement as specified by the declaring type.</returns>
     public Task WriteAsync(ReadOnlyMemory<byte> data, CancellationToken cancellationToken = default)
     {
         _context.Http(); cancellationToken.ThrowIfCancellationRequested();
@@ -82,7 +97,6 @@ public sealed class ServerResponse
             for (int offset = 0; offset < data.Length;)
             {
                 int count = Math.Min(_context.Native.Body.MaxChunkBytes, data.Length - offset);
-                using var overlap = _context.Native.Body.AcquireManagedCredit(count);
                 await _context.Native.Body.WriteAsync(data.Slice(offset, count), cancellationToken).ConfigureAwait(false);
                 offset += count; _written = checked(_written + count);
             }
@@ -91,6 +105,9 @@ public sealed class ServerResponse
         finally { Volatile.Write(ref _writer, 0); }
     }
     /// <summary>Flushes local native flow-controlled progress without certifying remote consumption.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.ServerResponse" path="/member/remarks" />
+    /// <param name="cancellationToken">Caller cancellation intent; cancellation never releases native owners before their retirement join.</param>
+    /// <returns>An awaitable operation; caller completion is distinct from safe native retirement as specified by the declaring type.</returns>
     public Task FlushAsync(CancellationToken cancellationToken = default)
     {
         _context.Http(); cancellationToken.ThrowIfCancellationRequested();
@@ -101,6 +118,12 @@ public sealed class ServerResponse
     private async Task FlushCoreAsync(CancellationToken token)
     { try { await StartAsync(token).ConfigureAwait(false); await _context.Native.Body.FlushAsync(token).ConfigureAwait(false); } finally { Volatile.Write(ref _writer, 0); } }
     /// <summary>Writes JSON using explicit static metadata and finite encoded/peak limits.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.ServerResponse" path="/member/remarks" />
+    /// <param name="value">The value value described by this operation.</param>
+    /// <param name="typeInfo">Static JSON metadata; nullable registration arguments resolve from UseJson contexts at route freeze, without reflection fallback.</param>
+    /// <param name="cancellationToken">Caller cancellation intent; cancellation never releases native owners before their retirement join.</param>
+    /// <typeparam name="T">The statically known result type; JSON paths require explicit or registered static metadata.</typeparam>
+    /// <returns>An awaitable operation; caller completion is distinct from safe native retirement as specified by the declaring type.</returns>
     public Task WriteJsonAsync<T>(T value, JsonTypeInfo<T> typeInfo, CancellationToken cancellationToken = default)
     {
         _context.Http(); ArgumentNullException.ThrowIfNull(typeInfo); cancellationToken.ThrowIfCancellationRequested();
@@ -124,6 +147,9 @@ public sealed class ServerResponse
         finally { Volatile.Write(ref _writer, 0); }
     }
     /// <summary>Joins one terminal attempt; failed completion is retained and never retried as a second response.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.ServerResponse" path="/member/remarks" />
+    /// <param name="cancellationToken">Caller cancellation intent; cancellation never releases native owners before their retirement join.</param>
+    /// <returns>An awaitable operation; caller completion is distinct from safe native retirement as specified by the declaring type.</returns>
     public Task CompleteAsync(CancellationToken cancellationToken = default)
     {
         _context.Http(); cancellationToken.ThrowIfCancellationRequested();
@@ -148,6 +174,8 @@ public sealed class ServerResponse
         catch { if (_committed) _context.Native.Abort(); throw; }
     }
     /// <summary>Registers one of at most 32 LIFO starting callbacks before starting begins.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.ServerResponse" path="/member/remarks" />
+    /// <param name="callback">An awaited lifecycle callback registered before the corresponding bounded list freezes.</param>
     public void OnStarting(Func<CancellationToken, Task> callback)
     {
         _context.Http(); ArgumentNullException.ThrowIfNull(callback);
@@ -155,9 +183,13 @@ public sealed class ServerResponse
         _starting.Add(callback);
     }
     /// <summary>Registers one of at most 32 LIFO completion callbacks, before disposal and request-scope release.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.ServerResponse" path="/member/remarks" />
+    /// <param name="callback">An awaited lifecycle callback registered before the corresponding bounded list freezes.</param>
     public void OnCompleted(Func<Task> callback)
     { _context.Alive(); ArgumentNullException.ThrowIfNull(callback); if (_cleaning || _completed.Count >= 32) throw new InvalidOperationException("Completion registrations are frozen or full."); _completed.Add(callback); }
     /// <summary>Transfers one disposable after successful bounded registration; duplicate identity is rejected.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.ServerResponse" path="/member/remarks" />
+    /// <param name="resource">The resource value described by this operation.</param>
     public void RegisterForDisposeAsync(IAsyncDisposable resource)
     {
         _context.Alive(); ArgumentNullException.ThrowIfNull(resource);

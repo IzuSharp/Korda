@@ -227,6 +227,41 @@ impl PayloadReservation {
             backing_capacity: self.capacity,
         })
     }
+    /// Retains a mature protocol formatter's existing allocation under this grant.
+    ///
+    /// # Safety
+    /// The caller must acquire this grant before formatting and prove that its
+    /// capacity covers the formatter's entire backing allocation and every
+    /// overlapping allocation during growth/conversion. `data` must be the only
+    /// externally escaping owner: all clones/slices that survive this call must
+    /// originate from the returned credited Bytes, never from an uncredited
+    /// pre-adoption alias. The bound must come from the pinned formatter/allocator
+    /// implementation, not merely the visible byte length.
+    unsafe fn adopt_admitted(self, data: Bytes) -> Result<OwnedBuffer, StreamError> {
+        if data.is_empty() || data.len() > self.capacity {
+            return Err(StreamError::InvalidArgument);
+        }
+        let request = Arc::clone(&self.credit.request);
+        let bytes = Bytes::from_owner(FormattedAllocation {
+            storage: data,
+            _credit: self.credit,
+        });
+        Ok(OwnedBuffer {
+            bytes,
+            request,
+            backing_capacity: self.capacity,
+        })
+    }
+}
+
+struct FormattedAllocation {
+    storage: Bytes,
+    _credit: Credit,
+}
+impl AsRef<[u8]> for FormattedAllocation {
+    fn as_ref(&self) -> &[u8] {
+        &self.storage
+    }
 }
 
 struct Allocation {
@@ -359,6 +394,23 @@ impl WriteReservation {
     /// queue slot and whole backing capacity until start or unstarted release.
     pub fn prepare(self, data: &[u8]) -> Result<PreparedWrite, StreamError> {
         let buffer = self.payload.copy(data)?;
+        Ok(PreparedWrite {
+            permit: self.permit,
+            buffer,
+        })
+    }
+    /// Adopts an already admitted formatter output without copying it or enqueueing
+    /// before operation start. Dropping the prepared owner rolls both grants back.
+    ///
+    /// # Safety
+    /// The pregrant must cover full formatter backing capacity plus growth and
+    /// conversion overlap before any formatting allocation. No uncredited clone
+    /// or slice of `data` may escape; retained derivatives must be obtained from
+    /// the credited output after commit. Visible length alone is not a proof.
+    pub unsafe fn prepare_admitted(self, data: Bytes) -> Result<PreparedWrite, StreamError> {
+        // SAFETY: the engine adapter supplies the formatter-specific bound and
+        // no-alias proof required by this explicitly unsafe entry.
+        let buffer = unsafe { self.payload.adopt_admitted(data)? };
         Ok(PreparedWrite {
             permit: self.permit,
             buffer,

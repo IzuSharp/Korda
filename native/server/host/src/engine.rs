@@ -1,6 +1,6 @@
 use crate::{
     ApiError, Result,
-    config::{self, Config, Route},
+    config::{Config, Route, TlsSnapshot},
     invalid, lock,
     metadata::{self, Head},
     wire::*,
@@ -23,13 +23,12 @@ use hyper_util::{
 use nativeweave_interop_abi::*;
 use nativeweave_interop_async::{Operation, WorkLease};
 use nativeweave_server_streaming::{
-    BodyReader, BodySender, BoundedBody, Budget, Cancellation, PreparedWrite, ReadFrame,
-    RequestBudget, StreamError, WriteReservation, body_channel,
+    BodyReader, BodySender, BoundedBody, Budget, Cancellation, OwnedBuffer, PreparedWrite,
+    ReadFrame, RequestBudget, StreamError, WriteReservation, body_channel,
 };
 use std::{
     collections::{HashMap, HashSet},
     convert::Infallible,
-    future::Future,
     net::SocketAddr,
     pin::Pin,
     sync::{
@@ -42,7 +41,7 @@ use std::{
 };
 use tokio::{
     net::TcpListener,
-    runtime::{Handle, Runtime},
+    runtime::Handle,
     sync::{Notify, OwnedSemaphorePermit, Semaphore, oneshot},
     task::JoinSet,
 };
@@ -65,6 +64,7 @@ pub struct Host {
     pub connections: Arc<Semaphore>,
     pub operation_slots: Arc<Semaphore>,
     pub live_ops: AtomicUsize,
+    pub retiring: AtomicUsize,
     pub callbacks: AtomicUsize,
     pub rejected: AtomicU64,
     pub callback_failures: AtomicU64,
@@ -102,6 +102,7 @@ impl Host {
             connections,
             operation_slots: Arc::new(Semaphore::new(slots)),
             live_ops: AtomicUsize::new(0),
+            retiring: AtomicUsize::new(0),
             callbacks: AtomicUsize::new(0),
             rejected: AtomicU64::new(0),
             callback_failures: AtomicU64::new(0),
@@ -296,7 +297,6 @@ impl Host {
         Ok(router)
     }
     async fn accept(self: Arc<Self>, index: usize, listener: TcpListener, router: Router) {
-        let handshakes = Arc::new(Semaphore::new(self.config.listeners[index].max_handshakes));
         let mut connections = JoinSet::new();
         loop {
             tokio::select! {
@@ -304,13 +304,13 @@ impl Host {
                 result=listener.accept()=>{
                     let Ok((stream,peer))=result else{self.fault(NW_DOMAIN_ERROR);break;};
                     let Ok(permit)=self.connections.clone().try_acquire_owned()else{self.rejected.fetch_add(1,Ordering::Relaxed);drop(stream);continue;};
-                    let tls=self.config.listeners[index].tls.read().unwrap_or_else(|p|p.into_inner()).clone();let host=self.clone();let router=router.clone();let handshake=handshakes.clone();
+                    let tls=self.config.listeners[index].tls.read().unwrap_or_else(|p|p.into_inner()).clone();let host=self.clone();let router=router.clone();
                     connections.spawn(async move{
                         let _permit=permit;
                         if let Some(tls)=tls{
-                            let Ok(_handshake)=handshake.try_acquire_owned()else{return;};
-                            let accept=tokio_rustls::TlsAcceptor::from(tls).accept(stream);
-                            let stream=tokio::select!{()=host.stop.cancelled()=>return,result=tokio::time::timeout(host.config.listeners[index].handshake_timeout,accept)=>match result{Ok(Ok(v))=>v,_=>return}};
+                            let Ok(_handshake)=tls.handshakes.clone().try_acquire_owned()else{return;};
+                            let accept=tokio_rustls::TlsAcceptor::from(tls.config.clone()).accept(stream);
+                            let stream=tokio::select!{()=host.stop.cancelled()=>return,result=tokio::time::timeout(tls.handshake_timeout,accept)=>match result{Ok(Ok(v))=>v,_=>return}};
                             drop(_handshake);let negotiated=stream.get_ref().1.alpn_protocol();let protocols=host.config.listeners[index].protocols;
                             if protocols==2 && negotiated!=Some(b"h2".as_slice()){return;}
                             host.serve(stream,peer,index,true,router).await;
@@ -490,10 +490,18 @@ impl Host {
             Ok(v) => v,
             Err(_) => return simple(StatusCode::SERVICE_UNAVAILABLE),
         };
-        let (sender, body) = match body_channel(budget.clone(), self.config.max_chunk_bytes, 1) {
+        // SSE formatter backing/growth has a conservative peak above its visible
+        // chunk length. Raw operations independently enforce MaxChunkBytes.
+        let write_capacity = self
+            .config
+            .max_chunk_bytes
+            .saturating_mul(3)
+            .min(self.config.request_retained_bytes as usize);
+        let (sender, body) = match body_channel(budget.clone(), write_capacity, 1) {
             Ok(v) => v,
             Err(_) => return simple(StatusCode::SERVICE_UNAVAILABLE),
         };
+        let body_limit = Arc::new(AtomicBool::new(false));
         let reader = BodyReader::new(
             ChunkedInput {
                 body: request.into_body(),
@@ -501,6 +509,7 @@ impl Host {
                 maximum: self.config.max_chunk_bytes,
                 received: 0,
                 limit: route.max_request_bytes,
+                exceeded: body_limit.clone(),
             },
             budget.clone(),
             self.config.max_chunk_bytes,
@@ -511,6 +520,7 @@ impl Host {
         peer.life.changed.notify_waiters();
         let request = Arc::new(RequestState {
             host: Arc::downgrade(&self),
+            body_limit,
             head,
             reader: tokio::sync::Mutex::new(Some(reader)),
             sender,
@@ -520,6 +530,7 @@ impl Host {
                 status: 200,
                 length: None,
                 written: 0,
+                sse: false,
                 head: Some(tx),
             }),
             cancel: Cancellation::default(),
@@ -541,7 +552,7 @@ impl Host {
         });
         lock(&self.requests).insert(id, request.clone());
         if self.notify_request(&request) != NW_OK {
-            request.dispatch_done.store(true, Ordering::Release);
+            request.mark_dispatch_done();
             request.retired.store(true, Ordering::Release);
             request.cancel.cancel();
             request.body_done.store(true, Ordering::Release);
@@ -574,14 +585,21 @@ impl Host {
         let suppress = request.head.method == "HEAD" || matches!(status, 204 | 205 | 304);
         let expected = if suppress { None } else { state.length };
         drop(state);
-        let mut response = Response::new(AxumBody::new(OutputBody {
-            body,
-            request,
-            expected,
-            sent: 0,
-            suppress,
-            ended: false,
-        }));
+        let output = if suppress {
+            request.body_ended();
+            drop(body);
+            AxumBody::empty()
+        } else {
+            AxumBody::new(OutputBody {
+                body,
+                request,
+                expected,
+                sent: 0,
+                suppress,
+                ended: false,
+            })
+        };
+        let mut response = Response::new(output);
         *response.status_mut() = StatusCode::from_u16(status).expect("validated final status");
         *response.headers_mut() = headers;
         response
@@ -674,6 +692,7 @@ impl Drop for Waiting {
     }
 }
 pub struct RequestState {
+    body_limit: Arc<AtomicBool>,
     pub host: Weak<Host>,
     pub head: Arc<Head>,
     pub reader: tokio::sync::Mutex<Option<BodyReader<ChunkedInput>>>,
@@ -700,6 +719,15 @@ pub struct RequestState {
 // does not grant unwind safety to arbitrary user or upstream callback state.
 impl std::panic::RefUnwindSafe for RequestState {}
 impl RequestState {
+    pub fn mark_dispatch_done(&self) -> bool {
+        if self.dispatch_done.swap(true, Ordering::AcqRel) {
+            return false;
+        }
+        if let Some(host) = self.host.upgrade() {
+            host.retiring.fetch_add(1, Ordering::AcqRel);
+        }
+        true
+    }
     pub fn business(&self) -> Result<()> {
         if self.dispatch_done.load(Ordering::Acquire) || self.retired.load(Ordering::Acquire) {
             Err(ApiError::status(NW_INVALID_STATE))
@@ -715,6 +743,11 @@ impl RequestState {
         }
     }
     pub fn abort(&self, status: u32) {
+        let status = if status == NW_TIMEOUT {
+            NW_TIMEOUT
+        } else {
+            NW_CANCELED
+        };
         if self
             .head
             .cancellation
@@ -738,6 +771,23 @@ impl RequestState {
         self.body_done.store(true, Ordering::Release);
         if self.dispatch_done.load(Ordering::Acquire) {
             self.finished.cancel();
+        }
+    }
+    pub fn discard_input(self: &Arc<Self>) {
+        self.input_cancel.cancel();
+        if let Ok(mut reader) = self.reader.try_lock() {
+            reader.take();
+            return;
+        }
+        if let Some(host) = self.host.upgrade()
+            && let Some(runtime) = lock(&host.runtime).clone()
+        {
+            self.live_ops.fetch_add(1, Ordering::AcqRel);
+            let guard = InputDiscard(self.clone());
+            runtime.spawn(async move {
+                guard.0.reader.lock().await.take();
+                drop(guard);
+            });
         }
     }
     pub fn try_retire(&self) -> u32 {
@@ -767,9 +817,23 @@ impl RequestState {
 }
 impl Drop for RequestState {
     fn drop(&mut self) {
+        if self.dispatch_done.load(Ordering::Acquire)
+            && let Some(host) = self.host.upgrade()
+        {
+            host.retiring.fetch_sub(1, Ordering::AcqRel);
+        }
         self.life.active.fetch_sub(1, Ordering::AcqRel);
         *lock(&self.life.last) = Instant::now();
         self.life.changed.notify_waiters();
+    }
+}
+struct InputDiscard(Arc<RequestState>);
+impl Drop for InputDiscard {
+    fn drop(&mut self) {
+        self.0.live_ops.fetch_sub(1, Ordering::AcqRel);
+        if let Some(host) = self.0.host.upgrade() {
+            host.reap();
+        }
     }
 }
 pub struct ControlGate {
@@ -781,6 +845,7 @@ pub struct ResponseState {
     pub status: u16,
     pub length: Option<u64>,
     pub written: u64,
+    pub sse: bool,
     pub head: Option<oneshot::Sender<(u16, HeaderMap)>>,
 }
 pub struct SideGuard(Arc<AtomicBool>);
@@ -810,13 +875,17 @@ pub struct Reservation {
 pub enum OpResult {
     Void,
     Close(NwServerCloseResultV1),
-    Chunk(ReadFrame),
+    Chunk(ChunkResult),
     Reservation(Reservation),
+}
+pub enum ChunkResult {
+    Data(OwnedBuffer),
+    End(Option<Vec<u8>>),
 }
 pub enum Job {
     Start,
     Close(Duration),
-    Reload(usize, Arc<rustls::ServerConfig>),
+    Reload(usize, Arc<TlsSnapshot>),
     Read(Arc<RequestState>, usize, SideGuard),
     Reserve(Arc<RequestState>, u32, usize, SideGuard),
     Begin(Arc<RequestState>, u16, HeaderMap, SideGuard),
@@ -953,12 +1022,37 @@ impl OpState {
                     request.business()?;
                     let mut guard = request.reader.lock().await;
                     let reader = guard.as_mut().ok_or(ApiError::status(NW_INVALID_STATE))?;
-                    let result = reader.read(max, &request.input_cancel).await?;
+                    let frame = reader
+                        .read(max, &request.input_cancel)
+                        .await
+                        .map_err(|error| {
+                            if request.body_limit.load(Ordering::Acquire) {
+                                ApiError::domain(2)
+                            } else {
+                                error.into()
+                            }
+                        })?;
+                    let result = match frame {
+                        ReadFrame::Data(buffer) => ChunkResult::Data(buffer),
+                        ReadFrame::End(trailers) => ChunkResult::End(
+                            trailers
+                                .as_ref()
+                                .map(crate::config::encode_headers)
+                                .transpose()?,
+                        ),
+                    };
                     Ok(OpResult::Chunk(result))
                 }
                 Job::Reserve(request, kind, capacity, side) => {
                     request.business()?;
-                    let reservation = request.sender.reserve(capacity, &request.cancel).await?;
+                    let reservation = request
+                        .sender
+                        .reserve(capacity, &request.cancel)
+                        .await
+                        .map_err(|error| {
+                            request.abort(NW_CANCELED);
+                            ApiError::from(error)
+                        })?;
                     Ok(OpResult::Reservation(Reservation {
                         request,
                         kind,
@@ -978,6 +1072,14 @@ impl OpState {
                     if response.phase != 0 {
                         return Err(ApiError::status(NW_INVALID_STATE));
                     }
+                    response.sse = headers
+                        .get(http::header::CONTENT_TYPE)
+                        .and_then(|value| value.to_str().ok())
+                        .is_some_and(|value| {
+                            value.split(';').next().is_some_and(|part| {
+                                part.trim().eq_ignore_ascii_case("text/event-stream")
+                            })
+                        });
                     let tx = response
                         .head
                         .take()
@@ -1038,6 +1140,12 @@ impl OpState {
                             return Err(invalid());
                         }
                         response.phase = 2;
+                        if request.head.method == "HEAD"
+                            || matches!(response.status, 204 | 205 | 304)
+                        {
+                            response.phase = 3;
+                            return Ok(OpResult::Void);
+                        }
                     }
                     request
                         .sender
@@ -1092,6 +1200,7 @@ pub struct ChunkedInput {
     maximum: usize,
     received: u64,
     limit: u64,
+    exceeded: Arc<AtomicBool>,
 }
 impl Body for ChunkedInput {
     type Data = Bytes;
@@ -1112,6 +1221,7 @@ impl Body for ChunkedInput {
                 Ok(mut bytes) => {
                     self.received = self.received.saturating_add(bytes.len() as u64);
                     if self.received > self.limit {
+                        self.exceeded.store(true, Ordering::Release);
                         return Poll::Ready(Some(Err(StreamError::ResourceLimit)));
                     }
                     let part = bytes.split_to(bytes.len().min(self.maximum));
@@ -1203,7 +1313,9 @@ impl Body for OutputBody {
 impl Drop for OutputBody {
     fn drop(&mut self) {
         if !self.ended {
-            if lock(&self.request.response).phase != 3 {
+            if lock(&self.request.response).phase != 3
+                && !self.expected.is_some_and(|length| length == self.sent)
+            {
                 self.request.abort(NW_CANCELED);
             }
             self.end();

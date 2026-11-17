@@ -6,6 +6,7 @@ using System.Text;
 namespace NativeWeave.Server;
 
 /// <summary>Bounded case-insensitive HTTP headers preserving repeated field values.</summary>
+/// <remarks>Static IParsable/JsonTypeInfo and native validated metadata; request collections readonly; trailers bit3 after EOF. Bounded lazy UTF-8 decoding and optional owned snapshots; repeated values preserved; one body mode/reader; no managed HTTP parser. This policy applies to members unless their documentation states a narrower rule. Configuration is single-threaded before freeze; borrowed request members expire after dispatch cleanup, and asynchronous operations retain native owners until retirement.</remarks>
 public sealed class HeaderCollection
 {
     private readonly Dictionary<string, List<string>> _values = new(StringComparer.OrdinalIgnoreCase);
@@ -19,10 +20,15 @@ public sealed class HeaderCollection
         if (values is not null) foreach (var pair in values) _values.Add(pair.Key, [.. pair.Value]);
     }
     /// <summary>Gets the number of distinct names while the request is alive.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.HeaderCollection" path="/member/remarks" />
     public int Count { get { _alive(); return _values.Count; } }
     /// <summary>Gets all field values; missing names return an empty immutable list.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.HeaderCollection" path="/member/remarks" />
     public IReadOnlyList<string> this[string name] { get { _alive(); ValidateToken(name); return _values.TryGetValue(name, out var values) ? values.AsReadOnly() : []; } }
     /// <summary>Gets a single value or null; repeated input is rejected without comma folding.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.HeaderCollection" path="/member/remarks" />
+    /// <param name="name">The name value described by this operation.</param>
+    /// <returns>The typed result described in the summary, retaining the ownership policy of its declaring type.</returns>
     public string? GetSingle(string name)
     {
         var values = this[name];
@@ -30,14 +36,28 @@ public sealed class HeaderCollection
             ? new RequestBindingException(name, "Exactly one header value is required.") : new InvalidOperationException("The response header has repeated values.")) };
     }
     /// <summary>Tests for a field name.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.HeaderCollection" path="/member/remarks" />
+    /// <param name="name">The name value described by this operation.</param>
+    /// <returns>The typed result described in the summary, retaining the ownership policy of its declaring type.</returns>
     public bool Contains(string name) { _alive(); ValidateToken(name); return _values.ContainsKey(name); }
     /// <summary>Replaces response values before commit; request instances are read-only.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.HeaderCollection" path="/member/remarks" />
+    /// <param name="name">The name value described by this operation.</param>
+    /// <param name="value">The value value described by this operation.</param>
     public void Set(string name, string value) => Change(name, value, false);
     /// <summary>Appends one response field without combining repeated values.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.HeaderCollection" path="/member/remarks" />
+    /// <param name="name">The name value described by this operation.</param>
+    /// <param name="value">The value value described by this operation.</param>
     public void Append(string name, string value) => Change(name, value, true);
     /// <summary>Removes a mutable field before commit.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.HeaderCollection" path="/member/remarks" />
+    /// <param name="name">The name value described by this operation.</param>
+    /// <returns>The typed result described in the summary, retaining the ownership policy of its declaring type.</returns>
     public bool Remove(string name) { Writable(); ValidateName(name); return _values.Remove(name); }
     /// <summary>Copies a bounded caller-owned metadata snapshot.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.HeaderCollection" path="/member/remarks" />
+    /// <returns>The typed result described in the summary, retaining the ownership policy of its declaring type.</returns>
     public IReadOnlyDictionary<string, IReadOnlyList<string>> ToDictionary()
     { _alive(); return _values.ToDictionary(p => p.Key, p => (IReadOnlyList<string>)Array.AsReadOnly(p.Value.ToArray()), StringComparer.OrdinalIgnoreCase); }
     internal void Clear() { Writable(); _values.Clear(); }
@@ -71,14 +91,24 @@ public sealed class HeaderCollection
 }
 
 /// <summary>Invariant typed access to already decoded native route/query values, without reflection.</summary>
+/// <remarks>Static IParsable/JsonTypeInfo and native validated metadata; request collections readonly; trailers bit3 after EOF. Bounded lazy UTF-8 decoding and optional owned snapshots; repeated values preserved; one body mode/reader; no managed HTTP parser. This policy applies to members unless their documentation states a narrower rule. Configuration is single-threaded before freeze; borrowed request members expire after dispatch cleanup, and asynchronous operations retain native owners until retirement.</remarks>
 public sealed class ParameterValues
 {
     private readonly Action _alive;
     private readonly IReadOnlyDictionary<string, IReadOnlyList<string>> _values;
     internal ParameterValues(Action alive, IReadOnlyDictionary<string, IReadOnlyList<string>> values) { _alive = alive; _values = values; }
     /// <summary>Parses exactly one required value or throws a bounded binding error.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.ParameterValues" path="/member/remarks" />
+    /// <param name="name">The name value described by this operation.</param>
+    /// <typeparam name="T">The statically known result type; JSON paths require explicit or registered static metadata.</typeparam>
+    /// <returns>The typed result described in the summary, retaining the ownership policy of its declaring type.</returns>
     public T Get<T>(string name) where T : IParsable<T> => TryGet<T>(name, out var value) ? value : throw new RequestBindingException(name, "A required value is missing, repeated or malformed.");
     /// <summary>Parses one value; false means absent, repeated or malformed.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.ParameterValues" path="/member/remarks" />
+    /// <param name="name">The name value described by this operation.</param>
+    /// <param name="value">The value value described by this operation.</param>
+    /// <typeparam name="T">The statically known result type; JSON paths require explicit or registered static metadata.</typeparam>
+    /// <returns>The typed result described in the summary, retaining the ownership policy of its declaring type.</returns>
     public bool TryGet<T>(string name, [MaybeNullWhen(false)] out T value) where T : IParsable<T>
     {
         var values = GetValues(name);
@@ -86,6 +116,9 @@ public sealed class ParameterValues
         value = default; return false;
     }
     /// <summary>Gets raw decoded values; returns an empty list when absent.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.ParameterValues" path="/member/remarks" />
+    /// <param name="name">The name value described by this operation.</param>
+    /// <returns>The typed result described in the summary, retaining the ownership policy of its declaring type.</returns>
     public IReadOnlyList<string> GetValues(string name)
     { _alive(); ArgumentNullException.ThrowIfNull(name); return _values.TryGetValue(name, out var values) ? values : []; }
 }

@@ -10,13 +10,18 @@ using Microsoft.Extensions.Logging;
 namespace NativeWeave.Server;
 
 /// <summary>Creates independently owned applications using the required Rust host.</summary>
+/// <remarks>Linux x64 verified package; other RID acceptance is separate; base http1/http2/tls/trailers module bits; requested listener capabilities checked at Build. Single-threaded bounded startup snapshots; O(config bytes); options/services freeze at Build, routes separately freeze at first Start; no default global runtime. This policy applies to members unless their documentation states a narrower rule. Configuration is single-threaded before freeze; borrowed request members expire after dispatch cleanup, and asynchronous operations retain native owners until retirement.</remarks>
 public static class NativeServer
 {
     /// <summary>Creates a builder with finite loopback defaults; explicit arguments populate configuration.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.NativeServer" path="/member/remarks" />
+    /// <param name="args">The args value described by this operation; omitted calls use null.</param>
+    /// <returns>The configured fluent builder; configuration is frozen at application startup.</returns>
     public static NativeServerBuilder CreateBuilder(string[]? args = null) => new(args);
 }
 
 /// <summary>Configures one application before Build; configuration is single-threaded and copied at Build.</summary>
+/// <remarks>Linux x64 verified package; other RID acceptance is separate; base http1/http2/tls/trailers module bits; requested listener capabilities checked at Build. Single-threaded bounded startup snapshots; O(config bytes); options/services freeze at Build, routes separately freeze at first Start; no default global runtime. This policy applies to members unless their documentation states a narrower rule. Configuration is single-threaded before freeze; borrowed request members expire after dispatch cleanup, and asynchronous operations retain native owners until retirement.</remarks>
 public sealed class NativeServerBuilder
 {
     private readonly List<ListenerConfiguration> _listeners = [];
@@ -39,15 +44,22 @@ public sealed class NativeServerBuilder
     }
 
     /// <summary>Gets mutable configuration copied and validated by Build.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.NativeServerBuilder" path="/member/remarks" />
     public ServerOptions Options { get; } = new();
     /// <summary>Gets service registrations; the owned provider is built once.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.NativeServerBuilder" path="/member/remarks" />
     public IServiceCollection Services { get; }
     /// <summary>Gets explicit configuration; no file watching, environment or secret scanning is installed.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.NativeServerBuilder" path="/member/remarks" />
     public ConfigurationManager Configuration { get; }
     /// <summary>Gets logging configuration; no sink is installed by default.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.NativeServerBuilder" path="/member/remarks" />
     public ILoggingBuilder Logging { get; }
 
     /// <summary>Applies supported scalar keys immediately using invariant checked parsing.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.NativeServerBuilder" path="/member/remarks" />
+    /// <param name="section">The section value described by this operation.</param>
+    /// <returns>The configured fluent builder; configuration is frozen at application startup.</returns>
     public NativeServerBuilder Configure(IConfiguration section)
     {
         Mutable(); ArgumentNullException.ThrowIfNull(section);
@@ -75,6 +87,11 @@ public sealed class NativeServerBuilder
     }
 
     /// <summary>Registers an explicit native listener; the first explicit registration replaces the loopback default.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.NativeServerBuilder" path="/member/remarks" />
+    /// <param name="address">The address value described by this operation.</param>
+    /// <param name="port">The port value described by this operation.</param>
+    /// <param name="configure">Optional synchronous configuration callback run before the options snapshot is frozen.</param>
+    /// <returns>The configured fluent builder; configuration is frozen at application startup.</returns>
     public NativeServerBuilder Listen(IPAddress address, int port, Action<ServerListenOptions>? configure = null)
     {
         Mutable(); ArgumentNullException.ThrowIfNull(address);
@@ -84,6 +101,10 @@ public sealed class NativeServerBuilder
     }
 
     /// <summary>Registers both IPv4 and IPv6 loopback listeners; startup must bind both.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.NativeServerBuilder" path="/member/remarks" />
+    /// <param name="port">The port value described by this operation; omitted calls use 5000.</param>
+    /// <param name="configure">Optional synchronous configuration callback run before the options snapshot is frozen.</param>
+    /// <returns>The configured fluent builder; configuration is frozen at application startup.</returns>
     public NativeServerBuilder ListenLocalhost(int port = 5000, Action<ServerListenOptions>? configure = null)
     {
         Listen(IPAddress.Loopback, port, configure);
@@ -91,6 +112,9 @@ public sealed class NativeServerBuilder
     }
 
     /// <summary>Registers explicit static JSON metadata without runtime serializer generation.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.NativeServerBuilder" path="/member/remarks" />
+    /// <param name="context">The current borrowed request context; it cannot escape awaited dispatch and cleanup.</param>
+    /// <returns>The configured fluent builder; configuration is frozen at application startup.</returns>
     public NativeServerBuilder UseJson(JsonSerializerContext context)
     {
         Mutable(); ArgumentNullException.ThrowIfNull(context);
@@ -99,6 +123,10 @@ public sealed class NativeServerBuilder
     }
 
     /// <summary>Uses an external scope-capable service provider; disposal transfers only when explicitly selected.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.NativeServerBuilder" path="/member/remarks" />
+    /// <param name="provider">An explicit scope-capable service provider; ownership transfers only when disposeWithServer is true.</param>
+    /// <param name="disposeWithServer">Whether application disposal also disposes the supplied provider; false retains caller ownership.</param>
+    /// <returns>The configured fluent builder; configuration is frozen at application startup.</returns>
     public NativeServerBuilder UseServiceProvider(IServiceProvider provider, bool disposeWithServer = false)
     {
         Mutable(); ArgumentNullException.ThrowIfNull(provider);
@@ -108,13 +136,21 @@ public sealed class NativeServerBuilder
     }
 
     /// <summary>Registers a caller-owned, thread-safe application authenticator.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.NativeServerBuilder" path="/member/remarks" />
+    /// <param name="authenticator">The authenticator value described by this operation.</param>
+    /// <returns>The configured fluent builder; configuration is frozen at application startup.</returns>
     public NativeServerBuilder UseAuthentication(IServerAuthenticator authenticator)
     { Mutable(); ArgumentNullException.ThrowIfNull(authenticator); _authenticator = authenticator; return this; }
     /// <summary>Registers a caller-owned, thread-safe named-policy authorizer.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.NativeServerBuilder" path="/member/remarks" />
+    /// <param name="authorizer">The authorizer value described by this operation.</param>
+    /// <returns>The configured fluent builder; configuration is frozen at application startup.</returns>
     public NativeServerBuilder UseAuthorization(IServerAuthorizer authorizer)
     { Mutable(); ArgumentNullException.ThrowIfNull(authorizer); _authorizer = authorizer; return this; }
 
     /// <summary>Builds once, validates and snapshots configuration, and loads the native module without starting listeners.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.NativeServerBuilder" path="/member/remarks" />
+    /// <returns>The typed result described in the summary, retaining the ownership policy of its declaring type.</returns>
     public NativeServerApplication Build()
     {
         Mutable();

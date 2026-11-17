@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 namespace NativeWeave.Server;
 
 /// <summary>Owns one Rust Host, frozen application routing and optionally owned application services.</summary>
+/// <remarks>Single required Rust host; no physical unload; optional capabilities negotiated before use. One app/provider/runtime; Core operation/cancellation records; Pending retains all owners/credits; DisposeAsync joins without a time limit. This policy applies to members unless their documentation states a narrower rule. Configuration is single-threaded before freeze; borrowed request members expire after dispatch cleanup, and asynchronous operations retain native owners until retirement.</remarks>
 public sealed class NativeServerApplication : ServerRoutes, IAsyncDisposable
 {
     private readonly ServerHost _host;
@@ -19,17 +20,27 @@ public sealed class NativeServerApplication : ServerRoutes, IAsyncDisposable
         : base(new(), new(null, string.Empty))
     { Configuration = configuration; _host = host; Services = services; _ownsServices = ownsServices; }
     /// <summary>Gets application services; request-scoped services are resolved through RequestContext.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.NativeServerApplication" path="/member/remarks" />
     public IServiceProvider Services { get; }
     /// <summary>Gets the atomic lifecycle observation.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.NativeServerApplication" path="/member/remarks" />
     public ServerState State => (ServerState)Volatile.Read(ref _state);
     /// <summary>Gets negotiated native capabilities.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.NativeServerApplication" path="/member/remarks" />
     public ServerCapabilities Capabilities => _host.Capabilities;
     /// <summary>Gets actual listener addresses after successful startup.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.NativeServerApplication" path="/member/remarks" />
     public IReadOnlyList<Uri> BoundAddresses => _host.BoundAddresses;
     /// <summary>Adds middleware before freeze; the first registered middleware is outermost.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.NativeServerApplication" path="/member/remarks" />
+    /// <param name="middleware">The middleware value described by this operation.</param>
+    /// <returns>The typed result described in the summary, retaining the ownership policy of its declaring type.</returns>
     public NativeServerApplication Use(ServerMiddleware middleware)
     { Registry.Mutable(); ArgumentNullException.ThrowIfNull(middleware); _middleware.Add(middleware); return this; }
     /// <summary>Freezes all routes and starts once; success means every native listener accepts requests.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.NativeServerApplication" path="/member/remarks" />
+    /// <param name="cancellationToken">Caller cancellation intent; cancellation never releases native owners before their retirement join.</param>
+    /// <returns>An awaitable operation; caller completion is distinct from safe native retirement as specified by the declaring type.</returns>
     public Task StartAsync(CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -52,6 +63,9 @@ public sealed class NativeServerApplication : ServerRoutes, IAsyncDisposable
         catch { Interlocked.CompareExchange(ref _state, (int)ServerState.Faulted, (int)ServerState.Starting); throw; }
     }
     /// <summary>Starts and waits for shutdown, then joins all ownership; Ctrl+C/SIGTERM handlers are scoped to this call.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.NativeServerApplication" path="/member/remarks" />
+    /// <param name="cancellationToken">Caller cancellation intent; cancellation never releases native owners before their retirement join.</param>
+    /// <returns>An awaitable operation; caller completion is distinct from safe native retirement as specified by the declaring type.</returns>
     public Task RunAsync(CancellationToken cancellationToken = default)
     { cancellationToken.ThrowIfCancellationRequested(); return RunCoreAsync(cancellationToken); }
     private async Task RunCoreAsync(CancellationToken token)
@@ -81,6 +95,10 @@ public sealed class NativeServerApplication : ServerRoutes, IAsyncDisposable
         if (failure is not null) ExceptionDispatchInfo.Capture(failure).Throw();
     }
     /// <summary>Closes admission and waits a finite interval; Pending retains outstanding roots and credits.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.NativeServerApplication" path="/member/remarks" />
+    /// <param name="timeout">The finite checked wait or request duration specified by this operation.</param>
+    /// <param name="cancellationToken">Caller cancellation intent; cancellation never releases native owners before their retirement join.</param>
+    /// <returns>An awaitable operation; caller completion is distinct from safe native retirement as specified by the declaring type.</returns>
     public Task<ServerCloseResult> CloseAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
     {
         ServerValidation.Duration(timeout, true, nameof(timeout)); cancellationToken.ThrowIfCancellationRequested();
@@ -99,6 +117,11 @@ public sealed class NativeServerApplication : ServerRoutes, IAsyncDisposable
         return result;
     }
     /// <summary>Validates and atomically replaces one native TLS listener snapshot; existing connections retain their original snapshot.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.NativeServerApplication" path="/member/remarks" />
+    /// <param name="listenerName">The listenerName value described by this operation.</param>
+    /// <param name="options">The options value described by this operation.</param>
+    /// <param name="cancellationToken">Caller cancellation intent; cancellation never releases native owners before their retirement join.</param>
+    /// <returns>An awaitable operation; caller completion is distinct from safe native retirement as specified by the declaring type.</returns>
     public Task ReloadTlsAsync(string listenerName, ServerTlsOptions options, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(options); ServerValidation.Text(listenerName, 128, nameof(listenerName)); cancellationToken.ThrowIfCancellationRequested();
@@ -107,6 +130,8 @@ public sealed class NativeServerApplication : ServerRoutes, IAsyncDisposable
         return _host.ReloadTlsAsync(listenerName, TlsSnapshot.Create(options), cancellationToken);
     }
     /// <summary>Closes and joins managed/native retirement without cancellation; self-join from this application's dispatch is rejected.</summary>
+    /// <inheritdoc cref="T:NativeWeave.Server.NativeServerApplication" path="/member/remarks" />
+    /// <returns>An awaitable operation; caller completion is distinct from safe native retirement as specified by the declaring type.</returns>
     public ValueTask DisposeAsync()
     {
         if (ReferenceEquals(Executing.Value, this)) throw new InvalidOperationException("An application cannot dispose itself inside its handler or cleanup callback.");

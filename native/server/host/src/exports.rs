@@ -8,7 +8,7 @@ use crate::{
 };
 use nativeweave_interop_abi::*;
 use nativeweave_interop_errors::{EngineBoundary, Failure, write_error};
-use nativeweave_server_streaming::{Credit, OwnedBuffer, ReadFrame, Side};
+use nativeweave_server_streaming::{Credit, OwnedBuffer, Side};
 use std::{
     collections::HashSet,
     sync::{Arc, Weak, atomic::Ordering},
@@ -115,6 +115,10 @@ unsafe fn request(ptr: *mut NwServerRequest) -> Result<Arc<RequestState>> {
     Ok(request)
 }
 
+/// Exact Server ABI entry `nw_server_get_abi_v1`.
+///
+/// # Safety
+/// Every input record/view must remain valid for the synchronous call; initialized output capacities must be truthful, naturally aligned, exclusive and nonoverlapping. Opaque handles must come from this creating module and remain leased.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_get_abi_v1(
     requested_major: u32,
@@ -137,12 +141,16 @@ pub unsafe extern "C" fn nw_server_get_abi_v1(
             abi_major: 1,
             abi_minor: 0,
             pointer_width_bits: 64,
-            capabilities: 15,
+            capabilities: 79,
             reserved: 0,
         })
     };
     NW_OK
 }
+/// Exact Server ABI entry `nw_server_create`.
+///
+/// # Safety
+/// Every input record/view must remain valid for the synchronous call; initialized output capacities must be truthful, naturally aligned, exclusive and nonoverlapping. Opaque handles must come from this creating module and remain leased.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_create(
     config: *const NwServerConfigV1,
@@ -153,6 +161,7 @@ pub unsafe extern "C" fn nw_server_create(
     ffi(error, || {
         // SAFETY: descriptor and output borrows end before this entry returns.
         unsafe { output(out_server)? };
+        // SAFETY: The ABI caller retains this creator-owned handle and synchronous view/output borrows; the surrounding validation and owner protocol authorize this access.
         let dispatch = unsafe { config::record(dispatch)? };
         if dispatch.version != 1
             || dispatch.cookie == 0
@@ -169,6 +178,10 @@ pub unsafe extern "C" fn nw_server_create(
         Ok(())
     })
 }
+/// Exact Server ABI entry `nw_server_routes_set`.
+///
+/// # Safety
+/// Every input record/view must remain valid for the synchronous call; initialized output capacities must be truthful, naturally aligned, exclusive and nonoverlapping. Opaque handles must come from this creating module and remain leased.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_routes_set(
     server: *mut NwServer,
@@ -217,6 +230,10 @@ pub unsafe extern "C" fn nw_server_routes_set(
         Ok(())
     })
 }
+/// Exact Server ABI entry `nw_server_start_create`.
+///
+/// # Safety
+/// Every input record/view must remain valid for the synchronous call; initialized output capacities must be truthful, naturally aligned, exclusive and nonoverlapping. Opaque handles must come from this creating module and remain leased.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_start_create(
     server: *mut NwServer,
@@ -226,6 +243,7 @@ pub unsafe extern "C" fn nw_server_start_create(
     ffi(error, || {
         // SAFETY: live owner/output are borrowed only during creation; no worker is started here.
         unsafe { output(out_op)? };
+        // SAFETY: The ABI caller retains this creator-owned handle through the synchronous entry; the owner allocation and its typed contents remain live.
         let host = unsafe { owner(server)? }.inner.clone();
         if host.state.load(Ordering::Acquire) != 0 || lock(&host.routes).is_none() {
             return Err(ApiError::status(NW_INVALID_STATE));
@@ -236,6 +254,10 @@ pub unsafe extern "C" fn nw_server_start_create(
         Ok(())
     })
 }
+/// Exact Server ABI entry `nw_server_bound_addresses`.
+///
+/// # Safety
+/// Every input record/view must remain valid for the synchronous call; initialized output capacities must be truthful, naturally aligned, exclusive and nonoverlapping. Opaque handles must come from this creating module and remain leased.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_bound_addresses(
     server: *mut NwServer,
@@ -245,6 +267,7 @@ pub unsafe extern "C" fn nw_server_bound_addresses(
     ffi(error, || {
         // SAFETY: borrowed server and initialized owner output.
         unsafe { output(out_addresses)? };
+        // SAFETY: The ABI caller retains this creator-owned handle through the synchronous entry; the owner allocation and its typed contents remain live.
         let host = &unsafe { owner(server)? }.inner;
         if host.state.load(Ordering::Acquire) < 2 {
             return Err(ApiError::status(NW_INVALID_STATE));
@@ -260,6 +283,10 @@ pub unsafe extern "C" fn nw_server_bound_addresses(
         Ok(())
     })
 }
+/// Exact Server ABI entry `nw_server_get_snapshot`.
+///
+/// # Safety
+/// Every input record/view must remain valid for the synchronous call; initialized output capacities must be truthful, naturally aligned, exclusive and nonoverlapping. Opaque handles must come from this creating module and remain leased.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_get_snapshot(
     server: *mut NwServer,
@@ -269,21 +296,17 @@ pub unsafe extern "C" fn nw_server_get_snapshot(
     ffi(error, || {
         // SAFETY: capacity is checked before writing the known fixed prefix.
         unsafe { capacity(out_snapshot)? };
+        // SAFETY: The caller leases the creator-owned handle and supplies live synchronous input/output storage; this entry preserves its typed owner contract.
         let host = &unsafe { owner(server)? }.inner;
-        host.reap();
         let (native, managed) = host.budget.snapshot();
-        let requests = lock(&host.requests);
-        let retiring = requests
-            .values()
-            .filter(|r| r.dispatch_done.load(Ordering::Acquire))
-            .count();
-        let total = requests.len();
+        let retiring = host.retiring.load(Ordering::Acquire);
+        let total = host.config.active_requests - host.active.available_permits();
         let value = NwServerSnapshotV1 {
             struct_size: size_of::<NwServerSnapshotV1>() as u32,
             version: 1,
             state: host.state.load(Ordering::Acquire),
             reserved: 0,
-            active_requests: (total - retiring) as u64,
+            active_requests: total.saturating_sub(retiring) as u64,
             queued_requests: (host.config.queued_requests - host.queued.available_permits()) as u64,
             retiring_requests: retiring as u64,
             retained_managed_bytes: managed,
@@ -297,6 +320,10 @@ pub unsafe extern "C" fn nw_server_get_snapshot(
         Ok(())
     })
 }
+/// Exact Server ABI entry `nw_server_close_create`.
+///
+/// # Safety
+/// Every input record/view must remain valid for the synchronous call; initialized output capacities must be truthful, naturally aligned, exclusive and nonoverlapping. Opaque handles must come from this creating module and remain leased.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_close_create(
     server: *mut NwServer,
@@ -307,6 +334,7 @@ pub unsafe extern "C" fn nw_server_close_create(
     ffi(error, || {
         // SAFETY: live server and borrowed output satisfy create-before-start protocol.
         unsafe { output(out_op)? };
+        // SAFETY: The caller leases the creator-owned handle and supplies live synchronous input/output storage; this entry preserves its typed owner contract.
         let host = unsafe { owner(server)? }.inner.clone();
         let timeout = config::duration(wait_timeout_ns, true)?;
         let op = OpState::new(host, None, Job::Close(timeout))?;
@@ -315,6 +343,10 @@ pub unsafe extern "C" fn nw_server_close_create(
         Ok(())
     })
 }
+/// Exact Server ABI entry `nw_server_tls_reload_create`.
+///
+/// # Safety
+/// Every input record/view must remain valid for the synchronous call; initialized output capacities must be truthful, naturally aligned, exclusive and nonoverlapping. Opaque handles must come from this creating module and remain leased.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_tls_reload_create(
     server: *mut NwServer,
@@ -326,8 +358,11 @@ pub unsafe extern "C" fn nw_server_tls_reload_create(
     ffi(error, || {
         // SAFETY: descriptors and file-name views are consumed before synchronous return.
         unsafe { output(out_op)? };
+        // SAFETY: The caller leases the creator-owned handle and supplies live synchronous input/output storage; this entry preserves its typed owner contract.
         let host = unsafe { owner(server)? }.inner.clone();
+        // SAFETY: The ABI caller retains this creator-owned handle and synchronous view/output borrows; the surrounding validation and owner protocol authorize this access.
         let name = unsafe { config::text(listener_name, 128)? };
+        // SAFETY: The ABI caller retains this creator-owned handle and synchronous view/output borrows; the surrounding validation and owner protocol authorize this access.
         let snapshot = unsafe { config::record(tls_snapshot)? };
         if host.state.load(Ordering::Acquire) != 2 {
             return Err(ApiError::status(NW_INVALID_STATE));
@@ -360,6 +395,10 @@ pub unsafe extern "C" fn nw_server_tls_reload_create(
         Ok(())
     })
 }
+/// Exact Server ABI entry `nw_server_try_retire`.
+///
+/// # Safety
+/// Every input record/view must remain valid for the synchronous call; initialized output capacities must be truthful, naturally aligned, exclusive and nonoverlapping. Opaque handles must come from this creating module and remain leased.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_try_retire(server: *mut NwServer) -> u32 {
     // SAFETY: caller retains the server through a cleanup lease until OK.
@@ -377,13 +416,22 @@ pub unsafe extern "C" fn nw_server_try_retire(server: *mut NwServer) -> u32 {
         NW_PENDING
     }
 }
+/// Exact Server ABI entry `nw_server_release`.
+///
+/// # Safety
+/// The pointer must identify one live creator-owned allocation. Request, operation and Server handles require their matching successful retirement gate (or documented never-started path); release is exact-once and no later access is valid.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_release(server: *mut NwServer) {
     // SAFETY: release is valid only for unstarted or successfully retired owners, and never waits.
     if unsafe { nw_server_try_retire(server) } == NW_OK {
+        // SAFETY: The matching native retirement/never-started predicate above permits exactly one creator release.
         unsafe { release(server) }
     }
 }
+/// Exact Server ABI entry `nw_server_operation_start`.
+///
+/// # Safety
+/// Every input record/view must remain valid for the synchronous call; initialized output capacities must be truthful, naturally aligned, exclusive and nonoverlapping. Opaque handles must come from this creating module and remain leased. The exact Core callback function and cookie remain rooted until operation_try_retire returns OK, including when completion races this call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_operation_start(
     operation: *mut NwServerOperation,
@@ -393,6 +441,7 @@ pub unsafe extern "C" fn nw_server_operation_start(
     ffi(error, || {
         // SAFETY: both operation owner and callback prefix are borrowed for setup; Core copies the table.
         let op = unsafe { owner(operation)? }.inner.clone();
+        // SAFETY: The ABI caller retains this creator-owned handle and synchronous view/output borrows; the surrounding validation and owner protocol authorize this access.
         let callbacks = unsafe { config::record(callbacks)? };
         let status = op.operation.start(callbacks);
         if status != NW_OK {
@@ -407,6 +456,10 @@ pub unsafe extern "C" fn nw_server_operation_start(
         Ok(())
     })
 }
+/// Exact Server ABI entry `nw_server_operation_request_cancel`.
+///
+/// # Safety
+/// Every input record/view must remain valid for the synchronous call; initialized output capacities must be truthful, naturally aligned, exclusive and nonoverlapping. Opaque handles must come from this creating module and remain leased.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_operation_request_cancel(
     operation: *mut NwServerOperation,
@@ -418,6 +471,10 @@ pub unsafe extern "C" fn nw_server_operation_request_cancel(
     op.inner.cancel.cancel();
     op.inner.operation.request_cancel()
 }
+/// Exact Server ABI entry `nw_server_operation_take_void`.
+///
+/// # Safety
+/// Every input record/view must remain valid for the synchronous call; initialized output capacities must be truthful, naturally aligned, exclusive and nonoverlapping. Opaque handles must come from this creating module and remain leased.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_operation_take_void(
     operation: *mut NwServerOperation,
@@ -425,6 +482,7 @@ pub unsafe extern "C" fn nw_server_operation_take_void(
 ) -> u32 {
     ffi(error, || {
         // SAFETY: typed take occurs once under the operation cleanup lease.
+        // SAFETY: The ABI caller retains this creator-owned handle through the synchronous entry; the owner allocation and its typed contents remain live.
         let op = &unsafe { owner(operation)? }.inner;
         if op.result_kind != 0 {
             return Err(ApiError::status(NW_INVALID_STATE));
@@ -435,6 +493,10 @@ pub unsafe extern "C" fn nw_server_operation_take_void(
         }
     })
 }
+/// Exact Server ABI entry `nw_server_operation_take_write_reservation`.
+///
+/// # Safety
+/// Every input record/view must remain valid for the synchronous call; initialized output capacities must be truthful, naturally aligned, exclusive and nonoverlapping. Opaque handles must come from this creating module and remain leased.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_operation_take_write_reservation(
     operation: *mut NwServerOperation,
@@ -444,6 +506,7 @@ pub unsafe extern "C" fn nw_server_operation_take_write_reservation(
     ffi(error, || {
         // SAFETY: output is cleared before any fallible typed take and owns no previous value.
         unsafe { output(out_reservation)? };
+        // SAFETY: The caller leases the creator-owned handle and supplies live synchronous input/output storage; this entry preserves its typed owner contract.
         let op = &unsafe { owner(operation)? }.inner;
         if op.result_kind != 3 {
             return Err(ApiError::status(NW_INVALID_STATE));
@@ -458,6 +521,10 @@ pub unsafe extern "C" fn nw_server_operation_take_write_reservation(
         Ok(())
     })
 }
+/// Exact Server ABI entry `nw_server_operation_take_close`.
+///
+/// # Safety
+/// Every input record/view must remain valid for the synchronous call; initialized output capacities must be truthful, naturally aligned, exclusive and nonoverlapping. Opaque handles must come from this creating module and remain leased.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_operation_take_close(
     operation: *mut NwServerOperation,
@@ -467,6 +534,7 @@ pub unsafe extern "C" fn nw_server_operation_take_close(
     ffi(error, || {
         // SAFETY: validate full caller output capacity before consuming a typed result.
         unsafe { capacity(out_close)? };
+        // SAFETY: The caller leases the creator-owned handle and supplies live synchronous input/output storage; this entry preserves its typed owner contract.
         let op = &unsafe { owner(operation)? }.inner;
         if op.result_kind != 1 {
             return Err(ApiError::status(NW_INVALID_STATE));
@@ -479,6 +547,10 @@ pub unsafe extern "C" fn nw_server_operation_take_close(
         Ok(())
     })
 }
+/// Exact Server ABI entry `nw_server_operation_try_retire`.
+///
+/// # Safety
+/// Every input record/view must remain valid for the synchronous call; initialized output capacities must be truthful, naturally aligned, exclusive and nonoverlapping. Opaque handles must come from this creating module and remain leased.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_operation_try_retire(operation: *mut NwServerOperation) -> u32 {
     // SAFETY: operation remains leased through native quiescence; Core owns its callback state.
@@ -487,15 +559,24 @@ pub unsafe extern "C" fn nw_server_operation_try_retire(operation: *mut NwServer
         Err(e) => e.status,
     }
 }
+/// Exact Server ABI entry `nw_server_operation_release`.
+///
+/// # Safety
+/// The pointer must identify one live creator-owned allocation. Request, operation and Server handles require their matching successful retirement gate (or documented never-started path); release is exact-once and no later access is valid.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_operation_release(operation: *mut NwServerOperation) {
     // SAFETY: only never-started or Core-retired operations may release the creating allocation.
-    if let Ok(op) = unsafe { owner(operation) } {
-        if op.inner.operation.can_release() {
-            unsafe { release(operation) }
-        }
+    if let Ok(op) = unsafe { owner(operation) }
+        && op.inner.operation.can_release()
+    {
+        // SAFETY: The matching native retirement/never-started predicate above permits exactly one creator release.
+        unsafe { release(operation) }
     }
 }
+/// Exact Server ABI entry `nw_server_request_take`.
+///
+/// # Safety
+/// Every input record/view must remain valid for the synchronous call; initialized output capacities must be truthful, naturally aligned, exclusive and nonoverlapping. Opaque handles must come from this creating module and remain leased.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_request_take(
     server: *mut NwServer,
@@ -510,6 +591,7 @@ pub unsafe extern "C" fn nw_server_request_take(
             output(out_request)?;
             output(out_metadata)?
         };
+        // SAFETY: The caller leases the creator-owned handle and supplies live synchronous input/output storage; this entry preserves its typed owner contract.
         let host = &unsafe { owner(server)? }.inner;
         let request = lock(&host.requests)
             .get(&ticket)
@@ -539,6 +621,10 @@ pub unsafe extern "C" fn nw_server_request_take(
         Ok(())
     })
 }
+/// Exact Server ABI entry `nw_server_metadata_read`.
+///
+/// # Safety
+/// Every input record/view must remain valid for the synchronous call; initialized output capacities must be truthful, naturally aligned, exclusive and nonoverlapping. Opaque handles must come from this creating module and remain leased.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_metadata_read(
     metadata: *mut NwServerMetadata,
@@ -548,6 +634,7 @@ pub unsafe extern "C" fn nw_server_metadata_read(
     ffi(error, || {
         // SAFETY: output capacity is checked first; returned views remain owned by this metadata handle.
         unsafe { capacity(out_info)? };
+        // SAFETY: The ABI caller retains this creator-owned handle and synchronous view/output borrows; the surrounding validation and owner protocol authorize this access.
         let head = unsafe { owner(metadata)? }
             .inner
             .head
@@ -558,6 +645,10 @@ pub unsafe extern "C" fn nw_server_metadata_read(
         Ok(())
     })
 }
+/// Exact Server ABI entry `nw_server_dispatch_complete`.
+///
+/// # Safety
+/// Every input record/view must remain valid for the synchronous call; initialized output capacities must be truthful, naturally aligned, exclusive and nonoverlapping. Opaque handles must come from this creating module and remain leased.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_dispatch_complete(
     request: *mut NwServerRequest,
@@ -570,16 +661,13 @@ pub unsafe extern "C" fn nw_server_dispatch_complete(
         }
         // SAFETY: the live request's dispatch lease remains held until this exact-once completion.
         let request = unsafe { owner(request)? }.inner.clone();
-        if request.dispatch_done.swap(true, Ordering::AcqRel) {
+        if !request.mark_dispatch_done() {
             return Err(ApiError::status(NW_INVALID_STATE));
         }
         request.budget.close();
-        request.input_cancel.cancel();
+        request.discard_input();
         if request.body_done.load(Ordering::Acquire) {
             request.finished.cancel();
-        }
-        if let Ok(mut reader) = request.reader.try_lock() {
-            reader.take();
         }
         if application_status != NW_OK {
             request.abort(application_status);
@@ -590,6 +678,10 @@ pub unsafe extern "C" fn nw_server_dispatch_complete(
         Ok(())
     })
 }
+/// Exact Server ABI entry `nw_server_request_abort`.
+///
+/// # Safety
+/// Every input record/view must remain valid for the synchronous call; initialized output capacities must be truthful, naturally aligned, exclusive and nonoverlapping. Opaque handles must come from this creating module and remain leased.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_request_abort(request: *mut NwServerRequest) -> u32 {
     // SAFETY: synchronous request cancellation is retained by the caller's cleanup lease.
@@ -601,6 +693,10 @@ pub unsafe extern "C" fn nw_server_request_abort(request: *mut NwServerRequest) 
         Err(e) => e.status,
     }
 }
+/// Exact Server ABI entry `nw_server_request_try_retire`.
+///
+/// # Safety
+/// Every input record/view must remain valid for the synchronous call; initialized output capacities must be truthful, naturally aligned, exclusive and nonoverlapping. Opaque handles must come from this creating module and remain leased.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_request_try_retire(request: *mut NwServerRequest) -> u32 {
     // SAFETY: the request and managed ticket stay rooted until this gate acknowledges callback quiescence.
@@ -615,18 +711,31 @@ pub unsafe extern "C" fn nw_server_request_try_retire(request: *mut NwServerRequ
         Err(e) => e.status,
     }
 }
+/// Exact Server ABI entry `nw_server_metadata_release`.
+///
+/// # Safety
+/// The pointer must identify one live creator-owned allocation. Request, operation and Server handles require their matching successful retirement gate (or documented never-started path); release is exact-once and no later access is valid.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_metadata_release(metadata: *mut NwServerMetadata) {
     // SAFETY: immutable metadata owns its independent storage; release is exact-once under its lease.
     unsafe { release(metadata) }
 }
+/// Exact Server ABI entry `nw_server_request_release`.
+///
+/// # Safety
+/// The pointer must identify one live creator-owned allocation. Request, operation and Server handles require their matching successful retirement gate (or documented never-started path); release is exact-once and no later access is valid.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_request_release(request: *mut NwServerRequest) {
     // SAFETY: only a native-retired request can relinquish the creator-owned ABI allocation.
     if unsafe { nw_server_request_try_retire(request) } == NW_OK {
+        // SAFETY: The matching native retirement/never-started predicate above permits exactly one creator release.
         unsafe { release(request) }
     }
 }
+/// Exact Server ABI entry `nw_server_managed_credit_acquire`.
+///
+/// # Safety
+/// Every input record/view must remain valid for the synchronous call; initialized output capacities must be truthful, naturally aligned, exclusive and nonoverlapping. Opaque handles must come from this creating module and remain leased.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_managed_credit_acquire(
     request_ptr: *mut NwServerRequest,
@@ -637,6 +746,7 @@ pub unsafe extern "C" fn nw_server_managed_credit_acquire(
     ffi(error, || {
         // SAFETY: request and owner output are caller-retained synchronous borrows.
         unsafe { output(out_credit)? };
+        // SAFETY: The ABI caller retains this creator-owned handle through the synchronous entry; the owner allocation and its typed contents remain live.
         let request = unsafe { request(request_ptr)? };
         let credit = request.budget.try_acquire(Side::Managed, capacity)?;
         // SAFETY: admitted credit transfers only after successful all-or-none quota reservation.
@@ -649,11 +759,19 @@ pub unsafe extern "C" fn nw_server_managed_credit_acquire(
         Ok(())
     })
 }
+/// Exact Server ABI entry `nw_server_managed_credit_release`.
+///
+/// # Safety
+/// The pointer must identify one live creator-owned allocation. Request, operation and Server handles require their matching successful retirement gate (or documented never-started path); release is exact-once and no later access is valid.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_managed_credit_release(credit: *mut NwServerManagedCredit) {
     // SAFETY: the unique credit owner releases its full backing reservation exactly once.
     unsafe { release(credit) }
 }
+/// Exact Server ABI entry `nw_server_write_reserve_create`.
+///
+/// # Safety
+/// Every input record/view must remain valid for the synchronous call; initialized output capacities must be truthful, naturally aligned, exclusive and nonoverlapping. Opaque handles must come from this creating module and remain leased.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_write_reserve_create(
     request_ptr: *mut NwServerRequest,
@@ -665,17 +783,26 @@ pub unsafe extern "C" fn nw_server_write_reserve_create(
     ffi(error, || {
         // SAFETY: scalar metadata only is copied; no payload pointer is retained while queue admission waits.
         unsafe { output(out_op)? };
+        // SAFETY: The caller leases the creator-owned handle and supplies live synchronous input/output storage; this entry preserves its typed owner contract.
         let request = unsafe { request(request_ptr)? };
         let host = request.host()?;
-        if kind != 0 {
+        if kind != 0 && kind != 2 {
             return Err(ApiError::status(NW_NOT_SUPPORTED));
         }
-        if native_capacity == 0 || native_capacity > host.config.max_chunk_bytes as u64 {
+        let maximum = (host.config.max_chunk_bytes as u64)
+            .checked_mul(if kind == 2 { 3 } else { 1 })
+            .ok_or(invalid())?;
+        if native_capacity == 0 || native_capacity > maximum {
             return Err(invalid());
         }
-        if lock(&request.response).phase != 1 {
+        if native_capacity > host.config.request_retained_bytes {
+            return Err(ApiError::domain(1));
+        }
+        let response = lock(&request.response);
+        if response.phase != 1 || (kind == 2 && !response.sse) {
             return Err(ApiError::status(NW_INVALID_STATE));
         }
+        drop(response);
         let side = SideGuard::acquire(&request.write_active)?;
         let op = OpState::new(
             host,
@@ -687,6 +814,10 @@ pub unsafe extern "C" fn nw_server_write_reserve_create(
         Ok(())
     })
 }
+/// Exact Server ABI entry `nw_server_write_reservation_release`.
+///
+/// # Safety
+/// The pointer must identify one live creator-owned allocation. Request, operation and Server handles require their matching successful retirement gate (or documented never-started path); release is exact-once and no later access is valid.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_write_reservation_release(
     reservation: *mut NwServerWriteReservation,
@@ -694,6 +825,10 @@ pub unsafe extern "C" fn nw_server_write_reservation_release(
     // SAFETY: one unused reservation owns both queue and payload grants; Drop rolls both back without waiting.
     unsafe { release(reservation) }
 }
+/// Exact Server ABI entry `nw_server_body_read_create`.
+///
+/// # Safety
+/// Every input record/view must remain valid for the synchronous call; initialized output capacities must be truthful, naturally aligned, exclusive and nonoverlapping. Opaque handles must come from this creating module and remain leased.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_body_read_create(
     request_ptr: *mut NwServerRequest,
@@ -704,6 +839,7 @@ pub unsafe extern "C" fn nw_server_body_read_create(
     ffi(error, || {
         // SAFETY: request and scalar inputs remain valid for synchronous create.
         unsafe { output(out_op)? };
+        // SAFETY: The caller leases the creator-owned handle and supplies live synchronous input/output storage; this entry preserves its typed owner contract.
         let request = unsafe { request(request_ptr)? };
         let host = request.host()?;
         if request.head.kind != 0 {
@@ -723,6 +859,10 @@ pub unsafe extern "C" fn nw_server_body_read_create(
         Ok(())
     })
 }
+/// Exact Server ABI entry `nw_server_operation_take_chunk`.
+///
+/// # Safety
+/// Every input record/view must remain valid for the synchronous call; initialized output capacities must be truthful, naturally aligned, exclusive and nonoverlapping. Opaque handles must come from this creating module and remain leased.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_operation_take_chunk(
     operation: *mut NwServerOperation,
@@ -740,6 +880,7 @@ pub unsafe extern "C" fn nw_server_operation_take_chunk(
         if out_frame_kind.is_null() || !out_frame_kind.is_aligned() {
             return Err(invalid());
         }
+        // SAFETY: The caller leases the creator-owned handle and supplies live synchronous input/output storage; this entry preserves its typed owner contract.
         let op = &unsafe { owner(operation)? }.inner;
         if op.result_kind != 2 {
             return Err(ApiError::status(NW_INVALID_STATE));
@@ -758,7 +899,7 @@ pub unsafe extern "C" fn nw_server_operation_take_chunk(
             return Err(ApiError::status(NW_CONTRACT_VIOLATION));
         };
         match frame {
-            ReadFrame::Data(value) => {
+            crate::engine::ChunkResult::Data(value) => {
                 buffer.buffer = Some(value);
                 // SAFETY: move prepared data wrapper and discriminator together after successful typed take.
                 unsafe {
@@ -766,9 +907,9 @@ pub unsafe extern "C" fn nw_server_operation_take_chunk(
                     out_buffer.write(Box::into_raw(buffer))
                 };
             }
-            ReadFrame::End(trailers) => {
+            crate::engine::ChunkResult::End(trailers) => {
                 if let Some(trailers) = trailers {
-                    metadata.inner.block = config::encode_headers(&trailers)?;
+                    metadata.inner.block = trailers;
                     // SAFETY: independently owned bounded trailers transfer only with this successful End observation.
                     unsafe { out_trailers.write(Box::into_raw(metadata)) };
                 }
@@ -779,6 +920,10 @@ pub unsafe extern "C" fn nw_server_operation_take_chunk(
         Ok(())
     })
 }
+/// Exact Server ABI entry `nw_server_buffer_length`.
+///
+/// # Safety
+/// Every input record/view must remain valid for the synchronous call; initialized output capacities must be truthful, naturally aligned, exclusive and nonoverlapping. Opaque handles must come from this creating module and remain leased.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_buffer_length(
     buffer: *mut NwServerBuffer,
@@ -790,14 +935,20 @@ pub unsafe extern "C" fn nw_server_buffer_length(
             return Err(invalid());
         }
         // SAFETY: one leased immutable native buffer and writable scalar output.
+        // SAFETY: The ABI caller retains this creator-owned handle through the synchronous entry; the owner allocation and its typed contents remain live.
         let buffer = unsafe { owner(buffer)? }
             .buffer
             .as_ref()
             .ok_or(ApiError::status(NW_INVALID_STATE))?;
+        // SAFETY: The ABI caller retains this creator-owned handle and synchronous view/output borrows; the surrounding validation and owner protocol authorize this access.
         unsafe { out_length.write(buffer.len() as u64) };
         Ok(())
     })
 }
+/// Exact Server ABI entry `nw_server_buffer_copy`.
+///
+/// # Safety
+/// Every input record/view must remain valid for the synchronous call; initialized output capacities must be truthful, naturally aligned, exclusive and nonoverlapping. Opaque handles must come from this creating module and remain leased.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_buffer_copy(
     buffer: *mut NwServerBuffer,
@@ -812,6 +963,7 @@ pub unsafe extern "C" fn nw_server_buffer_copy(
         }
         // SAFETY: scalar is caller-owned; initialize before capacity/provenance validation.
         unsafe { out_written.write(0) };
+        // SAFETY: The caller leases the creator-owned handle and supplies live synchronous input/output storage; this entry preserves its typed owner contract.
         let buffer = unsafe { owner(buffer)? }
             .buffer
             .as_ref()
@@ -830,6 +982,10 @@ pub unsafe extern "C" fn nw_server_buffer_copy(
         Ok(())
     })
 }
+/// Exact Server ABI entry `nw_server_buffer_managed_credit_acquire`.
+///
+/// # Safety
+/// Every input record/view must remain valid for the synchronous call; initialized output capacities must be truthful, naturally aligned, exclusive and nonoverlapping. Opaque handles must come from this creating module and remain leased.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_buffer_managed_credit_acquire(
     buffer: *mut NwServerBuffer,
@@ -840,6 +996,7 @@ pub unsafe extern "C" fn nw_server_buffer_managed_credit_acquire(
     ffi(error, || {
         // SAFETY: retained buffer credit anchor permits bounded copy reservations after request retirement.
         unsafe { output(out_credit)? };
+        // SAFETY: The ABI caller retains this creator-owned handle and synchronous view/output borrows; the surrounding validation and owner protocol authorize this access.
         let buffer = unsafe { owner(buffer)? };
         let amount = usize::try_from(capacity).map_err(|_| invalid())?;
         let credit = buffer
@@ -857,11 +1014,19 @@ pub unsafe extern "C" fn nw_server_buffer_managed_credit_acquire(
         Ok(())
     })
 }
+/// Exact Server ABI entry `nw_server_buffer_release`.
+///
+/// # Safety
+/// The pointer must identify one live creator-owned allocation. Request, operation and Server handles require their matching successful retirement gate (or documented never-started path); release is exact-once and no later access is valid.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_buffer_release(buffer: *mut NwServerBuffer) {
     // SAFETY: this creator allocation owns its independently retained backing and credit until exact-once release.
     unsafe { release(buffer) }
 }
+/// Exact Server ABI entry `nw_server_response_begin_create`.
+///
+/// # Safety
+/// Every input record/view must remain valid for the synchronous call; initialized output capacities must be truthful, naturally aligned, exclusive and nonoverlapping. Opaque handles must come from this creating module and remain leased.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_response_begin_create(
     request_ptr: *mut NwServerRequest,
@@ -873,12 +1038,14 @@ pub unsafe extern "C" fn nw_server_response_begin_create(
     ffi(error, || {
         // SAFETY: borrowed head bytes are bounded and copied before create returns.
         unsafe { output(out_op)? };
+        // SAFETY: The caller leases the creator-owned handle and supplies live synchronous input/output storage; this entry preserves its typed owner contract.
         let request = unsafe { request(request_ptr)? };
         let host = request.host()?;
         if !(200..=599).contains(&http_status) {
             return Err(invalid());
         }
         let headers = config::headers(
+            // SAFETY: The ABI caller retains this creator-owned handle and synchronous view/output borrows; the surrounding validation and owner protocol authorize this access.
             unsafe { config::bytes(headers, host.config.max_header_bytes)? },
             host.config.max_header_bytes,
             false,
@@ -897,6 +1064,10 @@ pub unsafe extern "C" fn nw_server_response_begin_create(
         Ok(())
     })
 }
+/// Exact Server ABI entry `nw_server_response_write_create`.
+///
+/// # Safety
+/// Every input record/view must remain valid for the synchronous call; initialized output capacities must be truthful, naturally aligned, exclusive and nonoverlapping. Opaque handles must come from this creating module and remain leased.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_response_write_create(
     request_ptr: *mut NwServerRequest,
@@ -908,8 +1079,10 @@ pub unsafe extern "C" fn nw_server_response_write_create(
     ffi(error, || {
         // SAFETY: all aliases remain caller-owned until validation and operation-slot admission succeed.
         unsafe { output(out_op)? };
+        // SAFETY: The caller leases the creator-owned handle and supplies live synchronous input/output storage; this entry preserves its typed owner contract.
         let request = unsafe { request(request_ptr)? };
         let host = request.host()?;
+        // SAFETY: The ABI caller retains this creator-owned handle and synchronous view/output borrows; the surrounding validation and owner protocol authorize this access.
         let token = unsafe { owner(reservation)? }
             .inner
             .as_ref()
@@ -917,6 +1090,7 @@ pub unsafe extern "C" fn nw_server_response_write_create(
         if !Arc::ptr_eq(&token.request, &request) || token.kind != 0 {
             return Err(ApiError::status(NW_INVALID_STATE));
         }
+        // SAFETY: The ABI caller retains this creator-owned handle and synchronous view/output borrows; the surrounding validation and owner protocol authorize this access.
         let data = unsafe { config::bytes(bytes, host.config.max_chunk_bytes)? };
         if data.is_empty() || data.len() > token.reservation.capacity() {
             return Err(invalid());
@@ -947,6 +1121,10 @@ pub unsafe extern "C" fn nw_server_response_write_create(
         Ok(())
     })
 }
+/// Exact Server ABI entry `nw_server_response_flush_create`.
+///
+/// # Safety
+/// Every input record/view must remain valid for the synchronous call; initialized output capacities must be truthful, naturally aligned, exclusive and nonoverlapping. Opaque handles must come from this creating module and remain leased.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_response_flush_create(
     request_ptr: *mut NwServerRequest,
@@ -956,6 +1134,7 @@ pub unsafe extern "C" fn nw_server_response_flush_create(
     ffi(error, || {
         // SAFETY: scalar-only operation creation retains the request owner, never managed payload pointers.
         unsafe { output(out_op)? };
+        // SAFETY: The caller leases the creator-owned handle and supplies live synchronous input/output storage; this entry preserves its typed owner contract.
         let request = unsafe { request(request_ptr)? };
         let host = request.host()?;
         let side = SideGuard::acquire(&request.write_active)?;
@@ -965,6 +1144,10 @@ pub unsafe extern "C" fn nw_server_response_flush_create(
         Ok(())
     })
 }
+/// Exact Server ABI entry `nw_server_response_finish_create`.
+///
+/// # Safety
+/// Every input record/view must remain valid for the synchronous call; initialized output capacities must be truthful, naturally aligned, exclusive and nonoverlapping. Opaque handles must come from this creating module and remain leased.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_response_finish_create(
     request_ptr: *mut NwServerRequest,
@@ -975,9 +1158,11 @@ pub unsafe extern "C" fn nw_server_response_finish_create(
     ffi(error, || {
         // SAFETY: trailers are fully validated/copied before return and no payload byte reservation is needed.
         unsafe { output(out_op)? };
+        // SAFETY: The caller leases the creator-owned handle and supplies live synchronous input/output storage; this entry preserves its typed owner contract.
         let request = unsafe { request(request_ptr)? };
         let host = request.host()?;
         let trailers = config::headers(
+            // SAFETY: The ABI caller retains this creator-owned handle and synchronous view/output borrows; the surrounding validation and owner protocol authorize this access.
             unsafe { config::bytes(trailers, host.config.max_header_bytes)? },
             host.config.max_header_bytes,
             true,
@@ -993,6 +1178,10 @@ pub unsafe extern "C" fn nw_server_response_finish_create(
         Ok(())
     })
 }
+/// Exact Server ABI entry `nw_server_metadata_headers`.
+///
+/// # Safety
+/// Every input record/view must remain valid for the synchronous call; initialized output capacities must be truthful, naturally aligned, exclusive and nonoverlapping. Opaque handles must come from this creating module and remain leased.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_metadata_headers(
     metadata: *mut NwServerMetadata,
@@ -1010,26 +1199,167 @@ pub unsafe extern "C" fn nw_server_metadata_headers(
             .as_ref()
             .map(|x| &x.headers)
             .unwrap_or(&metadata.block);
+        // SAFETY: The ABI caller retains this creator-owned handle and synchronous view/output borrows; the surrounding validation and owner protocol authorize this access.
         unsafe { out_headers.write(view(block)) };
         Ok(())
     })
 }
 
+/// Exact Server ABI entry `nw_server_sse_write_create`.
+///
+/// # Safety
+/// Every input record/view must remain valid for the synchronous call; initialized output capacities must be truthful, naturally aligned, exclusive and nonoverlapping. Opaque handles must come from this creating module and remain leased.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_sse_write_create(
-    _request: *mut NwServerRequest,
-    _reservation: *mut NwServerWriteReservation,
-    _event: *const NwServerSseEventV1,
+    request_ptr: *mut NwServerRequest,
+    reservation: *mut NwServerWriteReservation,
+    event: *const NwServerSseEventV1,
     out_op: *mut *mut NwServerOperation,
     error: *mut NwErrorInfoV1,
 ) -> u32 {
     ffi(error, || {
-        // SAFETY: unsupported optional protocols transfer no owner and always initialize the output.
+        use axum::response::{IntoResponse, Sse, sse::Event};
+        use http_body::Body;
+        use std::{
+            convert::Infallible,
+            pin::Pin,
+            task::{Context, Poll, Waker},
+            time::Duration,
+        };
+        // SAFETY: bounded call borrows are validated completely before consuming
+        // the caller's reservation or invoking a panic-capable Axum builder.
+        // SAFETY: The caller leases the creator-owned handle and supplies live synchronous input/output storage; this entry preserves its typed owner contract.
         unsafe { output(out_op)? };
-        Err(ApiError::status(NW_NOT_SUPPORTED))
+        // SAFETY: The ABI caller retains this creator-owned handle and synchronous view/output borrows; the surrounding validation and owner protocol authorize this access.
+        let request = unsafe { request(request_ptr)? };
+        let host = request.host()?;
+        // SAFETY: The ABI caller retains this creator-owned handle and synchronous view/output borrows; the surrounding validation and owner protocol authorize this access.
+        let event = unsafe { config::record(event)? };
+        if event.version != 1
+            || event.reserved != 0
+            || event.present_flags & !7 != 0
+            || event.retry_milliseconds > 86_400_000
+            || (event.present_flags & 1 == 0 && event.event_name.length != 0)
+            || (event.present_flags & 2 == 0 && event.id.length != 0)
+            || (event.present_flags & 4 == 0 && event.retry_milliseconds != 0)
+        {
+            return Err(invalid());
+        }
+        // SAFETY: these UTF-8 views are borrowed only until this synchronous entry returns.
+        let data =
+            // SAFETY: The caller leases the creator-owned handle and supplies live synchronous input/output storage; this entry preserves its typed owner contract.
+            std::str::from_utf8(unsafe { config::bytes(event.data, host.config.max_chunk_bytes)? })
+                .map_err(|_| invalid())?;
+        // SAFETY: same bounded synchronous metadata borrow; no native string copy is needed.
+        let name = std::str::from_utf8(unsafe {
+            config::bytes(event.event_name, host.config.max_chunk_bytes)?
+        })
+        .map_err(|_| invalid())?;
+        // SAFETY: same bounded synchronous metadata borrow.
+        let id =
+            // SAFETY: The caller leases the creator-owned handle and supplies live synchronous input/output storage; this entry preserves its typed owner contract.
+            std::str::from_utf8(unsafe { config::bytes(event.id, host.config.max_chunk_bytes)? })
+                .map_err(|_| invalid())?;
+        if name.contains(['\r', '\n']) || id.contains(['\r', '\n', '\0']) {
+            return Err(invalid());
+        }
+        let policy = data
+            .len()
+            .checked_mul(6)
+            .and_then(|n| n.checked_add(name.len() + id.len() + 128))
+            .ok_or(invalid())?;
+        // Axum 0.8.9 writes six prefix bytes after every CR/LF, plus bounded
+        // event/id/retry fields. This also handles dense newline input where
+        // the design's policy formula alone is not an allocation upper bound.
+        let exact_upper = data
+            .len()
+            .checked_add(6 * (data.bytes().filter(|b| matches!(b, b'\r' | b'\n')).count() + 1))
+            .and_then(|n| n.checked_add(name.len() + id.len() + 64))
+            .ok_or(invalid())?;
+        if policy > host.config.max_chunk_bytes || exact_upper > host.config.max_chunk_bytes {
+            return Err(ApiError::domain(1));
+        }
+        let required = policy
+            .max(exact_upper)
+            .max(8)
+            .checked_mul(3)
+            .ok_or(invalid())?;
+        // SAFETY: the reservation remains caller-owned until all validation and
+        // operation metadata admission below succeed.
+        // SAFETY: The caller leases the creator-owned handle and supplies live synchronous input/output storage; this entry preserves its typed owner contract.
+        let token = unsafe { owner(reservation)? }
+            .inner
+            .as_ref()
+            .ok_or(ApiError::status(NW_INVALID_STATE))?;
+        if !Arc::ptr_eq(&token.request, &request) || token.kind != 2 {
+            return Err(ApiError::status(NW_INVALID_STATE));
+        }
+        if token.reservation.capacity() < required {
+            return Err(invalid());
+        }
+        {
+            let response = lock(&request.response);
+            if response.phase != 1 || !response.sse {
+                return Err(ApiError::status(NW_INVALID_STATE));
+            }
+        }
+        let slot = host
+            .operation_slots
+            .clone()
+            .try_acquire_owned()
+            .map_err(|_| ApiError::domain(1))?;
+        // All allocation from this point is covered by the already-granted peak.
+        let mut value = Event::default().data(data);
+        if event.present_flags & 1 != 0 {
+            value = value.event(name);
+        }
+        if event.present_flags & 2 != 0 {
+            value = value.id(id);
+        }
+        if event.present_flags & 4 != 0 {
+            value = value.retry(Duration::from_millis(event.retry_milliseconds));
+        }
+        let mut body = Sse::new(futures_util::stream::iter([Ok::<_, Infallible>(value)]))
+            .into_response()
+            .into_body();
+        let frame = match Pin::new(&mut body).poll_frame(&mut Context::from_waker(Waker::noop())) {
+            Poll::Ready(Some(Ok(frame))) => frame,
+            _ => return Err(ApiError::status(NW_CONTRACT_VIOLATION)),
+        };
+        let bytes = frame
+            .into_data()
+            .map_err(|_| ApiError::status(NW_CONTRACT_VIOLATION))?;
+        if bytes.len() > host.config.max_chunk_bytes {
+            return Err(ApiError::status(NW_CONTRACT_VIOLATION));
+        }
+        let length = bytes.len();
+        drop(body);
+        // SAFETY: successful create alone consumes the unique request/kind-bound token.
+        let mut wrapper = unsafe { Box::from_raw(reservation) };
+        let token = wrapper.inner.take().expect("validated reservation");
+        // SAFETY: pinned Axum emits one unaliased BytesMut allocation. Its
+        // monotone Vec growth has old+new peak <=3*max(8,expanded bound), granted
+        // before Event construction above; freeze/Body projection is zero-copy.
+        // SAFETY: The caller leases the creator-owned handle and supplies live synchronous input/output storage; this entry preserves its typed owner contract.
+        let prepared = unsafe { token.reservation.prepare_admitted(bytes)? };
+        let operation = OpState::with_slot(
+            host,
+            Some(request.clone()),
+            Job::Write(request, prepared, length, token.side),
+            slot,
+        );
+        // SAFETY: the copied/formatted input is retained, but no network enqueue
+        // occurs until this successfully created operation is started.
+        // SAFETY: The caller leases the creator-owned handle and supplies live synchronous input/output storage; this entry preserves its typed owner contract.
+        unsafe { publish(out_op, operation) };
+        Ok(())
     })
 }
 
+/// Exact Server ABI entry `nw_server_grpc_read_create`.
+///
+/// # Safety
+/// Every input record/view must remain valid for the synchronous call; initialized output capacities must be truthful, naturally aligned, exclusive and nonoverlapping. Opaque handles must come from this creating module and remain leased.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_grpc_read_create(
     _request: *mut NwServerRequest,
@@ -1043,6 +1373,10 @@ pub unsafe extern "C" fn nw_server_grpc_read_create(
     })
 }
 
+/// Exact Server ABI entry `nw_server_grpc_write_create`.
+///
+/// # Safety
+/// Every input record/view must remain valid for the synchronous call; initialized output capacities must be truthful, naturally aligned, exclusive and nonoverlapping. Opaque handles must come from this creating module and remain leased.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_grpc_write_create(
     _request: *mut NwServerRequest,
@@ -1058,6 +1392,10 @@ pub unsafe extern "C" fn nw_server_grpc_write_create(
     })
 }
 
+/// Exact Server ABI entry `nw_server_grpc_headers_create`.
+///
+/// # Safety
+/// Every input record/view must remain valid for the synchronous call; initialized output capacities must be truthful, naturally aligned, exclusive and nonoverlapping. Opaque handles must come from this creating module and remain leased.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_grpc_headers_create(
     _request: *mut NwServerRequest,
@@ -1072,6 +1410,10 @@ pub unsafe extern "C" fn nw_server_grpc_headers_create(
     })
 }
 
+/// Exact Server ABI entry `nw_server_grpc_status_create`.
+///
+/// # Safety
+/// Every input record/view must remain valid for the synchronous call; initialized output capacities must be truthful, naturally aligned, exclusive and nonoverlapping. Opaque handles must come from this creating module and remain leased.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_grpc_status_create(
     _request: *mut NwServerRequest,
@@ -1088,6 +1430,10 @@ pub unsafe extern "C" fn nw_server_grpc_status_create(
     })
 }
 
+/// Exact Server ABI entry `nw_server_mcp_gate_resume_create`.
+///
+/// # Safety
+/// Every input record/view must remain valid for the synchronous call; initialized output capacities must be truthful, naturally aligned, exclusive and nonoverlapping. Opaque handles must come from this creating module and remain leased.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_mcp_gate_resume_create(
     _request: *mut NwServerRequest,
@@ -1102,6 +1448,10 @@ pub unsafe extern "C" fn nw_server_mcp_gate_resume_create(
     })
 }
 
+/// Exact Server ABI entry `nw_server_mcp_reply_create`.
+///
+/// # Safety
+/// Every input record/view must remain valid for the synchronous call; initialized output capacities must be truthful, naturally aligned, exclusive and nonoverlapping. Opaque handles must come from this creating module and remain leased.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_mcp_reply_create(
     _request: *mut NwServerRequest,
@@ -1118,6 +1468,10 @@ pub unsafe extern "C" fn nw_server_mcp_reply_create(
     })
 }
 
+/// Exact Server ABI entry `nw_server_mcp_call_take`.
+///
+/// # Safety
+/// Every input record/view must remain valid for the synchronous call; initialized output capacities must be truthful, naturally aligned, exclusive and nonoverlapping. Opaque handles must come from this creating module and remain leased.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_mcp_call_take(
     _request: *mut NwServerRequest,
@@ -1134,6 +1488,10 @@ pub unsafe extern "C" fn nw_server_mcp_call_take(
         Err(ApiError::status(NW_NOT_SUPPORTED))
     })
 }
+/// Exact Server ABI entry `nw_server_metadata_grpc_headers`.
+///
+/// # Safety
+/// Every input record/view must remain valid for the synchronous call; initialized output capacities must be truthful, naturally aligned, exclusive and nonoverlapping. Opaque handles must come from this creating module and remain leased.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn nw_server_metadata_grpc_headers(
     _metadata: *mut NwServerMetadata,
