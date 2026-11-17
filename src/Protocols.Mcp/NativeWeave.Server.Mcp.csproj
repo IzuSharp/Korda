@@ -14,6 +14,7 @@
     <ProjectReference Include="../Server.Application/NativeWeave.Server.csproj" />
     <ProjectReference Include="Generator/NativeWeave.Server.Mcp.Generator.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
     <None Include="Generator/bin/$(Configuration)/netstandard2.0/NativeWeave.Server.Mcp.Generator.dll" Pack="true" PackagePath="analyzers/dotnet/cs/" Visible="false" />
+    <None Include="buildTransitive/NativeWeave.Server.Mcp.targets" Pack="true" PackagePath="buildTransitive/" />
     <InternalsVisibleTo Include="NativeWeave.Server.Mcp.Tests" />
   </ItemGroup>
 </Project>

@@ -11,6 +11,12 @@ using NativeWeave.Server.Mcp;
 int assertions = 0, calls = 0, middleware = 0, completed = 0;
 void Check(bool value, string name) { if (!value) throw new InvalidOperationException(name); Interlocked.Increment(ref assertions); Console.WriteLine("PASS " + name); }
 void Throws<T>(Action action) where T : Exception { try { action(); } catch (T) { Interlocked.Increment(ref assertions); return; } throw new InvalidOperationException("Expected " + typeof(T).Name); }
+if (args.Contains("--layout-only"))
+{
+    await LayoutFixtures.RunAsync(Check);
+    Console.WriteLine($"Layout assertions: {assertions}");
+    return;
+}
 if (args.Contains("--managed-tail-only"))
 {
     await LifecycleFixtures.ManagedTailAsync(Check);
@@ -166,6 +172,7 @@ Check(retirements > 0 && retirementFailures.IsEmpty, "Separate managed A07 root/
 await LifecycleFixtures.RunAsync(Check);
 await LifecycleFixtures.UndecidedAsync(Check);
 await LifecycleFixtures.ManagedTailAsync(Check);
+await LayoutFixtures.RunAsync(Check);
 Console.WriteLine($"B19 actual Host assertions={assertions}, managed_retirements={retirements}, dynamic={System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported}");
 
 

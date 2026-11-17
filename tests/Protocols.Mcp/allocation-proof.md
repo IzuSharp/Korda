@@ -17,6 +17,12 @@ Only the profile actually configured in `native/protocols/mcp/src/runtime.rs` is
   [JsonSchemaExporter](https://github.com/dotnet/runtime/blob/deae2e32bf0e018e09d64597b7c59b62b73bb3ce/src/libraries/System.Text.Json/src/System/Text/Json/Schema/JsonSchemaExporter.cs),
   SHA-256 `33f9777cb73ab3d53bb006416ef46b528b92ca399cf27a05a9c93ebf4c059f5e`;
   [EnumConverter](https://github.com/dotnet/runtime/blob/deae2e32bf0e018e09d64597b7c59b62b73bb3ce/src/libraries/System.Text.Json/src/System/Text/Json/Serialization/Converters/Value/EnumConverter.cs).
+- The installed runtime's VMR source is
+  `297acf930fb0f5c07fd4e51d78e521b4ad2e5d1f`. The exact CoreCLR/NativeAOT
+  field-cache and `RuntimeHelpers.SizeOf(RuntimeTypeHandle)` sources, hashes, and
+  the SDK implementation-reference selector are recorded in
+  [runtime-layout-sources.json](runtime-layout-sources.json). The relevant CoreCLR
+  reflection source is byte-identical at the Design runtime reference and this VMR.
 
 The ledger measures requested backing capacities and controlled ownership, not allocator
 headers, fragmentation, runtime/JIT caches or arbitrary application code allocations.
@@ -37,7 +43,9 @@ It has not polled the body or entered rmcp. Deny never parses the body. After Al
 4. Atomically try the separate native and managed peak grants and the automatic-method
    metadata allowance. A failed partial acquisition rolls back immediately.
 5. For business methods, also reserve 3 MiB of native output/queue capacity and include
-   2 MiB of managed output overlap **before** calling the public rmcp service.
+   the registered static output's managed overlap **before** calling the public rmcp
+   service. Resources/prompts use their fixed text profile; tools additionally include
+   the complete typed output prewalk's boxing path.
 6. Native SDK, argument buffer, nested managed continuation, reply and Body each retain
    their appropriate ownership. Cancellation does not imply that a nested handler or
    upstream SDK worker has retired.
@@ -83,18 +91,81 @@ managed actual-Host tests; allocator measurements do not substitute for retireme
 
 ## Managed materialization and output
 
-The separate managed grant is `3W + 4096N + 8S + 65536`, plus 2 MiB for a business
-reply. `3W` covers owned bridge bytes and static decoder scratch; `8S` covers UTF-16
-strings and overlapping UTF-8 encoding capacity. A sparse JSON object can construct a
-wide statically mapped DTO even if most values are absent. The term is therefore
-`4096N`, not a small fixed-size-per-present-property assumption: it includes the
-admitted 256 mapped fields and collection capacity growth. The finite static metadata
-prewalk bounds the reachable mapped graph. The wide sparse-array witness materializes
-320 objects with 255 declared reference properties and records the actual allocation.
+For the selected tool, let `L` be the greatest proven complete CLR storage among its
+reachable input types. The separate managed grant is
+`3W + max(4096, 4L)*N + 8S + 65536 + R`, where `R` is its proven reply overlap.
+`3W` covers owned bridge bytes and static decoder scratch; `8S` covers UTF-16 strings
+and overlapping UTF-8 encoding capacity. The four storage copies cover live collection
+growth, final arrays and value copies. A JSON value supplies at least one counted node
+for every serializer-created object/collection element, including empty sparse objects;
+keys and envelope nodes add conservative slack. References are counted as inline slots
+inside their owner, with any separately created reachable object charged by its own node.
+
+`L` is not inferred from visible JSON properties. The public .NET 11
+`RuntimeHelpers.SizeOf(type.TypeHandle)` returns exact managed inline width for every
+value type, including private/ignored fields, explicit padding and nullable payloads.
+It returns only pointer width for reference types, so classes need complete preserved
+field metadata. The existing MCP package carries a compiler analyzer that roots public
+and nonpublic fields for every statically reachable class/base and emits a fixed internal
+proof helper. Before requesting field arrays, registration resolves that one helper in
+only the explicit context, DTO and entry assemblies and verifies its finite counts.
+There is no assembly scan, DTO instantiation, constructor execution or reflection codec.
+
+For each class, the bound is its proven base storage (or a 128-byte header margin),
+plus twice every declared field's exact inline width, plus twice the greater of declared
+`StructLayout.Size` and any `FieldOffset + field width`. Each field's alignment gap is
+bounded by its own width; the fixed header also covers final object alignment. Summing
+the base rather than reflecting inherited fields as declared preserves private base
+storage. Explicit offsets cover sparse layouts even when `Size` is zero. Ordinary
+non-nullable struct roots remain enabled.
+
+The generated field proof uses complete implementation metadata for external classes.
+The package's existing build-transitive integration sets the SDK-supported
+`CompileUsingReferenceAssemblies=false`: ProjectReference implementation-only field
+changes therefore rebuild the proof even when the public reference assembly is unchanged.
+Reference-only third-party metadata cannot certify absent private fields and fails
+closed unless the actual context/DTO assembly supplies its own preserved proof.
+A compilation-end invariant checks the final DTO/base field surface, including fields
+added by another generator, against emitted conservative counts. The runtime never
+accepts a field array larger than that proof. The compiler/JIT/NativeAOT witnesses live
+under [Generator](../../src/Protocols.Mcp/Generator/README.md), and product Host witnesses are in
+[LayoutFixtures.cs](LayoutFixtures.cs).
+
+The earlier fixed `4096N` estimate was disproved by a 600-byte request containing
+128 empty objects. An item with 80 ordinary nested value fields allocated 5,248,664
+bytes; an item with one 65,536-byte padded value allocated 8,394,392 bytes. Both exceeded
+the old 2,776,072-byte complete grant. These are framework-created object bodies, not
+application constructor allocations. The repaired fixtures cover these cases, private
+and ignored fields, inherited private storage, explicit offsets, and explicit class
+size. Each wide request is rejected before static deserialization/business entry;
+the native fixture independently observes zero public SDK admissions. A small ordinary
+struct tool remains callable beside the wide registered tools.
+
+The two derived terms cross the existing schema slot in exactly one root extension
+annotation, `x-nativeweave-managed-peak-v1`, containing unsigned `nodeBytes` and
+`replyBytes`. Both are range-checked at registration; nested instances or extra members
+are rejected. The annotation changes no assertion, required list, nullable member,
+exporter annotation or nested node. It is not a standard JSON Schema keyword and does
+not use `$comment`, whose standard forbids semantic action. Design server section 8
+requires B19's implementation-derived allocation formula; section 10.1's outer
+descriptor remains unchanged. [JSON Schema 2020-12 Core sections 4.3.1 and 6.5](https://json-schema.org/draft/2020-12/json-schema-core)
+permit unknown extension annotations. Native `get_tool` returns the exact registered schema,
+including this annotation; a real rmcp `tools/list` regression checks that equality.
+Its encoded bytes count toward the ordinary schema and startup scratch limits.
+The native preflight selects the named tool before SDK entry and binds the admitted
+handler identity again before creating any managed argument owner, so a header/body
+conflict cannot select a wider codec under another tool's budget.
 
 Output serialization uses bounded writers (at most 256 KiB each), a bounded static
-object/string/node prewalk and explicit static metadata. The managed grant covers
-DTO JSON, outer result JSON, final byte copy and writer/encoding overlap. Native reply
+object/string/node prewalk and explicit static metadata. For a tool,
+`R = 2 MiB + deepest live boxing path + 2*maximum inline value width + 128`.
+The metadata-derived path sums exact value widths plus box headers along nested getter,
+array and nullable visits; sibling values are visited sequentially. The two extra value
+copies cover the framework's deferred result closure and copy overlap. Thus a sparse
+JSON output cannot hide a large framework-created value box. A supported chain of
+fourteen 128 KiB structs supplies a real pre-SDK reply-budget regression.
+The remaining 2 MiB covers DTO JSON, outer result JSON, final byte copy and
+writer/encoding overlap. Native reply
 validation parses only under the already-owned 3 MiB reservation, checks its own
 structural/native peak, exact output schema and structured/text agreement. An invalid shape or an output whose derived native peak exceeds that reservation
 is replaced with a small redacted error while the failed-create token is still
@@ -105,19 +176,40 @@ not a release boundary.
 
 ## Startup exporter scratch
 
-The metadata walk rejects types>64, properties>256, depth>16, names>16 KiB, recursive/
+The metadata walk first acquires the existing full 4 MiB startup scratch grant, before
+field proof lookup or any new layout reflection arrays. It rejects types>64,
+properties>256, depth>16, names>16 KiB, recursive/
 open forms, unsupported converters and exporter callbacks before BCL export. It also
 bounds enum fields to256 each, attribute records to1024, attribute arrays to256 and
 aggregate default/name/attribute strings to64 KiB. Only already supplied static
 context metadata is resolved. Unknown attribute constructors are rejected using
 `CustomAttributeData`; they are not executed by the exporter.
 
-For `T` distinct metadata types, `P` unique mapped properties, `E` exporter visits
+Complete layout inspection separately caps 64 class/base types, 1,024 declared
+instance-field slots and 4,096 reflection-cache slots. The compiler helper supplies
+both declared storage count and the complete cache surface before `GetFields` runs.
+The latter includes static/literal fields, bases and interfaces: both pinned runtimes
+can populate these before applying `Instance | DeclaredOnly`. Counts are summed for
+each reflected class/base query, so repeated inherited cache entries are covered.
+An empty base/interface contributes an owner slot for the runtime's type arrays.
+Field names are lazy in these name-null runtime paths, so the count does not assume
+eager name copies. Enum field inspection uses the same prior cache admission.
+The helper is looked up by an exact generated type and method name; it does not
+materialize assembly attributes. Localized trimming suppressions document and test
+the generated `DynamicDependency` proof rather than claiming reflection-free code.
+
+For `T` distinct metadata types, `C` class/base layouts, `F` declared field slots,
+`Q` reflection-cache slots, `P` unique mapped properties, `E` exporter visits
 (including finite enum-name nodes), `A` unique plus revisited attribute records,
 `K` unique plus revisited attribute argument elements and `B` unique plus revisited
 property/default/name/path/attribute bytes, the pre-export reservation is:
 
-`65536 + 4096T + 1024P + 8192E + 256A + 64K + 16B`.
+`66560 + 4096(T+C) + 1024(P+F) + 256Q + 8192E + 256A + 64K + 16B`.
+
+After proving that this complete derived bound fits 4 MiB, registration atomically
+reduces its existing grant to that amount. The grant includes retained prewalk state;
+there is no uncharged overlap before export. Every failure releases the current grant
+in `finally`.
 
 The metadata-only `CountExport` follows the pinned `(JsonTypeInfo, JsonPropertyInfo)`
 cache cardinality. Scalar nodes are uncached; repeated nested properties, scalar enum

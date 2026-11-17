@@ -72,6 +72,9 @@ for identity, (folder, dependencies) in registry.items():
         entries['analyzers/dotnet/cs/NativeWeave.Server.Mcp.Generator.dll'] = directory / 'Generator/bin/Release/netstandard2.0/NativeWeave.Server.Mcp.Generator.dll'
     if identity in ['NativeWeave.Server', 'NativeWeave.Server.Mcp']:
         entries['buildTransitive/' + identity + '.targets'] = ROOT / 'src/Packaging.Release/buildTransitive/NativeWeave.Packaging.targets'
+        if identity == 'NativeWeave.Server.Mcp':
+            entries['buildTransitive/' + identity + '.targets'] = directory / 'buildTransitive/NativeWeave.Server.Mcp.targets'
+            entries['nativeweave/NativeWeave.Mcp.Packaging.targets'] = ROOT / 'src/Packaging.Release/buildTransitive/NativeWeave.Packaging.targets'
         selected = records if identity.endswith('.Mcp') else [r for r in records if r['id'] != 'NativeWeave.Server.Mcp']
         entries['nativeweave/closure.json'] = json.dumps({'schemaVersion': 1, 'packages': selected}, sort_keys=True).encode()
         for suffix in ['.dll', '.xml']: entries['tools/net11.0/NativeWeave.Packaging.Tasks' + suffix] = task.parent / 'bin/Release/net11.0' / ('NativeWeave.Packaging.Tasks' + suffix)
@@ -79,6 +82,11 @@ for identity, (folder, dependencies) in registry.items():
     packages[identity] = {'sha256': sha(package), 'path': str(package)}
 (out / 'packages.json').write_text(json.dumps(packages, indent=2) + '\n')
 consumer = out / 'consumer'; consumer.mkdir()
+# Block repository-only props/targets even when the retained receipt directory
+# lives beneath a maintainer worktree. Only the ordinary SDK/NuGet build imports
+# are part of this independent consumer.
+for name in ['Directory.Build.props', 'Directory.Build.targets']:
+    (consumer / name).write_text('<Project />\n')
 for name in ['Program.cs', 'Mcp.Sample.csproj']: shutil.copy2(ROOT / 'samples/api/protocols-mcp' / name, consumer / name)
 shutil.copy2(ROOT / 'global.json', consumer / 'global.json')
 config = ET.Element('configuration'); sources = ET.SubElement(config, 'packageSources'); ET.SubElement(sources, 'clear')
@@ -106,13 +114,44 @@ program = consumer / 'Program.cs'
 program.write_text(program.read_text().replace('internal sealed record AddOutput(int Total, string Tool);', 'internal sealed record AddOutput(int Total, string Tool) { public string Version => "edited DTO"; }'))
 run('ordinary-dto-edit-build', ['dotnet', 'build', cp, '-c', 'Release', '--no-restore', *common], consumer, ce)
 run('ordinary-dto-edit-execute', ['dotnet', dll, '--self-test'], consumer, ce)
+
+# The MCP NuGet target, not a manually added analyzer/project property, must
+# select full ProjectReference implementation metadata. The external context
+# library has no MCP reference or analyzer. Its private-only edit preserves the
+# public reference assembly but must regenerate the application's layout proof.
+external = consumer / 'external'
+shutil.copytree(ROOT / 'tests/Protocols.Mcp/PackageExternal', external)
+for template in external.rglob('*.csproj.template'):
+    template.rename(template.with_suffix(''))
+ep = external / 'External.csproj'
+run('external-restore', ['dotnet', 'restore', ep, '--ignore-failed-sources', *common], external, ce)
+assert run('external-reference-selector', ['dotnet', 'msbuild', ep, '-nologo', '-getProperty:CompileUsingReferenceAssemblies', *common], external, ce).strip() == 'false'
+run('external-build', ['dotnet', 'build', ep, '-c', 'Release', '--no-restore', *common], external, ce)
+external_dll = external / 'bin/Release/net11.0/External.Layout.Consumer.dll'
+reference = external / 'Models/obj/Release/net11.0/ref/External.Layout.Models.dll'
+reference_before = sha(reference)
+proof = next((external / 'obj/Release/net11.0/generated').rglob('NativeWeave.Mcp.Layout.g.cs'))
+proof_before = sha(proof)
+run('external-jit', ['dotnet', external_dll, '4640'], external, ce)
+model = external / 'Models/Models.cs'
+model.write_text(model.read_text().replace('// PRIVATE_FIELD_EDIT', 'private Padding _second;'))
+run('external-private-edit-build', ['dotnet', 'build', ep, '-c', 'Release', '--no-restore', *common], external, ce)
+assert sha(reference) == reference_before, 'The private-only edit unexpectedly changed the public reference assembly.'
+assert sha(proof) != proof_before, 'The private-only edit did not regenerate the static field count proof.'
+run('external-private-edit-jit', ['dotnet', external_dll, '8736'], external, ce)
+run('external-private-edit-aot-publish', ['dotnet', 'publish', ep, '-c', 'Release', '-r', 'linux-x64', '-p:PublishAot=true', '--ignore-failed-sources', '-o', external / 'publish', *common], external, ce)
+external_exe = external / 'publish/External.Layout.Consumer'
+run('external-private-edit-aot', [external_exe, '8736'], external, ce)
 assert not marker.exists(), 'Consumer attempted a Rust tool'
 outputs = {}
-for mode, directory in [('jit', dll.parent), ('aot', exe.parent)]:
+for mode, directory in [('jit', dll.parent), ('aot', exe.parent), ('external-jit', external_dll.parent), ('external-aot', external_exe.parent)]:
     record = json.loads((directory / 'NativeWeave.server.assets.json').read_text())
     assert record['sha256'] == native_hash == sha(directory / record['outputPath'])
     outputs[mode] = record
 (out / 'summary.json').write_text(json.dumps({'source_commit': source, 'cargo_lock_sha256': sha(ROOT / 'Cargo.lock'), 'native_sha256': native_hash,
     'packages': packages, 'sdk_output_records': outputs, 'no_consumer_rust': True, 'transitive_generator': True,
-    'minimal_advanced_jit_aot_http1_http2': True, 'ordinary_dto_edit_same_native': True, 'aot_executable_sha256': sha(exe)}, indent=2) + '\n')
+    'minimal_advanced_jit_aot_http1_http2': True, 'ordinary_dto_edit_same_native': True,
+    'external_context_no_analyzer_reference': True, 'no_repository_build_imports': True, 'private_only_edit_reference_sha256': reference_before,
+    'private_only_edit_regenerated_layout_proof': True, 'external_private_edit_jit_aot_http1_http2': True,
+    'aot_executable_sha256': sha(exe), 'external_aot_executable_sha256': sha(external_exe)}, indent=2) + '\n')
 print('B19 actual independent NuGet JIT/AOT consumers passed without Rust.', flush=True)

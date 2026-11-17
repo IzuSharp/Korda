@@ -180,7 +180,7 @@ fn actual_public_rmcp_peak(limits: Limits) {
     use http_body_util::BodyExt;
     use nativeweave_protocol_mcp::{profile::Profile, runtime};
     use std::sync::Arc;
-    let schema = serde_json::json!({"type":"object","properties":{"text":{"type":"string"},"items":{"type":"array","items":{"type":"integer"}}}});
+    let schema = serde_json::json!({"type":"object","properties":{"text":{"type":"string"},"items":{"type":"array","items":{"type":"integer"}}},"x-nativeweave-managed-peak-v1":{"nodeBytes":4096,"replyBytes":2097152}});
     let descriptor = serde_json::to_vec(&serde_json::json!({"version":1,"kind":"mcp","handler_id":1,"protocol_version":"2026-07-28","legacy_sessions":false,"event_store":false,"strict_metadata":true,"allowed_hosts":["localhost:80"],"allowed_origins":[],"max_request_bytes":1048576,"max_json_depth":32,"max_json_nodes":4096,"max_json_string_bytes":262144,
         "tools":[{"name":"measure","description":"measured native SDK","handler_id":4294967297u64,"input_codec_id":8589934594u64,"output_codec_id":8589934595u64,"input_schema":schema,"output_schema":schema}],"resources":[],"prompts":[]})).unwrap();
     let profile = Profile::parse(&descriptor, 1).unwrap();

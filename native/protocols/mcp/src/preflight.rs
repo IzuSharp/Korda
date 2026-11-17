@@ -225,15 +225,14 @@ pub fn native_peak(wire_capacity: usize, shape: Shape) -> Option<u64> {
         .map(|n| n as u64)
 }
 /// Separately held managed argument UTF8, decoder/DTO graph and response encoding.
-pub fn managed_peak(wire_length: usize, shape: Shape) -> Option<u64> {
-    wire_length
+pub fn managed_peak(wire_length: usize, shape: Shape, node_bytes: u64) -> Option<u64> {
+    (wire_length as u64)
         .checked_mul(3)?
-        // A sparse JSON object can instantiate a static DTO with 256 fields.
-        // Charge its declared storage even when most values are absent/null.
-        .checked_add(shape.nodes.checked_mul(4096)?)?
-        .checked_add(shape.strings.checked_mul(8)?)?
+        // The static codec proves complete CLR storage, including inline value
+        // fields which may be much wider than the visible sparse JSON object.
+        .checked_add((shape.nodes as u64).checked_mul(node_bytes)?)?
+        .checked_add((shape.strings as u64).checked_mul(8)?)?
         .checked_add(65_536)
-        .map(|n| n as u64)
 }
 
 #[cfg(test)]

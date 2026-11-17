@@ -11,6 +11,10 @@ Ordinary DTO and handler edits rebuild C# only.
 Use the maintainer-provided Linux x64 package feed and the repository's pinned .NET
 11 toolchain. The package brings its normal Server dependency and precompiled native
 asset; a consumer does not install Cargo or build Rust.
+The same package also carries the compiler analyzer needed to preserve complete
+static DTO field metadata for bounded JIT and NativeAOT materialization. There is no
+extra runtime package or registration call. Its build-transitive target uses complete
+ProjectReference implementations so private-field-only DTO edits update that proof.
 
 ```xml
 <PackageReference Include="NativeWeave.Server.Mcp" Version="0.1.0-preview.1" />
@@ -121,10 +125,25 @@ attributes are bounded to 256 fields per enum and included in the constant budge
 Recursive/open JSON, dictionaries, custom converters, unknown exporter attribute
 constructors and unregistered polymorphism fail registration. The prewalk resolves
 only types reachable through the supplied static context. It does not scan assemblies.
-The startup estimator also counts repeated exporter contexts, paths and attributes before permitting expansion. Schema export happens once, under a separate startup scratch grant; each encoded
+The startup estimator also counts repeated exporter contexts, paths and attributes before permitting expansion. Complete CLR layout includes private, ignored and inherited
+instance fields as well as explicit struct/class padding. The compiler preserves this
+metadata; registration checks its finite field counts before reflection allocation.
+Schema export happens once, under a separate startup scratch grant; each encoded
 schema is at most 64 KiB and aggregate registry metadata at most 4 MiB.
 
-`get_tool` returns the exact registered schema. Native finite-shape checks and the
+If a shared static context is compiled separately and its assembly has no MCP analyzer,
+concrete `AddTool<TInput,TOutput>` calls in the application can supply the required proof
+from complete referenced implementation metadata. A library that exposes only reference
+metadata cannot certify omitted private fields. Such a context library can reference
+the same package with `IncludeAssets="analyzers" PrivateAssets="all"` so it supplies its
+own proof without a runtime MCP dependency. Missing proof fails registration with
+`NWAPI-S004`; the runtime does not discover arbitrary registration libraries by scanning
+loaded assemblies.
+
+`get_tool` returns the exact registered schema. That schema includes one root
+`x-nativeweave-managed-peak-v1` extension annotation carrying the proven input/output
+allocation terms. It changes no JSON validation assertion or nested nullable/required
+constraint. Native finite-shape checks and the
 static C# decoder reject invalid arguments before a typed callback. This adapter does
 not claim to be an arbitrary JSON Schema validator. Application business validation
 remains explicit, and tool annotations never grant authorization.
@@ -151,6 +170,11 @@ rmcp parsing, the native Host performs a budgeted serde visitor scan and reserve
 separate native and managed live-overlap peaks. All byte-credit admission is
 nonwaiting. An otherwise valid request can receive HTTP 503 if its peak cannot fit
 4 MiB per request/side or the Host's global budget.
+The input term uses the selected DTO's complete CLR storage, including large inline
+value fields even when absent from the JSON. The output term includes framework-created
+value boxes along the static traversal path. Consequently a tiny sparse request for a
+very wide DTO can fail admission before parsing, while an ordinary small tool on the
+same endpoint remains usable.
 
 There is one native input collector, the SDK's own parser/tree, one owned UTF-8
 argument bridge and one static C# materialization. Output performs static serialization,

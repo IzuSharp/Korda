@@ -32,6 +32,7 @@ struct Peak {
     _admission: preflight::Admission,
     reply: Mutex<Option<WriteReservation>>,
     output: Mutex<Option<WriteReservation>>,
+    tool_handler: Option<u64>,
 }
 impl State {
     pub fn new(profile: Arc<Profile>, parts: http::request::Parts) -> Self {
@@ -161,6 +162,15 @@ impl ForeignCall for Bridge {
             let state = state(&self.request).map_err(|_| internal())?;
             if !state.allowed() || state.call_seen.swap(true, Ordering::AcqRel) {
                 return Err(internal());
+            }
+            // A mismatched header/body must never select a wider static codec
+            // than the one admitted before SDK parsing, even if an upstream
+            // consistency check changes. No managed argument owner exists yet.
+            if kind == 0 && self._peak.tool_handler != Some(handler) {
+                return Err(ErrorData::invalid_params(
+                    "MCP tool identity changed after admission",
+                    None,
+                ));
             }
             let encoded = serde_json::to_vec(&arguments).map_err(|_| internal())?;
             if encoded.is_empty() || encoded.len() > state.profile.limits.wire {
@@ -317,8 +327,23 @@ async fn allowed(request: Arc<RequestState>) -> Result<OpResult> {
         .get("mcp-method")
         .and_then(|v| v.to_str().ok())
         .is_some_and(|m| matches!(m, "tools/call" | "resources/read" | "prompts/get"));
-    let managed_peak = preflight::managed_peak(input.len(), shape)
-        .and_then(|n| n.checked_add(if business { 2 * 1024 * 1024 } else { 0 }))
+    let selected_tool = if parts
+        .headers
+        .get("mcp-method")
+        .and_then(|v| v.to_str().ok())
+        == Some("tools/call")
+    {
+        parts
+            .headers
+            .get("mcp-name")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|name| s.profile.tool_peak(name))
+    } else {
+        None
+    };
+    let managed = selected_tool.map(|(_, peak)| peak).unwrap_or_default();
+    let managed_peak = preflight::managed_peak(input.len(), shape, managed.node_bytes)
+        .and_then(|n| n.checked_add(if business { managed.reply_bytes } else { 0 }))
         .ok_or(invalid())?;
     let automatic = if parts
         .headers
@@ -362,6 +387,7 @@ async fn allowed(request: Arc<RequestState>) -> Result<OpResult> {
         _admission: admission,
         reply: Mutex::new(None),
         output: Mutex::new(output),
+        tool_handler: selected_tool.map(|(handler, _)| handler),
     });
     *lock(&s.peak) = Some(peak.clone());
     let bridge = Bridge::new(request.clone(), peak.clone());

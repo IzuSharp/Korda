@@ -44,13 +44,13 @@ internal static class SchemaFixtures
             if (name == "enum-string") check(document.RootElement.GetProperty("properties").GetProperty("value").GetProperty("enum").EnumerateArray().Any(v => v.GetString() == "renamed-value"), "Static renamed enum field survives schema export and Native AOT trimming");
         }
         check(JsonSerializer.Deserialize("{\"value\":\"renamed-value\"}", StringEnumJson.Default.EnumDto)!.Value == Choice.Second, "Static string enum codec agrees with schema");
-        _ = StaticSchema.Create("sparse-wide", SchemaJson.Default.WideArray);
+        using var sparseSchema = JsonDocument.Parse(StaticSchema.Create("sparse-wide", SchemaJson.Default.WideArray));
         byte[] wire = System.Text.Encoding.UTF8.GetBytes("{\"items\":[" + string.Join(',', Enumerable.Repeat("{}", 320)) + "]}");
         _ = JsonSerializer.Deserialize(wire, SchemaJson.Default.WideArray);
         long start = GC.GetAllocatedBytesForCurrentThread();
         var sparse = JsonSerializer.Deserialize(wire, SchemaJson.Default.WideArray)!;
         long materialized = GC.GetAllocatedBytesForCurrentThread() - start;
-        long managedBound = 3L * wire.Length + 4096L * 323 + 8 * 5 + 65536;
+        long managedBound = 3L * wire.Length + sparseSchema.RootElement.GetProperty(ManagedLayout.Annotation).GetProperty("nodeBytes").GetInt64() * 323 + 8 * 5 + 65536;
         check(materialized <= managedBound && sparse.Items.Length == 320, "Sparse wide static DTO storage fits managed per-node admission");
         Console.WriteLine($"managed_peak case=sparse-wide wire={wire.Length} nodes=323 allocated={materialized} bound={managedBound}");
         var options = new McpEndpointOptions(); options.AllowedHosts.Add("localhost:80"); options.AllowedOrigins.Add("https://localhost:443");

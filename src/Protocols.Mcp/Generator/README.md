@@ -18,24 +18,71 @@ discovery of an unrelated heap graph: its storage is one reference slot.
 Accessible types use `typeof` on the exact closed instantiation. Inaccessible
 private nested types and bases use the BCL type-name/assembly-name overload.
 Its type name follows the trimmer's documentation-signature format (nested
-types separated by dots), separately from reflection marker names using `+`.
+types separated by dots), separately from reflection identity names using `+`.
 The focused actual NativeAOT witness verifies that this overload retains closed
 generic field substitutions. The annotations are attached to a reachable,
 empty module initializer; no DTO constructor or registration callback runs there.
 
-Each preserved class definition also receives an assembly metadata marker:
-`NativeWeave.Mcp.Layout.v1` with value `assembly-simple-name|metadata-type-name`.
-Nested types use `+`, and generic definitions retain their metadata arity. The
-runtime must require this marker before using field reflection; a missing
-analyzer or an erased registration path with no discovered static root cannot
-silently fall back to incomplete NativeAOT metadata. This marker is an internal
+The generated internal helper has one fixed name:
+`NativeWeave.Server.Mcp.Generated.LayoutPreservation`. Its
+`DeclaredInstanceFieldCount(Type)` and `ReflectionFieldCount(Type)` methods
+return conservative upper bounds, or `-1` when coverage is absent. The runtime
+binds these two exact methods as typed delegates in explicitly known assemblies;
+it does not enumerate assembly attributes or load a registration table. These
+methods are themselves retained by the reachable module initializer. Accessible
+types compare the generic definition directly with `typeof`; inaccessible
+definitions compare their full metadata name and assembly simple name. That
+fallback can allocate identity strings and is covered by the runtime's reserved
+prewalk scratch; the helper is not universally allocation-free.
+
+The compiler resolves only the discovered definitions through Roslyn's public
+`MetadataImportOptions.All` view. Its default imported view can omit private
+external fields and is not a count proof. The existing MCP package sets the
+SDK's `CompileUsingReferenceAssemblies=false` for its consumers, so an ordinary
+`ProjectReference` supplies complete implementation metadata and a private DTO
+field edit invalidates the consumer's compilation. The focused maintainer
+witness uses the same SDK setting. A third-party package that supplies only
+reference compile assets still cannot prove omitted private fields; definitions
+or base/interface surfaces marked `ReferenceAssemblyAttribute` receive no
+proof unless they are the fixed, source-checked framework roots described below.
+Such a library can carry the existing MCP analyzer's proof in its own static
+context assembly. No binary files are scanned or substituted by the generator.
+The declared-instance bound includes
+private/backing fields, conservative event slots and primary constructor capture
+slots. The reflection bound also includes static/literal fields, each base and
+interface surface, and a slot for each metadata owner, including empty
+interfaces. It is charged separately for each runtime `GetFields` query because
+the runtime can populate inherited fields again under another reflected type.
+The actual returned instance-field array must fit the declared upper bound.
+
+The fixed .NET 11 reference pack always supplies framework definitions.
+`Object`, `ValueType`, `IEquatable<T>` (used by records) and the four `Enum` interfaces are fieldless; the pinned
+runtime's `Enum` has `EnumSeparatorChar` and CoreCLR's `s_underlyingTypes`
+(NativeAOT uses only the former). These exact framework roots are handled from
+[the actual runtime source](https://github.com/dotnet/dotnet/blob/297acf930fb0f5c07fd4e51d78e521b4ad2e5d1f/src/runtime/src/libraries/System.Private.CoreLib/src/System/Enum.cs)
+and its
+[CoreCLR partial](https://github.com/dotnet/dotnet/blob/297acf930fb0f5c07fd4e51d78e521b4ad2e5d1f/src/runtime/src/coreclr/System.Private.CoreLib/src/System/Enum.CoreCLR.cs).
+Other reference-only framework bases are not guessed from their public fields.
+
+`LayoutProofAnalyzer` checks the final generated compilation against every
+emitted proof. Its semantic action inspects only the one generated helper tree
+and the named definitions, after all source generators have completed. A second
+generator that adds fields to a partial DTO cannot silently invalidate the
+earlier proof: an understated bound produces the non-suppressible `NWMCP001`
+compiler error. Ordinary partial DTOs and generated methods remain supported.
+
+A missing analyzer or an erased registration path with no discovered static
+root fails registration before requesting field arrays. A shared static-context
+assembly can include the analyzer from the existing MCP package, or an entry
+project can supply concrete `AddTool` roots. An unrelated third registration
+assembly is not discovered by scanning loaded assemblies. This is an internal
 coverage contract, not an authorization boundary against application code.
 
 Discovery is finite. It tracks closed types and bounds a conservative candidate
 superset at depth 32 and 1024 types per root, above the runtime's admitted 16/64
 JSON graph. Recursive or unsupported JSON shapes remain governed by the
 existing runtime profile. Unrelated JSON contexts do not gain a new compilation
-error; any required class whose metadata cannot be proven remains unmarked and
+error; any required class whose metadata cannot be proven remains uncovered and
 fails registration. No referenced assembly is scanned for candidate DTOs.
 
 Value types need no field-reflection promise for their own inline width. The

@@ -49,12 +49,12 @@ fn until(mut predicate: impl FnMut() -> bool) {
         std::thread::sleep(Duration::from_millis(1));
     }
 }
-fn profile() -> Arc<Profile> {
-    let schema = serde_json::json!({"type":"object","properties":{"text":{"type":"string"}},"required":["text"]});
+fn profile(node_bytes: u64, reply_bytes: u64) -> Arc<Profile> {
+    let schema = serde_json::json!({"type":"object","properties":{"text":{"type":"string"},"items":{"type":"array","items":{"type":"object","properties":{}}}},"x-nativeweave-managed-peak-v1":{"nodeBytes":node_bytes,"replyBytes":reply_bytes}});
     Profile::parse(&serde_json::to_vec(&serde_json::json!({"version":1,"kind":"mcp","handler_id":1,"protocol_version":"2026-07-28","legacy_sessions":false,"event_store":false,"strict_metadata":true,"allowed_hosts":[],"allowed_origins":[],"max_request_bytes":1048576,"max_json_depth":32,"max_json_nodes":4096,"max_json_string_bytes":262144,
     "tools":[{"name":"echo","description":"native gate","handler_id":4294967297u64,"input_codec_id":8589934594u64,"output_codec_id":8589934595u64,"input_schema":schema,"output_schema":schema}],"resources":[],"prompts":[]})).unwrap(),1).unwrap()
 }
-fn host(events: &Events) -> Arc<Host> {
+fn host(events: &Events, node_bytes: u64, reply_bytes: u64) -> Arc<Host> {
     let host = Host::new(
         Config {
             _request_timeout: Duration::from_secs(5),
@@ -99,7 +99,7 @@ fn host(events: &Events) -> Arc<Host> {
         timeout: Duration::from_secs(5),
         max_request_bytes: 1048576,
         max_json_bytes: 0,
-        mcp: Some(profile()),
+        mcp: Some(profile(node_bytes, reply_bytes)),
         grpc: None,
     }]);
     host
@@ -172,7 +172,15 @@ fn network(
     })
 }
 fn scenario(body: String, method: &str, deny: bool, expected_status: u16, expected_sdk: usize) {
-    scenario_pressure(body, method, deny, expected_status, expected_sdk, None);
+    scenario_pressure(
+        body,
+        method,
+        deny,
+        expected_status,
+        expected_sdk,
+        None,
+        (4096, 2097152),
+    );
 }
 fn scenario_pressure(
     body: String,
@@ -181,9 +189,10 @@ fn scenario_pressure(
     expected_status: u16,
     expected_sdk: usize,
     pressure: Option<Side>,
+    layout: (u64, u64),
 ) {
     let events = Box::<Events>::default();
-    let host = host(&events);
+    let host = host(&events, layout.0, layout.1);
     let pressure_owner1 = host.budget.request(4 * 1024 * 1024).unwrap();
     let pressure_owner2 = host.budget.request(4 * 1024 * 1024).unwrap();
     let pressure1 =
@@ -341,7 +350,8 @@ fn scenario_pressure(
     until(|| host.budget.snapshot() == (0, 0));
     assert_eq!(events.gates.load(Ordering::Acquire), 1);
     println!(
-        "preparse status={expected_status} deny={deny} sdk_admissions={expected_sdk} handlers=0 request_take=1 gates=1 final_native=0 final_managed=0"
+        "preparse status={expected_status} deny={deny} sdk_admissions={expected_sdk} handlers=0 request_take=1 gates=1 final_native=0 final_managed=0 node_bytes={} reply_bytes={}",
+        layout.0, layout.1
     );
     let closing = begin(&host, Job::Close(Duration::from_secs(2)), &events);
     until(|| events.terminal.load(Ordering::Acquire) != 0);
@@ -434,6 +444,33 @@ fn actual_host_denial_and_full_peak_failures_never_enter_public_sdk_or_handler()
             503,
             0,
             Some(side),
+            (4096, 2097152),
         );
     }
+    // Real managed witnesses prove these declared inline/boxing widths. The
+    // native half separately observes zero public SDK and continuation entries.
+    scenario_pressure(
+        rpc(
+            "tools/call",
+            &format!(
+                r#""name":"echo","arguments":{{"items":[{}]}},"#,
+                vec!["{}"; 128].join(",")
+            ),
+        ),
+        "tools/call",
+        false,
+        503,
+        0,
+        None,
+        (524288, 2097152),
+    );
+    scenario_pressure(
+        rpc("tools/call", r#""name":"echo","arguments":{"text":"x"},"#),
+        "tools/call",
+        false,
+        503,
+        0,
+        None,
+        (4096, 8 * 1024 * 1024),
+    );
 }

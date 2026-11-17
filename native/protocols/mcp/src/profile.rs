@@ -68,6 +68,23 @@ pub struct Profile {
     pub resource_models: Vec<Resource>,
     pub prompt_models: Vec<Prompt>,
     pub metadata_bytes: usize,
+    tool_peaks: Vec<(u64, ManagedPeak)>,
+}
+/// The fixed root extension annotation contains allocation metadata only. It
+/// changes no schema assertion and remains in the exact registered get_tool map.
+pub const MANAGED_PEAK_ANNOTATION: &str = "x-nativeweave-managed-peak-v1";
+#[derive(Clone, Copy, Debug)]
+pub struct ManagedPeak {
+    pub node_bytes: u64,
+    pub reply_bytes: u64,
+}
+impl Default for ManagedPeak {
+    fn default() -> Self {
+        Self {
+            node_bytes: 4096,
+            reply_bytes: 2 * 1024 * 1024,
+        }
+    }
 }
 fn text(value: &str, maximum: usize, empty: bool) -> bool {
     (empty || !value.is_empty()) && value.len() <= maximum && !value.contains('\0')
@@ -135,6 +152,7 @@ impl Profile {
         let mut names = HashSet::new();
         let mut codecs = HashSet::new();
         let mut tool_models = Vec::new();
+        let mut tool_peaks = Vec::new();
         for t in &d.tools {
             if !name(&t.name)
                 || !text(&t.description, 4096, true)
@@ -148,8 +166,15 @@ impl Profile {
             {
                 return Err("invalid/duplicate tool identity");
             }
-            check_schema(&t.input_schema)?;
-            check_schema(&t.output_schema)?;
+            let input = check_schema(&t.input_schema)?;
+            let output = check_schema(&t.output_schema)?;
+            tool_peaks.push((
+                t.handler_id,
+                ManagedPeak {
+                    node_bytes: input.node_bytes,
+                    reply_bytes: output.reply_bytes,
+                },
+            ));
             let mut model = Tool::new(
                 t.name.clone(),
                 t.description.clone(),
@@ -217,7 +242,15 @@ impl Profile {
             resource_models,
             prompt_models,
             metadata_bytes: bytes.len(),
+            tool_peaks,
         }))
+    }
+    pub fn tool_peak(&self, name: &str) -> Option<(u64, ManagedPeak)> {
+        self.descriptor
+            .tools
+            .iter()
+            .position(|tool| tool.name == name)
+            .map(|index| self.tool_peaks[index])
     }
     /// Runs before a body is polled or managed authorization is dispatched.
     /// The original wire authority is supplied, never a forwarded host value.
@@ -302,7 +335,7 @@ impl Profile {
     }
 }
 
-fn check_schema(schema: &Map<String, Value>) -> Result<(), &'static str> {
+fn check_schema(schema: &Map<String, Value>) -> Result<ManagedPeak, &'static str> {
     if schema.get("type").and_then(Value::as_str) != Some("object")
         || serde_json::to_vec(schema)
             .map_err(|_| "schema encoding")?
@@ -311,8 +344,30 @@ fn check_schema(schema: &Map<String, Value>) -> Result<(), &'static str> {
     {
         return Err("schema root or byte limit");
     }
+    let peak = schema
+        .get(MANAGED_PEAK_ANNOTATION)
+        .and_then(Value::as_object)
+        .ok_or("missing static CLR layout admission annotation")?;
+    let node_bytes = peak
+        .get("nodeBytes")
+        .and_then(Value::as_u64)
+        .ok_or("invalid CLR node bound")?;
+    let reply_bytes = peak
+        .get("replyBytes")
+        .and_then(Value::as_u64)
+        .ok_or("invalid CLR reply bound")?;
+    if peak.len() != 2
+        || !(4096..=1u64 << 40).contains(&node_bytes)
+        || !(2 * 1024 * 1024..=1u64 << 40).contains(&reply_bytes)
+    {
+        return Err("static CLR layout bound outside finite profile");
+    }
     let root = Value::Object(schema.clone());
-    schema_node(&root, &root, 0, &mut Vec::new())
+    schema_node(&root, &root, 0, &mut Vec::new())?;
+    Ok(ManagedPeak {
+        node_bytes,
+        reply_bytes,
+    })
 }
 fn schema_node(
     node: &Value,
@@ -324,6 +379,9 @@ fn schema_node(
         return Err("schema nesting/recursive reference");
     }
     let obj = node.as_object().ok_or("open schema")?;
+    if obj.contains_key(MANAGED_PEAK_ANNOTATION) && !std::ptr::eq(node, root) {
+        return Err("managed layout annotation is root-only");
+    }
     if let Some(reference) = obj.get("$ref") {
         let reference = reference.as_str().ok_or("invalid schema reference")?;
         if !reference.starts_with("#/") || path.iter().any(|p| p == reference) {
@@ -341,6 +399,9 @@ fn schema_node(
         return result;
     }
     for key in obj.keys() {
+        if key == MANAGED_PEAK_ANNOTATION && std::ptr::eq(node, root) {
+            continue;
+        }
         if !matches!(
             key.as_str(),
             "$schema"
@@ -560,6 +621,42 @@ fn conforms_node(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn root_layout_annotation_is_bounded_nonsemantic_and_exact() {
+        let mut schema = serde_json::json!({"type":"object","$comment":"exporter comment is retained","required":["value"],"properties":{"value":{"type":["integer","null"]}},MANAGED_PEAK_ANNOTATION:{"nodeBytes":524288,"replyBytes":3145728}});
+        let original = schema.clone();
+        let peak = check_schema(schema.as_object().unwrap()).unwrap();
+        assert_eq!(peak.node_bytes, 524288);
+        assert_eq!(peak.reply_bytes, 3145728);
+        assert_eq!(schema, original);
+        assert!(conforms(
+            &serde_json::json!({"value":null}),
+            schema.as_object().unwrap()
+        ));
+        assert!(!conforms(
+            &serde_json::json!({}),
+            schema.as_object().unwrap()
+        ));
+        for bad in [
+            Value::Null,
+            serde_json::json!({"nodeBytes":1,"replyBytes":2097152}),
+            serde_json::json!({"nodeBytes":4096,"replyBytes":-1}),
+            serde_json::json!({"nodeBytes":4096,"replyBytes":2097152,"other":0}),
+            serde_json::json!({"nodeBytes":1u64<<41,"replyBytes":2097152}),
+        ] {
+            schema[MANAGED_PEAK_ANNOTATION] = bad;
+            assert!(check_schema(schema.as_object().unwrap()).is_err());
+        }
+        schema = original;
+        schema["properties"]["value"][MANAGED_PEAK_ANNOTATION] =
+            schema[MANAGED_PEAK_ANNOTATION].clone();
+        assert!(check_schema(schema.as_object().unwrap()).is_err());
+        schema
+            .as_object_mut()
+            .unwrap()
+            .remove(MANAGED_PEAK_ANNOTATION);
+        assert!(check_schema(schema.as_object().unwrap()).is_err());
+    }
     #[test]
     fn resource_names_and_uris_are_both_unique_before_registration() {
         let mut descriptor = serde_json::json!({"version":1,"kind":"mcp","handler_id":1,"protocol_version":"2026-07-28","legacy_sessions":false,"event_store":false,"strict_metadata":true,"allowed_hosts":[],"allowed_origins":[],"max_request_bytes":1048576,"max_json_depth":32,"max_json_nodes":4096,"max_json_string_bytes":262144,"tools":[],"prompts":[],"resources":[

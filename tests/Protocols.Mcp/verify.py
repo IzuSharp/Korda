@@ -12,6 +12,7 @@ ROOT = Path(__file__).resolve().parents[2]
 p = argparse.ArgumentParser()
 p.add_argument('--output', type=Path, required=True)
 p.add_argument('--native', type=Path, required=True)
+p.add_argument('--native-manifest', type=Path, help='Frozen composed Host build receipt; its native source identity is verified separately from this managed worktree.')
 p.add_argument('--design', type=Path, required=True)
 p.add_argument('--sdk', type=Path, required=True)
 a = p.parse_args()
@@ -37,6 +38,31 @@ try:
     result['rustc']=run('rustc-version',['rustc','-Vv']).strip()
     inputs=subprocess.check_output(['git','ls-files','src/Protocols.Mcp','native/protocols/mcp','src/Server.Application','src/Server.Native','src/Server.Streaming','native/server','src/Interop.Async','src/Interop.Abi','src/NativeWeave.Core','tests/Protocols.Mcp','samples/api/protocols-mcp','docs/guides/protocols-mcp.md','Cargo.lock','global.json','Directory.Build.props'],cwd=ROOT,text=True).splitlines()
     result['input_sha256']={name:sha(ROOT/name) for name in inputs}
+    run('native-build',['cargo','build','-p','nativeweave-server','--locked','--offline'])
+    component_native=ROOT/'target/debug/libnativeweave_server.so'
+    result['component_native_sha256']=sha(component_native)
+    if a.native_manifest:
+        manifest_path=a.native_manifest.resolve(); manifest=json.loads(manifest_path.read_text())
+        assert manifest['status']=='passed' and manifest['source_inputs_unchanged'] is True
+        assert manifest['platform']=='linux-x64' and manifest['export_count']==48
+        assert manifest['native_sha256']==sha(a.native) and manifest['native_bytes']==a.native.stat().st_size
+        native_commit=manifest['native_source_commit']
+        names=subprocess.check_output(['git','ls-tree','-r','--name-only',native_commit,'--','native','Cargo.toml','Cargo.lock','rust-toolchain.toml','.cargo'],cwd=ROOT,text=True).splitlines()
+        assert set(names)==set(manifest['native_input_sha256']), 'Composed native input inventory is incomplete.'
+        for name in names:
+            content=subprocess.check_output(['git','show',native_commit+':'+name],cwd=ROOT)
+            assert hashlib.sha256(content).hexdigest()==manifest['native_input_sha256'][name], 'Native source hash mismatch: '+name
+            if name.startswith('native/protocols/mcp/') and name!='native/protocols/mcp/host_tests.rs':
+                assert sha(ROOT/name)==manifest['native_input_sha256'][name], 'MCP product source differs from composed asset: '+name
+        provenance=out/'composed-native'; provenance.mkdir()
+        shutil.copy2(manifest_path,provenance/'result.json')
+        for command in manifest['commands']:
+            log=manifest_path.parent/command['log']
+            assert command['exit_code']==0 and sha(log)==command['log_sha256']
+            shutil.copy2(log,provenance/log.name)
+        result['product_native_build']={'source_commit':native_commit,'manifest_sha256':sha(manifest_path),'manifest':'composed-native/result.json','scope':'Complete composed gRPC/MCP Host native build; component-native tests below use this worktree source, while product JIT/AOT/package tests load the frozen composed asset.'}
+    elif sha(a.native) != sha(component_native):
+        raise RuntimeError('Native input must match the just-built exact Host source or a verified composed manifest.')
     assetdir=out/'input'; assetdir.mkdir(); native=assetdir/'libnativeweave_server.so'; shutil.copy2(a.native,native)
     result['native_sha256']=sha(native)
     run('native-features',['cargo','tree','-p','nativeweave-protocol-mcp','-e','features','--locked','--offline'])
@@ -44,7 +70,7 @@ try:
     run('native-clippy',['cargo','clippy','-p','nativeweave-protocol-mcp','-p','nativeweave-server','--all-targets','--locked','--offline','--','-D','warnings'])
     run('native-layout-sdk-peak',['cargo','test','-p','nativeweave-protocol-mcp','--locked','--offline','--','--nocapture','--test-threads=1'])
     preparse=run('native-preparse-ownership',['cargo','test','-p','nativeweave-server','engine::mcp::tests::actual_host_denial_and_full_peak_failures_never_enter_public_sdk_or_handler','--locked','--offline','--','--nocapture'])
-    assert preparse.count('sdk_admissions=0 handlers=0')==7
+    assert preparse.count('sdk_admissions=0 handlers=0')==9
     common=['-m:1','-nr:false','-p:UseSharedCompilation=false']; asset='-p:NativeWeaveServerAssetPath='+str(native)
     project=ROOT/'tests/Protocols.Mcp/Protocols.Mcp.Tests.csproj'
     run('restore-jit',['dotnet','restore',project,'--locked-mode','--ignore-failed-sources',*common])
@@ -60,7 +86,7 @@ try:
     run('publish-aot',['dotnet','publish',project,'-c','Release','-r','linux-x64','-p:PublishAot=true','--no-restore',asset,'-o',out/'aot',*common])
     aotexe=out/'aot/NativeWeave.Server.Mcp.Tests'; aot=run('actual-aot',[aotexe]); match=re.search(r'assertions=(\d+), managed_retirements=(\d+), dynamic=False',aot); assert match and int(match[1])==jit_count
     run('package-consumer',['python3',ROOT/'tests/Protocols.Mcp/package_probe.py','--output',out/'package','--native',native])
-    result.update(status='passed',jit_assertions=jit_count,aot_assertions=int(match[1]),aot_managed_retirement_observations=int(match[2]),public_symbols=65,consumer_compile_fixtures=5,preparse_rejected_cases=7,preparse_success_cases=1,source_dirty=False,aot_executable_sha256=sha(aotexe),package_summary_sha256=sha(out/'package/summary.json'))
+    result.update(status='passed',jit_assertions=jit_count,aot_assertions=int(match[1]),aot_managed_retirement_observations=int(match[2]),public_symbols=65,consumer_compile_fixtures=5,preparse_rejected_cases=9,preparse_success_cases=1,source_dirty=False,aot_executable_sha256=sha(aotexe),package_summary_sha256=sha(out/'package/summary.json'))
 except Exception as error:
     result.update(status='failed',failure=str(error)); raise
 finally:

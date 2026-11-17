@@ -23,16 +23,23 @@ internal static class StaticSchema
             throw McpValidation.Schema(name, typeInfo.Type, "provide source-generated JsonTypeInfo with an object root; nullable value, scalar, array, dictionary and open roots are unsupported");
         if (typeInfo.Options.Converters.Count != 0 || typeInfo.Options.PropertyNamingPolicy is { } naming && naming.GetType().Assembly != typeof(JsonSerializer).Assembly)
             throw McpValidation.Schema(name, typeInfo.Type, "custom serializer option converters/naming callbacks are outside the bounded exporter profile");
-        var walk = new MetadataWalk(name, context); walk.Visit(typeInfo, 1); walk.CountExport(typeInfo);
-        // The admitted metadata graph bounds the exporter object/list/path graph.
-        // Reserve before calling it; the checked layout/allocation witness belongs
-        // to tests/Protocols.Mcp and is separate from retained schema bytes.
-        long scratch = walk.Scratch;
-        LastScratchBytes = scratch;
-        if (Interlocked.Add(ref _scratch, scratch) > 4 * 1024 * 1024)
-        { Interlocked.Add(ref _scratch, -scratch); throw new ArgumentException("NWAPI-S004: concurrent startup schema scratch exceeds 4 MiB."); }
+        // Prewalk reflection arrays are admitted before allocation too. The
+        // generated counts bound each field/cache request before GetFields;
+        // the walk has independent finite type/property/attribute limits.
+        long reserved = 4 * 1024 * 1024;
+        if (Interlocked.Add(ref _scratch, reserved) > reserved)
+        { Interlocked.Add(ref _scratch, -reserved); throw new ArgumentException("NWAPI-S004: concurrent startup schema scratch exceeds 4 MiB."); }
         try
         {
+            var layout = new ManagedLayout(name, context);
+            var walk = new MetadataWalk(name, context, layout); walk.Visit(typeInfo, 1); walk.CountExport(typeInfo);
+            long nodeBytes = layout.NodeBytes, replyBytes = layout.ReplyBytes(typeInfo);
+            if (nodeBytes > 1L << 40 || replyBytes > 1L << 40) throw McpValidation.Schema(name, typeInfo.Type, "managed layout terms exceed the finite native annotation range");
+            long scratch = walk.Scratch;
+            if (scratch > reserved) throw McpValidation.Schema(name, typeInfo.Type, "metadata/export expansion exceeds4MiB startup scratch");
+            // The derived full grant includes the still-retained prewalk state;
+            // changing the charged size introduces no uncharged overlap window.
+            Interlocked.Add(ref _scratch, scratch - reserved); reserved = scratch; LastScratchBytes = scratch;
             typeInfo.MakeReadOnly();
             var schema = typeInfo.GetJsonSchemaAsNode(new JsonSchemaExporterOptions
             {
@@ -41,7 +48,13 @@ internal static class StaticSchema
                     if (context.Path.Length == 0)
                     {
                         if (node is not JsonObject obj || !ObjectOnly(obj["type"])) throw McpValidation.Schema(name, typeInfo.Type, "exported root is not object or object/null");
+                        if (obj.ContainsKey(ManagedLayout.Annotation)) throw McpValidation.Schema(name, typeInfo.Type, "exporter annotation collides with the private managed layout proof");
                         obj["type"] = "object";
+                        // A root-only implementation annotation carries the
+                        // proven allocation policy through the existing schema
+                        // slot. It changes no JSON validation assertion and the
+                        // exact registered schema is returned by native get_tool.
+                        obj[ManagedLayout.Annotation] = new JsonObject { ["nodeBytes"] = nodeBytes, ["replyBytes"] = replyBytes };
                     }
                     return node;
                 }
@@ -50,11 +63,11 @@ internal static class StaticSchema
             using (var writer = new Utf8JsonWriter(buffer)) schema.WriteTo(writer);
             return buffer.WrittenMemory.ToArray();
         }
-        finally { Interlocked.Add(ref _scratch, -scratch); }
+        finally { Interlocked.Add(ref _scratch, -reserved); }
     }
     private static bool ObjectOnly(JsonNode? node) => node is JsonValue value && value.TryGetValue<string>(out var type) && type == "object"
         || node is JsonArray array && array.Count == 2 && array.Any(v => v?.GetValue<string>() == "object") && array.Any(v => v?.GetValue<string>() == "null");
-    private sealed class MetadataWalk(string name, JsonSerializerContext context)
+    private sealed class MetadataWalk(string name, JsonSerializerContext context, ManagedLayout layout)
     {
         private readonly HashSet<Type> _seen = [];
         private readonly HashSet<Type> _path = [];
@@ -68,8 +81,9 @@ internal static class StaticSchema
         private readonly Dictionary<Type, (int Count, int Bytes)> _enumCosts = [];
         private readonly HashSet<(JsonTypeInfo, JsonPropertyInfo?)> _exported = [];
         private long _exportNodes, _exportBytes, _exportAttributes, _exportElements;
+        private long _minimumEnumNodes;
         private int _constantElements;
-        internal long Scratch => checked(65_536L + 4096L * Types + 1024L * Properties + 8192L * _exportNodes
+        internal long Scratch => checked(66_560L + 4096L * (Types + layout.LayoutTypes) + 1024L * (Properties + layout.Fields) + 256L * layout.ReflectionFields + 8192L * _exportNodes
             + 16L * (Names + Constants + _exportBytes) + 256L * (Attributes + _exportAttributes) + 64L * (_constantElements + _exportElements));
         // Mirrors only the pinned exporter's cache/traversal cardinality, never
         // its JSON schema semantics. Scalar contexts are deliberately uncached.
@@ -109,6 +123,7 @@ internal static class StaticSchema
             if (_seen.Count > 64) throw McpValidation.Schema(name, info.Type, "more than64 distinct static types");
             if (info.PolymorphismOptions is not null || info.Converter.GetType().Assembly != typeof(JsonSerializer).Assembly)
                 throw McpValidation.Schema(name, info.Type, "polymorphism or a custom converter is unsupported");
+            layout.Observe(info);
             _path.Add(info.Type);
             try
             {
@@ -139,8 +154,11 @@ internal static class StaticSchema
                 else if (!Scalar(info.Type)) throw McpValidation.Schema(name, info.Type, "scalar codec is outside the bounded BCL subset");
                 else if (info.Type.IsEnum)
                 {
+                    layout.AdmitEnumFields(info.Type);
                     var fields = EnumFields(info.Type);
                     if (fields.Length > 256) throw McpValidation.Schema(name, info.Type, "enum fields exceed256 before schema export");
+                    _minimumEnumNodes += fields.Length;
+                    if (8192L * _minimumEnumNodes > 4 * 1024 * 1024 - 65536) throw McpValidation.Schema(name, info.Type, "finite enum expansion cannot fit startup scratch");
                     int before = Constants;
                     foreach (var field in fields) { AddConstant(field.Name); CheckAttributes(field); }
                     _enumCosts[info.Type] = (fields.Length, Constants - before);

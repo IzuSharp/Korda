@@ -31,8 +31,20 @@ internal sealed class ClassPadding { public int Number { get; set; } }
 internal struct StructRoot { private Padding _hidden; public StructChild? Child { get; set; } }
 internal sealed class StructChild { private Padding _hidden; public int Number { get; set; } }
 internal sealed class ValueContainer { public StructRoot? Value { get; set; } }
+internal sealed class PrimaryDto(int number)
+{
+    public int Number => number;
+    public event Action? Changed;
+    public void Raise() => Changed?.Invoke();
+}
+internal enum ExampleKind { First, Second }
+internal sealed class EnumHolder { public ExampleKind Kind { get; set; } }
+internal sealed record RecordDto(string Text);
 
 [JsonSerializable(typeof(ClassPadding))]
 [JsonSerializable(typeof(StructRoot))]
 [JsonSerializable(typeof(ValueContainer))]
+[JsonSerializable(typeof(PrimaryDto))]
+[JsonSerializable(typeof(EnumHolder))]
+[JsonSerializable(typeof(RecordDto))]
 internal partial class LocalContext : JsonSerializerContext;
