@@ -1,0 +1,18 @@
+[package]
+name = "nativeweave-verification-interop"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+nativeweave-interop-abi = { path = "../../../native/interop/abi" }
+nativeweave-interop-errors = { path = "../../../native/interop/errors" }
+nativeweave-interop-memory = { path = "../../../native/interop/memory" }
+
+[lints]
+workspace = true

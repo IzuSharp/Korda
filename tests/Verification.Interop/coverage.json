@@ -1,0 +1,109 @@
+{
+  "model": "concrete controlled schedules; no abstract model result substituted for product execution",
+  "seed": "0a20c0dec0ffee001",
+  "generator": "splitmix64-a20-v1",
+  "properties": {
+    "wire_records": 5,
+    "layout_values": 31,
+    "generated_extents": 4096,
+    "fixed_extents": 6,
+    "utf8_generated": 1024,
+    "utf8_fixed": 8,
+    "statuses": 16,
+    "error_capacities": 8,
+    "owner_transfers": 128
+  },
+  "schedules": [
+    {
+      "contract": "D04 lifetime",
+      "code": "RaceSuite.Admission",
+      "cases": "4 real lease boundary barriers and 4 acquisition failures; SafeHandle-only logical admission negative",
+      "bounds": {
+        "native_owners": 1,
+        "active_calls": 1,
+        "controlled_threads": 2,
+        "selected_preemption_points": 4
+      }
+    },
+    {
+      "contract": "D07 memory",
+      "code": "PropertySuite.Ownership; RaceSuite.ResultFailures",
+      "cases": "fallible reserve/publication, decoder and adoption compensation, before/after take, retained child backing",
+      "bounds": {
+        "input_bytes": 127,
+        "extra_capacity": 512,
+        "parent_owners": 1,
+        "child_owners": 1
+      }
+    },
+    {
+      "contract": "D05 callbacks",
+      "code": "RaceSuite.CallbackDrain; ChildCases.Run",
+      "cases": "stop before managed entry or during active handler; pending queue discard; synchronous start/decision exception/reentrant self-close; duplicate live cookie and isolated stale-cookie negative",
+      "bounds": {
+        "native_producers": 1,
+        "active_handlers": 1,
+        "queue_items": 1,
+        "retained_bytes": 10,
+        "stale_cookie_attempts": 1024
+      }
+    },
+    {
+      "contract": "D06 async",
+      "code": "RaceSuite.SetupBoundaries; RaceSuite.EnumeratedOrders; ChildCases.Indeterminate",
+      "cases": "7 named setup/start/cancel/copy/take barriers, 2 root faults, synchronous pre-canceled registration; six cancel/terminal/Dispose permutations times four drain positions times three outcomes; isolated indeterminate start quarantine",
+      "bounds": {
+        "operations": 1,
+        "controlled_actor_threads": 2,
+        "held_source_leases": 1,
+        "control_leases": 1,
+        "mailbox_slots": 1,
+        "finite_orders": 72,
+        "action_positions": 3,
+        "drain_positions": 4
+      }
+    },
+    {
+      "contract": "D08 errors",
+      "code": "PropertySuite.Errors/Utf8; RaceSuite.ResultFailures/CallbackDrain",
+      "cases": "complete/short/malformed fixed diagnostics, strict UTF8 independent decoding, managed mapping/handler faults and cancellation identity",
+      "bounds": {
+        "diagnostic_record_bytes": 64,
+        "utf8_input_bytes": 48,
+        "utf8_limit_bytes": 64
+      }
+    },
+    {
+      "contract": "D09 concurrency",
+      "code": "RaceSuite.Mailbox",
+      "cases": "actual A06/A07 dirty/scheduled mailbox at four wake positions and two rejected enqueue attempts",
+      "bounds": {
+        "queued_records": 1,
+        "controlled_threads": 2,
+        "wake_positions": 4,
+        "rejected_attempts": 2
+      }
+    }
+  ],
+  "execution_limits": {
+    "barrier_seconds": 10,
+    "managed_child_seconds": 45,
+    "fatal_child_seconds": 30,
+    "fuzz_units": 20000,
+    "fuzz_seed": 20201117,
+    "fuzz_input_bytes": 256,
+    "fuzz_input_timeout_seconds": 5,
+    "fuzz_rss_limit_mb": 2048,
+    "fuzz_parent_seconds": 180,
+    "minimization_runs": 1000,
+    "minimization_parent_seconds": 90
+  },
+  "non_exhaustive": [
+    "OS scheduling inside an atomic gate or Rust/CLR helper is not enumerated",
+    "GC.Collect/finalizer pressure is actual but not a controlled GC scheduler",
+    "No weak-memory model or arbitrary multi-operation interleaving proof",
+    "D09 executor worker joins/started blocking tasks belong to accepted A08; this A20 profile covers the consumed coordinator only",
+    "Quarantine children intentionally retain uncertain roots until process exit and are never counted as acknowledged retirement"
+  ],
+  "sanitizer_scope": "C decoder/oracles and fatal driver use ASan/UBSan; stable Rust, CLR and Native AOT runtime are uninstrumented. LSan omission requires an explicit flag and remains recorded. Normal fuzz uses allocated valid memory only; numeric extent addresses are never dereferenced."
+}

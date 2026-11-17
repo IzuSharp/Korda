@@ -1,0 +1,16 @@
+{
+  "task": "A20",
+  "public_runtime_surface": [],
+  "distribution": "Internal maintainer verification assembly; not part of mandatory Core or a new NuGet package.",
+  "xml_applicability": "Internal oracle, native borrowing and bounded schedule responsibilities are documented in source XML and the guide. The shared compiled API/XML checker enforces zero exported symbols and generated reference consistency.",
+  "profile": "Linux x64 JIT and actual Native AOT over accepted real Core C/Rust/C# implementations.",
+  "unsupported": [
+    "Full Rust/CLR sanitizer instrumentation",
+    "Loom/Miri/Kani product proof",
+    "Unbounded or weak-memory schedule exhaustion"
+  ],
+  "deferred": [
+    "win-x64"
+  ],
+  "shared_prerequisites": "A13 optional Cargo member/lock and existing Core/Abi friend grants; no consumer Cargo build target."
+}

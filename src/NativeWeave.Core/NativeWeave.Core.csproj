@@ -12,7 +12,15 @@
   <ItemGroup>
     <Compile Include="../Interop.Negotiation/**/*.cs;../Interop.Errors/**/*.cs" Exclude="../Interop.Negotiation/**/obj/**/*.cs;../Interop.Negotiation/**/bin/**/*.cs;../Interop.Errors/**/obj/**/*.cs;../Interop.Errors/**/bin/**/*.cs" />
     <Compile Include="../Interop.Lifetime/**/*.cs;../Interop.Memory/**/*.cs" Exclude="../Interop.Lifetime/**/obj/**/*.cs;../Interop.Lifetime/**/bin/**/*.cs;../Interop.Memory/**/obj/**/*.cs;../Interop.Memory/**/bin/**/*.cs" />
+    <Compile Include="../Interop.Callbacks/**/*.cs" Exclude="../Interop.Callbacks/**/obj/**/*.cs;../Interop.Callbacks/**/bin/**/*.cs" />
+    <Compile Include="../Interop.Async/**/*.cs" Exclude="../Interop.Async/**/obj/**/*.cs;../Interop.Async/**/bin/**/*.cs" />
     <ProjectReference Include="../Interop.Abi/Interop.Abi.csproj" />
+    <InternalsVisibleTo Include="NativeWeave.Engines.SyncProof" />
+    <InternalsVisibleTo Include="NativeWeave.Verification.Interop" />
+    <InternalsVisibleTo Include="NativeWeave.Interop.Async.Tests" />
+    <InternalsVisibleTo Include="NativeWeave.Interop.Async.Sample" />
+    <InternalsVisibleTo Include="NativeWeave.Interop.Callbacks.Tests" />
+    <InternalsVisibleTo Include="NativeWeave.Interop.Callbacks.Sample" />
     <InternalsVisibleTo Include="NativeWeave.Interop.Negotiation.Tests" />
     <InternalsVisibleTo Include="NativeWeave.Interop.Errors.Tests" />
     <InternalsVisibleTo Include="NativeWeave.Interop.Errors.Sample" />
