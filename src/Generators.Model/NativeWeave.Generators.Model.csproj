@@ -12,6 +12,5 @@
     <!-- Maintainer tools reuse the validated A09 model without widening its public API. -->
     <InternalsVisibleTo Include="NativeWeave.Generators.CSharp" />
     <InternalsVisibleTo Include="NativeWeave.Generators.Rust" />
-    <InternalsVisibleTo Include="NativeWeave.Analyzers.ContractCheck" />
   </ItemGroup>
 </Project>
