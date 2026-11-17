@@ -33,6 +33,11 @@ both Roslyn's semantic driver and the .NET SDK 11.0.100 CLI loader. Visual Studi
 other IDE hosts, other compiler versions and Windows remain unexecuted. Roslyn
 dependencies are supplied by that compiler host, not copied into the application's
 runtime graph.
+The source-project compiler host fixes its own non-AOT, RID-independent build
+properties even when its consumer restores/publishes with `PublishAot=true`.
+This prevents a consumer's native target from being applied to the .NET Standard
+compiler plug-in. Both the source-project and independent-package consumers execute
+as Native AOT in verification.
 
 Future provider/Server facades retain an exact owned analyzer dependency and expose
 its transitive build assets. An application need not register the analyzer again.
@@ -192,6 +197,9 @@ fixtures verify exact spans/IDs/severity, safe alternatives, unrelated source,
 metadata drift, one-field edits and cancellation. Package tests prove one compiler
 payload inclusion, compile-negative activation, actual native JIT/AOT execution and
 unsuppressed framework warnings. Independent review is recorded separately in Plan.
+Unknown parameter direction/borrow-end values and unknown owner-release executors
+fail at the metadata row using A09's finite vocabulary; they cannot be interpreted
+as a weaker lifetime profile. The analyzer does not duplicate A09's full normalizer.
 
 All analysis allocation, hashing and semantic traversal is build-time cost; normal
 application execution adds no analyzer allocation, FFI call, runtime scan, pin or

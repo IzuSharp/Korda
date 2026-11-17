@@ -1,5 +1,13 @@
-<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk" TreatAsLocalProperty="PublishAot;PublishTrimmed;RuntimeIdentifier;RuntimeIdentifiers;SelfContained;IsAotCompatible;NuGetLockFilePath">
   <PropertyGroup>
+    <!-- This assembly runs in the compiler host, even during a consumer's AOT restore. -->
+    <PublishAot>false</PublishAot>
+    <PublishTrimmed>false</PublishTrimmed>
+    <RuntimeIdentifier></RuntimeIdentifier>
+    <RuntimeIdentifiers></RuntimeIdentifiers>
+    <SelfContained>false</SelfContained>
+    <IsAotCompatible>false</IsAotCompatible>
+    <NuGetLockFilePath>$(MSBuildProjectDirectory)/packages.lock.json</NuGetLockFilePath>
     <TargetFramework>netstandard2.0</TargetFramework>
     <AssemblyName>NativeWeave.Analyzers</AssemblyName>
     <ImplicitUsings>disable</ImplicitUsings>

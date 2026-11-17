@@ -129,6 +129,11 @@ internal sealed class Inputs
                         (cells[7] != "0" && cells[7] != "1") || (cells[8] != "0" && cells[8] != "1") ||
                         !uint.TryParse(cells[9], NumberStyles.None, CultureInfo.InvariantCulture, out _))
                     { Error(Rules.Abi, line, "Duplicate parameter or invalid finite lifetime flags; regenerate from A09."); break; }
+                    // Keep the finite A09 vocabulary at this compiler boundary.
+                    // Unknown future values must not silently weaken lifetime analysis.
+                    if (cells[4] is not ("in" or "out" or "inout") ||
+                        cells[5] is not ("none" or "call" or "callback" or "owner" or "retirement" or "transfer-success"))
+                        Error(Rules.Abi, line, "Unknown parameter direction or borrow_end; regenerate with the matching A09/A10 contract.");
                     export.Lifetimes.Add(new ParameterContract(cells[2], cells[5], cells[8] == "1"));
                     break;
                 case "record":
@@ -147,6 +152,8 @@ internal sealed class Inputs
                     if (!Count(5)) break;
                     if (!identifiers.Add("owner:" + cells[1]) || cells[2].Length == 0)
                         Error(Rules.Owner, line, "Duplicate owner or missing creating-module destructor; regenerate from A09.");
+                    if (cells[4] is not ("calling-thread" or "owner-thread" or "runtime" or "external-driver"))
+                        Error(Rules.Owner, line, "Unknown owner release executor; regenerate with the matching A09/A10 contract.");
                     owners.Add((cells[1], cells[2], cells[3], line));
                     break;
                 case "callback":
