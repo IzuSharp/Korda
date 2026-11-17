@@ -1,0 +1,6 @@
+{
+  "task": "A03",
+  "design_commit": "c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9",
+  "symbols": [],
+  "applicability": "Internal resource ownership only; no new public API. A04 owns NativeBuffer."
+}

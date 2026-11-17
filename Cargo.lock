@@ -907,6 +907,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "nativeweave-interop-lifetime"
+version = "0.1.0"
+dependencies = [
+ "nativeweave-interop-abi",
+ "nativeweave-interop-errors",
+]
+
+[[package]]
 name = "nativeweave-query-binding"
 version = "0.1.0"
 dependencies = [

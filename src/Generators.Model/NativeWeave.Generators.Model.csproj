@@ -9,5 +9,8 @@
   <ItemGroup>
     <InternalsVisibleTo Include="NativeWeave.Generators.Model.Tests" />
     <InternalsVisibleTo Include="NativeWeave.Generators.Model.Sample" />
+    <!-- Maintainer tools reuse the validated A09 model without widening its public API. -->
+    <InternalsVisibleTo Include="NativeWeave.Generators.CSharp" />
+    <InternalsVisibleTo Include="NativeWeave.Generators.Rust" />
   </ItemGroup>
 </Project>
