@@ -1,0 +1,6 @@
+{
+  "task": "A07",
+  "design_commit": "c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9",
+  "symbols": [],
+  "applicability": "Internal Task bridge used by exact domain Async methods. Existing EngineLoadException, EngineLoadFailure and NativeEngineException policies remain owned by A02/A05; no new public operation, generic runtime or package is introduced."
+}

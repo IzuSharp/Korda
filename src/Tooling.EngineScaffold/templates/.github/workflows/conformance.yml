@@ -1,0 +1,17 @@
+name: Engine conformance
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Require reviewed maintainer inputs
+        run: |
+          test -d reviewed-feed
+          test -d pinned-nativeweave-sdk
+          python3 eng/verify.py --feed reviewed-feed --sdk-root pinned-nativeweave-sdk
