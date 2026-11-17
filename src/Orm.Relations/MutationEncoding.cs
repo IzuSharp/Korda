@@ -5,6 +5,17 @@ namespace NativeWeave.Database;
 
 internal static class MutationEncoding
 {
+    internal static ColumnValue[] Snapshot<TEntity>(DataSource source, Table<TEntity> table, TEntity entity, long extraControlBytes = 0) where TEntity : class
+    {
+        var columns = table.Columns.Count(column => !column.Definition.Options.IsGenerated);
+        if (columns > source.Limits.MaxParameters || columns > (source.Limits.MaxQueryNodes - 1) / 2)
+            throw new DatabaseException("The entity exceeds the finite parameter/node budget.", DatabaseErrorKind.ResourceLimit);
+        // One row: header + descriptors + cells, then the exact table/value
+        // control envelope. Charge this fixed demand before invoking its writer.
+        var available = source.Limits.MaxParameterBytes - (96L + columns * 40L + 52L + extraControlBytes);
+        if (available < 0) throw new DatabaseException("The entity shape exceeds the finite byte budget.", DatabaseErrorKind.ResourceLimit);
+        return RowSnapshot.Capture(table, entity, checked((int)available));
+    }
     internal static void CheckKey<TEntity>(Table<TEntity> table, EntityKey<TEntity> key) where TEntity : class
     {
         ArgumentNullException.ThrowIfNull(table); ArgumentNullException.ThrowIfNull(key);
@@ -19,6 +30,10 @@ internal static class MutationEncoding
         var parameters = checked(rows.Count * descriptors.Length);
         if (parameters > source.Limits.MaxParameters || parameters > (source.Limits.MaxQueryNodes - 1) / 2)
             throw new DatabaseException("Mutation parameter/node demand exceeds the finite source limits.", DatabaseErrorKind.ResourceLimit);
+        long encodedBytes = checked(96L + descriptors.Length * 16L + parameters * 24L);
+        foreach (var row in rows)
+            foreach (var cell in row) encodedBytes = checked(encodedBytes + (cell.Bytes?.Length ?? 0));
+        if (encodedBytes > source.Limits.MaxParameterBytes) throw new DatabaseException("Mutation bytes exceed the finite source limit.", DatabaseErrorKind.ResourceLimit);
         var cells = new ReadOnlyMemory<byte>?[parameters]; var index = 0;
         foreach (var row in rows)
         {
@@ -33,15 +48,13 @@ internal static class MutationEncoding
                 cells[index++] = cell.Bytes is null ? (ReadOnlyMemory<byte>?)null : new ReadOnlyMemory<byte>(cell.Bytes);
             }
         }
-        var bytes = DbWire.Encode(new(PayloadKind.MutationValues, source.Binding.SemanticProfile, Convert.FromHexString(table.MetadataHash), table.Identity.Id, 0, descriptors), checked((uint)rows.Count), cells);
-        if (bytes.Length > source.Limits.MaxParameterBytes) throw new DatabaseException("Mutation bytes exceed the finite source limit.", DatabaseErrorKind.ResourceLimit);
-        return bytes;
+        return DbWire.Encode(new(PayloadKind.MutationValues, source.Binding.SemanticProfile, Convert.FromHexString(table.MetadataHash), table.Identity.Id, 0, descriptors), checked((uint)rows.Count), cells);
     }
     internal static byte[] Record<TEntity>(DataSource source, Table<TEntity> table, params ControlField[] fields) where TEntity : class
     {
-        var bytes = ControlRecord.Encode(4, [new(1, 1, ControlRecord.U32(table.Identity.Id)), .. fields]);
-        if (bytes.Length > source.Limits.MaxParameterBytes) throw new DatabaseException("Mutation envelope exceeds the finite source limit.", DatabaseErrorKind.ResourceLimit);
-        return bytes;
+        var encodedBytes = checked(16L + (fields.Length + 1) * 16L + 4L + fields.Sum(field => (long)field.Bytes.Length));
+        if (encodedBytes > source.Limits.MaxParameterBytes) throw new DatabaseException("Mutation envelope exceeds the finite source limit.", DatabaseErrorKind.ResourceLimit);
+        return ControlRecord.Encode(4, [new(1, 1, ControlRecord.U32(table.Identity.Id)), .. fields]);
     }
     internal static ControlField Bytes(ushort id, byte[] value) => new(id, 5, value);
     internal static unsafe nint Create(DataSession session, DatabaseOwner model, uint kind, byte[] payload)

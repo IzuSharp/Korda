@@ -170,8 +170,37 @@ their exact required/forbidden control fields before admission. Upsert kind 6
 uses the independent field 8 update payload. SQLx receives parameters through the
 existing single B07 codec decoder, preserving typed NULL and provider semantics.
 
-Each entity snapshot owns per-cell bytes. Each finite batch assembles a canonical
-db-wire value record and control record. The native Created call validates and
+Each entity snapshot reserves its fixed wire/control overhead before invoking the
+writer, then charges each encoded cell against the remaining row bytes. Text
+preflights strict UTF8 byte count, binary values preflight length and scalar codecs
+preflight fixed widths before copying. The bounded JSON path retains the explicit
+static `JsonTypeInfo` and selected encoding/indentation options. It uses the SDK's
+`Utf8JsonWriter` over a finite output writer, with a delegating encoder that checks
+token length before the SDK allocates escaping scratch. Nullable wrappers preserve
+the same bounded path and SQL NULL uses no cell payload. Existing ordinary codec
+and `Changes`/key construction semantics remain unchanged; wire and outer control
+records check aggregate size before making additional copies.
+
+For a JSON cell with remaining payload budget `R`, the output backing capacity is
+at most `6R + 4096` bytes to accommodate the SDK's conservative string/growth hints;
+only at most `R` committed output bytes are accepted. A resize can temporarily
+retain both old and new backing arrays, and the final exact copy can coexist with
+the backing array. SDK escaping scratch also coexists during string encoding; its
+requested capacity is bounded by the prechecked token length, with SDK pool
+rounding applying. The already buffered bulk rows and current row remain live
+during this work. These overlapping allocations belong in any measured peak.
+Application entity constructors, property accessors and custom JSON converter
+allocations remain application-owned. The tests specifically verify that oversized
+string, binary, ordinary/escaped JSON and aggregate-row rejection avoid copying
+their large inputs, and that valid near-limit JSON retains exact codec bytes.
+The logical parameter ceiling and a provider's physical input grant are distinct:
+SQLite's existing nonwaiting grant also charges SQL and simultaneous input copies.
+A value fitting the logical ceiling can therefore receive `ResourceLimit` before
+statement dispatch. The real-provider tests separately cover this rejection and
+successful JSON round trips within the available physical grant.
+
+Each finite batch assembles a canonical db-wire value record and control record.
+The native Created call validates and
 copies borrowed input before returning; native SeaQuery parameter ordering then
 produces the provider's owned argument record. Input enumerators cannot keep an
 unbounded backlog inside the bulk operation. One batch pays one mutation creation,

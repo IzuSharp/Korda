@@ -52,7 +52,7 @@ public sealed partial class DataSession
     public Task<long> InsertAsync<TEntity>(Table<TEntity> table, TEntity entity, CancellationToken cancellationToken = default) where TEntity : class
     {
         ArgumentNullException.ThrowIfNull(table); CheckOpen();
-        var values = MutationEncoding.Values(Source, table, [RowSnapshot.Capture(table, entity)]);
+        var values = MutationEncoding.Values(Source, table, [MutationEncoding.Snapshot(Source, table, entity)]);
         return Mutate(table, 0, MutationEncoding.Record(Source, table, MutationEncoding.Bytes(2, values)), cancellationToken);
     }
     /// <summary>Snapshots one entity and materializes exactly one native INSERT RETURNING row.</summary>
@@ -69,7 +69,7 @@ public sealed partial class DataSession
     public Task<T> InsertReturningAsync<TEntity, T>(Table<TEntity> table, TEntity entity, Projection<T> returning, CancellationToken cancellationToken = default) where TEntity : class
     {
         ArgumentNullException.ThrowIfNull(table); ArgumentNullException.ThrowIfNull(returning); CheckOpen(); Source.Capabilities.Require("db.returning.v1");
-        var values = MutationEncoding.Values(Source, table, [RowSnapshot.Capture(table, entity)]);
+        var values = MutationEncoding.Values(Source, table, [MutationEncoding.Snapshot(Source, table, entity, 20)]);
         var projection = Source.RegisterProjection(returning); var codecs = returning.Fields.Select(f => Source.BindCodec(f.Descriptor)).ToArray();
         var payload = MutationEncoding.Record(Source, table, MutationEncoding.Bytes(2, values), new(7, 1, ControlRecord.U32(projection)));
         var model = Source.RegisterModel(table);
@@ -153,8 +153,9 @@ public sealed partial class DataSession
     public Task<long> UpsertAsync<TEntity>(Table<TEntity> table, TEntity entity, ConflictTarget<TEntity> conflict, Changes<TEntity> update, CancellationToken cancellationToken = default) where TEntity : class
     {
         ArgumentNullException.ThrowIfNull(table); ArgumentNullException.ThrowIfNull(conflict); ArgumentNullException.ThrowIfNull(update); CheckOpen(); Source.Capabilities.Require("db.upsert.v1");
-        var insert = RowSnapshot.Capture(table, entity); var assignments = update.Snapshot(table); var target = conflict.Encode(table, Source);
-        return Mutate(table, 6, MutationEncoding.Record(Source, table, MutationEncoding.Bytes(2, MutationEncoding.Values(Source, table, [insert])), target, MutationEncoding.Bytes(8, MutationEncoding.Values(Source, table, [assignments]))), cancellationToken);
+        var assignments = MutationEncoding.Values(Source, table, [update.Snapshot(table)]); var target = conflict.Encode(table, Source);
+        var insert = MutationEncoding.Snapshot(Source, table, entity, 32L + assignments.Length + target.Bytes.Length);
+        return Mutate(table, 6, MutationEncoding.Record(Source, table, MutationEncoding.Bytes(2, MutationEncoding.Values(Source, table, [insert])), target, MutationEncoding.Bytes(8, assignments)), cancellationToken);
     }
     private Task<long> Mutate<TEntity>(Table<TEntity> table, uint kind, byte[] payload, CancellationToken token, BulkSessionLease? bulk = null) where TEntity : class
     { var model = Source.RegisterModel(table); return Source.Start(() => AdmitOperation(() => MutationEncoding.Create(this, model, kind, payload), bulk), operation => NativeHost.TakeCount(Source.Binding, operation), token); }

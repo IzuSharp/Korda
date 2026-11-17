@@ -1,5 +1,8 @@
 <Solution>
   <Folder Name="/src/">
+    <Project Path="src/Data.NativeHost/NativeWeave.Database.csproj" />
+    <Project Path="src/Data.NativeHost/DependencyInjection/NativeWeave.Database.DependencyInjection.csproj" />
+    <Project Path="src/Query.Generator/NativeWeave.Query.Generator.csproj" />
     <Project Path="src/Engines.SyncProof/NativeWeave.Engines.SyncProof.csproj" />
     <Project Path="src/Engines.AsyncProof/NativeWeave.Engines.AsyncProof.csproj" />
     <Project Path="src/Verification.ExtensionProof/NativeWeave.Verification.ExtensionProof.csproj" />
@@ -49,6 +52,13 @@
     <Project Path="samples/api/verification-compatibility/CompatibilitySample.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Data.NativeHost/NativeWeave.Data.NativeHost.Tests.csproj" />
+    <Project Path="tests/Data.Migrations/NativeWeave.Data.Migrations.Tests.csproj" />
+    <Project Path="tests/Query.Native/NativeWeave.Query.Native.Tests.csproj" />
+    <Project Path="tests/Data.Materialization/NativeWeave.Data.Materialization.Tests.csproj" />
+    <Project Path="tests/Query.Generator/Query.Generator.Tests.csproj" />
+    <Project Path="tests/Query.Fluent/NativeWeave.Query.Fluent.Tests.csproj" />
+    <Project Path="tests/Orm.Relations/NativeWeave.Orm.Relations.Tests.csproj" />
     <Project Path="tests/Interop.Callbacks/Interop.Callbacks.Tests.csproj" />
     <Project Path="tests/Interop.Async/Interop.Async.Tests.csproj" />
     <Project Path="tests/Engines.SyncProof/NativeWeave.Engines.SyncProof.Tests.csproj" />
@@ -76,6 +86,8 @@
     <Project Path="tests/Analyzers/NativeWeave.Analyzers.Tests.csproj" />
   </Folder>
   <Folder Name="/tools/">
+    <Project Path="tests/Query.Generator/ApiCheck/ApiCheck.csproj" />
+    <Project Path="tests/Query.Fluent/ApiCheck/ApiCheck.csproj" />
     <Project Path="tools/ApiDocs/ApiDocs.csproj" />
     <Project Path="tests/Data.Abstractions/ApiCheck/ApiCheck.csproj" />
     <Project Path="tests/Benchmarks.Harness/AssemblyInventory/AssemblyInventory.csproj" />

@@ -60,7 +60,7 @@ for name, project, assembly, folders in [
     config['baselines'] = [str(baseline)]
     path.write_text(json.dumps(config, indent=2) + '\n')
     subprocess.run([*command, '--write'], check=True)
-    summaries.append({'assembly': assembly, 'exact_signatures': len(actual), 'B14_signatures': sum(required(entry) for entry in actual), 'XML_complete': True, 'reference_complete': True})
+    summaries.append({'assembly': assembly, 'exact_signatures': len(actual), 'B14_signatures': sum(required(expected[entry['id']]) for entry in actual), 'XML_complete': True, 'reference_complete': True})
 missing = [entry['id'] for entry in expected.values() if required(entry) and entry['id'] not in all_ids]
 assert not missing, missing
 summary = {'design_commit': pin, 'assemblies': summaries, 'required_B14_symbols': sum(required(entry) for entry in expected.values()), 'missing': missing}

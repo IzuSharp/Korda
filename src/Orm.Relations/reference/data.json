@@ -1,0 +1,750 @@
+{
+  "assembly": "NativeWeave.Data, Version=0.1.0.0, Culture=neutral, PublicKeyToken=null",
+  "symbols": [
+    {
+      "id": "F:NativeWeave.Data.DatabaseErrorKind.ConcurrentUse",
+      "signature": "NativeWeave.Data.DatabaseErrorKind.ConcurrentUse = 6",
+      "implicit_member": false
+    },
+    {
+      "id": "F:NativeWeave.Data.DatabaseErrorKind.Constraint",
+      "signature": "NativeWeave.Data.DatabaseErrorKind.Constraint = 1",
+      "implicit_member": false
+    },
+    {
+      "id": "F:NativeWeave.Data.DatabaseErrorKind.Conversion",
+      "signature": "NativeWeave.Data.DatabaseErrorKind.Conversion = 2",
+      "implicit_member": false
+    },
+    {
+      "id": "F:NativeWeave.Data.DatabaseErrorKind.InvalidState",
+      "signature": "NativeWeave.Data.DatabaseErrorKind.InvalidState = 7",
+      "implicit_member": false
+    },
+    {
+      "id": "F:NativeWeave.Data.DatabaseErrorKind.Provider",
+      "signature": "NativeWeave.Data.DatabaseErrorKind.Provider = 0",
+      "implicit_member": false
+    },
+    {
+      "id": "F:NativeWeave.Data.DatabaseErrorKind.ResourceLimit",
+      "signature": "NativeWeave.Data.DatabaseErrorKind.ResourceLimit = 5",
+      "implicit_member": false
+    },
+    {
+      "id": "F:NativeWeave.Data.DatabaseErrorKind.ShapeMismatch",
+      "signature": "NativeWeave.Data.DatabaseErrorKind.ShapeMismatch = 3",
+      "implicit_member": false
+    },
+    {
+      "id": "F:NativeWeave.Data.DatabaseErrorKind.UnknownOutcome",
+      "signature": "NativeWeave.Data.DatabaseErrorKind.UnknownOutcome = 8",
+      "implicit_member": false
+    },
+    {
+      "id": "F:NativeWeave.Data.DatabaseErrorKind.UnsupportedCapability",
+      "signature": "NativeWeave.Data.DatabaseErrorKind.UnsupportedCapability = 4",
+      "implicit_member": false
+    },
+    {
+      "id": "F:NativeWeave.Data.SqlCommandKind.Mutation",
+      "signature": "NativeWeave.Data.SqlCommandKind.Mutation = 1",
+      "implicit_member": false
+    },
+    {
+      "id": "F:NativeWeave.Data.SqlCommandKind.Query",
+      "signature": "NativeWeave.Data.SqlCommandKind.Query = 0",
+      "implicit_member": false
+    },
+    {
+      "id": "F:NativeWeave.Data.SqlCommandKind.SessionMutating",
+      "signature": "NativeWeave.Data.SqlCommandKind.SessionMutating = 2",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Data.Changes\u00601.#ctor",
+      "signature": "public NativeWeave.Data.Changes\u003CTEntity\u003E.Changes()",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Data.Changes\u00601.Set\u0060\u00601(NativeWeave.Data.Column{\u00600,\u0060\u00600},\u0060\u00600)",
+      "signature": "public NativeWeave.Data.Changes\u003CTEntity\u003E NativeWeave.Data.Changes\u003CTEntity\u003E.Set\u003CT\u003E(NativeWeave.Data.Column\u003CTEntity, T\u003E column, T value)",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Data.Changes\u00601.Unset\u0060\u00601(NativeWeave.Data.Column{\u00600,\u0060\u00600})",
+      "signature": "public NativeWeave.Data.Changes\u003CTEntity\u003E NativeWeave.Data.Changes\u003CTEntity\u003E.Unset\u003CT\u003E(NativeWeave.Data.Column\u003CTEntity, T\u003E column)",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Data.Codecs.Decimal(System.Byte,System.Byte)",
+      "signature": "public static NativeWeave.Data.ValueCodec\u003Cdecimal\u003E NativeWeave.Data.Codecs.Decimal(byte precision, byte scale)",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Data.Codecs.EnumInt32\u0060\u00601",
+      "signature": "public static NativeWeave.Data.ValueCodec\u003CTEnum\u003E NativeWeave.Data.Codecs.EnumInt32\u003CTEnum\u003E() where TEnum : struct, System.Enum",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Data.Codecs.FixedScaleMoney(System.Byte)",
+      "signature": "public static NativeWeave.Data.ValueCodec\u003Cdecimal\u003E NativeWeave.Data.Codecs.FixedScaleMoney(byte scale)",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Data.Codecs.Json\u0060\u00601(System.Text.Json.Serialization.Metadata.JsonTypeInfo{\u0060\u00600})",
+      "signature": "public static NativeWeave.Data.ValueCodec\u003CT\u003E NativeWeave.Data.Codecs.Json\u003CT\u003E(System.Text.Json.Serialization.Metadata.JsonTypeInfo\u003CT\u003E typeInfo)",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Data.Codecs.NullableReference\u0060\u00601(NativeWeave.Data.ValueCodec{\u0060\u00600})",
+      "signature": "public static NativeWeave.Data.ValueCodec\u003CT?\u003E NativeWeave.Data.Codecs.NullableReference\u003CT\u003E(NativeWeave.Data.ValueCodec\u003CT\u003E codec) where T : class",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Data.Codecs.Nullable\u0060\u00601(NativeWeave.Data.ValueCodec{\u0060\u00600})",
+      "signature": "public static NativeWeave.Data.ValueCodec\u003CT?\u003E NativeWeave.Data.Codecs.Nullable\u003CT\u003E(NativeWeave.Data.ValueCodec\u003CT\u003E codec) where T : struct",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Data.ColumnOptions.#ctor",
+      "signature": "public NativeWeave.Data.ColumnOptions.ColumnOptions()",
+      "implicit_member": true
+    },
+    {
+      "id": "M:NativeWeave.Data.ColumnOptions.Equals(NativeWeave.Data.ColumnOptions)",
+      "signature": "public bool NativeWeave.Data.ColumnOptions.Equals(NativeWeave.Data.ColumnOptions? other)",
+      "implicit_member": true
+    },
+    {
+      "id": "M:NativeWeave.Data.ColumnOptions.Equals(System.Object)",
+      "signature": "public override bool NativeWeave.Data.ColumnOptions.Equals(object? obj)",
+      "implicit_member": true
+    },
+    {
+      "id": "M:NativeWeave.Data.ColumnOptions.GetHashCode",
+      "signature": "public override int NativeWeave.Data.ColumnOptions.GetHashCode()",
+      "implicit_member": true
+    },
+    {
+      "id": "M:NativeWeave.Data.ColumnOptions.ToString",
+      "signature": "public override string NativeWeave.Data.ColumnOptions.ToString()",
+      "implicit_member": true
+    },
+    {
+      "id": "M:NativeWeave.Data.ColumnOptions.op_Equality(NativeWeave.Data.ColumnOptions,NativeWeave.Data.ColumnOptions)",
+      "signature": "public static bool NativeWeave.Data.ColumnOptions.operator ==(NativeWeave.Data.ColumnOptions? left, NativeWeave.Data.ColumnOptions? right)",
+      "implicit_member": true
+    },
+    {
+      "id": "M:NativeWeave.Data.ColumnOptions.op_Inequality(NativeWeave.Data.ColumnOptions,NativeWeave.Data.ColumnOptions)",
+      "signature": "public static bool NativeWeave.Data.ColumnOptions.operator !=(NativeWeave.Data.ColumnOptions? left, NativeWeave.Data.ColumnOptions? right)",
+      "implicit_member": true
+    },
+    {
+      "id": "M:NativeWeave.Data.ColumnOptions.{Clone}$",
+      "signature": "public NativeWeave.Data.ColumnOptions NativeWeave.Data.ColumnOptions.\u003CClone\u003E$()",
+      "implicit_member": true
+    },
+    {
+      "id": "M:NativeWeave.Data.ConcurrencyCheck\u00601.#ctor",
+      "signature": "public NativeWeave.Data.ConcurrencyCheck\u003CTEntity\u003E.ConcurrencyCheck()",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Data.ConcurrencyCheck\u00601.Expect\u0060\u00601(NativeWeave.Data.Column{\u00600,\u0060\u00600},\u0060\u00600)",
+      "signature": "public NativeWeave.Data.ConcurrencyCheck\u003CTEntity\u003E NativeWeave.Data.ConcurrencyCheck\u003CTEntity\u003E.Expect\u003CT\u003E(NativeWeave.Data.Column\u003CTEntity, T\u003E column, T value)",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Data.ConcurrencyConflictException.#ctor(System.String,System.Int64,System.Int64)",
+      "signature": "public NativeWeave.Data.ConcurrencyConflictException.ConcurrencyConflictException(string message, long expectedRows, long actualRows)",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Data.DatabaseCapabilityException.#ctor(System.String,System.String)",
+      "signature": "public NativeWeave.Data.DatabaseCapabilityException.DatabaseCapabilityException(string capability, string provider)",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Data.DatabaseErrorKind.#ctor",
+      "signature": "public NativeWeave.Data.DatabaseErrorKind.DatabaseErrorKind()",
+      "implicit_member": true
+    },
+    {
+      "id": "M:NativeWeave.Data.DatabaseException.#ctor(System.String,NativeWeave.Data.DatabaseErrorKind,System.String,System.UInt64,System.Exception)",
+      "signature": "public NativeWeave.Data.DatabaseException.DatabaseException(string message, NativeWeave.Data.DatabaseErrorKind kind, string? providerCode = null, ulong correlationId = 0, System.Exception? innerException = null)",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Data.EntityKey\u00601.And\u0060\u00601(NativeWeave.Data.Column{\u00600,\u0060\u00600},\u0060\u00600)",
+      "signature": "public NativeWeave.Data.EntityKey\u003CTEntity\u003E NativeWeave.Data.EntityKey\u003CTEntity\u003E.And\u003CT\u003E(NativeWeave.Data.Column\u003CTEntity, T\u003E column, T value)",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Data.EntityWriter\u00601.#ctor(System.Object,System.IntPtr)",
+      "signature": "public NativeWeave.Data.EntityWriter\u003CT\u003E.EntityWriter(object @object, nint method)",
+      "implicit_member": true
+    },
+    {
+      "id": "M:NativeWeave.Data.EntityWriter\u00601.BeginInvoke(NativeWeave.Data.RowWriter,\u00600,System.AsyncCallback,System.Object)",
+      "signature": "public virtual System.IAsyncResult NativeWeave.Data.EntityWriter\u003CT\u003E.BeginInvoke(NativeWeave.Data.RowWriter row, T value, System.AsyncCallback callback, object @object)",
+      "implicit_member": true
+    },
+    {
+      "id": "M:NativeWeave.Data.EntityWriter\u00601.EndInvoke(System.IAsyncResult)",
+      "signature": "public virtual void NativeWeave.Data.EntityWriter\u003CT\u003E.EndInvoke(System.IAsyncResult result)",
+      "implicit_member": true
+    },
+    {
+      "id": "M:NativeWeave.Data.EntityWriter\u00601.Invoke(NativeWeave.Data.RowWriter,\u00600)",
+      "signature": "public virtual void NativeWeave.Data.EntityWriter\u003CT\u003E.Invoke(NativeWeave.Data.RowWriter row, T value)",
+      "implicit_member": true
+    },
+    {
+      "id": "M:NativeWeave.Data.Projection\u00601.Create(System.ReadOnlySpan{NativeWeave.Data.ResultField},NativeWeave.Data.RowMaterializer{\u00600})",
+      "signature": "public static NativeWeave.Data.Projection\u003CT\u003E NativeWeave.Data.Projection\u003CT\u003E.Create(System.ReadOnlySpan\u003CNativeWeave.Data.ResultField\u003E fields, NativeWeave.Data.RowMaterializer\u003CT\u003E materializer)",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Data.Relation\u00602.AndOptionalReference\u0060\u00601(NativeWeave.Data.Column{\u00600,\u0060\u00600},NativeWeave.Data.Column{\u00601,\u0060\u00600})",
+      "signature": "public NativeWeave.Data.Relation\u003CTParent, TChild\u003E NativeWeave.Data.Relation\u003CTParent, TChild\u003E.AndOptionalReference\u003CT\u003E(NativeWeave.Data.Column\u003CTParent, T\u003E parentKey, NativeWeave.Data.Column\u003CTChild, T?\u003E foreignKey) where T : class",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Data.Relation\u00602.AndOptional\u0060\u00601(NativeWeave.Data.Column{\u00600,\u0060\u00600},NativeWeave.Data.Column{\u00601,System.Nullable{\u0060\u00600}})",
+      "signature": "public NativeWeave.Data.Relation\u003CTParent, TChild\u003E NativeWeave.Data.Relation\u003CTParent, TChild\u003E.AndOptional\u003CT\u003E(NativeWeave.Data.Column\u003CTParent, T\u003E parentKey, NativeWeave.Data.Column\u003CTChild, T?\u003E foreignKey) where T : struct",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Data.Relation\u00602.And\u0060\u00601(NativeWeave.Data.Column{\u00600,\u0060\u00600},NativeWeave.Data.Column{\u00601,\u0060\u00600})",
+      "signature": "public NativeWeave.Data.Relation\u003CTParent, TChild\u003E NativeWeave.Data.Relation\u003CTParent, TChild\u003E.And\u003CT\u003E(NativeWeave.Data.Column\u003CTParent, T\u003E parentKey, NativeWeave.Data.Column\u003CTChild, T\u003E foreignKey)",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Data.Relation\u00602.CreateOptionalReference\u0060\u00601(NativeWeave.Data.Table{\u00600},NativeWeave.Data.Column{\u00600,\u0060\u00600},NativeWeave.Data.Table{\u00601},NativeWeave.Data.Column{\u00601,\u0060\u00600})",
+      "signature": "public static NativeWeave.Data.Relation\u003CTParent, TChild\u003E NativeWeave.Data.Relation\u003CTParent, TChild\u003E.CreateOptionalReference\u003CT\u003E(NativeWeave.Data.Table\u003CTParent\u003E parent, NativeWeave.Data.Column\u003CTParent, T\u003E parentKey, NativeWeave.Data.Table\u003CTChild\u003E child, NativeWeave.Data.Column\u003CTChild, T?\u003E foreignKey) where T : class",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Data.Relation\u00602.CreateOptional\u0060\u00601(NativeWeave.Data.Table{\u00600},NativeWeave.Data.Column{\u00600,\u0060\u00600},NativeWeave.Data.Table{\u00601},NativeWeave.Data.Column{\u00601,System.Nullable{\u0060\u00600}})",
+      "signature": "public static NativeWeave.Data.Relation\u003CTParent, TChild\u003E NativeWeave.Data.Relation\u003CTParent, TChild\u003E.CreateOptional\u003CT\u003E(NativeWeave.Data.Table\u003CTParent\u003E parent, NativeWeave.Data.Column\u003CTParent, T\u003E parentKey, NativeWeave.Data.Table\u003CTChild\u003E child, NativeWeave.Data.Column\u003CTChild, T?\u003E foreignKey) where T : struct",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Data.Relation\u00602.Create\u0060\u00601(NativeWeave.Data.Table{\u00600},NativeWeave.Data.Column{\u00600,\u0060\u00600},NativeWeave.Data.Table{\u00601},NativeWeave.Data.Column{\u00601,\u0060\u00600})",
+      "signature": "public static NativeWeave.Data.Relation\u003CTParent, TChild\u003E NativeWeave.Data.Relation\u003CTParent, TChild\u003E.Create\u003CT\u003E(NativeWeave.Data.Table\u003CTParent\u003E parent, NativeWeave.Data.Column\u003CTParent, T\u003E parentKey, NativeWeave.Data.Table\u003CTChild\u003E child, NativeWeave.Data.Column\u003CTChild, T\u003E foreignKey)",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Data.ResultColumn\u00601.#ctor",
+      "signature": "public NativeWeave.Data.ResultColumn\u003CT\u003E.ResultColumn()",
+      "implicit_member": true
+    },
+    {
+      "id": "M:NativeWeave.Data.ResultField.Create\u0060\u00601(System.String,NativeWeave.Data.ValueCodec{\u0060\u00600})",
+      "signature": "public static NativeWeave.Data.ResultField NativeWeave.Data.ResultField.Create\u003CT\u003E(string name, NativeWeave.Data.ValueCodec\u003CT\u003E codec)",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Data.RowMaterializer\u00601.#ctor(System.Object,System.IntPtr)",
+      "signature": "public NativeWeave.Data.RowMaterializer\u003CT\u003E.RowMaterializer(object @object, nint method)",
+      "implicit_member": true
+    },
+    {
+      "id": "M:NativeWeave.Data.RowMaterializer\u00601.BeginInvoke(NativeWeave.Data.RowReader,System.AsyncCallback,System.Object)",
+      "signature": "public virtual System.IAsyncResult NativeWeave.Data.RowMaterializer\u003CT\u003E.BeginInvoke(NativeWeave.Data.RowReader row, System.AsyncCallback callback, object @object)",
+      "implicit_member": true
+    },
+    {
+      "id": "M:NativeWeave.Data.RowMaterializer\u00601.EndInvoke(System.IAsyncResult)",
+      "signature": "public virtual T NativeWeave.Data.RowMaterializer\u003CT\u003E.EndInvoke(System.IAsyncResult result)",
+      "implicit_member": true
+    },
+    {
+      "id": "M:NativeWeave.Data.RowMaterializer\u00601.Invoke(NativeWeave.Data.RowReader)",
+      "signature": "public virtual T NativeWeave.Data.RowMaterializer\u003CT\u003E.Invoke(NativeWeave.Data.RowReader row)",
+      "implicit_member": true
+    },
+    {
+      "id": "M:NativeWeave.Data.RowReader.#ctor",
+      "signature": "public NativeWeave.Data.RowReader.RowReader()",
+      "implicit_member": true
+    },
+    {
+      "id": "M:NativeWeave.Data.RowReader.Get\u0060\u00601(NativeWeave.Data.ResultColumn{\u0060\u00600})",
+      "signature": "public T NativeWeave.Data.RowReader.Get\u003CT\u003E(NativeWeave.Data.ResultColumn\u003CT\u003E column)",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Data.RowReader.Get\u0060\u00602(NativeWeave.Data.Column{\u0060\u00600,\u0060\u00601})",
+      "signature": "public T NativeWeave.Data.RowReader.Get\u003CTEntity, T\u003E(NativeWeave.Data.Column\u003CTEntity, T\u003E column) where TEntity : class",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Data.RowReader.IsNull(System.Int32)",
+      "signature": "public bool NativeWeave.Data.RowReader.IsNull(int ordinal)",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Data.RowReader.Read\u0060\u00601(System.Int32,NativeWeave.Data.ValueCodec{\u0060\u00600})",
+      "signature": "public T NativeWeave.Data.RowReader.Read\u003CT\u003E(int ordinal, NativeWeave.Data.ValueCodec\u003CT\u003E codec)",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Data.RowWriter.#ctor",
+      "signature": "public NativeWeave.Data.RowWriter.RowWriter()",
+      "implicit_member": true
+    },
+    {
+      "id": "M:NativeWeave.Data.RowWriter.Set\u0060\u00602(NativeWeave.Data.Column{\u0060\u00600,\u0060\u00601},\u0060\u00601)",
+      "signature": "public void NativeWeave.Data.RowWriter.Set\u003CTEntity, T\u003E(NativeWeave.Data.Column\u003CTEntity, T\u003E column, T value) where TEntity : class",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Data.SqlCommand.Create(System.String,NativeWeave.Data.SqlParameters,NativeWeave.Data.SqlCommandKind,System.Nullable{System.TimeSpan})",
+      "signature": "public static NativeWeave.Data.SqlCommand NativeWeave.Data.SqlCommand.Create(string sql, NativeWeave.Data.SqlParameters? parameters = null, NativeWeave.Data.SqlCommandKind kind = NativeWeave.Data.SqlCommandKind.Query, System.TimeSpan? timeout = null)",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Data.SqlCommand.Parameterized(System.FormattableString,NativeWeave.Data.SqlCommandKind,System.Nullable{System.TimeSpan})",
+      "signature": "public static NativeWeave.Data.SqlCommand NativeWeave.Data.SqlCommand.Parameterized(System.FormattableString sql, NativeWeave.Data.SqlCommandKind kind = NativeWeave.Data.SqlCommandKind.Query, System.TimeSpan? timeout = null)",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Data.SqlCommandKind.#ctor",
+      "signature": "public NativeWeave.Data.SqlCommandKind.SqlCommandKind()",
+      "implicit_member": true
+    },
+    {
+      "id": "M:NativeWeave.Data.SqlParameters.#ctor",
+      "signature": "public NativeWeave.Data.SqlParameters.SqlParameters()",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Data.SqlParameters.Add\u0060\u00601(System.String,\u0060\u00600,NativeWeave.Data.ValueCodec{\u0060\u00600})",
+      "signature": "public NativeWeave.Data.SqlParameters NativeWeave.Data.SqlParameters.Add\u003CT\u003E(string name, T value, NativeWeave.Data.ValueCodec\u003CT\u003E codec)",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Data.TableBuilder\u00601.#ctor(System.String,System.String)",
+      "signature": "public NativeWeave.Data.TableBuilder\u003CTEntity\u003E.TableBuilder(string tableName, string? schema = null)",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Data.TableBuilder\u00601.Build(NativeWeave.Data.RowMaterializer{\u00600},NativeWeave.Data.EntityWriter{\u00600})",
+      "signature": "public NativeWeave.Data.Table\u003CTEntity\u003E NativeWeave.Data.TableBuilder\u003CTEntity\u003E.Build(NativeWeave.Data.RowMaterializer\u003CTEntity\u003E materializer, NativeWeave.Data.EntityWriter\u003CTEntity\u003E writer)",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Data.TableBuilder\u00601.Column\u0060\u00601(System.String,NativeWeave.Data.ValueCodec{\u0060\u00600},NativeWeave.Data.ColumnOptions)",
+      "signature": "public NativeWeave.Data.Column\u003CTEntity, T\u003E NativeWeave.Data.TableBuilder\u003CTEntity\u003E.Column\u003CT\u003E(string name, NativeWeave.Data.ValueCodec\u003CT\u003E codec, NativeWeave.Data.ColumnOptions? options = null)",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Data.Table\u00601.Key\u0060\u00601(NativeWeave.Data.Column{\u00600,\u0060\u00600},\u0060\u00600)",
+      "signature": "public NativeWeave.Data.EntityKey\u003CTEntity\u003E NativeWeave.Data.Table\u003CTEntity\u003E.Key\u003CT\u003E(NativeWeave.Data.Column\u003CTEntity, T\u003E column, T value)",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Data.Table\u00601.TryGetColumn\u0060\u00601(System.String,NativeWeave.Data.ValueCodec{\u0060\u00600},NativeWeave.Data.Column{\u00600,\u0060\u00600}@)",
+      "signature": "public bool NativeWeave.Data.Table\u003CTEntity\u003E.TryGetColumn\u003CT\u003E(string name, NativeWeave.Data.ValueCodec\u003CT\u003E codec, [System.Diagnostics.CodeAnalysis.NotNullWhenAttribute(true)] out NativeWeave.Data.Column\u003CTEntity, T\u003E? column)",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Data.WeaveColumnAttribute.#ctor(System.String)",
+      "signature": "public NativeWeave.Data.WeaveColumnAttribute.WeaveColumnAttribute(string name)",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Data.WeaveIgnoreAttribute.#ctor",
+      "signature": "public NativeWeave.Data.WeaveIgnoreAttribute.WeaveIgnoreAttribute()",
+      "implicit_member": true
+    },
+    {
+      "id": "M:NativeWeave.Data.WeaveKeyAttribute.#ctor",
+      "signature": "public NativeWeave.Data.WeaveKeyAttribute.WeaveKeyAttribute()",
+      "implicit_member": true
+    },
+    {
+      "id": "M:NativeWeave.Data.WeaveTableAttribute.#ctor(System.String)",
+      "signature": "public NativeWeave.Data.WeaveTableAttribute.WeaveTableAttribute(string name)",
+      "implicit_member": false
+    },
+    {
+      "id": "M:NativeWeave.Data.WeaveVersionAttribute.#ctor",
+      "signature": "public NativeWeave.Data.WeaveVersionAttribute.WeaveVersionAttribute()",
+      "implicit_member": true
+    },
+    {
+      "id": "P:NativeWeave.Data.Codecs.Boolean",
+      "signature": "public static NativeWeave.Data.ValueCodec\u003Cbool\u003E NativeWeave.Data.Codecs.Boolean { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Data.Codecs.Bytes",
+      "signature": "public static NativeWeave.Data.ValueCodec\u003Cbyte[]\u003E NativeWeave.Data.Codecs.Bytes { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Data.Codecs.Date",
+      "signature": "public static NativeWeave.Data.ValueCodec\u003CSystem.DateOnly\u003E NativeWeave.Data.Codecs.Date { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Data.Codecs.DecimalText",
+      "signature": "public static NativeWeave.Data.ValueCodec\u003Cdecimal\u003E NativeWeave.Data.Codecs.DecimalText { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Data.Codecs.Double",
+      "signature": "public static NativeWeave.Data.ValueCodec\u003Cdouble\u003E NativeWeave.Data.Codecs.Double { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Data.Codecs.Guid",
+      "signature": "public static NativeWeave.Data.ValueCodec\u003CSystem.Guid\u003E NativeWeave.Data.Codecs.Guid { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Data.Codecs.Int16",
+      "signature": "public static NativeWeave.Data.ValueCodec\u003Cshort\u003E NativeWeave.Data.Codecs.Int16 { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Data.Codecs.Int32",
+      "signature": "public static NativeWeave.Data.ValueCodec\u003Cint\u003E NativeWeave.Data.Codecs.Int32 { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Data.Codecs.Int64",
+      "signature": "public static NativeWeave.Data.ValueCodec\u003Clong\u003E NativeWeave.Data.Codecs.Int64 { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Data.Codecs.Single",
+      "signature": "public static NativeWeave.Data.ValueCodec\u003Cfloat\u003E NativeWeave.Data.Codecs.Single { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Data.Codecs.String",
+      "signature": "public static NativeWeave.Data.ValueCodec\u003Cstring\u003E NativeWeave.Data.Codecs.String { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Data.Codecs.Time",
+      "signature": "public static NativeWeave.Data.ValueCodec\u003CSystem.TimeOnly\u003E NativeWeave.Data.Codecs.Time { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Data.Codecs.UtcDateTime",
+      "signature": "public static NativeWeave.Data.ValueCodec\u003CSystem.DateTime\u003E NativeWeave.Data.Codecs.UtcDateTime { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Data.Codecs.UtcInstant",
+      "signature": "public static NativeWeave.Data.ValueCodec\u003CSystem.DateTimeOffset\u003E NativeWeave.Data.Codecs.UtcInstant { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Data.ColumnOptions.Collation",
+      "signature": "public string? NativeWeave.Data.ColumnOptions.Collation { get; init; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Data.ColumnOptions.IsConcurrencyToken",
+      "signature": "public bool NativeWeave.Data.ColumnOptions.IsConcurrencyToken { get; init; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Data.ColumnOptions.IsGenerated",
+      "signature": "public bool NativeWeave.Data.ColumnOptions.IsGenerated { get; init; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Data.ColumnOptions.IsPrimaryKey",
+      "signature": "public bool NativeWeave.Data.ColumnOptions.IsPrimaryKey { get; init; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Data.ColumnOptions.MaxLength",
+      "signature": "public int? NativeWeave.Data.ColumnOptions.MaxLength { get; init; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Data.Column\u00602.Codec",
+      "signature": "public NativeWeave.Data.ValueCodec\u003CT\u003E NativeWeave.Data.Column\u003CTEntity, T\u003E.Codec { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Data.Column\u00602.Id",
+      "signature": "public uint NativeWeave.Data.Column\u003CTEntity, T\u003E.Id { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Data.Column\u00602.Name",
+      "signature": "public string NativeWeave.Data.Column\u003CTEntity, T\u003E.Name { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Data.ConcurrencyConflictException.ActualRows",
+      "signature": "public long NativeWeave.Data.ConcurrencyConflictException.ActualRows { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Data.ConcurrencyConflictException.ExpectedRows",
+      "signature": "public long NativeWeave.Data.ConcurrencyConflictException.ExpectedRows { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Data.DatabaseCapabilityException.Capability",
+      "signature": "public string NativeWeave.Data.DatabaseCapabilityException.Capability { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Data.DatabaseCapabilityException.Provider",
+      "signature": "public string NativeWeave.Data.DatabaseCapabilityException.Provider { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Data.DatabaseException.CorrelationId",
+      "signature": "public ulong NativeWeave.Data.DatabaseException.CorrelationId { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Data.DatabaseException.IsTransient",
+      "signature": "public bool NativeWeave.Data.DatabaseException.IsTransient { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Data.DatabaseException.Kind",
+      "signature": "public NativeWeave.Data.DatabaseErrorKind NativeWeave.Data.DatabaseException.Kind { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Data.DatabaseException.ProviderCode",
+      "signature": "public string? NativeWeave.Data.DatabaseException.ProviderCode { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Data.Projection\u00601.ShapeHash",
+      "signature": "public string NativeWeave.Data.Projection\u003CT\u003E.ShapeHash { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Data.ResultColumn\u00601.Name",
+      "signature": "public string NativeWeave.Data.ResultColumn\u003CT\u003E.Name { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Data.ResultColumn\u00601.Ordinal",
+      "signature": "public int NativeWeave.Data.ResultColumn\u003CT\u003E.Ordinal { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Data.ResultField.CodecId",
+      "signature": "public uint NativeWeave.Data.ResultField.CodecId { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Data.ResultField.IsNullable",
+      "signature": "public bool NativeWeave.Data.ResultField.IsNullable { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Data.ResultField.Name",
+      "signature": "public string NativeWeave.Data.ResultField.Name { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Data.Table\u00601.MetadataHash",
+      "signature": "public string NativeWeave.Data.Table\u003CTEntity\u003E.MetadataHash { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Data.Table\u00601.Name",
+      "signature": "public string NativeWeave.Data.Table\u003CTEntity\u003E.Name { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Data.Table\u00601.Row",
+      "signature": "public NativeWeave.Data.Projection\u003CTEntity\u003E NativeWeave.Data.Table\u003CTEntity\u003E.Row { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Data.Table\u00601.Schema",
+      "signature": "public string? NativeWeave.Data.Table\u003CTEntity\u003E.Schema { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Data.ValueCodec\u00601.Id",
+      "signature": "public uint NativeWeave.Data.ValueCodec\u003CT\u003E.Id { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Data.ValueCodec\u00601.Name",
+      "signature": "public string NativeWeave.Data.ValueCodec\u003CT\u003E.Name { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Data.WeaveColumnAttribute.Generated",
+      "signature": "public bool NativeWeave.Data.WeaveColumnAttribute.Generated { get; init; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Data.WeaveTableAttribute.DescriptorName",
+      "signature": "public string? NativeWeave.Data.WeaveTableAttribute.DescriptorName { get; init; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:NativeWeave.Data.WeaveTableAttribute.Schema",
+      "signature": "public string? NativeWeave.Data.WeaveTableAttribute.Schema { get; init; }",
+      "implicit_member": false
+    },
+    {
+      "id": "T:NativeWeave.Data.Changes\u00601",
+      "signature": "public sealed class NativeWeave.Data.Changes\u003CTEntity\u003E where TEntity : class",
+      "implicit_member": false
+    },
+    {
+      "id": "T:NativeWeave.Data.Codecs",
+      "signature": "public static class NativeWeave.Data.Codecs",
+      "implicit_member": false
+    },
+    {
+      "id": "T:NativeWeave.Data.ColumnOptions",
+      "signature": "public sealed record class NativeWeave.Data.ColumnOptions : System.IEquatable\u003CNativeWeave.Data.ColumnOptions\u003E",
+      "implicit_member": false
+    },
+    {
+      "id": "T:NativeWeave.Data.Column\u00602",
+      "signature": "public sealed class NativeWeave.Data.Column\u003CTEntity, T\u003E where TEntity : class",
+      "implicit_member": false
+    },
+    {
+      "id": "T:NativeWeave.Data.ConcurrencyCheck\u00601",
+      "signature": "public sealed class NativeWeave.Data.ConcurrencyCheck\u003CTEntity\u003E where TEntity : class",
+      "implicit_member": false
+    },
+    {
+      "id": "T:NativeWeave.Data.ConcurrencyConflictException",
+      "signature": "public sealed class NativeWeave.Data.ConcurrencyConflictException : NativeWeave.Data.DatabaseException",
+      "implicit_member": false
+    },
+    {
+      "id": "T:NativeWeave.Data.DatabaseCapabilityException",
+      "signature": "public sealed class NativeWeave.Data.DatabaseCapabilityException : NativeWeave.Data.DatabaseException",
+      "implicit_member": false
+    },
+    {
+      "id": "T:NativeWeave.Data.DatabaseErrorKind",
+      "signature": "public enum NativeWeave.Data.DatabaseErrorKind : int",
+      "implicit_member": false
+    },
+    {
+      "id": "T:NativeWeave.Data.DatabaseException",
+      "signature": "public class NativeWeave.Data.DatabaseException : System.Exception",
+      "implicit_member": false
+    },
+    {
+      "id": "T:NativeWeave.Data.EntityKey\u00601",
+      "signature": "public sealed class NativeWeave.Data.EntityKey\u003CTEntity\u003E where TEntity : class",
+      "implicit_member": false
+    },
+    {
+      "id": "T:NativeWeave.Data.EntityWriter\u00601",
+      "signature": "public delegate void NativeWeave.Data.EntityWriter\u003CT\u003E(NativeWeave.Data.RowWriter row, T value)",
+      "implicit_member": false
+    },
+    {
+      "id": "T:NativeWeave.Data.Projection\u00601",
+      "signature": "public sealed class NativeWeave.Data.Projection\u003CT\u003E",
+      "implicit_member": false
+    },
+    {
+      "id": "T:NativeWeave.Data.Relation\u00602",
+      "signature": "public sealed class NativeWeave.Data.Relation\u003CTParent, TChild\u003E where TParent : class where TChild : class",
+      "implicit_member": false
+    },
+    {
+      "id": "T:NativeWeave.Data.ResultColumn\u00601",
+      "signature": "public readonly struct NativeWeave.Data.ResultColumn\u003CT\u003E",
+      "implicit_member": false
+    },
+    {
+      "id": "T:NativeWeave.Data.ResultField",
+      "signature": "public sealed class NativeWeave.Data.ResultField",
+      "implicit_member": false
+    },
+    {
+      "id": "T:NativeWeave.Data.RowMaterializer\u00601",
+      "signature": "public delegate T NativeWeave.Data.RowMaterializer\u003CT\u003E(NativeWeave.Data.RowReader row)",
+      "implicit_member": false
+    },
+    {
+      "id": "T:NativeWeave.Data.RowReader",
+      "signature": "public readonly ref struct NativeWeave.Data.RowReader",
+      "implicit_member": false
+    },
+    {
+      "id": "T:NativeWeave.Data.RowWriter",
+      "signature": "public readonly ref struct NativeWeave.Data.RowWriter",
+      "implicit_member": false
+    },
+    {
+      "id": "T:NativeWeave.Data.SqlCommand",
+      "signature": "public sealed class NativeWeave.Data.SqlCommand",
+      "implicit_member": false
+    },
+    {
+      "id": "T:NativeWeave.Data.SqlCommandKind",
+      "signature": "public enum NativeWeave.Data.SqlCommandKind : int",
+      "implicit_member": false
+    },
+    {
+      "id": "T:NativeWeave.Data.SqlParameters",
+      "signature": "public sealed class NativeWeave.Data.SqlParameters",
+      "implicit_member": false
+    },
+    {
+      "id": "T:NativeWeave.Data.TableBuilder\u00601",
+      "signature": "public sealed class NativeWeave.Data.TableBuilder\u003CTEntity\u003E where TEntity : class",
+      "implicit_member": false
+    },
+    {
+      "id": "T:NativeWeave.Data.Table\u00601",
+      "signature": "public sealed class NativeWeave.Data.Table\u003CTEntity\u003E where TEntity : class",
+      "implicit_member": false
+    },
+    {
+      "id": "T:NativeWeave.Data.ValueCodec\u00601",
+      "signature": "public sealed class NativeWeave.Data.ValueCodec\u003CT\u003E",
+      "implicit_member": false
+    },
+    {
+      "id": "T:NativeWeave.Data.WeaveColumnAttribute",
+      "signature": "[System.AttributeUsageAttribute(System.AttributeTargets.Property, Inherited = false)]\npublic sealed class NativeWeave.Data.WeaveColumnAttribute : System.Attribute",
+      "implicit_member": false
+    },
+    {
+      "id": "T:NativeWeave.Data.WeaveIgnoreAttribute",
+      "signature": "[System.AttributeUsageAttribute(System.AttributeTargets.Property, Inherited = false)]\npublic sealed class NativeWeave.Data.WeaveIgnoreAttribute : System.Attribute",
+      "implicit_member": false
+    },
+    {
+      "id": "T:NativeWeave.Data.WeaveKeyAttribute",
+      "signature": "[System.AttributeUsageAttribute(System.AttributeTargets.Property, Inherited = false)]\npublic sealed class NativeWeave.Data.WeaveKeyAttribute : System.Attribute",
+      "implicit_member": false
+    },
+    {
+      "id": "T:NativeWeave.Data.WeaveTableAttribute",
+      "signature": "[System.AttributeUsageAttribute(System.AttributeTargets.Class, Inherited = false)]\npublic sealed class NativeWeave.Data.WeaveTableAttribute : System.Attribute",
+      "implicit_member": false
+    },
+    {
+      "id": "T:NativeWeave.Data.WeaveVersionAttribute",
+      "signature": "[System.AttributeUsageAttribute(System.AttributeTargets.Property, Inherited = false)]\npublic sealed class NativeWeave.Data.WeaveVersionAttribute : System.Attribute",
+      "implicit_member": false
+    }
+  ]
+}

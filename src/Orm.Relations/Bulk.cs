@@ -69,7 +69,7 @@ public sealed partial class DataSession
             while (await enumerator.MoveNextAsync().ConfigureAwait(false))
             {
                 token.ThrowIfCancellationRequested(); CheckBulkOpen();
-                var snapshot = RowSnapshot.Capture(table, enumerator.Current);
+                var snapshot = MutationEncoding.Snapshot(Source, table, enumerator.Current);
                 var rowBytes = checked(snapshot.Length * 24L + snapshot.Sum(c => (long)(c.Bytes?.Length ?? 0)));
                 var headerBytes = 96L + snapshot.Length * 16L + 52L; // exact kind4 field1/field2 wrapper
                 if (headerBytes + rowBytes > Source.Limits.MaxParameterBytes)

@@ -211,7 +211,7 @@ public sealed class Projection<T>
 }
 
 internal sealed record ColumnValue(IColumn Column, byte[]? Bytes);
-internal sealed class RowSnapshot(TableIdentity table)
+internal sealed class RowSnapshot(TableIdentity table, int? remainingBytes = null)
 {
     private readonly Dictionary<uint, ColumnValue> _values = [];
     private bool _complete;
@@ -221,7 +221,13 @@ internal sealed class RowSnapshot(TableIdentity table)
         if (!ReferenceEquals(table, column.Identity)) throw new ArgumentException("The column belongs to another table.", nameof(column));
         if (_values.ContainsKey(column.Id)) throw new ArgumentException("The writer assigned a column twice.", nameof(column));
         if (column.Definition.Options.IsGenerated) { _values.Add(column.Id, new(column.Binding, null)); return; }
-        var bytes = column.Snapshot(value);
+        var bytes = remainingBytes is { } available ? column.Codec.EncodeBounded(value, available) : column.Snapshot(value);
+        if (remainingBytes is { } remaining)
+        {
+            if (bytes is not null && column.Definition.Options.MaxLength is { } maximum && bytes.Length > maximum)
+                throw new ArgumentException("The value exceeds its declared byte capacity.", nameof(value));
+            remainingBytes = checked(remaining - (bytes?.Length ?? 0));
+        }
         _values.Add(column.Id, new(column.Binding, bytes));
     }
     internal ColumnValue[] Complete(IColumn[] columns)
@@ -230,9 +236,15 @@ internal sealed class RowSnapshot(TableIdentity table)
         if (columns.Any(c => !c.Definition.Options.IsGenerated && !_values.ContainsKey(c.Definition.Id))) throw new ArgumentException("The writer omitted a required column.");
         return columns.Where(c => !c.Definition.Options.IsGenerated).Select(c => _values[c.Definition.Id]).ToArray();
     }
-    internal static ColumnValue[] Capture<TEntity>(Table<TEntity> table, TEntity value) where TEntity : class
+    internal static ColumnValue[] Capture<TEntity>(Table<TEntity> table, TEntity value) where TEntity : class => CaptureCore(table, value, null);
+    internal static ColumnValue[] Capture<TEntity>(Table<TEntity> table, TEntity value, int maximumBytes) where TEntity : class
     {
-        ArgumentNullException.ThrowIfNull(value); var snapshot = new RowSnapshot(table.Identity);
+        if (maximumBytes < 0 || maximumBytes > DbWire.MaxEncodedBytes) throw ValueCodec<byte>.Capacity();
+        return CaptureCore(table, value, maximumBytes);
+    }
+    private static ColumnValue[] CaptureCore<TEntity>(Table<TEntity> table, TEntity value, int? maximumBytes) where TEntity : class
+    {
+        ArgumentNullException.ThrowIfNull(value); var snapshot = new RowSnapshot(table.Identity, maximumBytes);
         try { table.Writer(new RowWriter(snapshot), value); return snapshot.Complete(table.Columns); }
         finally { snapshot._complete = true; }
     }
