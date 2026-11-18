@@ -133,6 +133,14 @@ class Service:
             self.reader.join(timeout=5)
         if hasattr(self, 'log'):
             self.log.close()
+        if exc_type is None and self.process is not None:
+            if self.process.returncode != 0:
+                raise AssertionError('Service did not exit successfully after graceful shutdown.')
+            lines = (self.output / 'service.log').read_text().splitlines()
+            receipts = [json.loads(line[7:]) for line in lines if line.startswith('CLOSED ')]
+            if len(receipts) != 1 or not receipts[0]['databaseResourcesReleased'] or not receipts[0]['consumerResourcesReleased']:
+                raise AssertionError('Service did not confirm both native database resource joins.')
+            self.shutdown = receipts[0]
 
 
 class Oracle:
@@ -254,7 +262,7 @@ def run_cases(service, database, oracle, identities):
     oracle.check('attachment-roundtrip', s == 200 and received == data)
     oracle.check('attachment-independent-digest', database.scalar(f"SELECT content_hash FROM attachments WHERE tenant_id='tenant-a' AND item_id='{first['itemId']}'") == hashlib.sha256(data).hexdigest())
     oracle.check('attachment-cross-tenant-denial', service.request('GET', attachment, token=carol)[0] in (403, 404))
-    bad_version = dict(headers, **{'Idempotency-Key': 'attachment-wrong-version', 'If-Match': '0'})
+    bad_version = dict(headers, **{'Idempotency-Key': 'attachment-wrong-version', 'If-Match': '1'})
     oracle.check('attachment-version-conflict', service.request('PUT', attachment, data, bad_version, alice)[0] in (409, 412))
     changed = bytearray(data)
     changed[-1] ^= 1
@@ -312,10 +320,15 @@ def run_operator_cases(command, config, config_path, output, database, oracle, r
         'scope': scope_hash('tenant-a', 'alice', 'POST /v1/items'), 'requestKey': 'retention-expiry',
         'requestHash': create_hash('tenant-a', 'alice', 'retention example'), 'createdAt': old}))
     admin('--maintenance-once', 'retention-with-recovery-manifest')
-    oracle.check('recovery-manifest-protects-old-operation', int(database.scalar(f"SELECT COUNT(*) FROM operations WHERE operation_id='{operation}'")) == 1)
-    recovery.unlink()
-    admin('--maintenance-once', 'retention-after-protection-resolved')
+    oracle.check('durable-result-positively-reconciles-recovery', not recovery.exists())
     oracle.check('expired-unreferenced-operation-removed', int(database.scalar(f"SELECT COUNT(*) FROM operations WHERE operation_id='{operation}'")) == 0)
+    unresolved_id = str(uuid.uuid4())
+    unresolved = recovery.parent / (unresolved_id + '.json')
+    unresolved.write_text(json.dumps({'version': 1, 'operationId': unresolved_id,
+        'scope': scope_hash('tenant-a', 'alice', 'POST /v1/items'), 'requestKey': 'unconfirmed-recovery',
+        'requestHash': create_hash('tenant-a', 'alice', 'unconfirmed'), 'createdAt': old}))
+    admin('--maintenance-once', 'retention-unconfirmed-recovery')
+    oracle.check('missing-row-does-not-retire-recovery-protection', unresolved.exists())
 
     root = Path(config['blobDirectory'])
     fixtures = {}
