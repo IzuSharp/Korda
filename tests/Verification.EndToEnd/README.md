@@ -155,3 +155,11 @@ the configured pool maximum; accepted HTTP sockets and open partial uploads
 must have retired while the application is still alive. SQLite profiles declare
 separate main/WAL/SHM owner caps for the application and consumer pools; scalar
 descriptor headroom cannot hide retained payload, staging, or metadata files.
+
+To stop this supervisor cooperatively, write `{"action":"stop","reason":"..."}`
+to its descriptor-output directory's `stop-request.json`. The supervisor records
+the request, signals its own controller with SIGTERM, and waits for the ordinary
+cleanup path. Interrupted elapsed time is not accepted. On isolated executors,
+tool-level Ctrl-C may terminate the namespace before cleanup records are written;
+that is an interruption with unavailable retirement evidence, never a zero-owner
+witness.

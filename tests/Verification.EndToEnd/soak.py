@@ -38,6 +38,26 @@ TRACE_ENVIRONMENT = {
 }
 ZERO_GAUGES = tuple("nativeweave.server." + value for value in
     ("requests.active", "requests.queued", "requests.retiring", "payload.managed.bytes", "payload.native.bytes"))
+COHORT_CONFIGURATION_SHA256 = "35d2415eec723a861e46e7221db92b94226b23bd6c6740ac943742093865fcf7"
+
+
+def native_cohort_policy(provider):
+    """Finite practical observation floors, separate from native hard admission."""
+    paths = ("src/Reference.TaskService/ServiceConfiguration.cs",
+             "src/Data.NativeHost/HostTransactionTransport.cs", "src/Data.NativeHost/DataSource.cs",
+             "src/Query.Binding/Owners.cs", "native/database/host/src/runtime.rs",
+             "native/database/host/src/session.rs", "native/database/host/src/operation.rs",
+             "native/database/host/src/abi.rs")
+    return {"connectionSlots": {"postgresql": 16, "sqlite": 2} if provider == "postgresql" else {"sqlite": 18},
+            "sourceCounts": {"postgresql": 1, "sqlite": 1} if provider == "postgresql" else {"sqlite": 2},
+            "configurationSha256": COHORT_CONFIGURATION_SHA256,
+            "rolesPerSlot": {"session": 1, "transaction": 1, "query": 1, "plan": 1,
+                             "cursor": 1, "operation": 3, "buffer": 3},
+            "operationRoles": ["normal dispatch", "session-close control", "transaction-close control"],
+            "bufferRoles": ["normal result or retained cursor batch", "session-close snapshot", "transaction-close snapshot"],
+            "derivation": "max(fresh measured maximum plus idle range, populated source-cohort floor); sessions/cursors C, operations/buffers 3C, registry qualified permanent baseline +11C. Sources remain exact.",
+            "interpretation": "Practical finite workload observation bands, not global object-lifetime bounds. Physical connection permits do not bound unreachable transaction wrappers. Qualified idle native baseline and final retirement remain separately mandatory.",
+            "sourceEvidence": {path: sha(HERE.parents[1] / path) for path in paths}}
 
 
 class Journal:
@@ -106,6 +126,8 @@ def identity(args):
     require(manifest.is_file(), "The instrumented consumer build manifest is required")
     metadata = json.loads(manifest.read_text())
     require(metadata.get("applicationSourceDelta", {}).get("bodyUnchanged") is True, "Observer entrypoint delta is not bound to an unchanged application body")
+    require(metadata["referenceSources"]["ServiceConfiguration.cs"] == COHORT_CONFIGURATION_SHA256,
+            "Reference connection budgets changed; independently review the native cohort policy")
     modules = {}
     for provider in ("sqlite", "postgresql") if args.provider == "postgresql" else ("sqlite",):
         paths = list(artifact.rglob("libnw_database_" + provider + ".so"))
@@ -129,6 +151,7 @@ def identity(args):
             "__pycache__" not in relative.parts and Path(relative).suffix != ".pyc"}}
     record = {"mode": args.mode, "provider": args.provider, "executableSha256": sha(executable),
         "observerBuildManifestSha256": sha(manifest),
+        "nativePeakPolicy": native_cohort_policy(args.provider),
         "traceEnvironment": TRACE_ENVIRONMENT,
         "artifacts": {str(p.relative_to(artifact)): sha(p) for p in sorted(artifact.rglob("*")) if p.is_file()},
         "controller": {name: sha(HERE / name) for name in ("soak.py", "harness.py")},
@@ -623,6 +646,19 @@ def main():
             candidate["peakCaps"].update({"nativeweave.server.requests.active": 256, "nativeweave.server.requests.queued": 128,
                 "nativeweave.server.requests.retiring": 256, "nativeweave.server.payload.managed.bytes": 64 * 1024**2,
                 "nativeweave.server.payload.native.bytes": 64 * 1024**2})
+            policy = inputs["nativePeakPolicy"]
+            applied_floors = {}
+            for provider, slots in policy["connectionSlots"].items():
+                prefix = "native." + provider + "."
+                candidate["peakCaps"][prefix + "0"] = policy["sourceCounts"][provider]
+                floors = {1: slots, 2: 3 * slots, 3: slots, 4: 3 * slots,
+                          5: post_gc_native[0][provider][5] + 11 * slots}
+                for kind, floor in floors.items():
+                    key = prefix + str(kind)
+                    candidate["peakCaps"][key] = max(candidate["peakCaps"][key], floor)
+                    applied_floors[key] = floor
+            candidate["nativePeakPolicy"] = {**policy, "appliedFloors": applied_floors}
+            candidate["thresholdDerivation"] += "; native transient peaks also retain the independently reviewed populated source-cohort floors"
             for key in ZERO_GAUGES: candidate["idleCaps"][key] = 0
     except BaseException as error:
         receipt.update(status="interrupted" if isinstance(error, (InterruptedError, KeyboardInterrupt)) or stopping.is_set() else "failed",

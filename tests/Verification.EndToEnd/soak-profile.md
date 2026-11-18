@@ -54,9 +54,28 @@ trend and qualified native baseline before freezing the candidate. An upward
 unexplained trend remains unfrozen. A later breach is a failed attempt, not a
 reason to edit its frozen limits in place.
 
+Native transient counters also use a populated source-cohort floor. The pinned
+reference configuration has sixteen application connection slots and two
+consumer slots: `C=18` for the combined SQLite module, or `C=16` PostgreSQL and
+`C=2` consumer SQLite. Sources remain exact. Session and cursor floors are `C`;
+operation and buffer floors are `3C`, covering a normal operation/result and
+overlapping session-close and transaction-close controls/snapshots. The registry
+floor is the qualified permanent baseline plus `11C`: one session, transaction,
+query, plan and cursor, three operation owners and three buffers per slot.
+Each transient peak is the larger of this floor and the fresh measured maximum
+plus idle range. The profile binds the configuration and owner-lifetime source
+hashes and the complete role derivation. A sampled zero buffer count therefore
+does not incorrectly prohibit legitimate snapshot/batch allocation.
+
+These are finite practical workload observation bands, not global lifetime
+bounds inferred from physical pool permits. They do not excuse omitted owner
+disposal or replace qualified idle native baselines, final owner retirement,
+runtime root controls, process RSS, threads, or descriptor-role checks. A source
+connection-budget change requires an independent policy review and recalibration.
+
 Pre-GC and later idle native counts include closed wrappers still awaiting
 finalization. A distinct post-GC native baseline is therefore frozen separately.
-The outbox worker remains unchanged. Within one logical idle window the observer
+The observer does not alter the product outbox worker. Within one logical idle window the observer
 may perform at most three diagnostic collections, within five seconds, to obtain
 an actual vector with no session/operation/cursor/buffer owners and the expected
 source inventory. Every attempted vector remains visible. The run must also match

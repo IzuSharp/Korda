@@ -137,6 +137,23 @@ def main():
             previous_handlers = {sig: signal.signal(sig, stop) for sig in (signal.SIGTERM, signal.SIGINT)}
             tail = Tail(output / 'resources.jsonl')
             while child.poll() is None:
+                stop_path = monitor_output / 'stop-request.json'
+                if stop_path.exists() and 'stopRequested' not in receipt:
+                    with stop_path.open('rb') as stream:
+                        payload = stream.read(4097)
+                    require(len(payload) <= 4096, 'Stop request exceeds its finite input bound')
+                    request = json.loads(payload)
+                    require(request.get('action') == 'stop' and
+                            isinstance(request.get('reason'), str) and
+                            0 < len(request['reason']) <= 512,
+                            'Stop request must contain a bounded explicit reason')
+                    receipt['stopRequested'] = {'reason': request['reason'],
+                                                'observedUnixNs': time.time_ns(),
+                                                'requestSha256': sha(stop_path)}
+                    write_json(monitor_output / 'stop-acknowledged.json', receipt['stopRequested'])
+                    # The child object belongs to this supervisor's namespace.
+                    # Tool-level Ctrl-C may kill that namespace before cleanup.
+                    child.send_signal(signal.SIGTERM)
                 progress_path = output / 'progress.json'
                 if progress_path.exists():
                     progress = json.loads(progress_path.read_text())
@@ -212,7 +229,8 @@ def main():
         write_json(monitor_output / 'final-live-idle.json', last_idle)
         receipt.update(status='supplemented-stage-passed', finalLiveIdleSha256=sha(monitor_output / 'final-live-idle.json'))
     except BaseException as error:
-        receipt.update(status='failed', error={'type': type(error).__name__, 'message': str(error)})
+        receipt.update(status='interrupted' if 'stopRequested' in receipt else 'failed',
+                       error={'type': type(error).__name__, 'message': str(error)})
         if child is not None and child.poll() is None:
             child.terminate()
             try:
