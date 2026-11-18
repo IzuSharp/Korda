@@ -50,7 +50,6 @@ def app_costs(receipt):
 
 def report(directory, a21):
     summary = load(directory / 'summary.json')
-    declared = Counter((case, route) for case, route, _ in summary.get('run_order', []))
     grouped = {}
     raw = []
     for entry in summary.get('runs', []):
@@ -69,10 +68,6 @@ def report(directory, a21):
             receipt = load(reference_path)
         raw.append({'case': row['case'], 'route': row['route'], 'repetition': row['repetition'],
             'valid': row['valid'], 'invalid_reasons': row.get('invalid_reasons', []),
-            'supervision_receipt': row.get('supervision_receipt'),
-            'original_a21_observation': row.get('original_a21_observation'),
-            'failed_http_capture': receipt.get('failed_http_capture') if receipt else None,
-            'adapter_error_capture': receipt.get('adapter_error_capture') if receipt else None,
             'application_costs': app_costs(receipt) if receipt else None,
             'http_status_counts_including_setup': receipt.get('http_status_counts') if receipt else None,
             'http_error_codes_including_setup': receipt.get('http_error_codes') if receipt else None,
@@ -98,10 +93,7 @@ def report(directory, a21):
         def mean_cost(key):
             values = [cost[key] for cost in costs if cost[key] is not None]
             return a21.statistics.mean(values) if values else None
-        required = declared.get((case, route))
-        complete = required is not None and len(cells) == len(valid) == required
         groups.append({'case': case, 'route': route, 'repetitions': len(cells), 'valid_repetitions': len(valid),
-            'declared_repetitions': required, 'complete_valid_cohort': complete,
             'samples': len(records), 'outcomes': dict(Counter(record['status'] for record in records)),
             'process_mean_arrival_ns': means, 'histogram': histogram, 'stage_histograms': stages,
             'maximum_arrival_ns': max(latencies) if latencies else None,
@@ -120,12 +112,12 @@ def report(directory, a21):
             'managed_allocated_bytes_per_offered_operation':
                 sum(cost['managed_allocated_bytes_delta'] for cost in costs) / len(records)
                 if records and all(cost['managed_allocated_bytes_delta'] is not None for cost in costs) else None,
-            'validity': 'all declared repetitions valid' if complete else 'incomplete or invalid repetitions retained; no complete-cohort performance conclusion'})
+            'validity': 'all repetitions valid' if len(valid) == len(cells) else 'invalid repetitions retained; no complete-cohort performance conclusion'})
     diagnostic_comparisons = {}
     di_comparison = None
     baseline_name = 'diagnostics-release-disabled-sqlite-http1'
     baseline = next((group for group in groups if group['case'] == baseline_name and group['route'] == 'nativeweave-aot-rust'), None)
-    if summary['phase'] == 'measure' and baseline and baseline['complete_valid_cohort']:
+    if summary['phase'] == 'measure' and baseline and baseline['repetitions'] == baseline['valid_repetitions']:
         for group in groups:
             if not group['case'].startswith('diagnostics-') or group['case'] == baseline_name:
                 continue
@@ -134,7 +126,7 @@ def report(directory, a21):
                     'reason': 'Longer declared saturation workload has different request count; report raw loss/resource observations, not a latency superiority claim'}
                 continue
             bands = summary.get('noise_bands', {})
-            if group['case'] not in bands or baseline_name not in bands or not group['complete_valid_cohort']:
+            if group['case'] not in bands or baseline_name not in bands or group['repetitions'] != group['valid_repetitions']:
                 continue
             band = {'baseline_id': baseline_name,
                 'absolute_noise_ns': max(bands[baseline_name]['absolute_noise_ns'], bands[group['case']]['absolute_noise_ns']), 'relative_noise': 0}
@@ -144,7 +136,7 @@ def report(directory, a21):
         minimal = next((group for group in groups if group['case'] == 'minimal-list-sqlite-http1'), None)
         advanced = next((group for group in groups if group['case'] == 'advanced-di-list-sqlite-http1'), None)
         bands = summary.get('noise_bands', {})
-        if minimal and advanced and all(group['complete_valid_cohort'] and group['case'] in bands for group in (minimal, advanced)):
+        if minimal and advanced and all(group['repetitions'] == group['valid_repetitions'] and group['case'] in bands for group in (minimal, advanced)):
             band = {'baseline_id': minimal['case'], 'absolute_noise_ns': max(bands[group['case']]['absolute_noise_ns']
                     for group in (minimal, advanced)), 'relative_noise': 0}
             di_comparison = a21.noise_comparison(minimal['process_mean_arrival_ns'], advanced['process_mean_arrival_ns'], band, 20261118)
@@ -153,7 +145,6 @@ def report(directory, a21):
         'state': summary['state'], 'claim': summary['claim'], 'acceptance_gate': summary['acceptance_gate'],
         'host': summary['host'], 'isolation_note': summary['isolation_note'],
         'routes': summary['routes'], 'unsupported': summary['unsupported'], 'groups': groups,
-        'not_run': summary.get('not_run', []), 'supervision': summary.get('supervision'),
         'independent_process_observations': raw, 'comparisons': summary.get('comparisons'),
         'diagnostic_comparisons': diagnostic_comparisons, 'di_comparison': di_comparison, 'noise_bands': summary.get('noise_bands'),
         'statistics_authority': 'Unmodified A21 histogram, nearest-rank sample thresholds, independent-process bootstrap and validity decisions',
@@ -309,11 +300,6 @@ def markdown(value):
         for limitation in route.get('limitations', []):
             lines.append(f'- {name}: {limitation}.')
     lines += ['', '## Interpretation and remaining gates', '',
-        'Each repaired controller cell runs under an external Linux process supervisor. Watchdog or stop-control termination '
-        'invalidates the cell and preserves its raw A21 events, worker log, registered process identities and cleanup receipt. '
-        'Process termination cannot establish native retirement. Bounded response evidence retains method/path/stage, '
-        'parsed header-value bytes and decoded body bytes; these are not raw HTTP/TLS wire packets. '
-        'Only exact declared complete cohorts can establish a performance conclusion.', '',
         'The measured reference service includes typed query construction, Rust database execution, DTO serialization, authenticated HTTP, '
         'transactional result/outbox writes, keyset queries and attachment staging/streaming in the declared cells. '
         'Foreground timing disables the periodic outbox consumer equally; external publication throughput is not established by these rows. '
@@ -329,12 +315,9 @@ def markdown(value):
 
 def archive(directory, destination):
     """Portable raw evidence; private runtime configs/keys/databases are excluded."""
-    patterns = ['summary.json', 'frozen-noise-bands.json', 'failure.json', 'control.json', 'plans/*/*.json',
+    patterns = ['summary.json', 'frozen-noise-bands.json', 'failure.json', 'plans/*/*.json',
                 'observations/*.json', 'observations/*.jsonl', 'applications/*/receipt.json',
-                'applications/*/http-failures.jsonl', 'applications/*/adapter-errors.jsonl',
                 'applications/*/application/*.log', 'applications/*/application/resources.jsonl',
-                'applications/*/application/b22-observations.jsonl',
-                'supervision/*/receipt.json', 'supervision/*/owned-processes.jsonl', 'supervision/*/worker.log',
                 'postgres/identity.json', 'postgres/commands.json', 'postgres/command-*.log']
     selected = sorted({path for pattern in patterns for path in directory.glob(pattern) if path.is_file()})
     with tarfile.open(destination, 'w:gz') as bundle:

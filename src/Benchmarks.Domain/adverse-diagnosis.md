@@ -13,14 +13,6 @@ source, with one middleware catch that records bounded exception metadata and
 rethrows the same exception. The observer verifies byte-identical native assets.
 No retry, response mapping, database configuration or business logic is changed.
 
-For the preserved `calibration-001`, execute the driver from a separate worktree
-at diagnostic commit `0eaf14cc2977820bfee5c485aafb3576325abbb3`. That commit keeps
-the imported `http_target.py`, `common.py`, A21 and golden oracle at the original
-calibration's exact bytes. The driver relocates file paths, never expected hashes.
-A newer checkout containing the repaired controller will intentionally fail those
-old input hash checks. Do not rewrite the manifest to make it pass; use the frozen
-worktree or its byte-identical exported source bundle.
-
 ## Captured evidence
 
 Each request records its logical operation, actual protocol, status, monotonic

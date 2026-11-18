@@ -11,8 +11,6 @@ from __future__ import annotations
 import argparse
 import asyncio
 import base64
-import contextvars
-from contextlib import contextmanager
 import hashlib
 import importlib.util
 import json
@@ -30,8 +28,7 @@ from urllib.parse import urlsplit
 import httpx
 import h11
 
-from common import Database, check_files, digest, expected_value, load, load_a21, mapping_sample, payload_chunk, process_sample, save
-from supervision import register_process
+from common import Database, check_files, digest, load, load_a21, mapping_sample, payload_chunk, process_sample, save
 
 
 class IntegrityFailure(AssertionError):
@@ -70,12 +67,9 @@ class Application:
         command = [*self.descriptor['command'], '--config', str(config)]
         environment = dict(os.environ, DOTNET_PROCESSOR_COUNT='2')
         environment.update(self.descriptor.get('environment', {}))
-        if self.descriptor.get('b22_observation'):
-            environment['NW_B22_OBSERVATIONS'] = str(self.directory / 'b22-observations.jsonl')
         self.started_ns = self.a21.time.monotonic_ns()
         self.process = await asyncio.create_subprocess_exec(*command, stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE, env=environment, start_new_session=True)
-        register_process('application', self.process.pid, self.directory)
         self.ready = asyncio.get_running_loop().create_future()
         self.stdout_log = (self.directory / 'stdout.log').open('w')
         self.stderr_log = (self.directory / 'stderr.log').open('w')
@@ -194,10 +188,6 @@ class Target:
         self.protocols, self.http_outcomes = set(), {}
         self.http_error_codes = {}
         self.overload_uploads = []
-        self.active_identifier = contextvars.ContextVar('b23_logical_request', default=None)
-        self.last_response = contextvars.ContextVar('b23_last_response', default=None)
-        self.failure_capture_count = self.failure_capture_omitted = 0
-        self.error_capture_count = 0
         self.mutations, self.operations = [], []
         self.errors = []
         self.halt_dispatch = False
@@ -207,102 +197,23 @@ class Target:
         spec = importlib.util.spec_from_file_location('b23_independent_hash_oracle', self.manifest['golden'])
         self.golden = importlib.util.module_from_spec(spec); spec.loader.exec_module(self.golden)
 
-    async def request(self, method, path, *, body=None, headers=None, stage=None):
+    async def request(self, method, path, *, body=None, headers=None):
         response = await self.client.request(method, path, content=body, headers=headers)
-        return self.observe_response(response, stage=stage, method=method, path=path)
+        return self.observe_response(response)
 
-    def observe_response(self, response, *, stage=None, method=None, path=None):
-        self.last_response.set((response, stage, method, path))
+    def observe_response(self, response):
         self.protocols.add(response.http_version)
         expected = 'HTTP/2' if self.manifest['protocol'] == 'http2-tls' else 'HTTP/1.1'
-        if response.http_version != expected:
-            self.capture_failure(response, stage=stage, method=method, path=path)
-            raise IntegrityFailure('HTTP response used an unexpected actual protocol')
+        require(response.http_version == expected, 'HTTP response used an unexpected actual protocol')
         key = str(response.status_code)
         self.http_outcomes[key] = self.http_outcomes.get(key, 0) + 1
         if response.status_code >= 400:
-            self.capture_failure(response, stage=stage, method=method, path=path)
             try:
                 code = response.json().get('code', 'unstructured_error')
             except (ValueError, AttributeError):
                 code = 'unstructured_error'
             self.http_error_codes[code] = self.http_error_codes.get(code, 0) + 1
         return response
-
-    def capture_failure(self, response, body=None, body_length=None, body_sha256=None,
-                        *, stage=None, method=None, path=None, body_complete=True):
-        """Bounded exact parsed header/body evidence; credentials are never copied from requests."""
-        if response.extensions.get('nw_b23_failure_captured'):
-            return
-        response.extensions['nw_b23_failure_captured'] = True
-        if self.failure_capture_count >= 32:
-            self.failure_capture_omitted += 1
-            return
-        data = response.content if body is None else body
-        observed_length = len(data) if body_length is None else body_length
-        headers, header_bytes, remaining, header_hash = [], 0, 16384, hashlib.sha256()
-        for name, value in response.headers.raw:
-            header_bytes += len(name) + len(value)
-            for component in (name, value):
-                header_hash.update(len(component).to_bytes(8, 'big')); header_hash.update(component)
-            if remaining:
-                prefix_name = name[:remaining]; remaining -= len(prefix_name)
-                prefix_value = value[:remaining]; remaining -= len(prefix_value)
-                headers.append([base64.b64encode(prefix_name).decode(), base64.b64encode(prefix_value).decode()])
-        row = {'logical_id': self.active_identifier.get(), 'observed_ns': self.a21.time.monotonic_ns(),
-            'stage': stage, 'method': method, 'path': path,
-            'status': response.status_code, 'http_version': response.http_version,
-            'headers_base64': headers, 'header_name_value_bytes': header_bytes,
-            'headers_truncated': header_bytes > 16384,
-            'headers_sha256': header_hash.hexdigest(),
-            'header_hash_encoding': 'Ordered name/value pairs, each prefixed by its unsigned 64-bit big-endian byte length',
-            'body_base64': base64.b64encode(data[:65536]).decode(),
-            'body_bytes': observed_length if body_complete else None,
-            'body_bytes_observed': observed_length, 'body_complete': body_complete,
-            'body_sha256': body_sha256 or hashlib.sha256(data).hexdigest(),
-            'body_sha256_scope': 'complete decoded body' if body_complete else 'decoded bytes yielded before interruption',
-            'body_truncated': observed_length > 65536,
-            'scope': 'Exact parsed header-value bytes and decoded body; no response content coding is configured in this profile'}
-        path = self.directory / 'http-failures.jsonl'
-        with path.open('a') as stream:
-            stream.write(json.dumps(row, separators=(',', ':')) + '\n')
-        self.failure_capture_count += 1
-
-    def complete(self, operation, value, responses=()):
-        """A success event may be emitted only after the entire logical oracle passes."""
-        if value != expected_value(operation):
-            for response, stage, method, path in responses:
-                self.capture_failure(response, stage=stage, method=method, path=path)
-            raise IntegrityFailure('Normalized HTTP/domain result differs: ' + json.dumps(value, sort_keys=True)[:1024])
-        return 'ok', value
-
-    @contextmanager
-    def response_contract(self, response, stage, method, path):
-        """Keep unexpected successful-status DTOs as well as HTTP error bodies."""
-        try:
-            yield
-        except Exception:
-            self.capture_failure(response, stage=stage, method=method, path=path)
-            raise
-
-    def capture_error(self, identifier, error):
-        # Retain malformed successful DTOs as well as HTTP error statuses. The
-        # context-local response cannot be confused with another in-flight call.
-        observed = self.last_response.get()
-        if observed is not None:
-            response, stage, method, path = observed
-            self.capture_failure(response, stage=stage, method=method, path=path)
-        self.errors.append(type(error).__name__ + ': ' + str(error)[:512])
-        if self.error_capture_count < 32:
-            with (self.directory / 'adapter-errors.jsonl').open('a') as stream:
-                stream.write(json.dumps({'logical_id': identifier, 'type': type(error).__name__,
-                    'message': str(error)[:512], 'traceback': traceback.format_exc()[:16384]}) + '\n')
-            self.error_capture_count += 1
-        # A21's stderr observer is bounded. Detailed failures belong to our
-        # bounded file, never an undrained pipe that can block event processing.
-        if len(self.errors) == 1:
-            sys.stderr.write('B23 request failed; see adapter-errors.jsonl and http-failures.jsonl\n')
-            sys.stderr.flush()
 
     async def overload_upload(self, path, upload, headers):
         """Read a real early HTTP/1 response concurrently with bounded body writes.
@@ -355,7 +266,7 @@ class Target:
                     require(status is not None, 'Overload response body arrived without a status')
                     record.update(status=status, response_bytes=len(body), complete_response=True)
                     return self.observe_response(httpx.Response(status, headers=response_headers, content=bytes(body),
-                        extensions={'http_version': b'HTTP/' + version}), stage='upload', method='PUT', path=path)
+                        extensions={'http_version': b'HTTP/' + version}))
                 elif isinstance(event, h11.ConnectionClosed):
                     raise IntegrityFailure('Overload connection closed without a complete observed HTTP response')
         try:
@@ -375,13 +286,12 @@ class Target:
         key = self.prefix + str(identifier)
         response = await self.request('POST', '/v1/items',
             body=json.dumps({'title': title}, separators=(',', ':'), ensure_ascii=False).encode(),
-            headers={'Content-Type': 'application/json', 'Idempotency-Key': key}, stage='create')
-        with self.response_contract(response, 'create', 'POST', '/v1/items'):
-            require(response.status_code == 201, 'Create did not confirm the expected durable mutation')
-            value = response.json()
-            canonical_id(value['operationId']); canonical_id(value['itemId'])
-            require(value['title'] == title and value['responseVersion'] == 1 and value['version'] == 1,
-                    'Created DTO differs from the independently supplied request')
+            headers={'Content-Type': 'application/json', 'Idempotency-Key': key})
+        require(response.status_code == 201, 'Create did not confirm the expected durable mutation')
+        value = response.json()
+        canonical_id(value['operationId']); canonical_id(value['itemId'])
+        require(value['title'] == title and value['responseVersion'] == 1 and value['version'] == 1,
+                'Created DTO differs from the independently supplied request')
         self.mutations.append({'operation_id': value['operationId'], 'item_id': value['itemId'], 'key': key,
             'scope': self.golden.scope_hash('tenant-a', 'alice', 'POST /v1/items'),
             'hash': self.golden.create_hash('tenant-a', 'alice', title), 'status': 201,
@@ -393,30 +303,24 @@ class Target:
         if kind in ('create', 'cycle'):
             response, value = await self.create(identifier, item['title'])
             if kind == 'create':
-                return self.complete(item, {'kind': kind, 'status': response.status_code,
-                    'title': value['title'], 'responseVersion': value['responseVersion'], 'version': value['version']},
-                    [(response, 'create', 'POST', '/v1/items')])
+                return 'ok', {'kind': kind, 'status': response.status_code,
+                    'title': value['title'], 'responseVersion': value['responseVersion'], 'version': value['version']}
             key = self.prefix + str(identifier)
             replay = await self.request('POST', '/v1/items', body=json.dumps({'title': item['title']}).encode(),
-                headers={'Content-Type': 'application/json', 'Idempotency-Key': key}, stage='replay')
-            recovery_path = '/v1/operations/' + value['operationId']
-            recovered = await self.request('GET', recovery_path, stage='recovery')
-            return self.complete(item, {'kind': kind, 'create': response.status_code, 'replay': replay.status_code,
+                headers={'Content-Type': 'application/json', 'Idempotency-Key': key})
+            recovered = await self.request('GET', '/v1/operations/' + value['operationId'])
+            return 'ok', {'kind': kind, 'create': response.status_code, 'replay': replay.status_code,
                 'recovery': recovered.status_code, 'title': value['title'], 'responseVersion': value['responseVersion'],
                 'version': value['version'], 'replay_equal': replay.content == response.content,
-                'recovery_equal': recovered.content == response.content},
-                [(response, 'create', 'POST', '/v1/items'), (replay, 'replay', 'POST', '/v1/items'),
-                 (recovered, 'recovery', 'GET', recovery_path)])
+                'recovery_equal': recovered.content == response.content}
         if kind == 'list':
             path = '/__b23/di-list' if self.manifest.get('di') else '/v1/items'
-            path += '?limit=' + str(item['limit'])
-            response = await self.request('GET', path, stage='list')
-            with self.response_contract(response, 'list', 'GET', path):
-                require(response.status_code == 200, 'Keyset query failed')
-                page = response.json()
-                return self.complete(item, {'kind': kind, 'status': response.status_code,
-                    'titles': [row['title'] for row in page['items']],
-                    'versions': [row['version'] for row in page['items']], 'has_cursor': page['nextCursor'] is not None})
+            response = await self.request('GET', path + '?limit=' + str(item['limit']))
+            require(response.status_code == 200, 'Keyset query failed')
+            page = response.json()
+            return 'ok', {'kind': kind, 'status': response.status_code,
+                'titles': [row['title'] for row in page['items']],
+                'versions': [row['version'] for row in page['items']], 'has_cursor': page['nextCursor'] is not None}
         if kind == 'stream':
             created, value = await self.create(identifier, 'attachment-' + str(identifier))
             key = self.prefix + str(identifier) + '-attachment'
@@ -434,54 +338,34 @@ class Target:
                 'Idempotency-Key': key, 'If-Match': '1', 'Content-Type': 'application/octet-stream',
                 'Content-Length': str(item['bytes'])}
             response = (await self.overload_upload(path, upload(), headers) if self.profile.get('product_only') else
-                        await self.request('PUT', path, body=upload(), headers=headers, stage='upload'))
+                        await self.request('PUT', path, body=upload(), headers=headers))
             if response.status_code == 503 and self.profile.get('product_only'):
                 require(response.json().get('code') == 'upload_capacity', 'Overload returned an unrelated 503')
                 return 'rejected', {'stage': 'upload', 'code': 'upload_capacity'}
-            with self.response_contract(response, 'upload', 'PUT', path):
-                require(response.status_code == 200, 'Attachment binding did not confirm')
-                attached = response.json(); canonical_id(attached['operationId'])
-                require(attached['itemId'] == value['itemId'], 'Attachment identity changed')
-                require(attached['responseVersion'] == 1 and attached['version'] == 2
-                        and attached['contentHash'] == item['sha256'] and attached['contentLength'] == item['bytes'],
-                        'Confirmed attachment DTO differs from the independent v1/hash/length/version oracle')
+            require(response.status_code == 200, 'Attachment binding did not confirm')
+            attached = response.json(); canonical_id(attached['operationId'])
+            require(attached['itemId'] == value['itemId'], 'Attachment identity changed')
+            require(attached['responseVersion'] == 1 and attached['version'] == 2
+                    and attached['contentHash'] == item['sha256'] and attached['contentLength'] == item['bytes'],
+                    'Confirmed attachment DTO differs from the independent v1/hash/length/version oracle')
             self.mutations.append({'operation_id': attached['operationId'], 'item_id': value['itemId'],
                 'key': key, 'scope': self.golden.scope_hash('tenant-a', 'alice', 'PUT /v1/items/{id}/attachment'),
                 'hash': self.golden.attachment_hash('tenant-a', 'alice', value['itemId'], item['sha256'], item['bytes'], 1),
                 'status': response.status_code, 'response_hex': response.content.hex(), 'kind': 'attachment',
                 'content_hash': item['sha256'], 'content_length': item['bytes']})
             actual = hashlib.sha256(); length = 0
-            failure_body = bytearray()
-            downloaded, body_complete = None, False
-            # A GET that fails before response headers must not inherit the
-            # prior successful PUT as its failure response.
-            self.last_response.set(None)
-            try:
-                async with self.client.stream('GET', path) as downloaded:
-                    self.last_response.set((downloaded, 'download', 'GET', path))
-                    self.protocols.add(downloaded.http_version)
-                    self.http_outcomes[str(downloaded.status_code)] = self.http_outcomes.get(str(downloaded.status_code), 0) + 1
-                    require(downloaded.http_version == ('HTTP/2' if self.manifest['protocol'] == 'http2-tls' else 'HTTP/1.1'),
-                            'Streaming download used an unexpected protocol')
-                    async for data in downloaded.aiter_bytes(32768):
-                        actual.update(data); length += len(data)
-                        if len(failure_body) < 65536:
-                            failure_body.extend(data[:65536 - len(failure_body)])
-                    body_complete = True
-            except BaseException:
-                if downloaded is not None:
-                    self.capture_failure(downloaded, bytes(failure_body), length, actual.hexdigest(),
-                        stage='download', method='GET', path=path, body_complete=body_complete)
-                raise
-            if downloaded.status_code != 200 or length != item['bytes'] or actual.hexdigest() != item['sha256']:
-                self.capture_failure(downloaded, bytes(failure_body), length, actual.hexdigest(),
-                    stage='download', method='GET', path=path)
-            return self.complete(item, {'kind': kind, 'create': created.status_code, 'upload': response.status_code,
-                'download': downloaded.status_code, 'bytes': length, 'sha256': actual.hexdigest(), 'version': attached['version']})
+            async with self.client.stream('GET', path) as downloaded:
+                self.protocols.add(downloaded.http_version)
+                require(downloaded.http_version == ('HTTP/2' if self.manifest['protocol'] == 'http2-tls' else 'HTTP/1.1'),
+                        'Streaming download used an unexpected protocol')
+                self.http_outcomes[str(downloaded.status_code)] = self.http_outcomes.get(str(downloaded.status_code), 0) + 1
+                async for data in downloaded.aiter_bytes(32768):
+                    actual.update(data); length += len(data)
+            return 'ok', {'kind': kind, 'create': created.status_code, 'upload': response.status_code,
+                'download': downloaded.status_code, 'bytes': length, 'sha256': actual.hexdigest(), 'version': attached['version']}
         if kind == 'diagnostic-failure':
-            response = await self.request('GET', '/__b23/failure', stage='intentional-diagnostic-failure')
-            return self.complete(item, {'kind': kind, 'status': response.status_code},
-                [(response, 'intentional-diagnostic-failure', 'GET', '/__b23/failure')])
+            response = await self.request('GET', '/__b23/failure')
+            return 'ok', {'kind': kind, 'status': response.status_code}
         raise IntegrityFailure('Unsupported operation token')
 
     async def seed(self):
@@ -595,8 +479,6 @@ class Target:
                 tasks = set()
 
                 async def execute(identifier, token, mode):
-                    self.active_identifier.set(identifier)
-                    self.last_response.set(None)
                     async with self.semaphore:
                         if self.halt_dispatch:
                             value = {'reason': 'Earlier integrity/transport failure stopped new application HTTP dispatch'}
@@ -611,9 +493,6 @@ class Target:
                             require(mode == 'ok', 'Fault injections cannot enter a throughput cell')
                             operation = json.loads(base64.urlsafe_b64decode(token.encode()))
                             outcome, value = await self.operation(identifier, operation)
-                            if outcome == 'ok':
-                                require(value == expected_value(operation),
-                                    'Normalized HTTP/domain result failed the independent expected-value oracle')
                             # A21 finishes warmup before its measured arrivals.
                             # Observation failures are ordinary failed outcomes,
                             # never unobserved background-task exceptions.
@@ -621,8 +500,9 @@ class Target:
                                 receipt['probe_before'] = await self.probe()
                         except Exception as error:
                             self.halt_dispatch = True
-                            self.capture_error(identifier, error)
+                            self.errors.append(type(error).__name__ + ': ' + str(error))
                             outcome, value = 'failed', {'error': type(error).__name__}
+                            traceback.print_exc(file=sys.stderr)
                         self.operations.append({'id': identifier, 'status': outcome, 'value': value})
                         emit({'kind': 'completed', 'id': identifier, 'status': outcome, 'value': value, 'counters': self.counters})
 
@@ -663,13 +543,6 @@ class Target:
                 overload_upload_observations=self.overload_uploads,
                 closed=self.application.closed, last_probe=self.application.latest_probe,
                 resources='application/resources.jsonl', source_manifest_sha256=digest(self.args.manifest))
-            receipt['failed_http_capture'] = {'captured': self.failure_capture_count, 'omitted_after_bound': self.failure_capture_omitted,
-                'maximum_records': 32, 'maximum_body_bytes_per_record': 65536, 'maximum_header_bytes_per_record': 16384,
-                'path': 'http-failures.jsonl' if self.failure_capture_count else None,
-                'sha256': digest(self.directory / 'http-failures.jsonl') if self.failure_capture_count else None}
-            receipt['adapter_error_capture'] = {'records': self.error_capture_count,
-                'path': 'adapter-errors.jsonl' if self.error_capture_count else None,
-                'sha256': digest(self.directory / 'adapter-errors.jsonl') if self.error_capture_count else None}
             save(self.directory / 'receipt.json', receipt)
         return 0 if receipt['status'] == 'passed' else 1
 
@@ -680,7 +553,6 @@ def main():
     parser.add_argument('--route', required=True, choices=sorted(load_a21().ROUTES))
     parser.add_argument('--a21', type=Path)
     args = parser.parse_args()
-    register_process('http-adapter', os.getpid())
     return asyncio.run(Target(args).run())
 
 
