@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Net;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
 using NativeWeave.Interop;
@@ -24,14 +25,17 @@ internal static class NativePackage
     }
     private static EngineDescriptor Create()
     {
-        using Stream input = typeof(NativeHost).Assembly.GetManifestResourceStream("NativeWeave.Server.native-sha256")
+        Assembly assembly = typeof(NativeHost).Assembly;
+        string version = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0]
+            ?? throw new InvalidOperationException("The Server facade is missing its package version.");
+        using Stream input = assembly.GetManifestResourceStream("NativeWeave.Server.native-sha256")
             ?? throw new InvalidOperationException("The Server package is missing its native asset fingerprint.");
         using var reader = new StreamReader(input);
         string hash = reader.ReadToEnd().Trim().ToLowerInvariant();
-        return EnginePackage.CreateDescriptor(new EnginePackageManifest("server", "NativeWeave.Server", "0.1.0-preview.1", new AbiVersion(1, 0),
+        return EnginePackage.CreateDescriptor(new EnginePackageManifest("server", "NativeWeave.Server", version, new AbiVersion(1, 0),
             "nw_server_get_abi_v1", EngineThreadingModel.EngineLocalAsync,
             [new NativeAssetDescriptor("linux-x64", "runtimes/linux-x64/native/libnativeweave_server.so", hash, "x86-64")],
-            Names.Select((name, bit) => new EngineCapabilityDefinition(new EngineCapability(name), bit)).ToArray()), typeof(NativeHost).Assembly);
+            Names.Select((name, bit) => new EngineCapabilityDefinition(new EngineCapability(name), bit)).ToArray()), assembly);
     }
 }
 

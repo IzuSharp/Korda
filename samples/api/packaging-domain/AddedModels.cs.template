@@ -1,0 +1,32 @@
+using System.Text.Json.Serialization;
+using NativeWeave.Data;
+using NativeWeave.Database;
+
+// Added after both restores. This ordinary managed entity, DTO and handler
+// executes through the existing metadata/native interfaces and real HTTP route.
+internal sealed record AddedEntity(long Number, string Label);
+internal sealed record AddedDto(long Number, string Label);
+[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[JsonSerializable(typeof(AddedDto))]
+internal partial class AddedJson : JsonSerializerContext;
+internal static class AddedModels
+{
+    internal static AddedDto Handle(AddedEntity value) => new(value.Number, value.Label);
+    internal static async Task Verify(DataSource source)
+    {
+        string name = "nw_b24_added_" + Guid.NewGuid().ToString("N");
+        await using var session = await source.OpenSessionAsync();
+        await session.ExecuteAsync(SqlCommand.Create("CREATE TABLE " + name + "(number BIGINT PRIMARY KEY,label TEXT NOT NULL)", kind: SqlCommandKind.Mutation));
+        try
+        {
+            var builder = new TableBuilder<AddedEntity>(name);
+            var number = builder.Column("number", Codecs.Int64, new() { IsPrimaryKey = true });
+            var label = builder.Column("label", Codecs.String);
+            var table = builder.Build(row => new(row.Get(number), row.Get(label)), (row, value) => { row.Set(number, value.Number); row.Set(label, value.Label); });
+            await session.InsertAsync(table, new AddedEntity(9, "ordinary edit"));
+            var value = await session.FindAsync(table, table.Key(number, 9L));
+            if (value is null || Handle(value) != new AddedDto(9, "ordinary edit")) throw new InvalidOperationException("Added entity/DTO/handler roundtrip failed.");
+        }
+        finally { await session.ExecuteAsync(SqlCommand.Create("DROP TABLE " + name, kind: SqlCommandKind.Mutation)); }
+    }
+}

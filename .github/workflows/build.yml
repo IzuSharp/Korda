@@ -67,6 +67,26 @@ jobs:
         run: bash eng/verify-task04-linux.sh
       - name: Reject Task-04 source or dependency drift
         run: git diff --exit-code
+      - name: Verify Task-07 domain packages and pristine Linux consumers
+        run: bash eng/verify-task07-linux.sh
+      - name: Reject Task-07 source or dependency drift
+        run: git diff --exit-code
+      - name: Restore runner ownership of exported Task-07 evidence
+        if: always()
+        run: |
+          # Atomic JSON files created by root inside the SDK container are 0600.
+          # Only the declared export directories change owner; working feeds,
+          # databases, TLS keys and consumer caches remain outside this scope.
+          task07_owner="$(id -u):$(id -g)"
+          for task07_evidence in \
+            artifacts/task07/B24/prepared/evidence \
+            artifacts/task07/B24/release/evidence \
+            artifacts/task07/B24/runtime/evidence \
+            artifacts/task07/B24/evidence; do
+            if sudo test -d "$task07_evidence"; then
+              sudo chown -R --no-dereference "$task07_owner" "$task07_evidence"
+            fi
+          done
       - name: Retain verification logs and evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -79,6 +99,12 @@ jobs:
             artifacts/pristine-consumer.json
             artifacts/task04/
             !artifacts/task04/**/cargo-target/**
+            artifacts/task07/B24/native-build/manifest.json
+            artifacts/task07/B24/prepared/manifest.json
+            artifacts/task07/B24/prepared/evidence/
+            artifacts/task07/B24/release/evidence/
+            artifacts/task07/B24/runtime/evidence/
+            artifacts/task07/B24/evidence/
           if-no-files-found: error
           retention-days: 14
       - name: Retain the exact verified candidate
