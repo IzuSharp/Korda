@@ -1,0 +1,115 @@
+{
+  "schema_version": 1,
+  "platform": "linux-x64",
+  "routes": {
+    "managed-aot": {
+      "command": [
+        "/workspace/scratch/58d2a6adf1c3/task07-runs/b23-comparators/managed-aot/NativeWeave.Benchmarks.ManagedComparator"
+      ],
+      "artifacts": {
+        "/workspace/scratch/58d2a6adf1c3/task07-runs/b23-comparators/managed-aot/NativeWeave.Benchmarks.ManagedComparator": "391221919deab6855f02438d894d78b82038b33a4e9819f91ed1cbcd7f2303dd",
+        "/workspace/scratch/58d2a6adf1c3/task07-runs/b23-comparators/managed-aot/libsqlite3.so": "2b99b38b699d3834c39b1e38d089dade94f64f8beac82d2461217d81a251b654"
+      },
+      "lock_hashes": {
+        "src/Benchmarks.Domain/comparators/managed/packages.linux-x64.aot.lock.json": "d48a900b45f50432780986e9de36400480ff43db0839270c45b11cf034efe732",
+        "src/Benchmarks.Domain/comparators/managed/packages.lock.json": "cf5557cf17cd32e65393918363c86cf7abd9d497ef70c2a362f9e2a1e6a80004"
+      },
+      "toolchain": {
+        "dotnet": "11.0.100",
+        "target": "linux-x64",
+        "native_isa": "portable x86-64; no host-native ISA override",
+        "sqlite_compiler": "Debian clang version 19.1.7 (3+b1)"
+      },
+      "source_identity": {
+        "base_commit": "517d1e42cfa04f0d6a81ddf2d520a9268a26e7b9",
+        "files": {
+          "src/Benchmarks.Domain/comparators/managed/Configuration.cs": "fc06c5533807d9e4c195b521e794f5b076dbb4ced36f82f45182604541016e70",
+          "src/Benchmarks.Domain/comparators/managed/Database.cs": "ea9e0a0d386d36678995fd9fc234a18825ebd777903b6e1bad013f7878423e76",
+          "src/Benchmarks.Domain/comparators/managed/Operations.cs": "fa35ccfd60761e67001e1e7402837bf4c1f60ea292e09b14bb60733ab750484b",
+          "src/Benchmarks.Domain/comparators/managed/Outbox.cs": "55b121c5a7061ae0dcdbcfe01ef870747f48fa1eb6d76cfb6eced98f0e324da0",
+          "src/Benchmarks.Domain/comparators/managed/Program.cs": "e64458bc34057bef4743d08be49525446bead48227f48d809c67911884f9b714",
+          "src/Benchmarks.Domain/comparators/managed/ManagedComparator.csproj": "2fdacf051bf56980a5831c1b605aa161cc4091f4db20675e72a439636e157a3f",
+          "src/Reference.TaskService/Protocol.cs": "fb54871265cb7f9b21bd04bf8e4096742ff049f75aa68c1f6abaaadc412be6e4",
+          "src/Reference.TaskService/BlobStore.cs": "b129c4d29a957a1f9da2d69035a7e9e451aa9e66b1f401def541f3edff78dc68",
+          "src/Reference.TaskService/Migrations/consumer.sql": "8219cd4d22b9247dbff4093a0ed3002ba58f999107e342491572447f66a2ebec",
+          "src/Reference.TaskService/Migrations/postgresql.sql": "fa30e8ec6090022cd3c92b5c0bb8eeb2a85e2ffb82633087245d26fef017a4c2",
+          "src/Reference.TaskService/Migrations/sqlite.sql": "4c27389f364c59e41db477a12bf3d2b2d9cf8a2e1a577e9a1e2bc9a7a0b39155"
+        }
+      },
+      "supported": {
+        "providers": [
+          "sqlite",
+          "postgresql"
+        ],
+        "protocols": [
+          "http1",
+          "http1-tls",
+          "http2-tls"
+        ],
+        "kinds": [
+          "create",
+          "cycle",
+          "list",
+          "stream"
+        ]
+      },
+      "limitations": [
+        "Ordinary workload cells only. No B22 fault/soak or maintenance acceptance.",
+        "No equivalent NativeWeave global byte-credit/overload ledger; corresponding cells not implemented/not run.",
+        "No DI or enabled-diagnostics variants.",
+        "ADO.NET fixed SQL query route and provider preparation/runtime architecture differ from typed NativeWeave and direct Rust; report separately.",
+        "Seven-day retention maintenance is not implemented; fresh bounded-duration datasets only."
+      ],
+      "readiness": [
+        {
+          "provider": "sqlite",
+          "protocol": "http1",
+          "cases_passed": 127,
+          "path": "/workspace/scratch/58d2a6adf1c3/task07-runs/b23-comparators/managed-aot-sqlite-http1-001/summary.json",
+          "sha256": "441cda0b25026f6ce7b9521f2e85ed6fd97abb9ed32d774495c720c2ca39f91b",
+          "controller_sha256": "d79740505ba98e3fc6c5253197528fdc5ddfac55a709290cd32d995ded5a59c4"
+        },
+        {
+          "provider": "postgresql",
+          "protocol": "http1",
+          "cases_passed": 127,
+          "path": "/workspace/scratch/58d2a6adf1c3/task07-runs/b23-comparators/managed-aot-postgresql-http1-002/summary.json",
+          "sha256": "e1bf6d9fdefadc4e73b19e78c7c4224dbc35b1e3e4fddb927a4e7e0d78f76982",
+          "controller_sha256": "89db04bc6597dba25b769b13339074380c95a4eaa8d993578f6e37ab0d6ec6d0"
+        },
+        {
+          "provider": "sqlite",
+          "protocol": "https1",
+          "cases_passed": 127,
+          "path": "/workspace/scratch/58d2a6adf1c3/task07-runs/b23-comparators/managed-aot-sqlite-https1-001/summary.json",
+          "sha256": "28c0bc410c2aba65002bfa8cc2e105c7e940431cf7c6b118226053ca698c5375",
+          "controller_sha256": "89db04bc6597dba25b769b13339074380c95a4eaa8d993578f6e37ab0d6ec6d0"
+        },
+        {
+          "provider": "sqlite",
+          "protocol": "https2",
+          "cases_passed": 127,
+          "path": "/workspace/scratch/58d2a6adf1c3/task07-runs/b23-comparators/managed-aot-sqlite-https2-002/summary.json",
+          "sha256": "87423fc40373d7256af5d14fd476fb001e4a2753e9ddf08028d45b42f4d3f6e8",
+          "controller_sha256": "89db04bc6597dba25b769b13339074380c95a4eaa8d993578f6e37ab0d6ec6d0"
+        },
+        {
+          "provider": "postgresql",
+          "protocol": "https1",
+          "cases_passed": 127,
+          "path": "/workspace/scratch/58d2a6adf1c3/task07-runs/b23-comparators/managed-aot-postgresql-https1-001/summary.json",
+          "sha256": "78a6086a480a0f0a945d9b50e7881c998e9635919311ad73c0ba5b563edf2d8d",
+          "controller_sha256": "89db04bc6597dba25b769b13339074380c95a4eaa8d993578f6e37ab0d6ec6d0"
+        },
+        {
+          "provider": "postgresql",
+          "protocol": "https2",
+          "cases_passed": 127,
+          "path": "/workspace/scratch/58d2a6adf1c3/task07-runs/b23-comparators/managed-aot-postgresql-https2-001/summary.json",
+          "sha256": "3e1f5623d508cb0c0ccbd276cd29904180443e16873e0246d324cbb43b240de9",
+          "controller_sha256": "89db04bc6597dba25b769b13339074380c95a4eaa8d993578f6e37ab0d6ec6d0"
+        }
+      ]
+    }
+  }
+}
