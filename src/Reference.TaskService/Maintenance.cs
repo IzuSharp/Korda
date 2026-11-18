@@ -17,7 +17,7 @@ internal sealed partial class TaskService
         var session = await source.OpenSessionAsync(token).ConfigureAwait(false);
         try
         {
-            var transaction = await session.BeginTransactionAsync(token).ConfigureAwait(false);
+            using var transaction = await session.BeginTransactionAsync(token).ConfigureAwait(false);
             using (var query = session.From(Outbox.Table))
             {
                 query.WhereEqual(Outbox.DeliveryState, 2L).Where(query.Column(Outbox.CompletedAt).LessThan(cutoff)).OrderBy(Outbox.CompletedAt).ThenBy(Outbox.EventId).Take(100);

@@ -48,7 +48,7 @@ internal sealed class OutboxWorker(DataSource source, DataSource consumer)
         var session = await source.OpenSessionAsync(token).ConfigureAwait(false);
         try
         {
-            var transaction = await session.BeginTransactionAsync(token).ConfigureAwait(false);
+            using var transaction = await session.BeginTransactionAsync(token).ConfigureAwait(false);
             long now = TaskService.Now();
             using var query = session.From(Outbox.Table);
             query.Where(query.Column(Outbox.DeliveryState).LessThan(2L)
@@ -84,7 +84,7 @@ internal sealed class OutboxWorker(DataSource source, DataSource consumer)
         var session = await consumer.OpenSessionAsync(token).ConfigureAwait(false);
         try
         {
-            var transaction = await session.BeginTransactionAsync(new() { RecoveryKey = entry.EventId }, token).ConfigureAwait(false);
+            using var transaction = await session.BeginTransactionAsync(new() { RecoveryKey = entry.EventId }, token).ConfigureAwait(false);
             string payloadHash = Canonical.Hash(entry.Payload);
             var claim = SqlCommand.Create("INSERT INTO receipts(event_id,payload_hash,delivery_attempts,effects) VALUES(@id,@hash,1,1) ON CONFLICT(event_id) DO NOTHING RETURNING event_id",
                 new SqlParameters().Add("id", entry.EventId, Codecs.String).Add("hash", payloadHash, Codecs.String));

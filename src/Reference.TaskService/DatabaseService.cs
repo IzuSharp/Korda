@@ -50,6 +50,7 @@ internal sealed partial class TaskService(DataSource source, CursorCodec cursors
         {
             await CloseSessionAsync(session).ConfigureAwait(false);
             if (protectedCommit && transaction is not null) cleanup.Transfer(transaction, () => blobs.ConfirmCommit(operation));
+            else transaction?.Dispose();
         }
     }
 
