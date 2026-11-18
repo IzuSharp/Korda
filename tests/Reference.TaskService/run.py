@@ -22,6 +22,7 @@ import subprocess
 import sys
 import threading
 import time
+import uuid
 from urllib.parse import quote
 
 import httpx
@@ -259,8 +260,84 @@ def run_cases(service, database, oracle, identities):
     changed[-1] ^= 1
     oracle.check('attachment-same-key-different-content', service.request('PUT', attachment, bytes(changed), headers, alice)[0] == 409)
     oracle.check('attachment-conflict-keeps-durable-content', service.request('GET', attachment, token=alice)[1] == data)
+
+    # The client may hold a whole fixture; the product must stream it under its
+    # separate 4MiB request credit, in chunks no larger than 32KiB.
+    large = b'0123456789abcdef' * ((64 * 1024 * 1024) // 16)
+    large_headers = dict(headers, **{'Idempotency-Key': 'attachment-at-limit', 'If-Match': '2', 'Content-Length': str(len(large))})
+    s, _, _ = service.request('PUT', attachment, large, large_headers, alice)
+    oracle.check('attachment-exact-sixty-four-mib', s in (200, 201), {'status': s, 'bytes': len(large)})
+    s, received, _ = service.request('GET', attachment, token=alice)
+    oracle.check('attachment-large-streamed-roundtrip', s == 200 and hashlib.sha256(received).digest() == hashlib.sha256(large).digest())
+    del received, large
+
+    retention = create(service, alice, 'retention-expiry', 'retention example')
+    oracle.check('retention-example-confirmed', retention[0] == 201)
     return {'item_id': first['itemId'], 'operation_id': first['operationId'],
-            'attachment_sha256': hashlib.sha256(data).hexdigest()}
+            'attachment_sha256': database.scalar(f"SELECT content_hash FROM attachments WHERE tenant_id='tenant-a' AND item_id='{first['itemId']}'"),
+            'retention_operation_id': json.loads(retention[1])['operationId']}
+
+
+def run_operator_cases(command, config, config_path, output, database, oracle, result):
+    """Deterministic operator-driven redelivery/retention/GC, not crash evidence."""
+    def admin(option, label):
+        process = subprocess.run([*command, '--config', str(config_path), option],
+            capture_output=True, timeout=120)
+        (output / (label + '.log')).write_bytes(process.stdout + process.stderr)
+        oracle.check(label, process.returncode == 0, {'exit_code': process.returncode})
+
+    for batch in range(4):
+        admin('--outbox-once', 'outbox-batch-' + str(batch))
+        if int(database.scalar('SELECT COUNT(*) FROM outbox WHERE delivery_state<>2')) == 0:
+            break
+    oracle.check('outbox-acknowledged', int(database.scalar('SELECT COUNT(*) FROM outbox WHERE delivery_state<>2')) == 0)
+    event = database.scalar(f"SELECT event_id FROM outbox WHERE operation_id='{result['operation_id']}'")
+    consumer = Database('sqlite', config['consumerDatabase'])
+    before = int(consumer.scalar(f"SELECT delivery_attempts FROM receipts WHERE event_id='{event}'"))
+    database.sql(f"UPDATE outbox SET delivery_state=0,available_at=0,lease_until=0,completed_at=0 WHERE event_id='{event}'")
+    admin('--outbox-once', 'outbox-explicit-redelivery')
+    oracle.check('persistent-consumer-counts-duplicate', int(consumer.scalar(f"SELECT delivery_attempts FROM receipts WHERE event_id='{event}'")) == before + 1)
+    oracle.check('persistent-consumer-one-effect', int(consumer.scalar(f"SELECT effects FROM receipts WHERE event_id='{event}'")) == 1)
+    oracle.check('consumer-every-event-one-effect', int(consumer.scalar('SELECT COUNT(*) FROM receipts WHERE effects<>1')) == 0)
+
+    old = int(time.time() * 1000) - 8 * 24 * 60 * 60 * 1000
+    operation = result['retention_operation_id']
+    database.sql(f"UPDATE operations SET completed_at={old} WHERE operation_id='{operation}'")
+    database.sql(f"UPDATE outbox SET delivery_state=0,completed_at=0 WHERE operation_id='{operation}'")
+    admin('--maintenance-once', 'retention-with-pending-outbox')
+    oracle.check('pending-outbox-protects-old-operation', int(database.scalar(f"SELECT COUNT(*) FROM operations WHERE operation_id='{operation}'")) == 1)
+    database.sql(f"UPDATE outbox SET delivery_state=2,completed_at={old} WHERE operation_id='{operation}'")
+    recovery = Path(config['blobDirectory']) / 'recovery' / (operation + '.json')
+    recovery.write_text(json.dumps({'version': 1, 'operationId': operation,
+        'scope': scope_hash('tenant-a', 'alice', 'POST /v1/items'), 'requestKey': 'retention-expiry',
+        'requestHash': create_hash('tenant-a', 'alice', 'retention example'), 'createdAt': old}))
+    admin('--maintenance-once', 'retention-with-recovery-manifest')
+    oracle.check('recovery-manifest-protects-old-operation', int(database.scalar(f"SELECT COUNT(*) FROM operations WHERE operation_id='{operation}'")) == 1)
+    recovery.unlink()
+    admin('--maintenance-once', 'retention-after-protection-resolved')
+    oracle.check('expired-unreferenced-operation-removed', int(database.scalar(f"SELECT COUNT(*) FROM operations WHERE operation_id='{operation}'")) == 0)
+
+    root = Path(config['blobDirectory'])
+    fixtures = {}
+    for name in ['old-orphan', 'recent-orphan', 'protected-recovery']:
+        payload = ('independent-' + name).encode()
+        digest = hashlib.sha256(payload).hexdigest()
+        path = root / 'blobs' / digest
+        path.write_bytes(payload)
+        fixtures[name] = (path, payload, digest)
+        if name != 'recent-orphan':
+            os.utime(path, (old / 1000, old / 1000))
+    protected_id = str(uuid.uuid4())
+    protected = fixtures['protected-recovery']
+    manifest = {'version': 1, 'operationId': protected_id, 'tenant': 'tenant-a', 'principal': 'alice',
+        'itemId': result['item_id'], 'requestKey': 'protected-fixture', 'expectedVersion': 3,
+        'contentHash': protected[2], 'contentLength': len(protected[1]), 'state': 'prepared', 'createdAt': old}
+    (root / 'staging' / (protected_id + '.json')).write_text(json.dumps(manifest))
+    admin('--maintenance-once', 'orphan-grace-and-protection')
+    oracle.check('old-unreferenced-blob-collected', not fixtures['old-orphan'][0].exists())
+    oracle.check('recent-blob-grace-preserved', fixtures['recent-orphan'][0].exists())
+    oracle.check('prepared-recovery-blob-preserved', protected[0].exists())
+    oracle.check('authorized-reference-blob-preserved', (root / 'blobs' / result['attachment_sha256']).exists())
 
 
 def main():
@@ -308,6 +385,12 @@ def main():
         result = run_cases(service, database, oracle, tokens)
         expected_protocol = 'HTTP/2' if args.http2 else 'HTTP/1.1'
         oracle.check('actual-http-protocol', service.protocols == {expected_protocol}, sorted(service.protocols))
+    run_operator_cases(command, config, service.config_path, output, database, oracle, result)
+    with factory(config, output / 'restart') as restarted:
+        retry = create(restarted, tokens['alice'], 'retention-expiry', 'retention example')
+        oracle.check('expired-key-no-permanent-replay-promise', retry[0] == 201 and json.loads(retry[1])['operationId'] != result['retention_operation_id'])
+        download = restarted.request('GET', '/v1/items/' + result['item_id'] + '/attachment', token=tokens['alice'])
+        oracle.check('referenced-attachment-survives-restart', download[0] == 200 and hashlib.sha256(download[1]).hexdigest() == result['attachment_sha256'])
     if args.postgres_oracles:
         if args.provider != 'postgresql':
             parser.error('--postgres-oracles requires PostgreSQL.')
