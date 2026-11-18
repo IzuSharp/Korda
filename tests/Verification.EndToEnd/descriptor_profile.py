@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Run a frozen B22 Linux stage with independent descriptor-role witnesses.
+"""Run a frozen B22 Linux stage with independent descriptor/thread witnesses.
 
 The existing soak controller, application and trace observer are unchanged.
-This external supervisor adds prospective FD evidence; its receipt is required
+This external supervisor adds prospective ownership evidence; its receipt is required
 alongside the ordinary stage receipt for the supplemented profile to pass.
 """
 from __future__ import annotations
@@ -18,7 +18,7 @@ import time
 from urllib.parse import urlsplit
 
 from harness import HERE, require, sha, write_json
-from soak import Journal, Tail
+from soak import Journal, Tail, ZERO_GAUGES
 
 
 def process_identity(pid):
@@ -87,6 +87,60 @@ def snapshot(target, output, http_port, postgres_port, phase):
             'inventory': inventory}
 
 
+def thread_snapshot(target, phase):
+    require(process_identity(target['pid']) == target, 'Observed application PID identity changed')
+    started = time.monotonic_ns()
+    entries = sorted((Path('/proc') / str(target['pid']) / 'task').iterdir(), key=lambda path: int(path.name))
+    inventory, vanished, names = [], [], {}
+    for entry in entries:
+        try:
+            first = (entry / 'stat').read_text().rsplit(')', 1)[1].split()
+            name = (entry / 'comm').read_text().strip()
+            wait_channel = (entry / 'wchan').read_text().strip()
+            second = (entry / 'stat').read_text().rsplit(')', 1)[1].split()
+        except FileNotFoundError:
+            vanished.append(int(entry.name))
+            continue
+        require(first[19] == second[19], 'Thread identifier reused during ownership snapshot')
+        inventory.append({'tid': int(entry.name), 'startTicks': int(first[19]), 'name': name,
+                          'stateBefore': first[0], 'stateAfter': second[0], 'waitChannel': wait_channel})
+        names[name] = names.get(name, 0) + 1
+    require(process_identity(target['pid']) == target, 'Application identity changed during thread snapshot')
+    return {'phase': phase, 'target': target, 'startedMonotonicNs': started,
+            'endedMonotonicNs': time.monotonic_ns(), 'enumerated': len(entries),
+            'resolved': len(inventory), 'vanishedDuringRead': vanished,
+            'countsByName': names, 'inventory': inventory}
+
+
+def thread_within_band(row, policy, *, idle=False):
+    names = row['countsByName']
+    caps = policy['classCaps']
+    if any(name not in caps or count > caps[name] for name, count in names.items()):
+        return False
+    # The blocking reserve and adaptive managed workers share the measured
+    # residual budget. Neither can silently consume a second independent reserve.
+    dynamic = names.get('.NET TP Worker', 0) + max(0, names.get('nw-db-worker', 0) - policy['asyncDatabaseWorkers'])
+    if dynamic > policy['idleDynamicResidualCap' if idle else 'peakDynamicResidualCap']:
+        return False
+    if idle:
+        if row['vanishedDuringRead'] or any(names.get(name, 0) != count for name, count in policy['fixedIdleCounts'].items()):
+            return False
+        if names.get('nw-db-worker', 0) < policy['asyncDatabaseWorkers']:
+            return False
+        if names.get('sqlx-sqlite-wor', 0) == 0 or names.get('.NET TP Worker', 0) == 0:
+            return False
+    return True
+
+
+def sqlx_workers_match_files(threads, descriptors):
+    if threads['vanishedDuringRead'] or descriptors['vanishedDuringRead']:
+        return False
+    main_files = sum(item['category'] == 'fixtureFile' and
+                     item['owner'] in ('application.sqlite', 'consumer.sqlite')
+                     for item in descriptors['inventory'])
+    return main_files >= 2 and threads['countsByName'].get('sqlx-sqlite-wor', 0) == main_files
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--profile', type=Path, required=True)
@@ -106,6 +160,10 @@ def main():
     supplement = profile['fdThresholdSupplement']
     require(supplement['descriptorMonitorSha256'] == monitor_sha,
             'External descriptor monitor differs from its reviewed frozen input')
+    thread_policy = profile.get('threadThresholdSupplement')
+    if thread_policy is not None:
+        require(args.provider == 'sqlite' and thread_policy['monitorSha256'] == monitor_sha,
+                'Classified thread supplement requires its exact reviewed SQLite monitor')
     output = args.output.resolve()
     monitor_output = output.with_name(output.name + '-descriptors')
     monitor_output.mkdir(parents=True, exist_ok=False)
@@ -123,8 +181,11 @@ def main():
     write_json(monitor_output / 'request.json', receipt)
     samples = Journal(monitor_output / 'counts.jsonl')
     peaks = Journal(monitor_output / 'peak-inventories.jsonl')
+    thread_samples = Journal(monitor_output / 'thread-owners.jsonl') if thread_policy is not None else None
     last_idle = target = None
+    last_idle_threads = None
     maximum = 0
+    maximum_threads = 0
     child = None
     previous_handlers = {}
     try:
@@ -181,8 +242,26 @@ def main():
                                 peaks.write(row)
                             require(row['enumerated'] <= profile['peakCaps']['fileDescriptors'],
                                     'External inventory exceeded the frozen peak descriptor cap')
-                            if phase == 'idle':
+                            threads = None
+                            if thread_policy is not None:
+                                threads = thread_snapshot(target, phase)
+                                thread_samples.write(threads)
+                                maximum_threads = max(maximum_threads, threads['enumerated'])
+                                # Server close helpers share the truncated comm
+                                # of its steady runtime. Retain every sample now;
+                                # classify only exact pre-closure samples after
+                                # the ordinary receipt supplies that boundary.
+                            qualified_idle = thread_policy is None or (all(
+                                tail.latest.get('resources', {}).get(f'native.{provider}.{kind}') == count
+                                for provider, counts in profile['postGcNativeBaseline'].items()
+                                for kind, count in enumerate(counts)) and all(
+                                tail.latest.get('resources', {}).get(key) == 0 for key in ZERO_GAUGES))
+                            if phase == 'idle' and qualified_idle and (threads is None or
+                                    threads['enumerated'] <= profile['idleCaps']['threads'] and
+                                    thread_within_band(threads, thread_policy, idle=True) and
+                                    sqlx_workers_match_files(threads, row)):
                                 last_idle = row
+                                last_idle_threads = threads
                         except FileNotFoundError:
                             # Closure races remain absent observations, never fabricated zeroes.
                             receipt['processReadRaces'] = receipt.get('processReadRaces', 0) + 1
@@ -224,6 +303,27 @@ def main():
                     'SQLite profile unexpectedly retained a PostgreSQL socket')
         require(0 <= stage['stageCompletedBeforeClosureNs'] - last_idle['endedMonotonicNs'] <= 3_300_000_000,
                 'Descriptor idle witness is stale or follows process closure')
+        if thread_policy is not None:
+            thread_rows = [json.loads(line) for line in (monitor_output / 'thread-owners.jsonl').read_text().splitlines()]
+            pre_closure = [row for row in thread_rows
+                           if row['endedMonotonicNs'] <= stage['stageCompletedBeforeClosureNs']]
+            require(pre_closure, 'No actual pre-closure thread ownership samples were obtained')
+            require(all(row['enumerated'] <= profile['peakCaps']['threads'] and
+                        thread_within_band(row, thread_policy) for row in pre_closure),
+                    'Pre-closure thread class, total, or combined dynamic residual exceeded its frozen band')
+            receipt.update(adjudicatedThreadSamples=len(pre_closure),
+                           closureOverlappingOrLaterThreadSamples=len(thread_rows) - len(pre_closure),
+                           peakPreClosureThreads=max(row['enumerated'] for row in pre_closure))
+            require(last_idle_threads is not None and
+                    0 <= stage['stageCompletedBeforeClosureNs'] - last_idle_threads['endedMonotonicNs'] <= 3_300_000_000,
+                    'No fresh classified live thread idle witness preceded process closure')
+            require(last_idle_threads['enumerated'] <= profile['idleCaps']['threads'] and
+                    thread_within_band(last_idle_threads, thread_policy, idle=True) and
+                    sqlx_workers_match_files(last_idle_threads, last_idle),
+                    'Final live thread owners exceed their frozen idle bands')
+            write_json(monitor_output / 'final-live-idle-threads.json', last_idle_threads)
+            receipt.update(peakEnumeratedThreads=maximum_threads,
+                           finalLiveIdleThreadsSha256=sha(monitor_output / 'final-live-idle-threads.json'))
         require(sha(Path(__file__)) == monitor_sha and sha(args.profile) == receipt['profileSha256'],
                 'Frozen monitor/profile inputs changed during execution')
         write_json(monitor_output / 'final-live-idle.json', last_idle)
@@ -244,6 +344,10 @@ def main():
     finally:
         samples.close()
         peaks.close()
+        if thread_samples is not None:
+            thread_samples.close()
+            receipt.update(threadOwnersSha256=sha(monitor_output / 'thread-owners.jsonl'),
+                           peakEnumeratedThreads=maximum_threads)
         for sig, handler in previous_handlers.items():
             signal.signal(sig, handler)
         receipt.update(endedUnixNs=time.time_ns(), numericSamplesSha256=sha(monitor_output / 'counts.jsonl'),

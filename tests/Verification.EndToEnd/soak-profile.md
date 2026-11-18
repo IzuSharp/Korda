@@ -73,6 +73,34 @@ disposal or replace qualified idle native baselines, final owner retirement,
 runtime root controls, process RSS, threads, or descriptor-role checks. A source
 connection-budget change requires an independent policy review and recalibration.
 
+An independently reviewed Linux thread supplement can distinguish physical
+SQLite pool growth from adaptive runtime workers. The supplement binds actual
+per-TID/start-time/name observations, the exact runtime/source versions, and the
+original failed profile. Thread names are Linux's truncated `comm` values;
+unexplained classes fail. The fixed observed classes total fourteen, including
+four database async workers. The configured SQLite pools permit eighteen
+physical connections; each qualified idle SQLx worker must match an actual
+application/consumer main-database file descriptor in the same live snapshot.
+Two database runtimes also have at most eight additional blocking workers.
+
+For the measured profile, the old total peak24 and idle21 minus fourteen fixed
+threads and the minimum observed one SQLx worker give residual bands9 and6.
+Managed ThreadPool workers and database blocking workers share that residual;
+the blocking reserve cannot conceal managed growth. Reserving all eighteen
+physical pool slots gives prospective total peak41 and idle38. These are finite
+observational budgets for this workload, not universal runtime thread limits:
+ProcessorCount2 and four clients do not cap the adaptive .NET ThreadPool. The
+profile retains every RSS, GCHandle, native-owner, Server and FD limit unchanged.
+
+The optional external monitor records all thread samples, including read races
+and shutdown. Its pre-closure adjudication uses the ordinary controller's exact
+`stageCompletedBeforeClosureNs`, because the Server close helper and runtime
+have the same truncated name. Closure-overlapping/later samples remain visible
+and do not masquerade as steady owners. A fresh live idle witness must satisfy
+the individual classes, combined residual and physical-file cross-check before
+closure; normal native/Server final joins remain mandatory. Both the ordinary
+stage and supplemental monitor receipts must pass.
+
 Pre-GC and later idle native counts include closed wrappers still awaiting
 finalization. A distinct post-GC native baseline is therefore frozen separately.
 The observer does not alter the product outbox worker. Within one logical idle window the observer
