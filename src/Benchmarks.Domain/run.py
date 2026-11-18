@@ -91,7 +91,9 @@ def select_cases(profile, mode):
                 'cache': 'Warm typed query/mapping path followed by an intentional diagnostic failure',
                 'provider': 'sqlite', 'protocol': 'http1', 'diagnostics': name, 'product_only': True})
         for advanced in (False, True):
-            cases.append({'id': 'advanced-di-list' if advanced else 'minimal-list', 'kind': 'list', 'requests': 1200, 'rate': 200,
+            di = profile.get('di_workload', {'requests': 1200, 'rate': 200})
+            cases.append({'id': 'advanced-di-list' if advanced else 'minimal-list', 'kind': 'list',
+                'requests': di['requests'], 'rate': di['rate'],
                 'warmup': 32, 'client_concurrency': 16, 'limit': 100, 'provider': 'sqlite', 'protocol': 'http1',
                 'cache': 'Same 128 rows, typed query and observation binary; request DI versus captured service',
                 'diagnostics': 'release-disabled', 'di': advanced, 'product_only': True})

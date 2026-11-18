@@ -21,6 +21,40 @@ def observation_value(sample, name):
     return value.get('value') if value.get('availability') == 'measured' else None
 
 
+def workload_concurrency(records):
+    """Observed logical client admissions, distinct from configured slot counts."""
+    if not isinstance(records, list):
+        return {'availability': 'unavailable', 'reason': 'Retained invalid observation has no record list'}
+    events = []
+    timed = []
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        if (all(type(record.get(name)) is int for name in ('admission_ns','completion_ns'))
+                and record['completion_ns'] >= record['admission_ns']):
+            events.extend([(record['admission_ns'], 1), (record['completion_ns'], -1)])
+        if (all(type(record.get(name)) is int for name in ('scheduled_ns','completion_ns'))
+                and record['completion_ns'] >= record['scheduled_ns']):
+            timed.append(record)
+    active = peak = 0
+    for _, delta in sorted(events):
+        active += delta
+        peak = max(peak, active)
+    latencies = [record['completion_ns'] - record['scheduled_ns']
+                 for record in sorted(timed, key=lambda item: item['scheduled_ns'])]
+    midpoint = len(latencies) // 2
+    mean = lambda values: sum(values) / len(values) if values else None
+    return {'availability': 'complete' if len(timed) == len(records) else 'partial',
+        'record_count': len(records), 'valid_latency_records': len(timed),
+        'excluded_latency_records': len(records) - len(timed),
+        'valid_admission_intervals': len(events) // 2,
+        'excluded_admission_intervals': len(records) - len(events) // 2,
+        'peak_admitted_logical_operations': peak if events else None,
+        'first_half_mean_scheduled_arrival_ns': mean(latencies[:midpoint]),
+        'last_half_mean_scheduled_arrival_ns': mean(latencies[midpoint:]),
+        'scope': 'External HTTP adapter logical admissions/completions; not native handler/DB concurrency. Half-window means expose queue growth without a new pass threshold.'}
+
+
 def app_costs(receipt):
     before = receipt.get('measurement_resources_before', {})
     after = receipt.get('measurement_resources_after', {})
@@ -73,6 +107,7 @@ def report(directory, a21):
             'original_a21_observation': row.get('original_a21_observation'),
             'failed_http_capture': receipt.get('failed_http_capture') if receipt else None,
             'adapter_error_capture': receipt.get('adapter_error_capture') if receipt else None,
+            'observed_concurrency': workload_concurrency(row.get('records', [])),
             'application_costs': app_costs(receipt) if receipt else None,
             'http_status_counts_including_setup': receipt.get('http_status_counts') if receipt else None,
             'http_error_codes_including_setup': receipt.get('http_error_codes') if receipt else None,

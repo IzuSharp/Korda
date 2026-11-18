@@ -1,5 +1,53 @@
 # Full domain workload measurements
 
+## Finite recovery after an adverse operating point
+
+The original high-rate calibration is preserved as adverse evidence. The
+recovery uses [the finite operating-point plan](../../src/Benchmarks.Domain/operating-point-plan-v1.json)
+and [cohorts.py](../../src/Benchmarks.Domain/cohorts.py), which delegates every
+measurement and validity decision to the existing `run.py` and unchanged A21.
+Only mutation, keyset and 1 MiB streaming families with observed busy or generator
+failures receive a two-candidate search. Cold create, 8 MiB streaming, deliberate
+upload overload and all nine diagnostic profiles retain their original inputs.
+Both candidates execute once with two independent processes per compared route.
+The highest complete valid candidate is frozen. If neither candidate passes,
+the lower candidate is recorded as an unvalidated operating point, never as
+demonstrated capacity.
+
+After selection, each of the original 30 complete workload cases receives three
+fresh calibration processes per supported route. A case receives three new
+confirmation processes only when its whole calibration and measured noise bands
+are valid. Every invalid case remains in the report, with its confirmation
+explicitly not run. One adverse case cannot prevent unrelated cases from being
+measured. There is no retry or additional tuning loop, no cross-fingerprint band
+reuse and no claim that a lower offered rate repairs an original high-rate result.
+
+```sh
+python3 src/Benchmarks.Domain/cohorts.py prepare \
+  --package-probe /absolute/path/to/accepted-b21-probe \
+  --comparators /absolute/path/to/comparators.json \
+  --instrumented /absolute/path/to/instrumented/manifest.json \
+  --postgres-bin /absolute/path/to/postgresql-18.0/bin \
+  --isolation-note "Recorded exclusive timing window; B22 load and builds stopped" \
+  --output /absolute/path/to/new-cohorts
+python3 src/Benchmarks.Domain/cohorts.py search --output /absolute/path/to/new-cohorts
+python3 src/Benchmarks.Domain/cohorts.py matrix --output /absolute/path/to/new-cohorts
+python3 src/Benchmarks.Domain/cohorts.py report --output /absolute/path/to/new-cohorts
+```
+
+The state file preserves completed units and their exact source/artifact pins.
+An existing unfinished invocation directory is retained as interrupted; it is
+not reused as a fresh successful process. Per-process receipts separately record
+the observed peak client logical-operation concurrency and first/last-half
+scheduled-arrival means. Configured client slots do not establish actual native
+handler/database concurrency. The means disclose queue growth without inventing
+a new performance acceptance threshold.
+An inner controller's unestablished cleanup or explicit stop also blocks all
+later outer invocations and preserves their exact unexecuted lists. Attempted,
+completed and valid cohorts are counted separately. Partial invalid timestamp
+records remain explicit unavailable observations; they cannot crash the report
+or contribute fabricated zero durations.
+
 B23 measures the accepted B21 reference service as an assembled application:
 authenticated HTTP, typed C# handlers and static JSON, Rust-backed queries and
 transactions, durable replay/outbox writes, keyset pages, and bounded streamed
