@@ -99,7 +99,15 @@ B22 acceptance. See `tests/Verification.EndToEnd/README.md` for exact inputs and
 invocations. `tests/Verification.EndToEnd/soak-profile.md` defines the actual
 staged runner, finite trace/file budgets, calibration/freeze steps and interrupted
 attempt recovery. Long stages remain subject to actual execution and independent
-review. No 30-minute, 24-hour or 72-hour acceptance is asserted by this document.
+review. Both Linux x64 Native AOT providers have now completed the frozen
+30-minute load and 60-second live-idle stage. PostgreSQL completed
+1,800.002372777 seconds of load; SQLite completed 1,800.006548833 seconds.
+Each recorded 7,194 completed logical operations and six deliberate upload
+cancellations, reconciled durable effects, and independently reviewed resource
+bounds and retirement. These are instrumented finite-profile observations, not
+a universal memory bound or a proof of leak freedom. Their exact identities and
+reviews are linked from the Task-07 handoff below; failed and interrupted
+predecessors remain unchanged and contribute no credited duration.
 
 For the Task-07 Linux continuation on 2026-11-18, the user explicitly deferred
 the 24-hour regression and 72-hour release soak while retaining the 30-minute
