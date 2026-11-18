@@ -135,3 +135,21 @@ all twelve known handle set/destroy pairs, GCHeapStats and zero lost events.
 `soak.py probe` separately verifies its local observer-control and durable-oracle
 path in eight seconds. That result is labelled `probe-passed`; it cannot create a
 frozen calibration profile or satisfy any long-stage duration.
+
+## Supplemental Linux descriptor ownership evidence
+
+`descriptor_profile.py` supervises an unchanged PostgreSQL `soak.py run` stage
+when a separately reviewed frozen profile contains an `fdThresholdSupplement`.
+The supplement binds this monitor's exact SHA-256. It records live process
+identity, descriptor counts, TCP endpoint roles, sampling races, inventories at
+new maxima, and a fresh classified idle observation before process closure.
+The supplemented result requires both the original stage receipt and the
+monitor's `supplemented-stage-passed` receipt. A successful ordinary soak receipt
+alone does not establish the supplemental owner checks.
+
+The descriptor band is prospective and specific to the measured workload. It
+does not change native connection limits or imply that client concurrency is a
+universal bound on live server sockets. Earlier failed profiles and attempts
+remain failed. PostgreSQL physical connections may persist during idle up to
+the configured pool maximum; accepted HTTP sockets and open partial uploads
+must have retired while the application is still alive.
