@@ -8,12 +8,35 @@ from __future__ import annotations
 import copy
 import json
 from pathlib import Path
+import re
 import shutil
 import xml.etree.ElementTree as ET
 
 from model import relative_file, save, sha
 
 FLAGS = ["-p:UseSharedCompilation=false", "-nr:false", "-m:1"]
+
+
+def run_owned_overrides(c, root, record):
+    # C# SDK props explicitly adds NU1605 to WarningsAsErrors, independently of
+    # TreatWarningsAsErrors. Clear that property only in these negative fixtures
+    # so the unchanged shipped closure task, including NoWarn, must reject them.
+    previous_version = next(item["version"] for item in c.manifest["previous"]["packages"] if item["id"] == "NativeWeave.Database")
+    for suppressed in (False, True):
+        name = "override-suppressed" if suppressed else "override-visible"
+        negative = root / name
+        c.template("combined", negative, override=("NativeWeave.Database", previous_version))
+        neg_env = c.environment_for(negative)
+        flags = [*FLAGS, "-p:TreatWarningsAsErrors=false", "-p:WarningsAsErrors=",
+                 *(["-p:NoWarn=NU1608%3BNU1605"] if suppressed else [])]
+        text = c.run("negative-" + name + "-restore", ["dotnet", "restore", negative / "Consumer.csproj", *flags], cwd=negative, env=neg_env)
+        warnings = sorted(set(re.findall(r"\bwarning\s+(NU1605|NU1608)\b", text)))
+        if not suppressed and not warnings:
+            raise ValueError("Direct override NU1605/NU1608 warning was not actually witnessed")
+        c.run("negative-" + name + "-build", ["dotnet", "build", negative / "Consumer.csproj", "--no-restore", *flags],
+              cwd=negative, env=neg_env, reject="NWPKG001")
+        record(name, rejectionCode="NWPKG001", freshRestoreCache=True, noWarnSuppressed=suppressed,
+               actualNuGetWarnings=warnings)
 
 
 def run_negatives(consumer, directory, published):
@@ -54,19 +77,7 @@ def run_negatives(consumer, directory, published):
 
     # A direct owned override must fail the actual build even after suppressing
     # NuGet's warning. Each restore has a fresh cache, with exact source mapping.
-    previous_version = next(item["version"] for item in c.manifest["previous"]["packages"] if item["id"] == "NativeWeave.Database")
-    for suppressed in (False, True):
-        name = "override-suppressed" if suppressed else "override-visible"
-        negative = root / name
-        c.template("combined", negative, override=("NativeWeave.Database", previous_version))
-        neg_env = c.environment_for(negative)
-        flags = [*FLAGS, "-p:TreatWarningsAsErrors=false", *(["-p:NoWarn=NU1608%3BNU1605"] if suppressed else [])]
-        text = c.run("negative-" + name + "-restore", ["dotnet", "restore", negative / "Consumer.csproj", *flags], cwd=negative, env=neg_env)
-        if not suppressed and "NU1608" not in text:
-            raise ValueError("Direct override warning was not actually witnessed")
-        c.run("negative-" + name + "-build", ["dotnet", "build", negative / "Consumer.csproj", "--no-restore", *flags],
-              cwd=negative, env=neg_env, reject="NWPKG001")
-        record(name, rejectionCode="NWPKG001", freshRestoreCache=True, noWarnSuppressed=suppressed)
+    run_owned_overrides(c, root, record)
 
     # Missing native leaf at actual NuGet resolution: all other destination
     # archives remain exact, and mapping forbids fallback to a public ID.
