@@ -85,6 +85,13 @@ if a runtime collection itself stops making progress. There remains exactly one
 before/after EventPipe window per logical idle observation, and its actual latest
 GCHeapStats event must fall inside that window.
 
+The final idle resource vector is the latest actual sample in the same finite
+window that has both zero Server permits/bytes and the window's qualified native
+baseline. The product's background outbox polling continues. Samples containing
+that legitimate transient work remain in the raw observations and peak checks;
+they do not replace the idle witness. If no combined witness exists, the stage
+fails without extending the idle window or relaxing a native limit.
+
 The observer samples public Meter/native counters at1.1-second intervals and
 records explicit diagnostic collections during idle. Short transient peaks can
 fall between samples; these observations do not replace the separate actual

@@ -566,9 +566,13 @@ def main():
         while time.monotonic() - begun < seconds:
             if stopping.is_set(): raise InterruptedError("Stage interrupted")
             vector = sample("idle", force=True)
-            if all(vector[key] == 0 for key in ZERO_GAUGES): idle_vector = vector
+            if all(vector[key] == 0 for key in ZERO_GAUGES) and all(
+                    vector[f"native.{provider}.{kind}"] == count
+                    for provider, counts in row["databaseNativeOwners"].items()
+                    for kind, count in enumerate(counts)):
+                idle_vector = vector
             stopping.wait(min(settings["sampleSeconds"], max(0, seconds - (time.monotonic() - begun))))
-        require(idle_vector is not None, "Server permits and byte owners did not retire in the frozen idle window")
+        require(idle_vector is not None, "No Server-zero and qualified native-baseline witness occurred in the frozen idle window")
         if profile:
             for key, limit in profile["idleCaps"].items(): require(idle_vector[key] <= limit, "Frozen idle resource cap exceeded: " + key)
         idle_vectors.append(idle_vector)
