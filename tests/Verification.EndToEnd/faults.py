@@ -265,7 +265,9 @@ class Faults:
         parsed = urlsplit(service.url)
         plain = socket.create_connection((parsed.hostname, parsed.port), timeout=15)
         if self.tls:
-            return ssl.create_default_context(cafile=str(self.tls[0])).wrap_socket(plain, server_hostname=parsed.hostname)
+            context = ssl.create_default_context(cafile=str(self.tls[0]))
+            context.minimum_version = ssl.TLSVersion.TLSv1_2
+            return context.wrap_socket(plain, server_hostname=parsed.hostname)
         return plain
 
     def open_upload(self, service, token, item, length, initial, key):
@@ -397,7 +399,9 @@ class Faults:
             require(status == 201, "HTTP2 parent fixture failed")
             item = json.loads(body)["itemId"]
             parsed = urlsplit(service.url)
-            context = ssl.create_default_context(cafile=str(self.tls[0])); context.set_alpn_protocols(["h2"])
+            context = ssl.create_default_context(cafile=str(self.tls[0]))
+            context.minimum_version = ssl.TLSVersion.TLSv1_2
+            context.set_alpn_protocols(["h2"])
             with socket.create_connection((parsed.hostname, parsed.port), timeout=15) as plain:
                 with context.wrap_socket(plain, server_hostname=parsed.hostname) as transport:
                     self.evidence.check("actual-http2-alpn", transport.selected_alpn_protocol() == "h2")

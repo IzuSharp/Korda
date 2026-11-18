@@ -54,6 +54,18 @@ trend and qualified native baseline before freezing the candidate. An upward
 unexplained trend remains unfrozen. A later breach is a failed attempt, not a
 reason to edit its frozen limits in place.
 
+A separately reviewed RSS supplement may correct an estimator that used only
+three terminal idle vectors when the original complete idle windows already
+record wider variation. It selects every original post-finalizer sample with
+both the exact qualified native baseline and zero Server permits/payload bytes,
+then applies the same measured-maximum-plus-measured-idle-range formula. The
+selection, original journal hashes, arithmetic and independent review are bound
+before a fresh confirmation run. Failed-attempt peaks and later diagnostic
+values do not enter the new limits; original frozen profiles and failed results
+remain unchanged. This corrects the observation band only. The full subsequent
+resource trend, native/managed owners and final joins still require review;
+fitting the band alone does not establish a plateau or exclude a leak.
+
 Native transient counters also use a populated source-cohort floor. The pinned
 reference configuration has sixteen application connection slots and two
 consumer slots: `C=18` for the combined SQLite module, or `C=16` PostgreSQL and

@@ -115,6 +115,15 @@ A focused functional pass is not full B22 acceptance. The required30-minute,
 for the actual elapsed duration. No long stress runs may overlap B23 timed
 performance measurements in the same resource environment.
 
+For the Task-07 Linux continuation on 2026-11-18, the user deferred the 24-hour
+regression and 72-hour release soak. Those two rows remain **not executed** and
+are excluded from this continuation's completion gate; the 30-minute stage is
+still required. This scope amendment does not change the pinned D20 contract,
+turn a shorter observation into a longer pass, or establish full release-soak
+or other-platform acceptance. The exact provider receipts and independent
+reviews are recorded in the
+[Task-07 handoff](https://github.com/IzuSharp/Plan/blob/main/ledger/evidence/batches/Task-07/handoff-linux.md).
+
 ### Implementation checkpoint
 
 The external PostgreSQL, SQLite, outbox, attachment, orphan-GC, half-close and
@@ -122,15 +131,16 @@ HTTP/2-reset fixtures have runnable implementations. The ordinary immutable B21
 JIT artifacts have exercised these fixtures; individual failed fixture attempts
 remain in their evidence directories. Final execution receipts bind the
 JIT/AOT fault matrix and the separate `transport_faults.py` cases. The staged
-runner is documented in `soak-profile.md`; its required long stages remain
-pending actual elapsed time.
+runner is documented in `soak-profile.md`; each duration row requires its own
+completed receipt and independent resource-trend review.
 The initial ProcessExit-only observation retained an application entry lifetime.
 The narrow joined-entrypoint profile distinguishes pre-finalizer native owners
 from post-Main full-GC retirement. Focused actual JIT/AOT SQLite faults and a
 PostgreSQL pool-return fault reach zero for the six native counters after that
-join and collection. This supports those specific lifetime rows, not the pending
-long-duration plateau gate. Actual JIT and Native AOT EventPipe controls observe
-all twelve known handle set/destroy pairs, GCHeapStats and zero lost events.
+join and collection. This supports those specific lifetime rows; long-duration
+resource trends require their own evidence. Actual JIT and Native AOT EventPipe
+controls observe all twelve known handle set/destroy pairs, GCHeapStats and zero
+lost events.
 
 `soak.py probe` separately verifies its local observer-control and durable-oracle
 path in eight seconds. That result is labelled `probe-passed`; it cannot create a

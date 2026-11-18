@@ -48,6 +48,22 @@ completed and valid cohorts are counted separately. Partial invalid timestamp
 records remain explicit unavailable observations; they cannot crash the report
 or contribute fabricated zero durations.
 
+For a text-only evidence handoff, preserve the observer snapshots alongside
+the timing and cost projection. The analysis-only exporter retains the measured
+Activity, logging, GC, callback, diagnostic-drop, queue and payload observations
+from both boundaries, including unavailable and invalid rows:
+
+```sh
+python3 src/Benchmarks.Domain/export_diagnostics.py \
+  /absolute/path/to/new-cohorts/report.json \
+  --output /absolute/path/to/new-evidence/diagnostic-observations.json
+```
+
+It verifies the report/cohort binding and writes only fixed identifiers,
+hashes and allowlisted numeric fields. It does not execute a target, change a
+measurement, or replace the original local observations. Sampled peaks include
+setup and can miss brief peaks; disabled listeners leave values unavailable.
+
 B23 measures the accepted B21 reference service as an assembled application:
 authenticated HTTP, typed C# handlers and static JSON, Rust-backed queries and
 transactions, durable replay/outbox writes, keyset pages, and bounded streamed

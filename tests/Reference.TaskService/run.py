@@ -169,6 +169,7 @@ class Service:
         import h2.events
         parsed = urlsplit(self.url)
         context = ssl.create_default_context(cafile=str(self.certificate))
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
         context.set_alpn_protocols(['h2'])
         connection = h2.connection.H2Connection(config=h2.config.H2Configuration(client_side=True, header_encoding='utf-8'))
         received, response_headers, offset = bytearray(), {}, 0

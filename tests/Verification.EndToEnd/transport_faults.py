@@ -92,7 +92,9 @@ class Transports(Faults):
                 {'Content-Type': 'application/octet-stream', 'Idempotency-Key': 'slow-download-content', 'If-Match': '1'}, token)
             self.evidence.check('slow-download-content-committed', status == 200)
             address = urlsplit(service.url)
-            context = ssl.create_default_context(cafile=str(self.tls[0])); context.set_alpn_protocols(['h2'])
+            context = ssl.create_default_context(cafile=str(self.tls[0]))
+            context.minimum_version = ssl.TLSVersion.TLSv1_2
+            context.set_alpn_protocols(['h2'])
             with socket.create_connection((address.hostname, address.port), timeout=15) as plain:
                 with context.wrap_socket(plain, server_hostname=address.hostname) as transport:
                     self.evidence.check('slow-download-actual-http2', transport.selected_alpn_protocol() == 'h2')

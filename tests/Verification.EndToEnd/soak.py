@@ -268,6 +268,7 @@ class Workload:
         with self.item_locks[slot]:
             parsed = urlsplit(self.service.url)
             context = ssl.create_default_context(cafile=str(self.service.certificate))
+            context.minimum_version = ssl.TLSVersion.TLSv1_2
             staging = Path(self.config["blobDirectory"]) / "staging"
             key = f"soak-cancel-{sequence}"
             headers = (f"PUT /v1/items/{self.items[slot]}/attachment HTTP/1.1\r\nHost: {parsed.netloc}\r\n"

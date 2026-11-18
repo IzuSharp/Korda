@@ -100,3 +100,11 @@ invocations. `tests/Verification.EndToEnd/soak-profile.md` defines the actual
 staged runner, finite trace/file budgets, calibration/freeze steps and interrupted
 attempt recovery. Long stages remain subject to actual execution and independent
 review. No 30-minute, 24-hour or 72-hour acceptance is asserted by this document.
+
+For the Task-07 Linux continuation on 2026-11-18, the user explicitly deferred
+the 24-hour regression and 72-hour release soak while retaining the 30-minute
+stage. Those two rows remain **not executed** and do not block the narrowed
+delivery scope. They do not become passed rows or establish full D20 release-soak
+acceptance. The exact provider results, retained failures, independent reviews
+and remaining platform scope are recorded in the
+[Task-07 handoff](https://github.com/IzuSharp/Plan/blob/main/ledger/evidence/batches/Task-07/handoff-linux.md).
