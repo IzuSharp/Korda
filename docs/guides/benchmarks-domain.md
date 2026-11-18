@@ -113,6 +113,63 @@ profile, input, executable, lock or controller file requires a new calibration;
 confirmation rejects a mismatched fingerprint. Do not combine old and new input
 cohorts or silently remove a saturated generator cell.
 
+## Failed cells and bounded cleanup
+
+The HTTP adapter validates the whole declared logical result before it emits an
+`ok` event. A cycle must confirm create, replay and recovery statuses and exact
+response-byte equality. A malformed successful-status DTO, unexpected status,
+wrong protocol, or streaming length/hash mismatch remains a failure. New HTTP
+dispatch stops after the first integrity/transport failure; already admitted
+requests retain their terminal observations. Expected diagnostic HTTP 500 and
+the declared upload-capacity rejection retain their distinct workload meanings.
+
+`http-failures.jsonl` records at most 32 distinct observed responses per adapter,
+including the logical request ID, stage, method/path, actual protocol/status,
+parsed header-value bytes and decoded body. Each record retains at most 16 KiB
+of headers and 64 KiB of body, with the full observed lengths and SHA-256 hashes.
+For an interrupted GET, `body_bytes_observed` and its hash cover only decoded
+bytes actually yielded by the bounded iterator; `body_complete` is false and
+the full `body_bytes` value is unavailable. A protocol rejection before body
+consumption therefore records zero observed bytes. `body_truncated` describes
+the evidence-file prefix cap separately from transport incompleteness. Bytes
+buffered inside the HTTP client but never yielded are not reconstructed. The
+GET response is registered before protocol/read checks; a failure before GET
+headers has no response record and cannot be attributed to the preceding PUT.
+Repeated reporting of the same response does not consume another record. These
+are parsed HTTP response bytes, not captured HTTP/TLS wire packets. No request
+authorization header is copied. `adapter-errors.jsonl` separately bounds detailed
+exceptions to 32 records and truncates each traceback to 16 KiB. The adapter emits
+only one short stderr notice, so failure logging cannot fill A21's bounded pipe.
+
+Each unchanged A21 cell runs in `cell_worker.py`, under the external Linux
+`supervision.py` controller. The watchdog budget is frozen in each plan from
+A21's hello/warmup bounds, scheduled arrival span, request timeout and cleanup
+timeout, plus five seconds of process overhead. Expiry or operator stop permits
+five seconds for TERM, then at most two seconds for KILL observation and two for
+the worker wait. Process ownership uses observed PID/start-time pairs and the
+private per-cell registration chain; signals use pidfds in that execution's
+Linux process namespace. Separately sessioned application children are included.
+A live descendant, failed worker, unverifiable cleanup or incomplete cohort
+cannot become a successful measurement. Later cells do not start if owned
+processes remain or cleanup cannot be established.
+
+To stop a controller safely, atomically replace `<output>/control.json` with
+`{"stop": true}`. The controller checks it between cells and every 100 ms during
+a cell, then records the failed/interrupted cell and the exact `not_run` list.
+Retain the directory; a new run must use a new directory and its own frozen
+inputs. The supervisor's worker log, ownership registry and cleanup receipt are
+included in raw archives. Polling contributes controller host overhead; it does
+not replace A21's request latency clocks. Forced process termination never proves
+managed or native resource retirement, which remains separately observed by B22.
+
+Reports retain invalid raw A21 observations and incomplete application receipts.
+Missing or malformed worker-result identity, verdict, receipt or required
+statistical fields become an invalid cell inside the guarded collection path;
+they cannot leave the run falsely marked as still running or escape its ledger.
+An otherwise valid subset of a declared three-process cohort cannot establish a
+comparison or substitute for its missing repetitions. Original failed calibration
+evidence remains immutable; source fixes require fresh calibration input hashes.
+
 ## Workload meanings
 
 | Workload | Measured logical operation | Declared conditions |

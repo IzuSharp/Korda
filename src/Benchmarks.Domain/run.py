@@ -16,6 +16,7 @@ import hashlib
 import importlib.metadata
 import importlib.util
 import json
+import math
 import os
 from pathlib import Path
 import random
@@ -24,6 +25,7 @@ import subprocess
 import sys
 
 from common import check_files, digest, expected_value, inventory, load, load_a21, payload_hash, save, source_identity
+from supervision import stop_requested, supervised_command
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
@@ -157,6 +159,53 @@ def calibration_bands(rows, resolution_ns, repetitions=3):
     return result
 
 
+def validate_observation(row, route, repetition, requests, a21):
+    """Check the worker result before any unguarded ledger/report consumption.
+
+    A21 remains the functional/statistical authority. This boundary validates
+    transport shape and the fields used by B23, without upgrading its verdict.
+    """
+    def require(condition, field):
+        if not condition:
+            raise ValueError('Malformed A21 observation: ' + field)
+
+    require(isinstance(row, dict), 'object required')
+    require(type(row.get('valid')) is bool, 'valid must be Boolean')
+    require(row.get('route') == route, 'route identity differs')
+    require(type(row.get('repetition')) is int and row['repetition'] == repetition, 'repetition identity differs')
+    reasons = row.get('invalid_reasons')
+    require(isinstance(reasons, list) and all(isinstance(value, str) for value in reasons), 'invalid_reasons must be strings')
+    hello = row.get('hello')
+    require(isinstance(hello, dict) and isinstance(hello.get('receipt_directory'), str)
+            and bool(hello['receipt_directory']), 'hello receipt_directory is required')
+    if not row['valid']:
+        return
+    require(not reasons, 'valid result contains invalid_reasons')
+    records = row.get('records')
+    require(isinstance(records, list) and len(records) == requests, 'records cardinality differs')
+    for identifier, record in enumerate(records):
+        require(isinstance(record, dict) and type(record.get('id')) is int
+                and record['id'] == identifier, 'record identity differs')
+        require(type(record.get('scheduled_ns')) is int and type(record.get('completion_ns')) is int
+                and record['completion_ns'] >= record['scheduled_ns'], 'record time bounds differ')
+        require(all(record.get(name) is None or type(record[name]) is int
+                    for name in ('dispatch_ns', 'admission_ns')), 'record stage times differ')
+        require(record.get('status') in a21.OUTCOMES, 'record outcome differs')
+    for name in ('admitted', 'completed', 'successful'):
+        require(type(row.get(name)) is int and 0 <= row[name] <= requests, name + ' count differs')
+    outcomes = row.get('outcome_counts')
+    require(isinstance(outcomes, dict) and all(isinstance(name, str) and type(count) is int and count >= 0
+            for name, count in outcomes.items()) and sum(outcomes.values()) == requests, 'outcome_counts differs')
+    histogram = row.get('histograms', {}).get('arrival_all_outcomes') if isinstance(row.get('histograms'), dict) else None
+    require(isinstance(histogram, dict) and all(type(histogram.get(name)) is int and histogram[name] > 0
+            for name in ('resolution_ns', 'maximum_ns')), 'histogram scale differs')
+    window = row.get('measurement_window_ns')
+    require(isinstance(window, dict) and type(window.get('elapsed')) is int and window['elapsed'] > 0, 'measurement elapsed differs')
+    rates = row.get('rates_per_second')
+    offered = rates.get('offered') if isinstance(rates, dict) else None
+    require(type(offered) in (float, int) and math.isfinite(offered) and offered > 0, 'offered rate differs')
+
+
 @contextmanager
 def postgres(directory, binaries):
     directory.mkdir(parents=True, exist_ok=False)
@@ -220,6 +269,7 @@ class Controller:
             self.cases = [dict(case, requests=2, warmup=1, rate=10,
                                client_concurrency=min(4, case['client_concurrency'])) for case in self.cases]
         self.files = {str(path): digest(path) for path in [HERE / 'run.py', HERE / 'http_target.py', HERE / 'common.py',
+            HERE / 'cell_worker.py', HERE / 'supervision.py',
             args.a21.resolve(), args.golden.resolve(), args.profile.resolve()]}
         self.external_inputs = {}
         if any(case['protocol'] != 'http1' for case in self.cases):
@@ -247,7 +297,9 @@ class Controller:
                 raise ValueError('Confirmation requires matching immutable calibration inputs')
             self.bands = self.calibration['noise_bands']
             required_cases = {case_id(case) for case in self.cases}
-            if not self.calibration.get('all_executed_cells_valid') or not required_cases.issubset(self.bands):
+            if (not self.calibration.get('all_executed_cells_valid') or
+                    not self.calibration.get('all_selected_cells_executed', True) or
+                    not required_cases.issubset(self.bands)):
                 raise ValueError('Confirmation requires complete valid calibration repetitions and a measured band for every selected case')
             save(self.output / 'frozen-noise-bands.json', {'calibration_sha256': digest(args.calibration / 'summary.json'),
                                                        'bands': self.bands})
@@ -257,6 +309,8 @@ class Controller:
             'fingerprint': self.fingerprint, 'profile_sha256': digest(args.profile),
             'a21_sha256': digest(args.a21), 'controller_source': source_identity(ROOT),
             'host': self.a21.host_metadata(), 'isolation_note': args.isolation_note,
+            'stop_control_file': str(self.output / 'control.json'),
+            'supervision': 'Each unmodified A21 cell runs in an external bounded process; 100ms ownership/stop polling is part of controller host overhead, never application latency',
             'client_libraries': self.client_libraries,
             'external_input_sha256': self.external_inputs,
             'cases': self.cases, 'routes': self.routes, 'runs': [], 'unsupported': [],
@@ -323,6 +377,13 @@ class Controller:
             'engineering_cost': {'source': 'Accepted B21 packed consumer plus separately built comparator executables',
                 'application_rebuild_scope': 'Managed source only; immutable native module hashes',
                 'counter_limitations': 'No inferred per-operation FFI/copy/native allocation counts'}}
+        plan['supervision'] = {
+            'worker_timeout_seconds': 10 + 20 * case['warmup'] +
+                ((case['requests'] - 1) * plan['timing']['period_ns'] + plan['timing']['timeout_ns'] +
+                 plan['timing']['cleanup_timeout_ns']) / 1e9 + 5,
+            'termination_grace_seconds': 5,
+            'derivation': 'A21 10s hello + two 10s warmup events per request + scheduled arrival span + operation timeout + cleanup timeout + 5s process overhead; then 5s TERM, at most 2s KILL and at most 2s worker reap',
+        }
         if set(selected_routes) == self.a21.ROUTES:
             self.a21.validate_plan(plan, directory)
         elif self.args.phase != 'functional':
@@ -349,13 +410,30 @@ class Controller:
         random.Random(self.profile['seed'] + (1 if self.args.phase == 'measure' else 0)).shuffle(jobs)
         self.summary['run_order'] = [[case_id(case), route['id'], rep] for case, _, route, _, rep in jobs]
         save(self.output / 'summary.json', self.summary)
+        interruption = None
         for case, plan, route, directory, repetition in jobs:
+            if stop_requested(self.output / 'control.json'):
+                self.summary['stop_requested'] = True
+                break
             name = case_id(case) + '--' + route['id'] + '--' + str(repetition)
             destination = self.output / 'observations' / (name + '.json')
             destination.parent.mkdir(exist_ok=True)
             print('RUN ' + name, flush=True)
+            raw_destination = destination.with_suffix('.a21.json')
+            supervision_directory = self.output / 'supervision' / name
+            supervised = None
             try:
-                row = await self.a21.run_cell(plan, route, repetition, directory, destination)
+                command = [str(Path(sys.executable).resolve()), str(HERE / 'cell_worker.py'),
+                    '--plan', str(directory / 'plan.json'), '--route', route['id'],
+                    '--repetition', str(repetition), '--output', str(raw_destination),
+                    '--a21', str(self.args.a21.resolve())]
+                supervised = await supervised_command(command, supervision_directory,
+                    plan['supervision']['worker_timeout_seconds'], plan['supervision']['termination_grace_seconds'],
+                    self.output / 'control.json', self.a21)
+                if supervised['status'] != 'completed':
+                    raise RuntimeError('External supervision failed: ' + str(supervised['failure']))
+                row = load(raw_destination)
+                validate_observation(row, route['id'], repetition, case['requests'], self.a21)
                 row['case'] = case_id(case)
                 app_path = Path(row['hello']['receipt_directory']) / 'receipt.json'
                 app = load(app_path)
@@ -363,26 +441,57 @@ class Controller:
                 if app['status'] != 'passed':
                     row['valid'] = False
                     row['invalid_reasons'].append('Application durable oracle or bounded shutdown failed')
-            except Exception as error:
+            except BaseException as error:
+                if not isinstance(error, Exception):
+                    interruption = error
                 row = {'case': case_id(case), 'route': route['id'], 'repetition': repetition,
                        'valid': False, 'invalid_reasons': [type(error).__name__ + ': ' + str(error)],
                        'stage': 'startup/protocol', 'claim': 'Failed cell retained, never a performance success'}
+            if raw_destination.is_file():
+                row['original_a21_observation'] = {'path': str(raw_destination), 'sha256': digest(raw_destination),
+                    'claim': 'Raw worker output; never upgraded to success after external termination'}
+            if (supervision_directory / 'receipt.json').is_file():
+                supervised = load(supervision_directory / 'receipt.json')
+                row['supervision_receipt'] = {'path': str(supervision_directory / 'receipt.json'),
+                    'sha256': digest(supervision_directory / 'receipt.json')}
+            if supervised and not row.get('application_receipt'):
+                for process in supervised['owned_processes']:
+                    if process.get('role') == 'application' and process.get('evidence_directory'):
+                        app_path = Path(process['evidence_directory']).parent / 'receipt.json'
+                        if app_path.is_file():
+                            row['application_receipt'] = {'path': str(app_path), 'sha256': digest(app_path),
+                                'claim': 'Retained observed receipt; running/incomplete is never completed retirement'}
             save(destination, row)
             self.rows.append(row)
             self.summary['runs'].append({'case': row['case'], 'route': row['route'], 'repetition': repetition,
                 'path': str(destination.relative_to(self.output)), 'sha256': digest(destination), 'valid': row['valid'],
                 'invalid_reasons': row.get('invalid_reasons', []), 'outcome_counts': row.get('outcome_counts', {})})
             save(self.output / 'summary.json', self.summary)
+            if interruption is not None:
+                self.summary['interruption'] = type(interruption).__name__
+                break
+            if supervised and supervised['live_owned_processes_after_cleanup']:
+                self.summary['execution_blocker'] = 'Owned process remains after bounded cleanup; later cells were not started'
+                break
+            if supervised and supervised.get('cleanup_error'):
+                self.summary['execution_blocker'] = 'Supervisor cleanup could not be established; later cells were not started'
+                break
         if self.args.phase == 'calibrate':
             self.summary['noise_bands'] = calibration_bands(self.rows, self.profile['settings']['histogram_resolution_ns'],
                                                             self.profile['calibration_repetitions'])
         elif self.args.phase == 'measure':
             self.summary['noise_bands'] = self.bands
             self.summary['comparisons'] = self.comparisons()
+        self.summary['all_selected_cells_executed'] = len(self.rows) == len(jobs)
+        self.summary['not_run'] = self.summary['run_order'][len(self.rows):]
         self.summary['all_executed_cells_valid'] = bool(self.rows) and all(row['valid'] for row in self.rows)
-        self.summary['state'] = 'completed' if self.summary['all_executed_cells_valid'] else 'completed-with-invalid-cells'
+        complete = self.summary['all_selected_cells_executed'] and self.summary['all_executed_cells_valid']
+        self.summary['state'] = ('stopped-incomplete' if not self.summary['all_selected_cells_executed'] else
+                                 'completed' if complete else 'completed-with-invalid-cells')
         save(self.output / 'summary.json', self.summary)
-        return 0 if self.summary['all_executed_cells_valid'] else 1
+        if interruption is not None:
+            raise interruption
+        return 0 if complete else 1
 
     def comparisons(self):
         result = {}
@@ -392,7 +501,8 @@ class Controller:
             means = {}
             for route in self.a21.ROUTES:
                 cells = [row for row in matching if row['route'] == route]
-                if cells and all(row['valid'] and row.get('successful') == case['requests'] for row in cells):
+                if len(cells) == self.profile['repetitions'] and all(
+                        row['valid'] and row.get('successful') == case['requests'] for row in cells):
                     means[route] = [self.a21.statistics.mean(record['completion_ns'] - record['scheduled_ns']
                         for record in row['records']) for row in cells]
             if name not in self.bands or len(means) != 3:

@@ -11,6 +11,13 @@ confirmation cohort requires matching immutable calibration inputs; interrupted
 or failed cells retain their observations and cannot become benchmark passes.
 The default functional phase makes no performance claim.
 
+`cell_worker.py` runs one unmodified A21 cell beneath the Linux supervisor in
+`supervision.py`. Watchdog expiry, operator stop, incomplete process cleanup and
+missing repetitions invalidate the affected cohort. HTTP outcome validation
+happens before adapter success; bounded response/exception files preserve the
+actual failure evidence. `control.json` in the output directory is the atomic
+stop-control input. Process termination is never a native retirement proof.
+
 The three route identities are inherited from A21:
 `direct-rust`, `nativeweave-aot-rust`, and `managed-aot`. Comparator applications
 and their independent build manifests live in `comparators/`. Unsupported
