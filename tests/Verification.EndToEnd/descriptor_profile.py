@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run a frozen B22 PostgreSQL stage with independent descriptor-role witnesses.
+"""Run a frozen B22 Linux stage with independent descriptor-role witnesses.
 
 The existing soak controller, application and trace observer are unchanged.
 This external supervisor adds prospective FD evidence; its receipt is required
@@ -93,15 +93,16 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--artifact-directory', type=Path, required=True)
     parser.add_argument('--trace-reader', type=Path, required=True)
-    parser.add_argument('--postgres-bin', type=Path, required=True)
+    parser.add_argument('--provider', choices=('sqlite', 'postgresql'), default='postgresql')
+    parser.add_argument('--postgres-bin', type=Path)
     parser.add_argument('--certificate', type=Path, required=True)
     parser.add_argument('--private-key', type=Path, required=True)
     parser.add_argument('--dotnet', default='dotnet')
     args = parser.parse_args()
     profile = json.loads(args.profile.read_text())
     monitor_sha = sha(Path(__file__))
-    require(profile['status'] == 'frozen' and profile['identity']['provider'] == 'postgresql',
-            'Descriptor supplement requires its own frozen PostgreSQL profile')
+    require(profile['status'] == 'frozen' and profile['identity']['provider'] == args.provider,
+            'Descriptor supplement requires its own frozen provider profile')
     supplement = profile['fdThresholdSupplement']
     require(supplement['descriptorMonitorSha256'] == monitor_sha,
             'External descriptor monitor differs from its reviewed frozen input')
@@ -109,10 +110,11 @@ def main():
     monitor_output = output.with_name(output.name + '-descriptors')
     monitor_output.mkdir(parents=True, exist_ok=False)
     command = [sys.executable, str(HERE / 'soak.py'), 'run', '--stage', 'steady-30m',
-               '--provider', 'postgresql', '--mode', 'aot', '--dotnet', args.dotnet]
+               '--provider', args.provider, '--mode', 'aot', '--dotnet', args.dotnet]
     for name in ('profile', 'output', 'artifact_directory', 'trace_reader', 'postgres_bin',
                  'certificate', 'private_key'):
-        command += ['--' + name.replace('_', '-'), str(getattr(args, name).resolve())]
+        if getattr(args, name) is not None:
+            command += ['--' + name.replace('_', '-'), str(getattr(args, name).resolve())]
     receipt = {'schemaVersion': 1, 'task': 'B22', 'status': 'running',
                'profileSha256': sha(args.profile), 'monitorSha256': monitor_sha,
                'command': command, 'sampleSeconds': 1.1, 'startedUnixNs': time.time_ns(),
@@ -195,9 +197,14 @@ def main():
                 roles.get('unclassified', 0) == 0, 'Final idle descriptor ownership is ambiguous')
         require(roles.get('acceptedHttp', 0) == 0 and last_idle['openStagingParts'] == 0,
                 'Live idle retained an accepted HTTP socket or staged upload file')
-        require(roles.get('listener', 0) == 1 and
-                0 < roles.get('postgresql', 0) <= supplement['configuredPostgresPoolMaximum'],
-                'Live idle listener or PostgreSQL socket inventory is outside the declared band')
+        require(roles.get('listener', 0) == 1,
+                'Live idle listener inventory is outside the declared band')
+        if args.provider == 'postgresql':
+            require(0 < roles.get('postgresql', 0) <= supplement['configuredPostgresPoolMaximum'],
+                    'Live idle PostgreSQL socket inventory is outside the declared band')
+        else:
+            require(roles.get('postgresql', 0) == 0,
+                    'SQLite profile unexpectedly retained a PostgreSQL socket')
         require(0 <= stage['stageCompletedBeforeClosureNs'] - last_idle['endedMonotonicNs'] <= 3_300_000_000,
                 'Descriptor idle witness is stale or follows process closure')
         require(sha(Path(__file__)) == monitor_sha and sha(args.profile) == receipt['profileSha256'],

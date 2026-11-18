@@ -138,7 +138,7 @@ frozen calibration profile or satisfy any long-stage duration.
 
 ## Supplemental Linux descriptor ownership evidence
 
-`descriptor_profile.py` supervises an unchanged PostgreSQL `soak.py run` stage
+`descriptor_profile.py` supervises an unchanged SQLite or PostgreSQL `soak.py run` stage
 when a separately reviewed frozen profile contains an `fdThresholdSupplement`.
 The supplement binds this monitor's exact SHA-256. It records live process
 identity, descriptor counts, TCP endpoint roles, sampling races, inventories at
@@ -152,4 +152,6 @@ does not change native connection limits or imply that client concurrency is a
 universal bound on live server sockets. Earlier failed profiles and attempts
 remain failed. PostgreSQL physical connections may persist during idle up to
 the configured pool maximum; accepted HTTP sockets and open partial uploads
-must have retired while the application is still alive.
+must have retired while the application is still alive. SQLite profiles declare
+separate main/WAL/SHM owner caps for the application and consumer pools; scalar
+descriptor headroom cannot hide retained payload, staging, or metadata files.
