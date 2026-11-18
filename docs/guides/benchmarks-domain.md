@@ -64,6 +64,36 @@ hashes and allowlisted numeric fields. It does not execute a target, change a
 measurement, or replace the original local observations. Sampled peaks include
 setup and can miss brief peaks; disabled listeners leave values unavailable.
 
+The complete finite-cohort supplement preserves search, calibration and
+confirmation process observations, explicit measured noise bands, unsupported
+routes and unexecuted rows. It retains both boundaries of every diagnostic
+snapshot through the same reviewed projection, all numeric application and
+adapter resource samples, per-process histograms and additional search timing
+rows. Use it after the timed execution has reached a terminal state:
+
+```sh
+python3 src/Benchmarks.Domain/export_cohort_observations.py \
+  /absolute/path/to/new-cohorts \
+  --output /absolute/path/to/new-evidence/all-phase-observations
+```
+
+The exporter checks the actual summary, observation and application-receipt
+digests before projection. It exports no HTTP content, private configuration,
+key, database, runtime trace or free-form log. Missing observations retain their
+availability and identity; they do not become zero measurements. Both matrix
+phases' raw numeric timing rows must accompany this supplement when creating a
+compact evidence handoff. The fields `request_wire_bytes` and
+`response_wire_bytes` belong to A21's JSONL IPC accounting, not HTTP or TLS wire
+sizes. Mapping sizes describe virtual file mappings rather than resident code.
+
+Schema version 2 represents application and adapter resource samples as explicit
+column tables. The column names and interned availability/unit metadata permit
+lossless reconstruction of the numeric snapshots; application phase and managed
+probe references are retained. A null adapter sample and an absent sample list
+remain distinct. Each invocation has its own observation file, and the manifest
+binds every file's byte size and SHA-256. This formatting change does not rerun or
+alter a measurement.
+
 B23 measures the accepted B21 reference service as an assembled application:
 authenticated HTTP, typed C# handlers and static JSON, Rust-backed queries and
 transactions, durable replay/outbox writes, keyset pages, and bounded streamed
@@ -337,6 +367,11 @@ Percentiles use A21's sample-count rules; p99.9 is unavailable below 1000 sample
 Pooled percentile tables describe requests, while confidence intervals compare
 independent process means. Report adverse outcomes and inconclusive comparisons
 as observed. The first baseline does not establish a historical-release regression.
+An A21 comparison labelled `regression` in this report means that the measured
+route is slower than its comparison route under the declared measured-noise
+rule. Preserve that classification and describe the observed route overhead;
+it is not a comparison with a previous NativeWeave release. A functionally valid
+cohort does not establish that the near-Rust performance goal has been achieved.
 
 ```sh
 python3 src/Benchmarks.Domain/report.py /absolute/path/to/confirmation \
