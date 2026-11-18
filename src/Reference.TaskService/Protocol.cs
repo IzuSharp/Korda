@@ -99,7 +99,20 @@ internal static class Canonical
         writer.WriteString("tenant", "tenant-a"); writer.WriteString("principal", "alice"); writer.WriteString("itemId", item);
         writer.WriteString("contentSha256", contentHash); writer.WriteNumber("contentLength", 3); writer.WriteNumber("expectedVersion", 7);
         writer.WriteString("sha256", AttachmentHash(new("tenant-a", "alice", true), item, contentHash, 3, 7));
-        writer.WriteEndObject(); writer.WriteEndObject(); writer.Flush();
+        writer.WriteEndObject();
+        const string responseItem = "11223344-5566-7788-99aa-bbccddeeff00";
+        WriteResponseVector(writer, "responseCreate", JsonSerializer.SerializeToUtf8Bytes(
+            new CreatedItem(1, item, responseItem, "世界 🦀", 1_700_000_000_123, 1), AppJson.Default.CreatedItem));
+        WriteResponseVector(writer, "responseAttachment", JsonSerializer.SerializeToUtf8Bytes(
+            new AttachedItem(1, "22334455-6677-8899-aabb-ccddeeff0011", responseItem, contentHash, 3, 2), AppJson.Default.AttachedItem));
+        writer.WriteEndObject(); writer.Flush();
+    }
+
+    private static void WriteResponseVector(Utf8JsonWriter writer, string name, byte[] bytes)
+    {
+        writer.WriteStartObject(name);
+        writer.WriteString("bytes", Convert.ToHexStringLower(bytes)); writer.WriteString("sha256", Hash(bytes));
+        writer.WriteEndObject();
     }
 }
 

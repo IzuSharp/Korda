@@ -496,7 +496,9 @@ def _conflict(command: list[str], config: dict[str, Any], output: Path,
                 require(len(insert) == 1 and insert[0]["completion"] == "INSERT 0 0",
                         "The contender did not observe the actual DO NOTHING zero-row result")
                 following = [event for event in events if event["event"] == "command"
-                             and event["backend_pid"] == loser_pid and event["sequence"] > insert[0]["sequence"]]
+                             and event["backend_pid"] == loser_pid and event["sequence"] > insert[0]["command_sequence"]]
+                # Start at INSERT dispatch, not its completion: a pipelined
+                # command sent while that INSERT waits must remain observable.
                 # Preparing FindAsync can cause the pinned SQLx driver to load
                 # column origins from pg_catalog. It carries no business-table
                 # read/write and cannot reuse the INSERT's statement snapshot.

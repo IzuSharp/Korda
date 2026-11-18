@@ -151,6 +151,14 @@ attachment fields. This is a fixed application protocol, not a general JSON
 canonicalizer. `responseVersion=1` separately identifies persisted response
 serialization.
 
+The same command also emits `responseCreate` and `responseAttachment`, each
+with lowercase UTF-8 `bytes` hexadecimal and `sha256`. These fixed v1 vectors
+invoke the actual source-generated `CreatedItem` and `AttachedItem` JSON
+serializers using fixed UUIDs, timestamp, versions and content hash. The create
+response includes `世界 🦀`, freezing JSON field order and the serializer's
+uppercase Unicode/surrogate escape bytes independently of request hashing.
+The independent Python fixture supplies literal expected response bytes.
+
 ## Native transactions, idempotency and Unknown
 
 The four application tables are `operations`, `items`, `outbox` and

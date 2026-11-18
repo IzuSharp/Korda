@@ -27,6 +27,11 @@ def scope_hash(tenant, principal, semantic):
     return hashlib.sha256(fields('scope.v1', tenant, principal, semantic)).hexdigest()
 
 
+def response_vector(value):
+    """The fixed v1 application JSON bytes, not a universal JSON canonicalizer."""
+    return {'bytes': value.hex(), 'sha256': hashlib.sha256(value).hexdigest()}
+
+
 def vectors():
     result = []
     for name, tenant, principal, title in [
@@ -41,6 +46,18 @@ def vectors():
         result.append({'name': name, 'tenant': tenant, 'principal': principal,
                        'title': title, 'bytes': encoded.hex(),
                        'sha256': hashlib.sha256(encoded).hexdigest()})
+    # Explicit byte literals freeze field order, integer spelling and the selected
+    # source-generated serializer's Unicode escaping. Do not derive these bytes
+    # from the application's JSON output or a generic JSON canonicalizer.
+    create_response = (
+        b'{"responseVersion":1,"operationId":"00112233-4455-6677-8899-aabbccddeeff",'
+        b'"itemId":"11223344-5566-7788-99aa-bbccddeeff00",'
+        br'"title":"\u4E16\u754C \uD83E\uDD80","createdAt":1700000000123,"version":1}')
+    attachment_response = (
+        b'{"responseVersion":1,"operationId":"22334455-6677-8899-aabb-ccddeeff0011",'
+        b'"itemId":"11223344-5566-7788-99aa-bbccddeeff00",'
+        b'"contentHash":"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",'
+        b'"contentLength":3,"version":2}')
     return {'version': 1, 'create': result,
             'attachment': {'tenant': 'tenant-a', 'principal': 'alice',
                 'itemId': '00112233-4455-6677-8899-aabbccddeeff',
@@ -48,7 +65,9 @@ def vectors():
                 'contentLength': 3, 'expectedVersion': 7,
                 'sha256': attachment_hash('tenant-a', 'alice',
                     '00112233-4455-6677-8899-aabbccddeeff',
-                    hashlib.sha256(b'abc').hexdigest(), 3, 7)}}
+                    hashlib.sha256(b'abc').hexdigest(), 3, 7)},
+            'responseCreate': response_vector(create_response),
+            'responseAttachment': response_vector(attachment_response)}
 
 
 def verify_fixture(path):

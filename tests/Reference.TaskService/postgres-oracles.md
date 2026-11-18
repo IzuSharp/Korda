@@ -35,7 +35,10 @@ This observed barrier, rather than a fixed sleep, releases the winner.
 
 Both responses must be status 201 with byte-identical stable results. The actual
 contender wire trace must show `INSERT 0 0` followed by a **separate next business**
-operations SELECT completing `SELECT 1`. Preparing that typed lookup can first
+operations SELECT completing `SELECT 1`.
+The command-order window begins at INSERT dispatch, so an intervening pipelined
+command cannot disappear merely because it preceded the INSERT completion.
+Preparing that typed lookup can first
 load result-column origins through the pinned SQLx 0.9.0 driver's
 `sqlx-postgres/src/connection/resolve.rs`, `ColumnResolver::push_column` and
 `fill_cache`. Its native caller is `Session::describe_typed` in

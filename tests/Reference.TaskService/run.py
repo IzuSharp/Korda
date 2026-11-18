@@ -9,6 +9,7 @@ import argparse
 import concurrent.futures
 import csv
 import hashlib
+import http.client
 import io
 import json
 import os
@@ -27,7 +28,7 @@ import uuid
 from urllib.parse import quote, urlsplit
 
 import httpx
-from golden import create_hash, scope_hash, verify_fixture
+from golden import attachment_hash, create_hash, scope_hash, verify_fixture
 
 HERE = Path(__file__).resolve().parent
 
@@ -59,6 +60,14 @@ class Database:
         if len(rows) != 1 or len(rows[0]) != 1:
             raise AssertionError('Expected one independent SQL scalar.')
         return rows[0][0]
+
+    def replay(self, operation_id):
+        encoded = 'hex(response_bytes)' if self.provider == 'sqlite' else "encode(response_bytes,'hex')"
+        rows = self.sql(f"SELECT response_version,response_status,{encoded} FROM operations WHERE operation_id='{operation_id}'")
+        if len(rows) != 1:
+            raise AssertionError('Expected one independently stored replay response.')
+        version, status, body = rows[0]
+        return int(version), int(status), bytes.fromhex(body)
 
 
 class Service:
@@ -95,6 +104,11 @@ class Service:
             self.url = self.ready.get(timeout=60)
             if not self.url:
                 raise RuntimeError('Service exited before READY; inspect its retained log.')
+            self.observed_scheme = urlsplit(self.url).scheme
+            expected_scheme = 'https' if self.certificate else 'http'
+            if self.observed_scheme != expected_scheme:
+                raise AssertionError('Observed READY scheme does not match the selected TLS profile: '
+                    + self.observed_scheme + ' != ' + expected_scheme)
             return self
         except BaseException:
             self.__exit__(*sys.exc_info())
@@ -117,6 +131,36 @@ class Service:
         headers = {'Content-Type': 'application/json', 'Idempotency-Key': 'oversize-json'}
         if not self.http2:
             return self.request('POST', '/v1/items', body, headers, token)
+        return self._h2_rejection('POST', '/v1/items', len(body),
+            lambda offset, count: body[offset:offset+count], headers, token)
+
+    def oversized_attachment(self, path, token, expected_version):
+        length = 64 * 1024 * 1024 + 1
+        headers = {'Content-Type': 'application/octet-stream',
+            'Idempotency-Key': 'attachment-over-limit', 'If-Match': str(expected_version)}
+        if self.http2:
+            return self._h2_rejection('PUT', path, length,
+                lambda offset, count: b'x' * count, headers, token)
+        parsed = urlsplit(self.url)
+        if parsed.scheme == 'https':
+            connection = http.client.HTTPSConnection(parsed.hostname, parsed.port, timeout=30,
+                context=ssl.create_default_context(cafile=str(self.certificate)))
+        else:
+            connection = http.client.HTTPConnection(parsed.hostname, parsed.port, timeout=30)
+        try:
+            # The declared length already exceeds the route cap. Keep the
+            # connection open after one bounded chunk and observe the actual
+            # early response; a disconnect/timeout is not a successful rejection.
+            connection.request('PUT', path, body=b'x' * (32 * 1024),
+                headers=dict(headers, **{'Content-Length': str(length), 'Authorization': 'Bearer ' + token}))
+            response = connection.getresponse()
+            with self._protocol_lock:
+                self.protocols.add('HTTP/1.1' if response.version == 11 else 'HTTP/1.0')
+            return response.status, response.read(), dict(response.getheaders())
+        finally:
+            connection.close()
+
+    def _h2_rejection(self, method, path, length, chunk, headers, token):
         # A legal early HTTP2 response can close the stream while HTTPX is still
         # writing, masking the already-received status with LocalProtocolError.
         # Read the actual frames here; a reset without a 413 is never a pass.
@@ -133,10 +177,12 @@ class Service:
                 if transport.selected_alpn_protocol() != 'h2':
                     raise AssertionError('The rejection oracle did not negotiate HTTP2.')
                 connection.initiate_connection()
-                connection.send_headers(1, [(':method', 'POST'), (':scheme', 'https'),
-                    (':authority', parsed.netloc), (':path', '/v1/items'),
-                    ('authorization', 'Bearer ' + token), ('content-type', 'application/json'),
-                    ('content-length', str(len(body))), ('idempotency-key', 'oversize-json')], end_stream=False)
+                with self._protocol_lock:
+                    self.protocols.add('HTTP/2')
+                connection.send_headers(1, [(':method', method), (':scheme', 'https'),
+                    (':authority', parsed.netloc), (':path', path),
+                    ('authorization', 'Bearer ' + token), ('content-length', str(length)),
+                    *[(key.lower(), value) for key, value in headers.items()]], end_stream=False)
                 transport.sendall(connection.data_to_send())
                 while True:
                     data = transport.recv(65536)
@@ -156,11 +202,11 @@ class Service:
                             raise AssertionError('HTTP2 reset without an observed 413: ' + str(event.error_code))
                     # After response headers arrive, stop sending rejected data.
                     # Otherwise obey the negotiated peer stream/connection windows.
-                    while not response_headers and offset < len(body):
-                        count = min(connection.local_flow_control_window(1), connection.max_outbound_frame_size, len(body) - offset)
+                    while not response_headers and offset < length:
+                        count = min(connection.local_flow_control_window(1), connection.max_outbound_frame_size, 32 * 1024, length - offset)
                         if count <= 0:
                             break
-                        connection.send_data(1, body[offset:offset+count], end_stream=offset+count == len(body))
+                        connection.send_data(1, chunk(offset, count), end_stream=offset+count == length)
                         offset += count
                     outbound = connection.data_to_send()
                     if outbound:
@@ -228,11 +274,13 @@ def run_cases(service, database, oracle, identities):
     oracle.check('authentication-before-business', service.request('GET', '/v1/items')[0] == 401)
     oracle.check('write-authorization', create(service, reader, 'reader-denied', 'denied')[0] == 403)
 
-    status, original, _ = create(service, alice, 'one', 'hello')
+    status, original, original_headers = create(service, alice, 'one', 'hello')
     oracle.check('create-confirmed', status == 201, {'status': status})
     first = json.loads(original)
     oracle.check('stable-response-version', first['responseVersion'] == 1 and first['version'] == 1)
     oracle.check('stable-response-title', first['title'] == 'hello')
+    oracle.check('declared-seven-day-retention', original_headers.get('idempotency-retention-seconds') == '604800')
+    oracle.check('independent-durable-response-bytes', database.replay(first['operationId']) == (1, status, original))
     oracle.check('canonical-request-hash', database.scalar("SELECT request_hash FROM operations WHERE request_key='one'") == create_hash('tenant-a', 'alice', 'hello'))
     oracle.check('authenticated-scope-hash', database.scalar("SELECT scope FROM operations WHERE request_key='one'") == scope_hash('tenant-a', 'alice', 'POST /v1/items'))
     for attempt in range(3):
@@ -313,22 +361,55 @@ def run_cases(service, database, oracle, identities):
         oracle.check('tampered-cursor-rejected', service.request('GET', '/v1/items?after=' + quote(tampered, safe=''), token=alice)[0] == 400)
         oracle.check('cross-tenant-cursor-rejected', service.request('GET', '/v1/items?after=' + quote(first_cursor, safe=''), token=carol)[0] in (400, 403))
         oracle.check('cross-principal-cursor-rejected', service.request('GET', '/v1/items?after=' + quote(first_cursor, safe=''), token=bob)[0] in (400, 403))
+    # An uncapped handler must not pass merely because the fixture is smaller
+    # than the cap. These additional items are actual product HTTP writes.
+    additional = max(0, 101 - int(database.scalar("SELECT COUNT(*) FROM items WHERE tenant_id='tenant-a'")))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+        limit_fixture = list(executor.map(lambda index: create(service, alice,
+            'page-limit-' + str(index), 'page limit ' + str(index)), range(additional)))
+    oracle.check('page-limit-fixture-created-over-http', all(status == 201 for status, _, _ in limit_fixture))
+    available = int(database.scalar("SELECT COUNT(*) FROM items WHERE tenant_id='tenant-a'"))
+    oracle.check('page-limit-fixture-exceeds-one-hundred', available > 100, {'matching_items': available})
     oversized_page = service.request('GET', '/v1/items?limit=101', token=alice)
     oracle.check('maximum-one-hundred-rows', oversized_page[0] == 400 or (oversized_page[0] == 200 and len(json.loads(oversized_page[1])['items']) <= 100))
 
     data = bytes(range(256)) * 401
     attachment = '/v1/items/' + first['itemId'] + '/attachment'
-    headers = {'Idempotency-Key': 'attachment-1', 'If-Match': '1', 'Content-Type': 'application/octet-stream', 'Content-Length': str(len(data))}
+    # Reuse the existing POST key for PUT: authenticated endpoint semantics
+    # must keep the two durable operations distinct.
+    headers = {'Idempotency-Key': 'one', 'If-Match': '1', 'Content-Type': 'application/octet-stream', 'Content-Length': str(len(data))}
     s, attachment_result, _ = service.request('PUT', attachment, data, headers, alice)
     oracle.check('attachment-confirmed', s in (200, 201), {'status': s})
+    attached = json.loads(attachment_result)
+    digest = hashlib.sha256(data).hexdigest()
+    operation = attached['operationId']
+    oracle.check('same-key-independent-endpoint-semantics', operation != first['operationId']
+        and create(service, alice, 'one', 'hello')[1] == original)
+    oracle.check('attachment-authenticated-scope-hash', database.scalar(f"SELECT scope FROM operations WHERE operation_id='{operation}'")
+        == scope_hash('tenant-a', 'alice', 'PUT /v1/items/{id}/attachment'))
+    oracle.check('attachment-canonical-request-hash', database.scalar(f"SELECT request_hash FROM operations WHERE operation_id='{operation}'")
+        == attachment_hash('tenant-a', 'alice', first['itemId'], digest, len(data), 1))
+    oracle.check('attachment-durable-response-bytes', database.replay(operation) == (1, s, attachment_result))
     s, replay, _ = service.request('PUT', attachment, data, headers, alice)
     oracle.check('attachment-exact-replay', s in (200, 201) and replay == attachment_result)
     s, received, _ = service.request('GET', attachment, token=alice)
     oracle.check('attachment-roundtrip', s == 200 and received == data)
     oracle.check('attachment-independent-digest', database.scalar(f"SELECT content_hash FROM attachments WHERE tenant_id='tenant-a' AND item_id='{first['itemId']}'") == hashlib.sha256(data).hexdigest())
     oracle.check('attachment-cross-tenant-denial', service.request('GET', attachment, token=carol)[0] in (403, 404))
+    foreign_item = json.loads(foreign[1])['itemId']
+    foreign_attachment = '/v1/items/' + foreign_item + '/attachment'
+    s, _, _ = service.request('PUT', foreign_attachment, data, dict(headers, **{'Idempotency-Key': 'shared-content'}), carol)
+    oracle.check('shared-content-tenant-reference-confirmed', s in (200, 201))
+    shared = database.sql(f"SELECT tenant_id,item_id,content_hash FROM attachments WHERE content_hash='{digest}' ORDER BY tenant_id,item_id")
+    oracle.check('shared-content-independent-references', shared == [
+        ('tenant-a', first['itemId'], digest), ('tenant-b', foreign_item, digest)])
+    own_download = service.request('GET', foreign_attachment, token=carol)
+    oracle.check('shared-content-own-reference-authorized', own_download[0] == 200 and own_download[1] == data)
+    oracle.check('shared-content-other-tenant-reference-denied', service.request('GET', attachment, token=carol)[0] in (403, 404))
     bad_version = dict(headers, **{'Idempotency-Key': 'attachment-wrong-version', 'If-Match': '1'})
     oracle.check('attachment-version-conflict', service.request('PUT', attachment, data, bad_version, alice)[0] in (409, 412))
+    oracle.check('attachment-same-key-different-expected-version',
+        service.request('PUT', attachment, data, dict(headers, **{'If-Match': '2'}), alice)[0] == 409)
     changed = bytearray(data)
     changed[-1] ^= 1
     oracle.check('attachment-same-key-different-content', service.request('PUT', attachment, bytes(changed), headers, alice)[0] == 409)
@@ -342,13 +423,34 @@ def run_cases(service, database, oracle, identities):
     oracle.check('attachment-exact-sixty-four-mib', s in (200, 201), {'status': s, 'bytes': len(large)})
     s, received, _ = service.request('GET', attachment, token=alice)
     oracle.check('attachment-large-streamed-roundtrip', s == 200 and hashlib.sha256(received).digest() == hashlib.sha256(large).digest())
+    large_digest = hashlib.sha256(large).hexdigest()
     del received, large
+
+    def attachment_state():
+        counts = tuple(int(database.scalar('SELECT COUNT(*) FROM ' + table))
+            for table in ('operations', 'items', 'outbox', 'attachments'))
+        reference = database.sql(f"SELECT content_hash,content_length,operation_id,version FROM attachments WHERE tenant_id='tenant-a' AND item_id='{first['itemId']}'")
+        item_version = int(database.scalar(f"SELECT version FROM items WHERE tenant_id='tenant-a' AND item_id='{first['itemId']}'"))
+        return counts, reference, item_version
+
+    before_oversize = attachment_state()
+    s, _, _ = service.oversized_attachment(attachment, alice, 3)
+    oracle.check('attachment-over-sixty-four-mib-rejected', s == 413,
+        {'status': s, 'declared_bytes': 64 * 1024 * 1024 + 1})
+    oracle.check('oversize-attachment-no-durable-effects', attachment_state() == before_oversize)
+    oracle.check('oversize-attachment-keeps-immutable-content',
+        sha(Path(service.config['blobDirectory']) / 'blobs' / large_digest) == large_digest)
 
     retention = create(service, alice, 'retention-expiry', 'retention example')
     oracle.check('retention-example-confirmed', retention[0] == 201)
+    within_retention = create(service, alice, 'retention-within-window', 'retention guarantee')
+    oracle.check('retention-within-window-example-confirmed', within_retention[0] == 201)
     return {'item_id': first['itemId'], 'operation_id': first['operationId'],
+            'original_response_hex': original.hex(),
             'attachment_sha256': database.scalar(f"SELECT content_hash FROM attachments WHERE tenant_id='tenant-a' AND item_id='{first['itemId']}'"),
-            'retention_operation_id': json.loads(retention[1])['operationId']}
+            'retention_operation_id': json.loads(retention[1])['operationId'],
+            'within_retention_operation_id': json.loads(within_retention[1])['operationId'],
+            'within_retention_response_hex': within_retention[1].hex()}
 
 
 def run_operator_cases(command, config, config_path, output, database, oracle, result):
@@ -359,8 +461,14 @@ def run_operator_cases(command, config, config_path, output, database, oracle, r
         (output / (label + '.log')).write_bytes(process.stdout + process.stderr)
         oracle.check(label, process.returncode == 0, {'exit_code': process.returncode})
 
-    for batch in range(4):
+    pending = int(database.scalar('SELECT COUNT(*) FROM outbox WHERE delivery_state<>2'))
+    # Accommodate the >100-item fixture while keeping both iterations and each
+    # actual claim bounded. attempt_count observes claims independently of ACKs.
+    for batch in range((pending + 15) // 16 + 2):
+        attempts = int(database.scalar('SELECT COALESCE(SUM(attempt_count),0) FROM outbox'))
         admin('--outbox-once', 'outbox-batch-' + str(batch))
+        claimed = int(database.scalar('SELECT COALESCE(SUM(attempt_count),0) FROM outbox')) - attempts
+        oracle.check('bounded-outbox-claim-' + str(batch), 0 <= claimed <= 16, {'claimed': claimed})
         if int(database.scalar('SELECT COUNT(*) FROM outbox WHERE delivery_state<>2')) == 0:
             break
     oracle.check('outbox-acknowledged', int(database.scalar('SELECT COUNT(*) FROM outbox WHERE delivery_state<>2')) == 0)
@@ -373,7 +481,25 @@ def run_operator_cases(command, config, config_path, output, database, oracle, r
     oracle.check('persistent-consumer-one-effect', int(consumer.scalar(f"SELECT effects FROM receipts WHERE event_id='{event}'")) == 1)
     oracle.check('consumer-every-event-one-effect', int(consumer.scalar('SELECT COUNT(*) FROM receipts WHERE effects<>1')) == 0)
 
-    old = int(time.time() * 1000) - 8 * 24 * 60 * 60 * 1000
+    now = int(time.time() * 1000)
+    old = now - 8 * 24 * 60 * 60 * 1000
+    within_operation = result['within_retention_operation_id']
+    within_event = database.scalar(f"SELECT event_id FROM outbox WHERE operation_id='{within_operation}' AND delivery_state=2")
+    oracle.check('within-window-fixture-published-and-acknowledged',
+        int(consumer.scalar(f"SELECT effects FROM receipts WHERE event_id='{within_event}'")) == 1)
+    # Independent fixture setup: archive only this verified acknowledged outbox
+    # row. Otherwise its reference could mask an incorrectly short operation
+    # retention period. Keep the actual consumer effect and replay bytes intact.
+    within_completed = now - 7 * 24 * 60 * 60 * 1000 + 60 * 60 * 1000
+    database.sql(f"DELETE FROM outbox WHERE operation_id='{within_operation}' AND delivery_state=2")
+    database.sql(f"UPDATE operations SET completed_at={within_completed} WHERE operation_id='{within_operation}'")
+    blob_root = Path(config['blobDirectory'])
+    oracle.check('within-window-fixture-has-no-reference-protection',
+        int(database.scalar(f"SELECT COUNT(*) FROM outbox WHERE operation_id='{within_operation}'")) == 0
+        and not (blob_root / 'recovery' / (within_operation + '.json')).exists()
+        and not (blob_root / 'staging' / (within_operation + '.json')).exists(),
+        {'fixture_setup': 'independent SQL after confirmed consumer effect and outbox acknowledgement',
+         'completed_at': within_completed, 'remaining_guaranteed_window_seconds': 3600})
     operation = result['retention_operation_id']
     database.sql(f"UPDATE operations SET completed_at={old} WHERE operation_id='{operation}'")
     database.sql(f"UPDATE outbox SET delivery_state=0,completed_at=0 WHERE operation_id='{operation}'")
@@ -416,6 +542,8 @@ def run_operator_cases(command, config, config_path, output, database, oracle, r
     oracle.check('recent-blob-grace-preserved', fixtures['recent-orphan'][0].exists())
     oracle.check('prepared-recovery-blob-preserved', protected[0].exists())
     oracle.check('authorized-reference-blob-preserved', (root / 'blobs' / result['attachment_sha256']).exists())
+    oracle.check('inside-seven-day-window-survives-maintenance',
+        database.replay(within_operation) == (1, 201, bytes.fromhex(result['within_retention_response_hex'])))
 
 
 def main():
@@ -463,8 +591,19 @@ def main():
         result = run_cases(service, database, oracle, tokens)
         expected_protocol = 'HTTP/2' if args.http2 else 'HTTP/1.1'
         oracle.check('actual-http-protocol', service.protocols == {expected_protocol}, sorted(service.protocols))
+        oracle.check('actual-http-scheme', service.observed_scheme == ('https' if args.tls_certificate else 'http'), service.observed_scheme)
     run_operator_cases(command, config, service.config_path, output, database, oracle, result)
     with factory(config, output / 'restart') as restarted:
+        original = bytes.fromhex(result['original_response_hex'])
+        replay = create(restarted, tokens['alice'], 'one', 'hello')
+        oracle.check('original-result-exact-replay-after-restart', replay[0] == 201 and replay[1] == original)
+        recovered = restarted.request('GET', '/v1/operations/' + result['operation_id'], token=tokens['alice'])
+        oracle.check('original-result-recovery-after-restart', recovered[0] == 200 and recovered[1] == original)
+        oracle.check('original-durable-bytes-unchanged-after-restart',
+            database.replay(result['operation_id']) == (1, 201, original))
+        within = create(restarted, tokens['alice'], 'retention-within-window', 'retention guarantee')
+        oracle.check('inside-seven-day-window-exact-replay-after-restart',
+            within[0] == 201 and within[1].hex() == result['within_retention_response_hex'])
         retry = create(restarted, tokens['alice'], 'retention-expiry', 'retention example')
         oracle.check('expired-key-no-permanent-replay-promise', retry[0] == 201 and json.loads(retry[1])['operationId'] != result['retention_operation_id'])
         download = restarted.request('GET', '/v1/items/' + result['item_id'] + '/attachment', token=tokens['alice'])
@@ -475,7 +614,8 @@ def main():
         from postgres_oracles import run_postgres_oracles
         run_postgres_oracles(command, config, output / 'postgres-oracles', factory, database.sql)
     summary = {'task': 'B21', 'provider': args.provider, 'platform': 'linux-x64',
-        'http_protocol': expected_protocol, 'tls': bool(args.tls_certificate),
+        'http_protocol': expected_protocol, 'http_scheme': service.observed_scheme,
+        'tls': service.observed_scheme == 'https',
         'duration_seconds': round(time.monotonic() - started, 3),
         'cases_passed': len(oracle.results), 'result': result,
         'controller_sha256': sha(__file__), 'golden_sha256': sha(HERE / 'golden-v1.json'),
