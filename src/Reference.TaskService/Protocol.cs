@@ -27,7 +27,7 @@ internal sealed class ApplicationProblem(int status, string code) : Exception(co
 [JsonSerializable(typeof(CreateItem)), JsonSerializable(typeof(CreatedItem)), JsonSerializable(typeof(AttachedItem))]
 [JsonSerializable(typeof(ItemPage)), JsonSerializable(typeof(Problem)), JsonSerializable(typeof(ServiceConfiguration))]
 [JsonSerializable(typeof(UploadManifest)), JsonSerializable(typeof(RecoveryManifest)), JsonSerializable(typeof(MaintenanceReport))]
-[JsonSerializable(typeof(ShutdownReport))]
+[JsonSerializable(typeof(ShutdownReport)), JsonSerializable(typeof(MaintenanceProgress))]
 internal partial class AppJson : JsonSerializerContext { }
 
 internal sealed record MaintenanceReport(int DeletedOutbox, int DeletedOperations, int DeletedBlobs, int DeletedStaging);

@@ -16,6 +16,7 @@ from pathlib import Path
 import queue
 import secrets
 import signal
+import socket
 import sqlite3
 import ssl
 import subprocess
@@ -23,7 +24,7 @@ import sys
 import threading
 import time
 import uuid
-from urllib.parse import quote
+from urllib.parse import quote, urlsplit
 
 import httpx
 from golden import create_hash, scope_hash, verify_fixture
@@ -111,6 +112,60 @@ class Service:
                 self.protocols.add(response.http_version)
             return response.status_code, response.content, dict(response.headers)
 
+    def oversized_json(self, token):
+        body = b'{"title":"' + b'x' * (1024 * 1024) + b'"}'
+        headers = {'Content-Type': 'application/json', 'Idempotency-Key': 'oversize-json'}
+        if not self.http2:
+            return self.request('POST', '/v1/items', body, headers, token)
+        # A legal early HTTP2 response can close the stream while HTTPX is still
+        # writing, masking the already-received status with LocalProtocolError.
+        # Read the actual frames here; a reset without a 413 is never a pass.
+        import h2.config
+        import h2.connection
+        import h2.events
+        parsed = urlsplit(self.url)
+        context = ssl.create_default_context(cafile=str(self.certificate))
+        context.set_alpn_protocols(['h2'])
+        connection = h2.connection.H2Connection(config=h2.config.H2Configuration(client_side=True, header_encoding='utf-8'))
+        received, response_headers, offset = bytearray(), {}, 0
+        with socket.create_connection((parsed.hostname, parsed.port), timeout=30) as plain:
+            with context.wrap_socket(plain, server_hostname=parsed.hostname) as transport:
+                if transport.selected_alpn_protocol() != 'h2':
+                    raise AssertionError('The rejection oracle did not negotiate HTTP2.')
+                connection.initiate_connection()
+                connection.send_headers(1, [(':method', 'POST'), (':scheme', 'https'),
+                    (':authority', parsed.netloc), (':path', '/v1/items'),
+                    ('authorization', 'Bearer ' + token), ('content-type', 'application/json'),
+                    ('content-length', str(len(body))), ('idempotency-key', 'oversize-json')], end_stream=False)
+                transport.sendall(connection.data_to_send())
+                while True:
+                    data = transport.recv(65536)
+                    if not data:
+                        raise AssertionError('HTTP2 closed without a complete rejection response.')
+                    for event in connection.receive_data(data):
+                        if isinstance(event, h2.events.ResponseReceived):
+                            response_headers.update(event.headers)
+                        elif isinstance(event, h2.events.DataReceived):
+                            received.extend(event.data)
+                            connection.acknowledge_received_data(event.flow_controlled_length, event.stream_id)
+                        elif isinstance(event, h2.events.StreamEnded):
+                            return int(response_headers[':status']), bytes(received), response_headers
+                        elif isinstance(event, h2.events.StreamReset):
+                            if response_headers.get(':status') == '413':
+                                return 413, bytes(received), response_headers
+                            raise AssertionError('HTTP2 reset without an observed 413: ' + str(event.error_code))
+                    # After response headers arrive, stop sending rejected data.
+                    # Otherwise obey the negotiated peer stream/connection windows.
+                    while not response_headers and offset < len(body):
+                        count = min(connection.local_flow_control_window(1), connection.max_outbound_frame_size, len(body) - offset)
+                        if count <= 0:
+                            break
+                        connection.send_data(1, body[offset:offset+count], end_stream=offset+count == len(body))
+                        offset += count
+                    outbound = connection.data_to_send()
+                    if outbound:
+                        transport.sendall(outbound)
+
     def admin(self, option):
         result = subprocess.run([*self.command, '--config', str(self.config_path), option],
             capture_output=True, timeout=90)
@@ -186,6 +241,16 @@ def run_cases(service, database, oracle, identities):
     oracle.check('different-hash-conflict', create(service, alice, 'one', 'changed')[0] == 409)
     oracle.check('conflict-preserves-winner', create(service, alice, 'one', 'hello')[1] == original)
 
+    title = "literal ' quote ; -- \u4e16\u754c \U0001f980"
+    parameterized = create(service, alice, 'k' * 128, title)
+    oracle.check('maximum-key-and-parameterized-unicode', parameterized[0] == 201 and json.loads(parameterized[1])['title'] == title)
+    oracle.check('utf8-database-hash-matches-wire-value', database.scalar("SELECT request_hash FROM operations WHERE request_key='" + 'k' * 128 + "'") == create_hash('tenant-a', 'alice', title))
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=12) as executor:
+        distinct = list(executor.map(lambda index: create(service, alice, 'distinct-' + str(index), 'distinct title ' + str(index)), range(24)))
+    oracle.check('concurrent-distinct-manifest-lifetimes', all(status == 201 for status, _, _ in distinct))
+    oracle.check('distinct-operations-not-lost', int(database.scalar("SELECT COUNT(*) FROM operations WHERE request_key LIKE 'distinct-%'")) == 24)
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=12) as executor:
         replies = list(executor.map(lambda _: create(service, alice, 'concurrent', 'same payload'), range(12)))
     oracle.check('concurrent-same-key-identical', all(s == 201 and b == replies[0][1] for s, b, _ in replies))
@@ -221,8 +286,7 @@ def run_cases(service, database, oracle, identities):
             {'Content-Type': 'application/json', 'Idempotency-Key': key}, alice)
         oracle.check('reject-' + name, s in (400, 413))
     oracle.check('invalid-input-no-side-effects', int(database.scalar('SELECT COUNT(*) FROM operations')) == before)
-    s, _, _ = service.request('POST', '/v1/items', b'{"title":"' + b'x' * (1024 * 1024) + b'"}',
-        {'Content-Type': 'application/json', 'Idempotency-Key': 'oversize-json'}, alice)
+    s, _, _ = service.oversized_json(alice)
     oracle.check('json-one-mib-route-limit', s == 413)
 
     for index in range(6):
@@ -248,6 +312,7 @@ def run_cases(service, database, oracle, identities):
         tampered = first_cursor[:position] + ('A' if first_cursor[position] != 'A' else 'B') + first_cursor[position+1:]
         oracle.check('tampered-cursor-rejected', service.request('GET', '/v1/items?after=' + quote(tampered, safe=''), token=alice)[0] == 400)
         oracle.check('cross-tenant-cursor-rejected', service.request('GET', '/v1/items?after=' + quote(first_cursor, safe=''), token=carol)[0] in (400, 403))
+        oracle.check('cross-principal-cursor-rejected', service.request('GET', '/v1/items?after=' + quote(first_cursor, safe=''), token=bob)[0] in (400, 403))
     oversized_page = service.request('GET', '/v1/items?limit=101', token=alice)
     oracle.check('maximum-one-hundred-rows', oversized_page[0] == 400 or (oversized_page[0] == 200 and len(json.loads(oversized_page[1])['items']) <= 100))
 

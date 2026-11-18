@@ -1,18 +1,20 @@
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text.Json;
-using Microsoft.Win32.SafeHandles;
 
 namespace NativeWeave.Reference.TaskService;
 
 internal sealed record UploadManifest(long Version, string OperationId, string Tenant, string Principal, string ItemId,
     string RequestKey, long ExpectedVersion, string? ContentHash, long ContentLength, string State, long CreatedAt);
 internal sealed record RecoveryManifest(long Version, string OperationId, string Scope, string RequestKey, string RequestHash, long CreatedAt);
+internal sealed record MaintenancePosition(long CompletedAt, string Id);
+internal sealed record MaintenanceProgress(long Version, MaintenancePosition? Outbox, MaintenancePosition? Operations, string? Recovery, string? Uploads);
 
 /// <summary>One process owns this finite local filesystem profile; blobs precede database references.</summary>
 internal sealed class BlobStore : IDisposable
 {
     internal const long MaximumAttachment = 64L * 1024 * 1024;
+    private const long MaintenanceReserve = 8192; // Complete and temporary progress records, each bounded to 4KiB.
     private readonly ServiceConfiguration _configuration;
     private readonly FileStream _processLock;
     private readonly object _gate = new();
@@ -40,8 +42,8 @@ internal sealed class BlobStore : IDisposable
         long reservation = checked(length + 16_384);
         lock (_gate)
         {
-            long stored = Directory.EnumerateFiles(Root, "*", SearchOption.AllDirectories).Sum(path => new FileInfo(path).Length);
-            if (_active.Count >= _configuration.MaxUploads || stored + _reserved + reservation > _configuration.MaxBlobBytes ||
+            long stored = StoredBytes();
+            if (_active.Count >= _configuration.MaxUploads || stored + _reserved + reservation + MaintenanceReserve > _configuration.MaxBlobBytes ||
                 Directory.EnumerateFiles(Staging, "*.json").Take(8192).Count() >= 8192)
                 throw new ApplicationProblem(503, "upload_capacity");
             _active.Add(operation); _reserved += reservation;
@@ -59,36 +61,72 @@ internal sealed class BlobStore : IDisposable
         return stream;
     }
 
-    internal IReadOnlyList<UploadManifest> Manifests() => Directory.EnumerateFiles(Staging, "*.json").Select(ReadManifest).ToArray();
-    internal HashSet<string> ProtectedOperations() => Manifests().Where(x => x.ContentHash is not null || IsActive(x.OperationId)).Select(x => x.OperationId)
-        .Concat(Directory.EnumerateFiles(Recovery, "*.json").Select(path => Canonical.Id(Path.GetFileNameWithoutExtension(path)))).ToHashSet(StringComparer.Ordinal);
+    internal IReadOnlyList<UploadManifest> Manifests()
+    { lock (_gate) return Directory.EnumerateFiles(Staging, "*.json").Select(ReadManifest).ToArray(); }
+
+    internal IReadOnlyList<RecoveryManifest> RecoveryManifests()
+    {
+        lock (_gate)
+        {
+            return Directory.EnumerateFiles(Recovery, "*.json").Select(path =>
+            {
+                if (new FileInfo(path).Length > 8192) throw new InvalidOperationException("Recovery record is too large.");
+                var value = JsonSerializer.Deserialize(File.ReadAllBytes(path), AppJson.Default.RecoveryManifest)
+                    ?? throw new InvalidOperationException("Invalid recovery record.");
+                if (value.Version != 1 || Path.GetFileName(path) != Canonical.Id(value.OperationId) + ".json")
+                    throw new InvalidOperationException("Recovery identity mismatch.");
+                return value;
+            }).ToArray();
+        }
+    }
+
+    internal HashSet<string> ProtectedOperations()
+    {
+        lock (_gate) return Manifests().Where(x => x.ContentHash is not null || _active.Contains(x.OperationId)).Select(x => x.OperationId)
+            .Concat(Directory.EnumerateFiles(Recovery, "*.json").Select(path => Canonical.Id(Path.GetFileNameWithoutExtension(path)))).ToHashSet(StringComparer.Ordinal);
+    }
 
     internal void ProtectCommit(OperationResult operation)
     {
         lock (_gate)
         {
             if (Directory.EnumerateFiles(Recovery, "*.json").Take(8192).Count() >= 8192 ||
-                Directory.EnumerateFiles(Root, "*", SearchOption.AllDirectories).Sum(path => new FileInfo(path).Length) + _reserved + 8192 > _configuration.MaxBlobBytes)
+                StoredBytes() + _reserved + 8192 + MaintenanceReserve > _configuration.MaxBlobBytes)
                 throw new ApplicationProblem(503, "recovery_capacity");
             var manifest = new RecoveryManifest(1, operation.OperationId, operation.Scope, operation.RequestKey, operation.RequestHash, operation.CompletedAt);
             string path = Path.Combine(Recovery, operation.OperationId + ".json");
             byte[] bytes = JsonSerializer.SerializeToUtf8Bytes(manifest, AppJson.Default.RecoveryManifest);
-            using (var file = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
+            using (var file = new FileStream(path + ".new", FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
             { file.Write(bytes); file.Flush(true); }
+            File.Move(path + ".new", path);
             DurableDirectory.Flush(Recovery);
         }
     }
 
     internal void ConfirmCommit(string operationId)
     {
-        try { File.Delete(Path.Combine(Recovery, Canonical.Id(operationId) + ".json")); DurableDirectory.Flush(Recovery); }
-        catch (IOException) { Console.Error.WriteLine("confirmed_commit_protection_cleanup_pending"); }
+        try
+        {
+            lock (_gate)
+            {
+                string path = Path.Combine(Recovery, Canonical.Id(operationId) + ".json");
+                File.Delete(path); File.Delete(path + ".new"); DurableDirectory.Flush(Recovery);
+            }
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException) { Console.Error.WriteLine("confirmed_commit_protection_cleanup_pending"); }
     }
 
     internal void ConfirmRecoveredUpload(string operationId)
     {
-        try { File.Delete(ManifestPath(operationId)); DurableDirectory.Flush(Staging); }
-        catch (IOException) { Console.Error.WriteLine("confirmed_upload_protection_cleanup_pending"); }
+        try
+        {
+            lock (_gate)
+            {
+                string path = ManifestPath(operationId);
+                File.Delete(path); File.Delete(path + ".new"); DurableDirectory.Flush(Staging);
+            }
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException) { Console.Error.WriteLine("confirmed_upload_protection_cleanup_pending"); }
     }
 
     internal async Task<(int Blobs, int Staging)> CollectAsync(Func<string, CancellationToken, Task<bool>> referenced, CancellationToken token)
@@ -111,8 +149,15 @@ internal sealed class BlobStore : IDisposable
             string fileName = Path.GetFileName(path);
             if (fileName.Length < 36) continue;
             string id = fileName[..36];
-            if (!Guid.TryParseExact(id, "D", out _) || IsActive(id) || File.Exists(ManifestPath(id)) ||
+            if (!Guid.TryParseExact(id, "D", out _) || IsActive(id) || path.EndsWith(".part", StringComparison.Ordinal) && File.Exists(ManifestPath(id)) ||
                 new DateTimeOffset(File.GetLastWriteTimeUtc(path)).ToUnixTimeMilliseconds() >= cutoff) continue;
+            File.Delete(path); deletedStaging++;
+        }
+        foreach (string path in Directory.EnumerateFiles(Recovery, "*.json.new"))
+        {
+            token.ThrowIfCancellationRequested();
+            // A temporary record cannot authorize COMMIT: publication and directory fsync precede dispatch.
+            if (new DateTimeOffset(File.GetLastWriteTimeUtc(path)).ToUnixTimeMilliseconds() >= cutoff) continue;
             File.Delete(path); deletedStaging++;
         }
         foreach (string path in Directory.EnumerateFiles(Blobs))
@@ -126,10 +171,10 @@ internal sealed class BlobStore : IDisposable
             {
                 if (Manifests().Any(manifest => manifest.ContentHash == hash)) continue;
                 try { File.Delete(path); deletedBlobs++; }
-                catch (IOException) { /* An open Windows reader retains the file; a later collection retries. */ }
+                catch (IOException) { /* A failed local deletion remains eligible for a later collection. */ }
             }
         }
-        DurableDirectory.Flush(Staging); DurableDirectory.Flush(Blobs);
+        DurableDirectory.Flush(Staging); DurableDirectory.Flush(Blobs); DurableDirectory.Flush(Recovery);
         return (deletedBlobs, deletedStaging);
     }
 
@@ -153,9 +198,49 @@ internal sealed class BlobStore : IDisposable
         byte[] bytes = JsonSerializer.SerializeToUtf8Bytes(value, AppJson.Default.UploadManifest);
         if (bytes.Length > 8192) throw new InvalidOperationException("Recovery manifest exceeds its bound.");
         string path = ManifestPath(value.OperationId); string temporary = path + ".new";
-        using (var stream = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
-        { stream.Write(bytes); stream.Flush(true); }
-        File.Move(temporary, path, true); DurableDirectory.Flush(Staging);
+        lock (_gate)
+        {
+            using (var stream = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
+            { stream.Write(bytes); stream.Flush(true); }
+            File.Move(temporary, path, true); DurableDirectory.Flush(Staging);
+        }
+    }
+
+    internal MaintenanceProgress ReadMaintenanceProgress()
+    {
+        string path = Path.Combine(Root, "maintenance.json");
+        if (!File.Exists(path)) return new(1, null, null, null, null);
+        if (new FileInfo(path).Length > 4096) throw new InvalidOperationException("Maintenance progress exceeds its bound.");
+        var value = JsonSerializer.Deserialize(File.ReadAllBytes(path), AppJson.Default.MaintenanceProgress)
+            ?? throw new InvalidOperationException("Invalid maintenance progress.");
+        if (value.Version != 1) throw new InvalidOperationException("Unsupported maintenance progress version.");
+        return value;
+    }
+
+    internal void WriteMaintenanceProgress(MaintenanceProgress value)
+    {
+        byte[] bytes = JsonSerializer.SerializeToUtf8Bytes(value, AppJson.Default.MaintenanceProgress);
+        if (bytes.Length > 4096) throw new InvalidOperationException("Maintenance progress exceeds its bound.");
+        string path = Path.Combine(Root, "maintenance.json");
+        lock (_gate)
+        {
+            using (var file = new FileStream(path + ".new", FileMode.Create, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
+            { file.Write(bytes); file.Flush(true); }
+            File.Move(path + ".new", path, true); DurableDirectory.Flush(Root);
+        }
+    }
+
+    private long StoredBytes()
+    {
+        long total = 0;
+        foreach (string path in Directory.EnumerateFiles(Root, "*", SearchOption.AllDirectories))
+        {
+            try { total = checked(total + new FileInfo(path).Length); }
+            catch (FileNotFoundException) { /* A retired temporary contributes no retained bytes. */ }
+            catch (DirectoryNotFoundException) { /* A concurrent local deletion contributes no retained bytes. */ }
+        }
+        // Active upload bytes are additionally covered in full by _reserved, including not-yet-written bytes.
+        return total;
     }
 
     private void Release(string operation, long reservation)
@@ -225,7 +310,7 @@ internal sealed class BlobStore : IDisposable
                 }
                 else if (!_databaseBinding) _owner.ConfirmRecoveredUpload(Manifest.OperationId);
             }
-            catch (IOException) { Console.Error.WriteLine("upload_manifest_cleanup_pending"); }
+            catch (Exception error) when (error is IOException or UnauthorizedAccessException) { Console.Error.WriteLine("upload_manifest_cleanup_pending"); }
             finally { _owner.Release(Manifest.OperationId, _reservation); }
             return ValueTask.CompletedTask;
         }
@@ -266,17 +351,10 @@ internal static partial class DurableDirectory
             try { if (Fsync(descriptor) != 0) throw new IOException("Directory fsync failed."); }
             finally { _ = Close(descriptor); }
         }
-        else if (OperatingSystem.IsWindows())
-        {
-            using var handle = CreateFile(directory, 0x80000000, 7, 0, 3, 0x02000000, 0);
-            if (handle.IsInvalid || !FlushFileBuffers(handle)) throw new IOException("Directory durability is unsupported by this Windows filesystem profile.");
-        }
-        else throw new PlatformNotSupportedException("The reference blob persistence profile requires explicit platform validation.");
+        else throw new PlatformNotSupportedException("The reference blob persistence profile is implemented and validated for Linux only.");
     }
 
     [LibraryImport("libc", EntryPoint = "open", StringMarshalling = StringMarshalling.Utf8, SetLastError = true)] private static partial int Open(string path, int flags);
     [LibraryImport("libc", EntryPoint = "fsync", SetLastError = true)] private static partial int Fsync(int fd);
     [LibraryImport("libc", EntryPoint = "close")] private static partial int Close(int fd);
-    [LibraryImport("kernel32.dll", EntryPoint = "CreateFileW", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)] private static partial SafeFileHandle CreateFile(string path, uint access, uint share, nint security, uint creation, uint flags, nint template);
-    [LibraryImport("kernel32.dll", SetLastError = true)][return: MarshalAs(UnmanagedType.Bool)] private static partial bool FlushFileBuffers(SafeFileHandle handle);
 }

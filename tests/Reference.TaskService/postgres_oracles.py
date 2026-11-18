@@ -52,6 +52,17 @@ def _kind(statement: str) -> str:
         return "begin"
     if re.match(r"^ROLLBACK\b", text, re.IGNORECASE):
         return "rollback"
+    # SQLx 0.9.0 ColumnResolver resolves prepared-result column origins. This
+    # exact catalog-only shape is the sole permitted intervening SQL below.
+    # Only the eleven operation columns' numeric OID/attribute pairs vary.
+    catalog = " ".join(text.split())
+    prefix = ("SELECT attrelid table_oid, attrelid::regclass::text table_name, "
+              "array_agg(ROW(attnum, attname)) AS columns FROM (VALUES ")
+    suffix = (") lookup(table_oid, attribute_num) INNER JOIN pg_catalog.pg_attribute "
+              "ON lookup.table_oid = attrelid AND lookup.attribute_num = attnum GROUP BY attrelid")
+    pair = r"\([0-9]{1,10}, [0-9]{1,5}\)"
+    if re.fullmatch(re.escape(prefix) + pair + r"(?:, " + pair + r"){0,10}" + re.escape(suffix), catalog):
+        return "sqlx_column_metadata"
     if re.match(r'^INSERT\s+INTO\s+(?:"?\w+"?\.)?"?operations"?\b', text, re.IGNORECASE):
         return "operation_insert"
     if re.match(r"^SELECT\b", text, re.IGNORECASE) and re.search(
@@ -74,8 +85,8 @@ class _Connection:
         self.client = client
         self.upstream = upstream
         self.backend_pid: int | None = None
-        self.statements: dict[bytes, str] = {}
-        self.portals: dict[bytes, str] = {}
+        self.statements: dict[bytes, tuple[str, str | None]] = {}
+        self.portals: dict[bytes, tuple[str, str | None]] = {}
         self.pending: list[tuple[int, str]] = []
         self.operation_transaction = False
         self.suppress = False
@@ -97,7 +108,8 @@ class PostgreSqlProxy:
     """Loopback plaintext PG proxy with one explicitly armed commit fault.
 
     Authentication frames pass transparently. TLS/GSS negotiation is declined on
-    this test-only listener; the caller sets sslmode=disable. The upstream HTTP
+    this test-only listener; the caller selects the product's explicit local
+    database TLS-disable option. Its validated URI must not add sslmode. HTTP
     protocol/TLS profile belongs to the ordinary reference-service launcher.
     """
 
@@ -133,7 +145,6 @@ class PostgreSqlProxy:
         credentials = parsed.netloc.rsplit("@", 1)[0] + "@" if "@" in parsed.netloc else ""
         query = [(key, value) for key, value in parse_qsl(parsed.query, keep_blank_values=True)
                  if key.lower() not in ("sslmode", "host", "hostaddr", "port")]
-        query.append(("sslmode", "disable"))
         self.database_uri = urlunsplit((parsed.scheme, f"{credentials}127.0.0.1:{port}",
                                        parsed.path, urlencode(query), ""))
 
@@ -246,22 +257,27 @@ class PostgreSqlProxy:
             while True:
                 tag, payload, frame = self._frame(connection.client, connection)
                 command_kind: str | None = None
+                statement_sha256: str | None = None
                 if tag == b"P":
                     name, offset = _cstring(payload)
                     statement, _ = _cstring(payload, offset)
-                    connection.statements[name] = _kind(statement.decode("utf-8", errors="strict"))
+                    kind = _kind(statement.decode("utf-8", errors="strict"))
+                    fingerprint = hashlib.sha256(statement).hexdigest() if kind == "sqlx_column_metadata" else None
+                    connection.statements[name] = (kind, fingerprint)
                 elif tag == b"B":
                     portal, offset = _cstring(payload)
                     statement, _ = _cstring(payload, offset)
-                    connection.portals[portal] = connection.statements.get(statement, "other")
+                    connection.portals[portal] = connection.statements.get(statement, ("other", None))
                 elif tag == b"E":
                     portal, _ = _cstring(payload)
-                    command_kind = connection.portals.get(portal, "other")
+                    command_kind, statement_sha256 = connection.portals.get(portal, ("other", None))
                 elif tag == b"Q":
                     statement, _ = _cstring(payload)
                     command_kind = _kind(statement.decode("utf-8", errors="strict"))
+                    if command_kind == "sqlx_column_metadata":
+                        statement_sha256 = hashlib.sha256(statement).hexdigest()
                 if command_kind is not None:
-                    self._before_command(connection, command_kind)
+                    self._before_command(connection, command_kind, statement_sha256)
                 connection.upstream.sendall(frame)
                 if tag == b"X":
                     return
@@ -272,9 +288,10 @@ class PostgreSqlProxy:
         finally:
             connection.close()
 
-    def _before_command(self, connection: _Connection, kind: str) -> None:
+    def _before_command(self, connection: _Connection, kind: str, statement_sha256: str | None) -> None:
         with self._lock:
-            sequence = self._record("command", connection, kind=kind)
+            fields = {"statement_sha256": statement_sha256} if statement_sha256 is not None else {}
+            sequence = self._record("command", connection, kind=kind, **fields)
             connection.pending.append((sequence, kind))
             if kind == "operation_insert":
                 connection.operation_transaction = True
@@ -480,6 +497,13 @@ def _conflict(command: list[str], config: dict[str, Any], output: Path,
                         "The contender did not observe the actual DO NOTHING zero-row result")
                 following = [event for event in events if event["event"] == "command"
                              and event["backend_pid"] == loser_pid and event["sequence"] > insert[0]["sequence"]]
+                # Preparing FindAsync can cause the pinned SQLx driver to load
+                # column origins from pg_catalog. It carries no business-table
+                # read/write and cannot reuse the INSERT's statement snapshot.
+                controls = []
+                while following and following[0].get("kind") == "sqlx_column_metadata":
+                    controls.append(following.pop(0))
+                require(len(controls) <= 1, "Unexpected repeated SQLx metadata queries before the recovery SELECT")
                 require(bool(following) and following[0].get("kind") == "operation_select",
                         "The zero-row INSERT was not followed by a separate operations SELECT")
                 selected = [event for event in events if event["event"] == "command_complete"
@@ -489,7 +513,12 @@ def _conflict(command: list[str], config: dict[str, Any], output: Path,
                 require(not proxy.failures, "The PostgreSQL proxy recorded a framing failure")
                 return {"passed": True, "key": key, "winner_pid": winner_pid,
                         "loser_pid": loser_pid, "lock_wait": list(witness),
-                        "separate_select": True, "durable": durable}
+                        "separate_select": True,
+                        "sqlx_metadata_query_count_before_select": len(controls),
+                        "sqlx_metadata_before_select": [{"sequence": item["sequence"],
+                                                         "statement_sha256": item["statement_sha256"]}
+                                                        for item in controls],
+                        "durable": durable}
             finally:
                 proxy.release.set()
 

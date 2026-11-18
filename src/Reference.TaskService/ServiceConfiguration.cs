@@ -2,7 +2,9 @@ using System.Net;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using NativeWeave.Database;
+#if !REFERENCE_SQLITE_ONLY
 using NativeWeave.Database.PostgreSql;
+#endif
 using NativeWeave.Database.Sqlite;
 using NativeWeave.Server;
 
@@ -32,6 +34,9 @@ internal sealed class ServiceConfiguration
 
     internal void Validate()
     {
+#if REFERENCE_SQLITE_ONLY
+        if (Provider != "sqlite") throw new ArgumentException("The minimum sample includes only the SQLite provider package.");
+#endif
         if (Provider is not ("sqlite" or "postgresql") || string.IsNullOrWhiteSpace(Database) || string.IsNullOrWhiteSpace(ConsumerDatabase) ||
             string.IsNullOrWhiteSpace(BlobDirectory) || !IPAddress.TryParse(ListenAddress, out _) || Port is < 0 or > 65535 ||
             MaxUploads is < 1 or > 16 || MaxBlobBytes < BlobStore.MaximumAttachment || MaxBlobBytes > 1024L * 1024 * 1024 * 1024 ||
@@ -55,7 +60,11 @@ internal sealed class ServiceConfiguration
     {
         DataSourceBuilder builder = new();
         if (Provider == "sqlite") builder.UseSqlite(Database, options => { options.BeginMode = SqliteBeginMode.Immediate; options.BusyTimeout = TimeSpan.FromSeconds(5); });
+#if !REFERENCE_SQLITE_ONLY
         else builder.UsePostgreSql(Database, options => { if (AllowLocalDatabaseTlsDisable) options.TlsMode = PostgreSqlTlsMode.DisableForLocalDevelopment; });
+#else
+        else throw new ArgumentException("The minimum sample includes only the SQLite provider package.");
+#endif
         return builder.ConfigureLimits(new DatabaseLimits
         {
             MaxConnections = 16,

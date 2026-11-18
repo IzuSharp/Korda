@@ -39,14 +39,23 @@ internal static class Program
             }
             using BlobStore blobs = new(configuration);
             TaskService service = new(database, new(Convert.FromBase64String(configuration.CursorKey)), blobs);
-            if (mode == "--maintenance-once")
+            string serverState;
+            try
             {
-                using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(5));
-                Console.WriteLine(JsonSerializer.Serialize(await service.MaintainAsync(timeout.Token).ConfigureAwait(false), AppJson.Default.MaintenanceReport)); return 0;
+                if (mode == "--maintenance-once")
+                {
+                    using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+                    Console.WriteLine(JsonSerializer.Serialize(await service.MaintainAsync(timeout.Token).ConfigureAwait(false), AppJson.Default.MaintenanceReport)); return 0;
+                }
+                serverState = await ServeAsync(configuration, service, outbox, blobs).ConfigureAwait(false);
             }
-            string serverState = await ServeAsync(configuration, service, outbox, blobs).ConfigureAwait(false);
-            await consumer.DisposeAsync().ConfigureAwait(false);
-            await database.DisposeAsync().ConfigureAwait(false);
+            finally
+            {
+                // ServeAsync owns and joins its handlers even on worker/host failure. Keep blob ownership until
+                // native retirement and every bounded application protection continuation have actually ended.
+                try { await Task.WhenAll(consumer.DisposeAsync().AsTask(), database.DisposeAsync().AsTask()).ConfigureAwait(false); }
+                finally { await service.JoinProtectionRetirementAsync().ConfigureAwait(false); }
+            }
             Console.WriteLine("CLOSED " + JsonSerializer.Serialize(new ShutdownReport(serverState, database.Cleanup.Status.ToString(),
                 database.Cleanup.LocalResourcesReleased, consumer.Cleanup.Status.ToString(), consumer.Cleanup.LocalResourcesReleased), AppJson.Default.ShutdownReport));
             return 0;

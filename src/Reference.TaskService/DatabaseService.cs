@@ -29,6 +29,7 @@ internal sealed partial class TaskService(DataSource source, CursorCodec cursors
         byte[] response = JsonSerializer.SerializeToUtf8Bytes(new CreatedItem(1, operation, itemId, command.Title, now, 1), AppJson.Default.CreatedItem);
         var result = new OperationResult(Canonical.Scope(identity, Canonical.CreateSemantic), key, Canonical.CreateHash(identity, command.Title), operation,
             identity.Tenant, identity.Principal, Canonical.CreateSemantic, 1, 201, response, now);
+        using var cleanup = ReserveProtectionRetirement();
         var session = await source.OpenSessionAsync(token).ConfigureAwait(false);
         DataTransaction? transaction = null;
         bool protectedCommit = false;
@@ -39,8 +40,8 @@ internal sealed partial class TaskService(DataSource source, CursorCodec cursors
             if (existing is not null) return existing;
             await session.InsertAsync(Items.Table, new Item(identity.Tenant, itemId, operation, command.Title, now, 1), token).ConfigureAwait(false);
             await session.InsertAsync(Outbox.Table, NewEvent(result), token).ConfigureAwait(false);
-            blobs.ProtectCommit(result);
             protectedCommit = true;
+            blobs.ProtectCommit(result);
             var committed = await CommitAsync(transaction, result, token).ConfigureAwait(false);
             if (committed.Status != 503) { blobs.ConfirmCommit(operation); protectedCommit = false; }
             return committed;
@@ -48,7 +49,7 @@ internal sealed partial class TaskService(DataSource source, CursorCodec cursors
         finally
         {
             await CloseSessionAsync(session).ConfigureAwait(false);
-            if (protectedCommit && transaction is not null) RetireProtection(transaction, () => blobs.ConfirmCommit(operation));
+            if (protectedCommit && transaction is not null) cleanup.Transfer(transaction, () => blobs.ConfirmCommit(operation));
         }
     }
 
@@ -160,6 +161,7 @@ internal sealed partial class TaskService(DataSource source, CursorCodec cursors
         var result = new OperationResult(Canonical.Scope(identity, Canonical.AttachSemantic), key,
             Canonical.AttachmentHash(identity, itemId, upload.ContentHash!, upload.ContentLength, expectedVersion), upload.OperationId,
             identity.Tenant, identity.Principal, Canonical.AttachSemantic, 1, 200, response, now);
+        using var cleanup = ReserveProtectionRetirement();
         var session = await source.OpenSessionAsync(token).ConfigureAwait(false);
         DataTransaction? transaction = null;
         try
@@ -181,7 +183,7 @@ internal sealed partial class TaskService(DataSource source, CursorCodec cursors
         finally
         {
             await CloseSessionAsync(session).ConfigureAwait(false);
-            if (transaction is not null) RetireProtection(transaction, () => blobs.ConfirmRecoveredUpload(upload.OperationId));
+            if (transaction is not null) cleanup.Transfer(transaction, () => blobs.ConfirmRecoveredUpload(upload.OperationId));
         }
     }
 
@@ -194,23 +196,6 @@ internal sealed partial class TaskService(DataSource source, CursorCodec cursors
             if (!result.LocalResourcesReleased) Console.Error.WriteLine($"database_cleanup status={result.Status} disposition={result.ConnectionDisposition} released=false");
         }
         catch (Exception error) { Console.Error.WriteLine("database_cleanup_failure type=" + error.GetType().Name); session.Dispose(); }
-    }
-
-    private static void RetireProtection(DataTransaction transaction, Action removeConfirmedRollbackProtection)
-    {
-        // At most one continuation per admitted DB session: parent/source admission bounds its population.
-        // Capture only transaction and durable identity, never RequestContext, cancellation registrations or a DI scope.
-        _ = RetireProtectionAsync(transaction, removeConfirmedRollbackProtection);
-    }
-
-    private static async Task RetireProtectionAsync(DataTransaction transaction, Action removeConfirmedRollbackProtection)
-    {
-        try
-        {
-            await transaction.DisposeAsync().ConfigureAwait(false);
-            if (transaction.Outcome == TransactionOutcome.RolledBack) removeConfirmedRollbackProtection();
-        }
-        catch (Exception error) { Console.Error.WriteLine("recovery_protection_retained type=" + error.GetType().Name); }
     }
 
     internal static long Now() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
