@@ -13,6 +13,8 @@ import asyncio
 import base64
 from contextlib import contextmanager
 import hashlib
+import importlib.metadata
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -25,6 +27,27 @@ from common import check_files, digest, expected_value, inventory, load, load_a2
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
+
+
+def comparator_route(name, route, manifest):
+    """Resolve repository-relative source/lock pins without changing their bytes."""
+    route = dict(route, id=name)
+    relative = [path for path in route['lock_hashes'] if not Path(path).is_absolute()]
+    ancestors = [manifest.resolve().parent, *manifest.resolve().parents]
+    base = next((parent for parent in ancestors if all((parent / path).is_file() for path in relative)), None)
+    if base is None:
+        raise ValueError('Cannot resolve comparator lockfiles relative to its manifest repository')
+    for group in ('artifacts', 'lock_hashes'):
+        route[group] = {str(Path(path) if Path(path).is_absolute() else base / path): value
+                        for path, value in route[group].items()}
+        check_files(route[group])
+    route['source'] = route.get('source', route.get('source_identity', {}))
+    if 'files' in route['source']:
+        check_files({str(base / path): value for path, value in route['source']['files'].items()})
+        route['source'] = dict(route['source'], repository=str(base))
+    if not Path(route['command'][0]).is_absolute():
+        route['command'] = [str(base / route['command'][0]), *route['command'][1:]]
+    return route
 
 
 def product_route(probe_directory):
@@ -65,10 +88,11 @@ def select_cases(profile, mode):
                 'rate': 100, 'warmup': 16, 'client_concurrency': 16,
                 'cache': 'Warm typed query/mapping path followed by an intentional diagnostic failure',
                 'provider': 'sqlite', 'protocol': 'http1', 'diagnostics': name, 'product_only': True})
-        cases.append({'id': 'advanced-di-list', 'kind': 'list', 'requests': 1200, 'rate': 200,
-            'warmup': 32, 'client_concurrency': 16, 'limit': 100, 'provider': 'sqlite', 'protocol': 'http1',
-            'cache': 'Same 128 rows and typed query as minimal list; service resolved through request DI',
-            'diagnostics': 'release-disabled', 'di': True, 'product_only': True})
+        for advanced in (False, True):
+            cases.append({'id': 'advanced-di-list' if advanced else 'minimal-list', 'kind': 'list', 'requests': 1200, 'rate': 200,
+                'warmup': 32, 'client_concurrency': 16, 'limit': 100, 'provider': 'sqlite', 'protocol': 'http1',
+                'cache': 'Same 128 rows, typed query and observation binary; request DI versus captured service',
+                'diagnostics': 'release-disabled', 'di': advanced, 'product_only': True})
     if mode == 'diagnostics':
         cases = [case for case in cases if 'diagnostics' in case]
     return cases
@@ -109,21 +133,22 @@ def unsupported(route, case):
     return None
 
 
-def calibration_bands(rows, resolution_ns):
+def calibration_bands(rows, resolution_ns, repetitions=3):
     """Freeze observed within-route process variability; no invented percentage."""
     a21 = load_a21()
-    by_case, declared = {}, {}
+    by_case, declared, failed = {}, {}, set()
     for row in rows:
         declared.setdefault(row['case'], set()).add(row['route'])
         if not row.get('valid') or not row.get('records'):
+            failed.add(row['case'])
             continue
         values = [record['completion_ns'] - record['scheduled_ns'] for record in row['records']]
         mean = a21.statistics.mean(values)
         by_case.setdefault(row['case'], {}).setdefault(row['route'], []).append(mean)
     result = {}
     for key, routes in by_case.items():
-        eligible = {route: means for route, means in routes.items() if len(means) >= 2}
-        if set(eligible) != declared[key]:
+        eligible = {route: means for route, means in routes.items() if len(means) == repetitions}
+        if key in failed or set(eligible) != declared[key]:
             continue
         noise = max([resolution_ns] + [max(means) - min(means) for means in eligible.values()])
         result[key] = {'absolute_noise_ns': noise, 'relative_noise': 0,
@@ -181,8 +206,7 @@ class Controller:
         if args.comparators:
             comparators = load(args.comparators)
             for name, route in comparators['routes'].items():
-                self.routes[name] = dict(route, id=name)
-                check_files(route['artifacts']); check_files(route['lock_hashes'])
+                self.routes[name] = comparator_route(name, route, args.comparators)
         if args.phase != 'functional' and set(self.routes) != self.a21.ROUTES:
             raise ValueError('Timed comparison requires manifests for all three routes, including explicitly unsupported cells')
         self.instrumented = load(args.instrumented)['profiles'] if args.instrumented else {}
@@ -197,6 +221,24 @@ class Controller:
                                client_concurrency=min(4, case['client_concurrency'])) for case in self.cases]
         self.files = {str(path): digest(path) for path in [HERE / 'run.py', HERE / 'http_target.py', HERE / 'common.py',
             args.a21.resolve(), args.golden.resolve(), args.profile.resolve()]}
+        self.external_inputs = {}
+        if any(case['protocol'] != 'http1' for case in self.cases):
+            for name in ('localhost.pem', 'localhost.private.pem'):
+                path = args.package_probe.resolve() / 'tls' / name
+                self.external_inputs[str(path)] = digest(path)
+        if any(case['provider'] == 'postgresql' for case in self.cases):
+            if not args.postgres_bin:
+                raise ValueError('PostgreSQL cells require pinned PostgreSQL 18.0 binaries')
+            for name in ('postgres', 'psql', 'initdb', 'pg_ctl'):
+                path = args.postgres_bin.resolve() / name
+                self.external_inputs[str(path)] = digest(path)
+        self.files.update(self.external_inputs)
+        self.client_libraries = {}
+        for name in ('httpx', 'httpcore', 'h11', 'h2', 'hpack', 'hyperframe'):
+            path = Path(importlib.util.find_spec(name).origin).resolve()
+            self.files[str(path)] = digest(path)
+            self.client_libraries[name] = {'version': importlib.metadata.version(name),
+                'module': str(path), 'module_sha256': digest(path)}
         self.fingerprint = hashlib.sha256(json.dumps({'profile': digest(args.profile), 'cases': self.cases,
             'routes': self.routes, 'instrumented': self.instrumented, 'controller_files': self.files}, sort_keys=True).encode()).hexdigest()
         self.calibration = load(args.calibration / 'summary.json') if args.calibration else None
@@ -204,6 +246,9 @@ class Controller:
             if not self.calibration or self.calibration.get('phase') != 'calibrate' or self.calibration['fingerprint'] != self.fingerprint:
                 raise ValueError('Confirmation requires matching immutable calibration inputs')
             self.bands = self.calibration['noise_bands']
+            required_cases = {case_id(case) for case in self.cases}
+            if not self.calibration.get('all_executed_cells_valid') or not required_cases.issubset(self.bands):
+                raise ValueError('Confirmation requires complete valid calibration repetitions and a measured band for every selected case')
             save(self.output / 'frozen-noise-bands.json', {'calibration_sha256': digest(args.calibration / 'summary.json'),
                                                        'bands': self.bands})
         else:
@@ -212,6 +257,8 @@ class Controller:
             'fingerprint': self.fingerprint, 'profile_sha256': digest(args.profile),
             'a21_sha256': digest(args.a21), 'controller_source': source_identity(ROOT),
             'host': self.a21.host_metadata(), 'isolation_note': args.isolation_note,
+            'client_libraries': self.client_libraries,
+            'external_input_sha256': self.external_inputs,
             'cases': self.cases, 'routes': self.routes, 'runs': [], 'unsupported': [],
             'state': 'running', 'acceptance_gate': 'B22 correctness/fault/soak acceptance remains separately required',
             'claim': 'Functional comparison only; timing outputs do not constitute performance evidence' if args.phase == 'functional'
@@ -234,6 +281,7 @@ class Controller:
         manifest = {'schema_version': 1, 'profile': case, 'provider': case['provider'],
             'protocol': case['protocol'], 'routes': selected_routes,
             'requests': case['requests'], 'max_in_flight': self.profile['settings']['max_in_flight'],
+            'diagnostic_snapshot_settle_ms': self.profile['settings']['diagnostic_snapshot_settle_ms'],
             'run_directory': str(self.output / 'applications'), 'files': self.files,
             'golden': str(self.args.golden.resolve()), 'di': case.get('di', False), **postgres_settings}
         if case['protocol'] != 'http1':
@@ -326,7 +374,8 @@ class Controller:
                 'invalid_reasons': row.get('invalid_reasons', []), 'outcome_counts': row.get('outcome_counts', {})})
             save(self.output / 'summary.json', self.summary)
         if self.args.phase == 'calibrate':
-            self.summary['noise_bands'] = calibration_bands(self.rows, self.profile['settings']['histogram_resolution_ns'])
+            self.summary['noise_bands'] = calibration_bands(self.rows, self.profile['settings']['histogram_resolution_ns'],
+                                                            self.profile['calibration_repetitions'])
         elif self.args.phase == 'measure':
             self.summary['noise_bands'] = self.bands
             self.summary['comparisons'] = self.comparisons()
@@ -373,7 +422,15 @@ def main():
     args = parser.parse_args()
     if args.phase != 'functional' and args.isolation_note == 'Functional validation; no performance conclusion':
         parser.error('Timed runs require --isolation-note identifying the window separated from B22 fault/soak load')
-    controller = Controller(args)
+    output_existed = args.output.exists()
+    try:
+        controller = Controller(args)
+    except Exception as error:
+        if not output_existed and args.output.is_dir():
+            save(args.output / 'failure.json', {'stage': 'preflight', 'phase': args.phase,
+                'error': type(error).__name__ + ': ' + str(error), 'controller_sha256': digest(__file__),
+                'claim': 'No workload was executed; this is not a benchmark result'})
+        raise
     if any(case['provider'] == 'postgresql' for case in controller.cases):
         if not args.postgres_bin:
             parser.error('PostgreSQL cells require --postgres-bin')

@@ -48,8 +48,12 @@ internal static class Program
         builder.WebHost.ConfigureKestrel(options =>
         {
             options.AddServerHeader = false; options.Limits.MaxConcurrentConnections = 512; options.Limits.MaxRequestHeadersTotalSize = 32_768;
+            options.Limits.MaxRequestHeaderCount = 200; options.Limits.RequestHeadersTimeout = TimeSpan.FromSeconds(10);
+            options.Limits.KeepAliveTimeout = TimeSpan.FromSeconds(60);
             options.Limits.MaxRequestBodySize = BlobStore.MaximumAttachment; options.Limits.MaxResponseBufferSize = 32_768;
             options.Limits.Http2.MaxStreamsPerConnection = 32;
+            options.Limits.Http2.InitialStreamWindowSize = 65_536; options.Limits.Http2.InitialConnectionWindowSize = 65_536;
+            options.Limits.Http2.MaxFrameSize = 32_768; options.Limits.Http2.MaxRequestHeaderFieldSize = 32_768;
             options.Listen(IPAddress.Parse(configuration.ListenAddress), configuration.Port, listen =>
             {
                 if (configuration.TlsCertificatePem is not null)

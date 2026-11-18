@@ -54,6 +54,46 @@ Successful shutdown prints `CLOSED` after stopped HTTP handlers, owned database
 retirement tasks, and source/consumer shutdown. These receipts describe this
 comparator's owners, not NativeWeave cleanup receipts.
 
+## Direct Rust route
+
+`direct-rust` is a standalone Rust executable with its own locked dependency
+closure. It directly uses the product's pinned SQLx 0.9.0, SeaQuery 1.0.2,
+Axum 0.8.9, Hyper 1.12.0, Tokio 1.54.1, rustls 0.23.46 and bundled SQLite
+3.51.3. Every dependency already shared with the product uses a version from
+the product lock. The additional Tokio signal support is part of this
+application's ordinary Linux lifecycle, with its dependencies locked locally.
+There is no NativeWeave ABI call, C# process, or managed HTTP/database helper.
+The keyset route constructs its parameterized select through SeaQuery and
+projects concrete row values. Transaction statements are fixed parameterized
+SQL, including the separate PostgreSQL conflict winner lookup.
+
+```sh
+RUSTFLAGS='-C target-cpu=x86-64' cargo build --locked --release \
+  --manifest-path src/Benchmarks.Domain/comparators/direct-rust/Cargo.toml
+nativeweave-b23-direct-rust --config /absolute/config.json
+nativeweave-b23-direct-rust --config /absolute/config.json --outbox-once
+nativeweave-b23-direct-rust --golden-vectors
+```
+
+Release uses thin LTO, one code-generation unit, and unwinding, matching the
+repository's ordinary native release settings. Its single Tokio runtime has
+two worker threads. This differs from NativeWeave's separate server/source
+runtimes and the managed thread pool, and is recorded as an application
+architecture difference; a whole-service ratio is not an isolated FFI cost.
+SQLx connections use the accepted SQLite statement/command/row-buffer settings
+and PostgreSQL prepared-statement cache capacity. The independent consumer uses
+the same bundled SQLite engine, its own database, and its own finite pool.
+
+Rust v1 response structs use a serializer formatter matching the accepted
+safe-ASCII JSON bytes, including uppercase UTF-16 escapes. Golden response
+vectors execute this actual serializer. Application request framing, HMAC
+cursors, scoped operation claims, file hash verification, fsync-before-rename
+protocol, and persistent consumer effects are real operations rather than
+precomputed responses. The Rust filesystem implementation retains uncertain
+commit/upload protection and joins application retirement tasks before
+releasing its root lock. Failure/soak acceptance is still outside the declared
+ordinary comparator cells.
+
 ## Shared ordinary workload contract
 
 The implemented routes are `POST /v1/items`, typed DTO keyset `GET /v1/items`,
@@ -79,6 +119,13 @@ the controller. PostgreSQL is an independently launched real server, with
 durability enabled; plaintext database transport requires the explicit local
 development configuration flag.
 
+Both comparison hosts explicitly use 64 KiB HTTP2 stream and connection receive
+windows, 32 KiB frames, 32 KiB aggregate headers, and 200 HTTP1 headers. These
+values were read from `native/server/host/src/engine.rs` for B21's selected
+32 KiB native chunk configuration; an application copy buffer alone does not
+define transport frame or flow-control limits. The final managed artifact
+supersedes the initial development checkpoint which used Kestrel's defaults.
+
 ## Readiness and applicability
 
 `functional_probe.py` invokes the existing independent B21 golden/HTTP/SQL
@@ -97,6 +144,12 @@ The managed NativeAOT normal-route readiness was executed on Linux x64 for
 SQLite and PostgreSQL 18.0 with HTTP1 plaintext, HTTP1 TLS, and HTTP2 TLS.
 Each cell passed 127 independent checks, including an exact 64 MiB upload and
 download. These are functional observations, not benchmark timing results.
+The direct Rust executable passed the corresponding 126 checks in each of the
+same six cells; the extra managed check is its actual NativeAOT runtime witness.
+`comparators.json` binds the actual immutable executables, native SQLite asset,
+compiled source inputs, locks, toolchains, and readiness records. Its build
+receipts distinguish captured compiler-reported development duration from
+unavailable timing; no unrecorded time is inferred or treated as a benchmark.
 
 Limitations must remain visible in B23 profiles and reports:
 
@@ -104,6 +157,12 @@ Limitations must remain visible in B23 profiles and reports:
   prepared-statement ownership. ADO.NET fixed SQL is an explicitly named raw
   route, not a substitute for NativeWeave typed-query measurements. Pool and
   application limits do not imply identical internal buffering.
+- Both comparator migration ledgers use `__b23_migrations` with the exact B21
+  application-schema checksum. NativeWeave's full migration mechanism remains
+  a separate startup implementation. Cold-start reports must disclose this.
+  Comparator request queue admission uses a five-second bound; exact overload,
+  idle-connection policy and cancellation equivalence are not established by
+  the ordinary functional rows.
 - NativeWeave's process/source/request byte-credit ledger and reserved native
   cleanup capacities have no directly equivalent Kestrel/ADO.NET mechanism in
   this comparator. Overload, byte-budget saturation, cancellation/commit-loss,

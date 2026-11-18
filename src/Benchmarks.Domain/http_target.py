@@ -26,8 +26,9 @@ import uuid
 from urllib.parse import urlsplit
 
 import httpx
+import h11
 
-from common import Database, check_files, digest, load, load_a21, payload_chunk, process_sample, save
+from common import Database, check_files, digest, load, load_a21, mapping_sample, payload_chunk, process_sample, save
 
 
 class IntegrityFailure(AssertionError):
@@ -62,6 +63,7 @@ class Application:
         config = self.directory / 'config.private.json'
         save(config, self.configuration)
         config.chmod(0o600)
+        self.configuration_sha256 = digest(config)
         command = [*self.descriptor['command'], '--config', str(config)]
         environment = dict(os.environ, DOTNET_PROCESSOR_COUNT='2')
         environment.update(self.descriptor.get('environment', {}))
@@ -137,7 +139,10 @@ class Application:
                 getattr(self, name).close()
         if self.process is not None:
             require(self.process.returncode == 0, 'Application did not shut down successfully')
-        if self.descriptor['id'] == 'nativeweave-aot-rust' and self.closed is not None:
+        if self.descriptor['id'] == 'nativeweave-aot-rust':
+            require(self.closed is not None, 'Native product did not emit its mandatory CLOSED receipt')
+            require(self.closed.get('serverState') == 'Disposed' and self.closed.get('databaseStatus') == 'Succeeded'
+                    and self.closed.get('consumerStatus') == 'Succeeded', 'Native product CLOSED states did not complete')
             require(self.closed.get('databaseResourcesReleased') and self.closed.get('consumerResourcesReleased'),
                     'Native database resources did not join at process shutdown')
 
@@ -150,6 +155,8 @@ class Target:
         self.descriptor = self.manifest['routes'][arguments.route]
         self.profile = self.manifest['profile']
         check_files(self.manifest['files'])
+        check_files(self.descriptor['artifacts'])
+        check_files(self.descriptor['lock_hashes'])
         self.directory = Path(self.manifest['run_directory']) / (arguments.route + '-' + uuid.uuid4().hex)
         self.directory.mkdir(parents=True, exist_ok=False)
         self.prefix = 'b23-' + uuid.uuid4().hex[:16] + '-'
@@ -179,8 +186,11 @@ class Target:
         self.database = Database(self.config['provider'], self.config['database'], self.manifest.get('psql'))
         self.application = Application(self.descriptor, self.config, self.directory / 'application', self.a21)
         self.protocols, self.http_outcomes = set(), {}
+        self.http_error_codes = {}
+        self.overload_uploads = []
         self.mutations, self.operations = [], []
         self.errors = []
+        self.halt_dispatch = False
         self.counters = {name: self.a21.unknown(unit, 'No observation of this application/engine counter in this profile')
                          for name, unit in self.a21.COUNTERS.items()}
         self.semaphore = asyncio.Semaphore(self.profile['client_concurrency'])
@@ -189,12 +199,88 @@ class Target:
 
     async def request(self, method, path, *, body=None, headers=None):
         response = await self.client.request(method, path, content=body, headers=headers)
+        return self.observe_response(response)
+
+    def observe_response(self, response):
         self.protocols.add(response.http_version)
         expected = 'HTTP/2' if self.manifest['protocol'] == 'http2-tls' else 'HTTP/1.1'
         require(response.http_version == expected, 'HTTP response used an unexpected actual protocol')
         key = str(response.status_code)
         self.http_outcomes[key] = self.http_outcomes.get(key, 0) + 1
+        if response.status_code >= 400:
+            try:
+                code = response.json().get('code', 'unstructured_error')
+            except (ValueError, AttributeError):
+                code = 'unstructured_error'
+            self.http_error_codes[code] = self.http_error_codes.get(code, 0) + 1
         return response
+
+    async def overload_upload(self, path, upload, headers):
+        """Read a real early HTTP/1 response concurrently with bounded body writes.
+
+        The product-only overload profile uses a fresh HTTP/1 connection for its
+        PUT. A reset without a complete response is still a failure, never 503.
+        """
+        require(self.manifest['protocol'] == 'http1', 'This declared overload transport is HTTP/1 plaintext only')
+        address = urlsplit(self.application.url)
+        reader, writer = await asyncio.open_connection(address.hostname, address.port)
+        protocol = h11.Connection(h11.CLIENT, max_incomplete_event_size=32768)
+        record = {'transport': 'HTTP/1 concurrent response reader; fresh PUT connection; Expect: 100-continue', 'body_bytes_sent': 0}
+        self.overload_uploads.append(record)
+        request_headers = [('Host', address.netloc), ('Authorization', 'Bearer ' + self.token),
+                           ('Connection', 'close'), ('Expect', '100-continue'), *headers.items()]
+        writer.write(protocol.send(h11.Request(method='PUT', target=path, headers=request_headers)))
+        await writer.drain()
+
+        continue_upload = asyncio.Event()
+        async def produce():
+            await continue_upload.wait()
+            async for chunk in upload:
+                writer.write(protocol.send(h11.Data(data=chunk)))
+                await writer.drain()
+                record['body_bytes_sent'] += len(chunk)
+            writer.write(protocol.send(h11.EndOfMessage()))
+            await writer.drain()
+
+        producer = asyncio.create_task(produce())
+        async def receive():
+            status, response_headers, version = None, None, None
+            body = bytearray()
+            while True:
+                event = protocol.next_event()
+                if event is h11.NEED_DATA:
+                    data = await reader.read(32768)
+                    record['response_wire_bytes_read'] = record.get('response_wire_bytes_read', 0) + len(data)
+                    protocol.receive_data(data)
+                elif isinstance(event, h11.InformationalResponse):
+                    record.setdefault('informational_statuses', []).append(event.status_code)
+                    if event.status_code == 100:
+                        continue_upload.set()
+                elif isinstance(event, h11.Response):
+                    status, response_headers, version = event.status_code, list(event.headers), event.http_version
+                    record['observed_status'] = status
+                elif isinstance(event, h11.Data):
+                    body.extend(event.data)
+                    require(len(body) <= 1_048_576, 'Overload response exceeded bounded JSON limit')
+                elif isinstance(event, h11.EndOfMessage):
+                    require(status is not None, 'Overload response body arrived without a status')
+                    record.update(status=status, response_bytes=len(body), complete_response=True)
+                    return self.observe_response(httpx.Response(status, headers=response_headers, content=bytes(body),
+                        extensions={'http_version': b'HTTP/' + version}))
+                elif isinstance(event, h11.ConnectionClosed):
+                    raise IntegrityFailure('Overload connection closed without a complete observed HTTP response')
+        try:
+            return await asyncio.wait_for(receive(), 30)
+        finally:
+            producer.cancel()
+            outcomes = await asyncio.gather(producer, return_exceptions=True)
+            if isinstance(outcomes[0], Exception):
+                record['producer_error'] = type(outcomes[0]).__name__
+            writer.close()
+            try:
+                await writer.wait_closed()
+            except (ConnectionError, OSError):
+                pass
 
     async def create(self, identifier, title):
         key = self.prefix + str(identifier)
@@ -248,15 +334,20 @@ class Target:
                         await asyncio.sleep(self.profile['chunk_delay_ms'] / 1000)
 
             path = '/v1/items/' + value['itemId'] + '/attachment'
-            response = await self.request('PUT', path, body=upload(), headers={
+            headers = {
                 'Idempotency-Key': key, 'If-Match': '1', 'Content-Type': 'application/octet-stream',
-                'Content-Length': str(item['bytes'])})
+                'Content-Length': str(item['bytes'])}
+            response = (await self.overload_upload(path, upload(), headers) if self.profile.get('product_only') else
+                        await self.request('PUT', path, body=upload(), headers=headers))
             if response.status_code == 503 and self.profile.get('product_only'):
                 require(response.json().get('code') == 'upload_capacity', 'Overload returned an unrelated 503')
                 return 'rejected', {'stage': 'upload', 'code': 'upload_capacity'}
             require(response.status_code == 200, 'Attachment binding did not confirm')
             attached = response.json(); canonical_id(attached['operationId'])
             require(attached['itemId'] == value['itemId'], 'Attachment identity changed')
+            require(attached['responseVersion'] == 1 and attached['version'] == 2
+                    and attached['contentHash'] == item['sha256'] and attached['contentLength'] == item['bytes'],
+                    'Confirmed attachment DTO differs from the independent v1/hash/length/version oracle')
             self.mutations.append({'operation_id': attached['operationId'], 'item_id': value['itemId'],
                 'key': key, 'scope': self.golden.scope_hash('tenant-a', 'alice', 'PUT /v1/items/{id}/attachment'),
                 'hash': self.golden.attachment_hash('tenant-a', 'alice', value['itemId'], item['sha256'], item['bytes'], 1),
@@ -296,12 +387,39 @@ class Target:
         response = await self.request('GET', '/__b23/observe')
         require(response.status_code == 200, 'Application counter observation failed')
         observation = response.json()
+        mode = self.descriptor['environment']['B23_DIAGNOSTICS']
+        require(observation['mode'] == mode and observation['configuration'] == ('Debug' if mode.startswith('debug-') else 'Release'),
+                'Application diagnostic/build configuration witness differs from its manifest')
+        require(observation['observerFailures'] == 0, 'Configured observation callback failed')
         self.application.latest_probe = observation
         self.counters['managed_allocated_bytes'] = self.a21.measured(observation['allocatedBytes'], 'bytes',
             'GC.GetTotalAllocatedBytes(true), whole child process since launch; includes observation overhead')
         self.counters['gc_heap_live_bytes'] = self.a21.measured(observation['heapLiveBytes'], 'bytes', 'GC.GetTotalMemory(false); whole application process')
         self.counters['gc_heap_committed_bytes'] = self.a21.measured(observation['heapCommittedBytes'], 'bytes', 'GC.GetGCMemoryInfo().TotalCommittedBytes')
         return observation
+
+    def diagnostics_oracle(self, observation):
+        if observation is None:
+            return {'applicability': 'No benchmark instrumentation in the accepted product/comparator executable'}
+        mode = observation['mode']
+        tracing = mode in ('debug-local', 'sampled', 'full', 'exporter-saturation', 'exporter-failure')
+        metering = tracing or mode == 'meter-only'
+        logging = mode in ('debug-local', 'sampled', 'full', 'log-only', 'exporter-saturation', 'exporter-failure')
+        require((observation['activities'] > 0) == tracing, 'Observed Activity configuration differs')
+        require((observation['measurements'] > 0) == metering and (observation['metrics'] is not None) == metering,
+                'Observed Meter configuration differs')
+        if self.profile['kind'] == 'diagnostic-failure':
+            require((observation['logCalls'] > 0) == logging, 'Configured logger was not exercised as declared')
+        if mode == 'exporter-failure':
+            require(observation['exportFailures'] > 0 and observation['logExports'] == 0,
+                    'Controlled exporter failure was not observed')
+        saturated = mode == 'exporter-saturation' and self.manifest['requests'] > 2048
+        if saturated:
+            require(observation['logExports'] == 0 and observation['metrics'].get('nativeweave.server.diagnostics.dropped', 0) > 0,
+                    'Declared exporter saturation did not actually fill the bounded queue and drop metadata')
+        return {'passed': True, 'mode': mode, 'observed_listeners': {'Activity': tracing, 'Meter': metering, 'ILogger': logging},
+            'queue_saturation_positive_control': 'passed' if saturated else 'not requested by this reduced/request-count profile',
+            'scope': 'Observed configuration/effect; disabled observer does not establish whole-product zero cost'}
 
     def durable_oracle(self):
         rows = self.database.operation_rows(self.prefix)
@@ -341,6 +459,7 @@ class Target:
         save(self.directory / 'receipt.json', receipt)
         try:
             await self.application.start()
+            receipt['configuration_private_sha256'] = self.application.configuration_sha256
             verify = ssl.create_default_context(cafile=self.config['tlsCertificatePem']) if self.config.get('tlsCertificatePem') else True
             async with httpx.AsyncClient(base_url=self.application.url, http2=self.manifest['protocol'] == 'http2-tls',
                     verify=verify, trust_env=False, timeout=30,
@@ -351,6 +470,7 @@ class Target:
                 receipt['ready_to_seed_ns'] = self.a21.time.monotonic_ns() - self.application.ready_ns
                 receipt['startup_to_ready_ns'] = self.application.ready_ns - self.application.started_ns
                 receipt['probe_before'] = await self.probe()
+                receipt['image_mappings_before'] = mapping_sample(self.application.process.pid)
                 emit({'kind': 'hello', 'route': self.args.route,
                     'dynamic_code_supported': self.application.dynamic,
                     'application_pid': self.application.process.pid, 'adapter_pid': os.getpid(),
@@ -360,6 +480,11 @@ class Target:
 
                 async def execute(identifier, token, mode):
                     async with self.semaphore:
+                        if self.halt_dispatch:
+                            value = {'reason': 'Earlier integrity/transport failure stopped new application HTTP dispatch'}
+                            self.operations.append({'id': identifier, 'status': 'cancelled', 'value': value})
+                            emit({'kind': 'completed', 'id': identifier, 'status': 'cancelled', 'value': value, 'counters': self.counters})
+                            return
                         if identifier < self.manifest['requests'] and 'measurement_resources_before' not in receipt:
                             self.application.phase = 'measurement'
                             receipt['measurement_resources_before'] = process_sample(self.a21, self.application.process.pid)
@@ -368,15 +493,17 @@ class Target:
                             require(mode == 'ok', 'Fault injections cannot enter a throughput cell')
                             operation = json.loads(base64.urlsafe_b64decode(token.encode()))
                             outcome, value = await self.operation(identifier, operation)
+                            # A21 finishes warmup before its measured arrivals.
+                            # Observation failures are ordinary failed outcomes,
+                            # never unobserved background-task exceptions.
+                            if self.descriptor.get('instrumented') and identifier == self.manifest['requests'] + self.profile['warmup'] - 1:
+                                receipt['probe_before'] = await self.probe()
                         except Exception as error:
+                            self.halt_dispatch = True
                             self.errors.append(type(error).__name__ + ': ' + str(error))
                             outcome, value = 'failed', {'error': type(error).__name__}
                             traceback.print_exc(file=sys.stderr)
                         self.operations.append({'id': identifier, 'status': outcome, 'value': value})
-                        # End the warmup before the observation baseline. The
-                        # counter query is outside A21's measured arrivals.
-                        if self.descriptor.get('instrumented') and identifier == self.manifest['requests'] + self.profile['warmup'] - 1:
-                            receipt['probe_before'] = await self.probe()
                         emit({'kind': 'completed', 'id': identifier, 'status': outcome, 'value': value, 'counters': self.counters})
 
                 reader = asyncio.StreamReader()
@@ -390,8 +517,15 @@ class Target:
                 if tasks:
                     await asyncio.gather(*tasks)
                 receipt['measurement_resources_after'] = process_sample(self.a21, self.application.process.pid)
+                receipt['image_mappings_after'] = mapping_sample(self.application.process.pid)
                 self.application.phase = 'reconciliation-and-shutdown'
+                if self.descriptor.get('instrumented'):
+                    # This is after A21 request completion and CPU/RSS boundaries.
+                    # Let the accepted one-second Meter cache refresh and finite
+                    # exporters drain before inspecting final cumulative losses.
+                    await asyncio.sleep(self.manifest['diagnostic_snapshot_settle_ms'] / 1000)
                 receipt['probe_after'] = await self.probe()
+                receipt['diagnostics_oracle'] = self.diagnostics_oracle(receipt['probe_after'])
                 receipt['durable_oracle'] = self.durable_oracle()
                 receipt['status'] = 'passed' if not self.errors else 'failed'
         except BaseException as error:
@@ -405,6 +539,8 @@ class Target:
                 receipt['status'] = 'failed'; self.errors.append(type(error).__name__ + ': ' + str(error))
             receipt.update(errors=self.errors, observed_http_protocols=sorted(self.protocols),
                 http_status_counts=self.http_outcomes, operation_outcomes=self.operations,
+                http_error_codes=self.http_error_codes,
+                overload_upload_observations=self.overload_uploads,
                 closed=self.application.closed, last_probe=self.application.latest_probe,
                 resources='application/resources.jsonl', source_manifest_sha256=digest(self.args.manifest))
             save(self.directory / 'receipt.json', receipt)

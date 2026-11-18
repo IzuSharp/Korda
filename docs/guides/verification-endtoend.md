@@ -37,8 +37,12 @@ orphan collection. A process crash is not evidence of power-loss durability.
 
 SQLite busy uses an actual independent writer transaction. The filesystem fault
 profile targets native writes to the disposable database/WAL with injected
-`ENOSPC`, when the executor permits child syscall tracing. It does not fill a
-shared filesystem, claim physical disk exhaustion, or substitute `RLIMIT_FSIZE`.
+`ENOSPC`. If child syscall tracing is unavailable, a B22-only `LD_PRELOAD` shim
+forwards libc calls except the single externally armed, exact-file write. Its
+audit must prove injection; the actual native exception must preserve SQLite
+provider code13, including Unknown when the error occurs during COMMIT. This is
+labelled **injected libc I/O ENOSPC**. It does not fill a shared filesystem, claim
+physical disk exhaustion, or substitute `RLIMIT_FSIZE`.
 `PRAGMA max_page_count` on an unrelated connection does not constrain the
 application's pooled connections and is not used as a whole-application fault.
 
@@ -56,6 +60,11 @@ entries. The observer uses public `NativeLibrary` APIs and keeps its own library
 reference through final observation. It never loads a copied module to obtain an
 empty counter set. Long-lived sources and metadata legitimately keep nonzero
 counts; zero is required only where the fixture actually joins those owners.
+The instrumented consumer uses an entrypoint-only wrapper around the unchanged
+application body and joins its thread before collecting final observations.
+Pre-finalizer and post-finalizer counts remain separate. This prevents a completed
+Main Task or its entry frame from being misclassified as a persistent framework
+root at ProcessExit, and discloses GC-owned SafeHandle retirement explicitly.
 
 Normal GCHandle roots are not publicly counted by the NativeWeave packages.
 An explicitly identified instrumented Native AOT consumer may enable EventPipe;
@@ -81,6 +90,10 @@ and a flat RSS graph do not prove safe ownership retirement.
 
 ## Current delivery state
 
-This checkpoint establishes the required matrix and observation/fault contract.
-The controller, public API probe and stage runner are being implemented. No B22
-fault, 30-minute, 24-hour or 72-hour acceptance is asserted by this document.
+The external controller and public observer consumer are runnable. The controller
+preserves failed attempts and distinguishes selected functional passes from full
+B22 acceptance. See `tests/Verification.EndToEnd/README.md` for exact inputs and
+invocations. `tests/Verification.EndToEnd/soak-profile.md` defines the actual
+staged runner, finite trace/file budgets, calibration/freeze steps and interrupted
+attempt recovery. Long stages remain subject to actual execution and independent
+review. No 30-minute, 24-hour or 72-hour acceptance is asserted by this document.

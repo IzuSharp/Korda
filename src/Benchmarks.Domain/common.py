@@ -105,6 +105,25 @@ def process_sample(a21, pid):
     return value
 
 
+def mapping_sample(pid):
+    """Linux virtual image mappings, explicitly separate from resident bytes."""
+    modules = {}
+    try:
+        for line in Path(f'/proc/{pid}/maps').read_text().splitlines():
+            fields = line.split(maxsplit=5)
+            if len(fields) < 6 or not fields[5].startswith('/'):
+                continue
+            low, high = (int(part, 16) for part in fields[0].split('-'))
+            module = modules.setdefault(fields[5], {'virtual_mapped_bytes': 0, 'executable_virtual_bytes': 0})
+            module['virtual_mapped_bytes'] += high - low
+            if 'x' in fields[1]:
+                module['executable_virtual_bytes'] += high - low
+        return {'availability': 'measured', 'modules': modules,
+            'method': 'Linux procfs maps; virtual file mappings and executable permissions, not RSS, resident code, or native allocator live bytes'}
+    except OSError as error:
+        return {'availability': 'unavailable', 'method': type(error).__name__}
+
+
 def expected_value(operation):
     """Independent domain normalization excludes generated identities and wall time."""
     kind = operation['kind']

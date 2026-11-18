@@ -25,3 +25,16 @@ observations and independent SQL/blob reconciliation.
 The task owns no new public application API or NuGet package. Benchmark-only
 instrumentation and comparator plumbing stay internal. B22 retains fault/soak
 correctness acceptance; B24 retains final clean-machine release acceptance.
+
+`build_instrumented.py` builds an explicit copied application with standard
+Activity/Meter/ILogger observers and internal DI/observation routes. It checks
+unchanged native bytes. `report.py` preserves raw validity decisions, process
+confidence intervals, separate application resources, actual diagnostic losses,
+deployment sizes and recorded developer costs. The engineering inventory reuses
+accepted B21 ordinary-edit evidence without repeating that acceptance.
+
+See [the full guide](../../docs/guides/benchmarks-domain.md),
+[API applicability](api-reference.md), and the
+[minimal/advanced consumers](../../samples/api/benchmarks-domain/README.md).
+The selected profile is frozen before timing; no timed run may overlap B22 fault
+or soak load. Incomplete/unsupported/invalid cells remain explicit in the report.

@@ -24,6 +24,7 @@
     "os_cache": "Uncontrolled host page cache; cold denotes fresh application process and database, never a claim of dropped OS caches.",
     "isa_profile": "portable-x86-64-default-no-host-native",
     "process_cpu_count": 2,
+    "diagnostic_snapshot_settle_ms": 1100,
     "measurement_timeout_seconds": 30,
     "cleanup_timeout_seconds": 60,
     "max_dispatch_lag_ms": 100,
@@ -39,7 +40,7 @@
     {"id": "warm-keyset-page", "kind": "list", "requests": 1200, "rate": 200, "warmup": 32, "client_concurrency": 16, "limit": 100, "cache": "128 fixed ordered rows; warm descriptors and data"},
     {"id": "stream-one-mib", "kind": "stream", "requests": 60, "rate": 10, "warmup": 2, "client_concurrency": 4, "bytes": 1048576, "cache": "warm pool; immutable content reuse; new authorized item per operation"},
     {"id": "stream-eight-mib", "kind": "stream", "requests": 20, "rate": 2, "warmup": 1, "client_concurrency": 4, "bytes": 8388608, "cache": "warm pool; immutable content reuse; new authorized item per operation"},
-    {"id": "upload-overload", "kind": "stream", "requests": 80, "rate": 20, "warmup": 1, "client_concurrency": 32, "bytes": 8388608, "chunk_delay_ms": 2, "max_uploads": 1, "cache": "slow request producer; one active upload slot; genuine product admission rejections retained", "product_only": true}
+    {"id": "upload-overload", "kind": "stream", "requests": 80, "rate": 20, "warmup": 1, "client_concurrency": 32, "bytes": 8388608, "chunk_delay_ms": 2, "max_uploads": 1, "cache": "slow request producer; one active upload slot; genuine product admission rejections retained", "upload_transport": "HTTP/1 fresh PUT connection, Expect: 100-continue and concurrent response reader; ordinary cells use persistent HTTPX", "product_only": true}
   ],
   "diagnostics_profiles": [
     "release-disabled", "debug-default", "debug-local", "sampled", "full", "meter-only", "log-only", "exporter-saturation", "exporter-failure"

@@ -44,6 +44,7 @@ internal static partial class Probe
         {
             var decoded = call.RequestHeaders.GetBinaryValues("values-bin");
             var initial = new GrpcMetadata(); initial.Add("decoded-lengths", string.Join(',', decoded.Select(value => value.Length)));
+            initial.Add("decoded-hex", string.Join(',', decoded.Select(value => Convert.ToHexStringLower(value))));
             initial.AddBinary("initial-bin", [0, 3, 255]);
             await call.WriteResponseHeadersAsync(initial);
             call.ResponseTrailers.AddBinary("ending-bin", [4, 5]);
@@ -81,27 +82,32 @@ internal static partial class Probe
         app.MapGet("/events", () => Results.ServerSentEvents(Events(sseCancelled)));
         await app.StartAsync(); using var client = Client(app);
         byte[] wire = [0, 0, 0, 0, 2, 8, 7];
-        foreach (var row in new[] { ("AQI, /w==", "2,1"), ("", "0"), ("AQI,", "2,0"), (",AQI", "0,2"), ("AQI, ,/w==", "2,0,1") })
+        foreach (var row in new[] { ("AQI, /w==", "2,1", "0102,ff"), ("", "0", ""), ("AQI,", "2,0", "0102,"), (",AQI", "0,2", ",0102"), ("AQI, ,/w==", "2,0,1", "0102,,ff") })
         {
             var response = await GrpcWire(client, "Metadata", wire, [("values-bin", row.Item1)]);
             Check("grpc-binary-metadata-" + row.Item2, response.Status == 0 && response.Value == 5
                 && response.Headers.GetValueOrDefault("decoded-lengths") == row.Item2
+                && response.Headers.GetValueOrDefault("decoded-hex") == row.Item3
                 && BinaryMetadataEquals(response.Headers.GetValueOrDefault("initial-bin"), [0, 3, 255])
                 && BinaryMetadataEquals(response.Trailers.GetValueOrDefault("ending-bin"), [4, 5]),
                 ("status", response.Status), ("lengths", response.Headers.GetValueOrDefault("decoded-lengths") ?? "missing"),
+                ("decodedHex", response.Headers.GetValueOrDefault("decoded-hex") ?? "missing"),
                 ("initialWire", response.Headers.GetValueOrDefault("initial-bin") ?? "missing"),
                 ("endingWire", response.Trailers.GetValueOrDefault("ending-bin") ?? "missing"));
         }
         foreach (string invalid in new[] { "%%%", "A===", "YQ=", "A QI" })
             Check("grpc-invalid-binary-metadata-" + invalid, (await GrpcWire(client, "Metadata", wire, [("values-bin", invalid)])).Status == 3);
-        Check("grpc-route-guards-preserve-typed-result", (await GrpcWire(client, "Guards", wire)).Value == 5);
+        var guarded = await GrpcWire(client, "Guards", wire);
+        Check("grpc-route-guards-preserve-typed-result", guarded.Status == 0 && guarded.Value == 5, ("status", guarded.Status));
         Check("grpc-encoded-cap-native-rejection", (await GrpcWire(client, "Metadata", [0, 0, 0, 0, 65])).Status == 11);
         Check("grpc-identity-only-compressed-frame-rejection", (await GrpcWire(client, "Metadata", [1, 0, 0, 0, 0], [("grpc-encoding", "gzip")])).Status != 0,
             ("profile", "Identity only; no compressed/decompression-support pass is claimed"));
         using (var positive = await client.SendAsync(McpRequest("count")))
         {
             using var json = JsonDocument.Parse(await positive.Content.ReadAsStringAsync());
-            Check("mcp-composed-native-database-result", positive.IsSuccessStatusCode && json.RootElement.GetProperty("result").GetProperty("structuredContent").GetProperty("count").GetInt64() == 5);
+            var result = json.RootElement.GetProperty("result").GetProperty("structuredContent");
+            Check("mcp-composed-native-database-result", positive.IsSuccessStatusCode && !json.RootElement.TryGetProperty("error", out _)
+                && result.GetProperty("count").GetInt64() == 5 && result.GetProperty("text").GetString() == "bounded");
         }
         using (var mismatch = McpRequest("count"))
         {
@@ -218,7 +224,14 @@ internal static partial class Probe
             }
         }
         finally { release.TrySetResult(); }
-        if (!cancel) { using var response = await active; Check("mcp-positive-pressure-recovery", response.IsSuccessStatusCode); }
+        if (!cancel)
+        {
+            using var response = await active;
+            using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+            var result = json.RootElement.GetProperty("result").GetProperty("structuredContent");
+            Check("mcp-positive-pressure-recovery", response.IsSuccessStatusCode && !json.RootElement.TryGetProperty("error", out _)
+                && result.GetProperty("count").GetInt64() == 5 && result.GetProperty("text").GetString() == "bounded");
+        }
         Closed("mcp-pressure-close-" + cancel, await app.CloseAsync(TimeSpan.FromSeconds(5)));
         Check("mcp-request-scope-retirement-" + cancel, completed >= 1 && ScopeWitness.Disposed >= disposed + 1);
     }
