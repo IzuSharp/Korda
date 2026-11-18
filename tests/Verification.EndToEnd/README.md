@@ -87,7 +87,9 @@ capture actual events from startup:
 DOTNET_EnableEventPipe=1
 DOTNET_EventPipeConfig=Microsoft-Windows-DotNETRuntime:0x3:5,NativeWeave.B22:0xffffffffffffffff:5
 DOTNET_EventPipeOutputPath=/absolute/new/runtime.nettrace
-DOTNET_EventPipeCircularMB=64
+DOTNET_EventPipeCircularMB=0x40
+DOTNET_EventPipeOutputStreaming=1
+DOTNET_EventPipeBufferingMode=0
 NW_B22_HANDLE_CONTROL=1
 NW_B22_HANDLE_CONTROL_OUTPUT=/absolute/new/known-handles.jsonl
 ```

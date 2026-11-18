@@ -27,6 +27,15 @@ from harness import (Database, HERE, REFERENCE, PostgresCluster, Service, canoni
                      create, eventually, require, sha, write_json)
 
 STAGES = {"steady-30m": 1800, "regression-24h": 86400, "release-72h": 259200}
+# Runtime startup tracing buffers in memory unless streaming is explicit. The
+# buffer size uses hexadecimal syntax; 0x40 is the intended finite 64 MiB.
+TRACE_ENVIRONMENT = {
+    "DOTNET_EnableEventPipe": "1",
+    "DOTNET_EventPipeConfig": "Microsoft-Windows-DotNETRuntime:0x3:5,NativeWeave.B22:0xffffffffffffffff:5",
+    "DOTNET_EventPipeCircularMB": "0x40",
+    "DOTNET_EventPipeOutputStreaming": "1",
+    "DOTNET_EventPipeBufferingMode": "0",
+}
 ZERO_GAUGES = tuple("nativeweave.server." + value for value in
     ("requests.active", "requests.queued", "requests.retiring", "payload.managed.bytes", "payload.native.bytes"))
 
@@ -120,6 +129,7 @@ def identity(args):
             "__pycache__" not in relative.parts and Path(relative).suffix != ".pyc"}}
     record = {"mode": args.mode, "provider": args.provider, "executableSha256": sha(executable),
         "observerBuildManifestSha256": sha(manifest),
+        "traceEnvironment": TRACE_ENVIRONMENT,
         "artifacts": {str(p.relative_to(artifact)): sha(p) for p in sorted(artifact.rglob("*")) if p.is_file()},
         "controller": {name: sha(HERE / name) for name in ("soak.py", "harness.py")},
         "importedReferenceHelpers": {name: sha(REFERENCE / name) for name in ("run.py", "golden.py", "postgres_oracles.py")},
@@ -418,8 +428,8 @@ def main():
     control_sequence = 0; last_fault = None
     trace = output / "runtime.nettrace"
     observer_control = output / "observer-control.json"
-    traced_command = ["env", "DOTNET_EnableEventPipe=1", "DOTNET_EventPipeConfig=Microsoft-Windows-DotNETRuntime:0x3:5,NativeWeave.B22:0xffffffffffffffff:5",
-        "DOTNET_EventPipeOutputPath=" + str(trace), "DOTNET_EventPipeCircularMB=64", "NW_B22_HANDLE_CONTROL=1",
+    traced_command = ["env", *[key + "=" + value for key, value in TRACE_ENVIRONMENT.items()],
+        "DOTNET_EventPipeOutputPath=" + str(trace), "NW_B22_HANDLE_CONTROL=1",
         "NW_B22_HANDLE_CONTROL_OUTPUT=" + str(output / "known-handles.jsonl"), "NW_B22_OBSERVER_CONTROL=" + str(observer_control), *command]
 
     def checkpoint():
@@ -446,7 +456,10 @@ def main():
         require(time.time_ns() // 1000000 - observation["unixMilliseconds"] < 10000, "Soak observer became stale")
         process = process_sample(service.process.pid); vector = resource_vector(process, observation)
         for key, value in vector.items(): all_max[key] = max(all_max.get(key, 0), value)
-        resources.write({"monotonicNs": time.monotonic_ns(), "phase": phase, "process": process, "observationSequence": observation["sequence"],
+        trace_bytes = trace.stat().st_size
+        receipt["traceBytesObservedWhileRunning"] = trace_bytes
+        resources.write({"monotonicNs": time.monotonic_ns(), "phase": phase, "process": process,
+            "traceBytes": trace_bytes, "observationSequence": observation["sequence"],
             "controlSequence": observation["controlSequence"], "resources": vector})
         sample_counts += 1
         receipt["stageObservedThroughNs"] = time.monotonic_ns()
@@ -575,6 +588,11 @@ def main():
             receipt["finalRetirement"] = final
         revalidate_inputs(args, inputs)
         receipt["inputRechecks"] = ["before-runtime-trace-analysis"]
+        # File growth is observed while the service is alive, independently of
+        # the final flush. Missing runtime streaming cannot masquerade as a
+        # bounded target-process resource profile.
+        require(receipt.get("traceBytesObservedWhileRunning", 0) > 1024,
+            "Runtime trace did not stream event blocks during the observed process lifetime")
         trace_receipt = trace_analyze(args, output); receipt["traceObservation"] = trace_receipt
         roots = idle_trace_windows(output / "trace-receipt.json.samples.jsonl", control_sequence)
         root_values = [max(row["trackedLiveHandles"], row["runtimeGcHandlesAtLastGc"]) for row in roots]

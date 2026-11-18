@@ -69,7 +69,10 @@ root at ProcessExit, and discloses GC-owned SafeHandle retirement explicitly.
 Normal GCHandle roots are not publicly counted by the NativeWeave packages.
 An explicitly identified instrumented Native AOT consumer may enable EventPipe;
 its real handle events, trace-loss accounting and known allocate/free controls
-must pass before they can be used. Weak references to public objects provide a
+must pass before they can be used. Startup EventPipe output is streamed while
+the target runs, with an explicit hexadecimal64MiB buffer and recorded live
+file growth; shutdown-only trace retention is excluded from this resource
+profile. Weak references to public objects provide a
 separate retention witness and do not measure total runtime roots. Missing
 counters remain unavailable. Private friend-assembly names and internal test
 hooks are not consumer contracts.

@@ -79,8 +79,14 @@ handles must be seen allocated and freed within their explicit phase window.
 Actual GCHeapStats totals anchor tracked handle kinds at the idle windows.
 Unknown initial destroy events remain recorded. Any trace loss, missing window,
 failed control or unavailable counter prevents acceptance. The64MiB EventPipe
-buffer is not permission to discard evidence: the complete output file is
-retained and checked. Trace files have an8GiB cap; operation journals have a1GiB
+buffer is set explicitly as `DOTNET_EventPipeCircularMB=0x40`, because the runtime
+parses this value as hexadecimal. `DOTNET_EventPipeOutputStreaming=1` writes
+trace blocks during the process lifetime; the controller records actual live
+file growth rather than relying on a shutdown-only flush. Drop mode remains
+explicitly selected, so instrumentation cannot block event-writing product
+threads to hide trace saturation; any observed event loss still fails. The full
+trace configuration is part of the frozen identity. The buffer is not permission
+to discard evidence: the complete output file is retained and checked. Trace files have an8GiB cap; operation journals have a1GiB
 cap; resource and observer journals each have a512MiB cap; service logs have a
 128MiB cap. The host must retain2GiB free disk. Crossing a budget fails explicitly.
 
