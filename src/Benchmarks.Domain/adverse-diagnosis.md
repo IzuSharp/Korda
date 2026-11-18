@@ -14,7 +14,11 @@ rethrows the same exception. The observer verifies byte-identical native assets.
 No retry, response mapping, database configuration or business logic is changed.
 
 For the preserved `calibration-001`, execute the driver from a separate worktree
-at diagnostic commit `0eaf14cc2977820bfee5c485aafb3576325abbb3`. That commit keeps
+at remote diagnostic checkpoint
+`b8ca9a6a8a27dc04a7902597d747ea79889d5ae3`
+(`task/Task-07-B23-diagnosis-linux`). Its tree
+`36ab7e7535d67b83c5a56ff59551023acc7d94df` exactly matches the original local
+execution commit `0eaf14cc2977820bfee5c485aafb3576325abbb3`. That checkpoint keeps
 the imported `http_target.py`, `common.py`, A21 and golden oracle at the original
 calibration's exact bytes. The driver relocates file paths, never expected hashes.
 A newer checkout containing the repaired controller will intentionally fail those
