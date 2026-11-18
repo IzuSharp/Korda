@@ -1,6 +1,17 @@
 using System.Globalization;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using Microsoft.Diagnostics.Tracing;
+
+if (args.Length == 1 && args[0] == "--runtime-identity")
+{
+    Console.WriteLine(JsonSerializer.Serialize(new { runtimeDirectory = RuntimeEnvironment.GetRuntimeDirectory(),
+        runtimeVersion = Environment.Version.ToString(), framework = RuntimeInformation.FrameworkDescription,
+        runtimeIdentifier = RuntimeInformation.RuntimeIdentifier, processArchitecture = RuntimeInformation.ProcessArchitecture.ToString(),
+        processPath = Environment.ProcessPath, dynamicCodeSupported = RuntimeFeature.IsDynamicCodeSupported }));
+    return 0;
+}
 
 if (args.Length is < 2 or > 3)
 {

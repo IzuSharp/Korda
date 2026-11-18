@@ -2,8 +2,9 @@
 
 `soak.py` has four explicit modes. `probe` exercises the controller for three
 seconds of load and five seconds of idle; it cannot create a calibration profile
-or a long-stage pass. `calibrate` measures five actual20-second load /20-second
-idle cycles. `freeze` binds that passed receipt and an explicit review note to an
+or a long-stage pass. `calibrate` measures three actual 240-second load /60-second
+drain-idle cycles, matching the declared cyclic profile. `freeze` binds that
+measured receipt and an explicit review note to an
 immutable profile. `run` accepts only that frozen identity and one exact stage:
 
 | Stage | Required actual duration | Workload |
@@ -25,7 +26,12 @@ Supply the observer consumer created by `prepare_observer.py`, its build
 manifest, the pinned TraceReader executable, TLS files, provider and optional
 PostgreSQL18 binaries. The profile binds every artifact hash, native module,
 observer entrypoint delta, controller, trace reader, kernel, CPU affinity and
-`DOTNET_PROCESSOR_COUNT`. Each runtime/provider has its own measured profile.
+`DOTNET_PROCESSOR_COUNT`. Imported reference HTTP/SQL helpers, the actual Python
+HTTP dependency files, TraceReader's complete dependency output and its selected
+.NET runtime files are included. JIT mode verifies that the service actually uses
+that recorded runtime; every row checks the observed dynamic-code mode. Certificate
+and key hashes plus all invoked PostgreSQL lifecycle binaries are also bound.
+Each runtime/provider has its own measured profile.
 The target application remains the actual packed B21 implementation; the
 observer is an explicitly separate diagnostic artifact.
 
@@ -42,9 +48,23 @@ improvement threshold. The accepted Server hard profile remains256 active or
 retiring requests,128 metadata waiters, and64MiB per managed/native payload side.
 Idle Server permits and payload credits must be exactly zero. Native sources and
 registered metadata remain alive during service idle; their actual measured
-baseline is distinguished from post-Main all-owner zero. Review the candidate
-before freezing it. A later breach is a failed attempt, not a reason to edit its
-frozen limits in place.
+baseline is distinguished from post-Main all-owner zero. Three measured cycles
+are not automatically a stable plateau. Review the natural-GC peaks, RSS/root
+trend and qualified native baseline before freezing the candidate. An upward
+unexplained trend remains unfrozen. A later breach is a failed attempt, not a
+reason to edit its frozen limits in place.
+
+Pre-GC and later idle native counts include closed wrappers still awaiting
+finalization. A distinct post-GC native baseline is therefore frozen separately.
+The outbox worker remains unchanged. Within one logical idle window the observer
+may perform at most three diagnostic collections, within five seconds, to obtain
+an actual vector with no session/operation/cursor/buffer owners and the expected
+source inventory. Every attempted vector remains visible. The run must also match
+the frozen source/registry vector; a missing witness fails rather than enlarging
+the allowance. The external controller has a finite15-second observation deadline
+if a runtime collection itself stops making progress. There remains exactly one
+before/after EventPipe window per logical idle observation, and its actual latest
+GCHeapStats event must fall inside that window.
 
 The observer samples public Meter/native counters at1.1-second intervals and
 records explicit diagnostic collections during idle. Short transient peaks can
@@ -61,7 +81,8 @@ Unknown initial destroy events remain recorded. Any trace loss, missing window,
 failed control or unavailable counter prevents acceptance. The64MiB EventPipe
 buffer is not permission to discard evidence: the complete output file is
 retained and checked. Trace files have an8GiB cap; operation journals have a1GiB
-cap; the host must retain2GiB free disk. Crossing a budget fails explicitly.
+cap; resource and observer journals each have a512MiB cap; service logs have a
+128MiB cap. The host must retain2GiB free disk. Crossing a budget fails explicitly.
 
 RSS, peak RSS, CPU ticks, thread and file-descriptor counts come from Linux
 procfs. Runtime GCHandle totals are process observations and retain their kind
@@ -84,7 +105,11 @@ focused fault matrix.
 The ordinary application outbox worker runs throughout load and idle. Each idle
 window waits for durable acknowledgment, then an independent SQLite or `psql`
 connection checks items/operations/outbox cardinality, atomic references and the
-separate consumer's one-effect receipts. Application state intentionally grows
+separate consumer's one-effect receipts. The four current attachment references
+are independently checked for exact item/attachment version, request/operation
+linkage, durable replay bytes, content length and actual blob hash. Repeated
+identical payload bytes cannot conceal a stale attachment reference. Application
+state intentionally grows
 with confirmed writes; its size and count are distinguished from retained request
 objects. The controller keeps only four attachment slots and finite outstanding
 requests rather than an in-memory history of every created item.

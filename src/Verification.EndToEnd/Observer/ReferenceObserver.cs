@@ -30,6 +30,7 @@ internal static class ReferenceObserver
     private static bool _stopping;
     private static string? _controlPath;
     private static long _controlSequence;
+    private static int _controlAttempt;
     [ThreadStatic] private static bool _reportingError;
 
     [ModuleInitializer]
@@ -98,11 +99,39 @@ internal static class ReferenceObserver
                     if (!document.RootElement.GetProperty("collect").GetBoolean())
                         throw new ArgumentException("Only explicit diagnostic collection is supported.");
                     _controlSequence = sequence;
+                    _controlAttempt = 0;
                     SampleCore("idle-before-finalizers");
                     ControlEvents.Log.Observation(sequence, "idle-before-finalizers");
-                    CollectDiagnostic();
-                    SampleCore("idle-after-finalizers");
-                    ControlEvents.Log.Observation(sequence, "idle-after-finalizers");
+                    JsonElement sources = document.RootElement.GetProperty("expectedSources");
+                    if (sources.EnumerateObject().Count() != Native.Count)
+                        throw new ArgumentException("Idle source inventory differs from the selected modules.");
+                    bool frozen = document.RootElement.TryGetProperty("nativeBaseline", out JsonElement baseline);
+                    if (frozen && baseline.EnumerateObject().Count() != Native.Count)
+                        throw new ArgumentException("Idle native baseline inventory is incomplete.");
+                    long deadline = Stopwatch.GetTimestamp() + 5 * Stopwatch.Frequency;
+                    bool qualified = false;
+                    for (int attempt = 1; attempt <= 3 && Stopwatch.GetTimestamp() < deadline; attempt++)
+                    {
+                        _controlAttempt = attempt;
+                        CollectDiagnostic();
+                        var counts = Native.Select(value => (value.Provider, value.Read())).ToList();
+                        qualified = counts.All(value => value.Item2[0] == sources.GetProperty(value.Provider).GetUInt64() &&
+                            value.Item2.Skip(1).Take(4).All(count => count == 0) &&
+                            (!frozen || baseline.GetProperty(value.Provider).EnumerateArray().Select(item => item.GetUInt64()).SequenceEqual(value.Item2))) &&
+                            Stopwatch.GetTimestamp() <= deadline;
+                        SampleCore("idle-collection-attempt", counts);
+                        ControlEvents.Log.Observation(sequence, "idle-collection-attempt");
+                        if (qualified)
+                        {
+                            // The witness is this exact sampled vector. A new
+                            // legitimate empty outbox poll may begin afterwards.
+                            SampleCore("idle-after-finalizers", counts);
+                            ControlEvents.Log.Observation(sequence, "idle-after-finalizers");
+                            break;
+                        }
+                        Thread.Sleep(10);
+                    }
+                    if (!qualified) throw new InvalidOperationException("Idle ownership did not reach its qualified native baseline.");
                 }
             }
             SampleCore("sample");
@@ -138,7 +167,7 @@ internal static class ReferenceObserver
         finally { Volatile.Write(ref _sampling, 0); }
     }
 
-    private static void SampleCore(string phase)
+    private static void SampleCore(string phase, List<(string Provider, ulong[] Counts)>? observedNative = null)
     {
         // Never hold the observer lock while calling a package or native module.
         // A FirstChanceException callback can arrive while those components own
@@ -149,7 +178,7 @@ internal static class ReferenceObserver
         try
         {
             _listener!.RecordObservableInstruments();
-            native = Native.Select(value => (value.Provider, value.Read())).ToList();
+            native = observedNative ?? Native.Select(value => (value.Provider, value.Read())).ToList();
             gc = GC.GetGCMemoryInfo();
         }
         catch { Interlocked.Increment(ref _failures); return; }
@@ -164,10 +193,15 @@ internal static class ReferenceObserver
                     writer.WriteStartObject();
                     writer.WriteNumber("schemaVersion", 1); writer.WriteNumber("sequence", ++_sequence);
                     writer.WriteNumber("controlSequence", _controlSequence);
+                    writer.WriteNumber("controlAttempt", _controlAttempt);
                     writer.WriteString("phase", phase); writer.WriteNumber("timestamp", Stopwatch.GetTimestamp());
                     writer.WriteNumber("timestampFrequency", Stopwatch.Frequency);
                     writer.WriteNumber("unixMilliseconds", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
                     writer.WriteBoolean("dynamicCodeSupported", RuntimeFeature.IsDynamicCodeSupported);
+                    writer.WriteString("runtimeVersion", Environment.Version.ToString());
+                    writer.WriteString("framework", RuntimeInformation.FrameworkDescription);
+                    writer.WriteString("processArchitecture", RuntimeInformation.ProcessArchitecture.ToString());
+                    writer.WriteString("runtimeDirectory", RuntimeFeature.IsDynamicCodeSupported ? RuntimeEnvironment.GetRuntimeDirectory() : null);
                     writer.WriteStartObject("serverMeter");
                     foreach (var value in Gauges) writer.WriteNumber(value.Key, value.Value);
                     writer.WriteEndObject();

@@ -6,12 +6,14 @@ import argparse
 import concurrent.futures
 import contextlib
 import hashlib
+import importlib.metadata
 import json
 import math
 import os
 from pathlib import Path
 import platform
 import random
+import shutil
 import signal
 import socket
 import ssl
@@ -21,7 +23,7 @@ import threading
 import time
 from urllib.parse import quote, urlsplit
 
-from harness import (Database, HERE, PostgresCluster, Service, canonical, configuration,
+from harness import (Database, HERE, REFERENCE, PostgresCluster, Service, canonical, configuration,
                      create, eventually, require, sha, write_json)
 
 STAGES = {"steady-30m": 1800, "regression-24h": 86400, "release-72h": 259200}
@@ -102,20 +104,53 @@ def identity(args):
         modules[provider] = str(paths[0])
     command = [args.dotnet, str(executable)] if args.mode == "jit" else [str(executable)]
     command = ["env", "NW_B22_DB_MODULES=" + json.dumps(modules, sort_keys=True), *command]
+    dotnet = Path(shutil.which(args.dotnet) or args.dotnet).resolve()
+    require(dotnet.is_file(), "The actual .NET analysis/JIT host is unavailable")
+    runtime = json.loads(subprocess.check_output([str(dotnet), str(args.trace_reader.resolve()), "--runtime-identity"], text=True, timeout=30))
+    require(runtime["dynamicCodeSupported"] is True, "TraceReader must run as the separately identified JIT analyzer")
+    runtime_directory = Path(runtime["runtimeDirectory"]).resolve()
+    reader_directory = args.trace_reader.resolve().parent
+    packages = {}
+    for name in ("httpx", "httpcore", "h11", "h2", "hpack", "hyperframe", "anyio", "certifi", "idna", "sniffio", "typing_extensions", "brotli", "brotlicffi", "zstandard"):
+        try: distribution = importlib.metadata.distribution(name)
+        except importlib.metadata.PackageNotFoundError:
+            packages[name] = None; continue
+        packages[name] = {"version": distribution.version, "files": {str(relative): sha(Path(distribution.locate_file(relative)))
+            for relative in distribution.files or () if Path(distribution.locate_file(relative)).is_file() and
+            "__pycache__" not in relative.parts and Path(relative).suffix != ".pyc"}}
     record = {"mode": args.mode, "provider": args.provider, "executableSha256": sha(executable),
         "observerBuildManifestSha256": sha(manifest),
         "artifacts": {str(p.relative_to(artifact)): sha(p) for p in sorted(artifact.rglob("*")) if p.is_file()},
         "controller": {name: sha(HERE / name) for name in ("soak.py", "harness.py")},
-        "traceReaderSha256": sha(args.trace_reader), "certificateSha256": sha(args.certificate),
-        "python": sys.version, "kernel": platform.release(), "machine": platform.machine(),
+        "importedReferenceHelpers": {name: sha(REFERENCE / name) for name in ("run.py", "golden.py", "postgres_oracles.py")},
+        "traceReaderFiles": {str(p.relative_to(reader_directory)): sha(p) for p in sorted(reader_directory.rglob("*")) if p.is_file()},
+        "dotnetHost": {"path": str(dotnet), "sha256": sha(dotnet), "selectedRuntime": runtime,
+            "runtimeFiles": {str(p.relative_to(runtime_directory)): sha(p) for p in sorted(runtime_directory.rglob("*")) if p.is_file()}},
+        "certificateSha256": sha(args.certificate), "privateKeySha256": sha(args.private_key),
+        "python": {"version": sys.version, "executableSha256": sha(Path(sys.executable).resolve()), "packages": packages},
+        "kernel": platform.release(), "machine": platform.machine(),
         "processorCountEnvironment": os.environ.get("DOTNET_PROCESSOR_COUNT"),
         "cpuAffinity": sorted(os.sched_getaffinity(0)),
         "cgroupCpuMax": Path("/sys/fs/cgroup/cpu.max").read_text().strip() if Path("/sys/fs/cgroup/cpu.max").exists() else None}
     if args.provider == "postgresql":
         require(args.postgres_bin is not None, "PostgreSQL requires explicit pinned binaries")
-        record["postgresSha256"] = sha(args.postgres_bin / "postgres")
-        record["psqlSha256"] = sha(args.postgres_bin / "psql")
+        record["postgresLifecycleBinaries"] = {name: sha(args.postgres_bin / name) for name in ("postgres", "psql", "initdb", "pg_ctl")}
     return command, record, set(modules)
+
+
+def revalidate_inputs(args, expected):
+    # Verify the analyzer/host/runtime bytes before even launching its identity
+    # command. Then recheck the complete transitive controller/product inventory.
+    reader = args.trace_reader.resolve().parent
+    require({str(path.relative_to(reader)): sha(path) for path in sorted(reader.rglob("*")) if path.is_file()} == expected["traceReaderFiles"],
+        "Pinned TraceReader inputs changed during the attempt")
+    host = Path(shutil.which(args.dotnet) or args.dotnet).resolve()
+    require(str(host) == expected["dotnetHost"]["path"] and sha(host) == expected["dotnetHost"]["sha256"], "Pinned .NET host changed during the attempt")
+    runtime = Path(expected["dotnetHost"]["selectedRuntime"]["runtimeDirectory"]).resolve()
+    require({str(path.relative_to(runtime)): sha(path) for path in sorted(runtime.rglob("*")) if path.is_file()} == expected["dotnetHost"]["runtimeFiles"],
+        "Pinned analysis/JIT runtime changed during the attempt")
+    _, actual, _ = identity(args)
+    require(actual == expected, "Pinned directly executed inputs changed during the attempt")
 
 
 class Workload:
@@ -127,6 +162,7 @@ class Workload:
         self.counts = {"created": 0, "attachments": 0, "completed": 0, "cancelledUploads": 0}
         self.items = []; self.item_locks = [threading.Lock() for _ in range(4)]
         self.versions = [1] * 4
+        self.current_attachments = [None] * 4
         self.payloads = [(hashlib.sha256(f"b22-payload-{seed}-{i}".encode()).digest() * 2048) for i in range(4)]
         for index in range(4):
             status, body, _ = create(service, token, f"seed-{index}", f"B22 seed {index}")
@@ -167,10 +203,17 @@ class Workload:
                 slot = sequence % 4
                 with self.item_locks[slot]:
                     route = "/v1/items/" + self.items[slot] + "/attachment"
-                    status, _, _ = self.request("PUT", route, self.payloads[slot],
+                    status, response_bytes, _ = self.request("PUT", route, self.payloads[slot],
                         {"Content-Type": "application/octet-stream", "Idempotency-Key": f"soak-attachment-{sequence}", "If-Match": str(self.versions[slot])})
                     require(status == 200, "Soak attachment CAS failed")
                     self.versions[slot] += 1
+                    expected_hash = hashlib.sha256(self.payloads[slot]).hexdigest()
+                    response = json.loads(response_bytes)
+                    require(type(response["responseVersion"]) is int and response["responseVersion"] == 1 and
+                        response["itemId"] == self.items[slot] and response["version"] == self.versions[slot] and
+                        response["contentHash"] == expected_hash and response["contentLength"] == len(self.payloads[slot]), "Attachment response did not reflect the expected version/content")
+                    self.current_attachments[slot] = {"operationId": response["operationId"], "requestKey": f"soak-attachment-{sequence}",
+                        "version": self.versions[slot], "contentHash": expected_hash, "contentLength": len(self.payloads[slot]), "responseBytes": response_bytes}
                     with self.lock: self.counts["attachments"] += 1
                     content = self.request("GET", route)
                     require(content[0] == 200 and content[1] == self.payloads[slot], "Soak attachment content changed")
@@ -231,7 +274,30 @@ class Workload:
         consumer = Database("sqlite", self.config["consumerDatabase"], None)
         count, effects = consumer.sql("SELECT count(*),COALESCE(sum(effects),0) FROM receipts")[0]
         require(int(count) == int(effects) == operations, "Independent consumer effect count failed")
-        return {"expected": expected, "observed": actual, "consumerReceipts": int(count), "consumerEffects": int(effects), "dangling": dangling, "cancelledOperations": cancelled}
+        attachments = []
+        for slot, item in enumerate(self.items):
+            literal = "'" + item.replace("'", "''") + "'"
+            item_version = int(self.sql.scalar("SELECT version FROM items WHERE tenant_id='b22-tenant' AND item_id=" + literal))
+            require(item_version == self.versions[slot], "Independent item expected-version oracle failed")
+            rows = self.sql.sql("SELECT a.operation_id,a.version,a.content_hash,a.content_length,o.request_key,o.tenant_id,o.principal_id "
+                "FROM attachments a LEFT JOIN operations o ON o.operation_id=a.operation_id WHERE a.tenant_id='b22-tenant' AND a.item_id=" + literal)
+            wanted = self.current_attachments[slot]
+            if wanted is None:
+                require(not rows, "An untouched attachment slot acquired a reference")
+                attachments.append({"slot": slot, "present": False, "itemVersion": item_version}); continue
+            require(len(rows) == 1, "Current attachment reference is missing or duplicated")
+            operation, version, content_hash, length, key, tenant, principal = rows[0]
+            require(operation == wanted["operationId"] and int(version) == wanted["version"] and content_hash == wanted["contentHash"] and
+                int(length) == wanted["contentLength"] and key == wanted["requestKey"] and tenant == "b22-tenant" and principal == "b22-actor",
+                "Independent current attachment metadata/operation linkage failed")
+            replay_version, replay_status, replay_bytes = self.sql.replay(operation)
+            require(replay_version == 1 and replay_status == 200 and replay_bytes == wanted["responseBytes"], "Current attachment operation has different durable replay bytes")
+            blob = Path(self.config["blobDirectory"]) / "blobs" / content_hash
+            require(blob.is_file() and blob.stat().st_size == wanted["contentLength"] and sha(blob) == content_hash, "Current attachment reference targets missing or incorrect durable content")
+            attachments.append({"slot": slot, "present": True, "itemVersion": item_version, "attachmentVersion": int(version), "contentHash": content_hash,
+                "contentLength": int(length), "operationId": operation, "requestKey": key})
+        return {"expected": expected, "observed": actual, "consumerReceipts": int(count), "consumerEffects": int(effects), "dangling": dangling,
+            "cancelledOperations": cancelled, "currentAttachments": attachments}
 
 
 def trace_analyze(args, output):
@@ -313,11 +379,14 @@ def main():
     else:
         require(args.rate is not None and 0 < args.rate <= 1000 and 1 <= args.concurrency <= 64, "Calibration requires a finite explicit offered rate and concurrency")
         settings = {"rate": args.rate, "concurrency": args.concurrency, "seed": args.seed,
-            "calibrationCycles": 5, "calibrationLoadSeconds": 20, "calibrationIdleSeconds": 20,
+            "calibrationCycles": 3, "calibrationLoadSeconds": 240, "calibrationIdleSeconds": 60,
             "regressionLoadSeconds": 240, "regressionIdleSeconds": 60,
             "maxGeneratorLagSeconds": 1.0, "sampleSeconds": 1.1,
             "traceBudgetBytes": 8 * 1024**3, "journalBudgetBytes": 1024**3,
+            "resourceJournalBudgetBytes": 512 * 1024**2, "observerJournalBudgetBytes": 512 * 1024**2,
+            "serviceLogBudgetBytes": 128 * 1024**2,
             "minimumFreeDiskBytes": 2 * 1024**3, "faultEverySeconds": 300,
+            "idleCollectionAttempts": 3, "idleCollectionBudgetSeconds": 5,
             "applicationBlobBudgetBytes": 256 * 1024**2,
             "workload": "40% create+same-key replay+authorized recovery,35% keyset page,20% streamed64KiB attachment+download,5% hash conflict; per-request connection churn; admitted half-written upload connection close every300s"}
         profile = None
@@ -331,14 +400,19 @@ def main():
         "requiredStageSeconds": required, "startedUnixNs": time.time_ns(), "identity": inputs, "settings": settings,
         "profileSha256": sha(args.profile) if args.profile else None, "completedCycles": 0,
         "fullB22Acceptance": False, "interruptedPredecessor": None, "creditedPredecessorSeconds": 0,
-        "instrumentedDiagnosticGc": True, "performanceMeasurement": False, "error": None}
+        "instrumentedDiagnosticGc": True, "performanceMeasurement": False, "error": None,
+        "unavailableObservations": {"nativeAllocatorLiveBytes": None, "nativeAllocatorRetainedBytes": None,
+            "databasePoolWaiters": None, "sqlitePhysicalPoolConnections": None},
+        "observationLimits": "Native sessions are owner counts, not physical pool connections; process GCHandle totals are not every managed graph root."}
+    write_json(output / "identity.json", inputs)
+    receipt["identitySha256"] = sha(output / "identity.json")
     if args.predecessor:
         predecessor = json.loads(args.predecessor.read_text())
         receipt["interruptedPredecessor"] = {"path": str(args.predecessor.resolve()), "sha256": sha(args.predecessor),
             "recordedElapsedSeconds": predecessor.get("stageElapsedSeconds", 0), "status": predecessor.get("status")}
     write_json(output / "progress.json", receipt)
     operations = Journal(output / "operations.jsonl"); resources = Journal(output / "resources.jsonl")
-    all_max, idle_vectors, sample_counts = {}, [], 0
+    all_max, idle_vectors, post_gc_native, sample_counts = {}, [], [], 0
     candidate = None
     stage_start = None; last_sample = 0.; service = workload = None
     control_sequence = 0; last_fault = None
@@ -352,7 +426,9 @@ def main():
         receipt.update(elapsedSeconds=(time.monotonic_ns() - started) / 1e9,
             stageElapsedSeconds=0 if stage_start is None else (receipt.get("stageObservedThroughNs", stage_start) - stage_start) / 1e9,
             sampleCount=sample_counts, observedMax=all_max, workloadCounts=workload.counts.copy() if workload else {})
-        write_json(output / "progress.json", receipt)
+        progress = dict(receipt)
+        progress["identity"] = {"path": "identity.json", "sha256": receipt["identitySha256"]}
+        write_json(output / "progress.json", progress)
 
     def sample(phase, force=False):
         nonlocal last_sample, sample_counts
@@ -362,6 +438,10 @@ def main():
         require(service.process.poll() is None, "Soak service exited unexpectedly")
         tail.read(); observation = tail.latest
         require(observation is not None and observation["observerFailures"] == 0, "Soak observer failed or is unavailable")
+        require(observation["dynamicCodeSupported"] is (args.mode == "jit"), "Actual observer runtime mode does not match the selected artifact row")
+        if args.mode == "jit":
+            require(Path(observation["runtimeDirectory"]).resolve() == Path(inputs["dotnetHost"]["selectedRuntime"]["runtimeDirectory"]).resolve() and
+                observation["runtimeVersion"] == inputs["dotnetHost"]["selectedRuntime"]["runtimeVersion"], "JIT service selected a different unrecorded runtime")
         require(set(observation["databaseNativeOwners"]) == expected_providers, "Soak provider inventory is incomplete")
         require(time.time_ns() // 1000000 - observation["unixMilliseconds"] < 10000, "Soak observer became stale")
         process = process_sample(service.process.pid); vector = resource_vector(process, observation)
@@ -372,6 +452,9 @@ def main():
         receipt["stageObservedThroughNs"] = time.monotonic_ns()
         require(trace.stat().st_size <= settings["traceBudgetBytes"], "Finite trace-file budget exhausted")
         require((output / "operations.jsonl").stat().st_size <= settings["journalBudgetBytes"], "Finite operation-journal budget exhausted")
+        require((output / "resources.jsonl").stat().st_size <= settings["resourceJournalBudgetBytes"], "Finite resource-journal budget exhausted")
+        require((output / "service/observations.jsonl").stat().st_size <= settings["observerJournalBudgetBytes"], "Finite observer-journal budget exhausted")
+        require((output / "service/service.log").stat().st_size <= settings["serviceLogBudgetBytes"], "Finite service-log budget exhausted")
         disk = os.statvfs(output)
         require(disk.f_bavail * disk.f_frsize >= settings["minimumFreeDiskBytes"], "Declared free-disk safety reserve exhausted")
         if profile:
@@ -416,7 +499,10 @@ def main():
         nonlocal control_sequence
         begun = time.monotonic(); durable = workload.reconcile()
         control_sequence += 1
-        write_json(observer_control, {"sequence": control_sequence, "collect": True})
+        sources = {provider: 2 if args.provider == "sqlite" else 1 for provider in expected_providers}
+        control = {"sequence": control_sequence, "collect": True, "expectedSources": sources}
+        if profile: control["nativeBaseline"] = profile["postGcNativeBaseline"]
+        write_json(observer_control, control)
         phases = {}
         def observed():
             for value in tail.read():
@@ -432,6 +518,14 @@ def main():
             return phases["idle-after-finalizers"]
         row = eventually(observed, "explicit post-GC idle observation", timeout=15)
         require(row["observerFailures"] == 0, "Diagnostic collection failed")
+        require(1 <= row["controlAttempt"] <= settings["idleCollectionAttempts"], "Idle collection exceeded its declared attempt bound")
+        require(all(counts[0] == sources[provider] and counts[1:5] == [0, 0, 0, 0] for provider, counts in row["databaseNativeOwners"].items()),
+            "No actual quiescent native owner witness was obtained")
+        if profile:
+            require(row["databaseNativeOwners"] == profile["postGcNativeBaseline"], "Qualified post-GC native ownership differs from the frozen baseline")
+        post_gc_native.append(row["databaseNativeOwners"])
+        resources.write({"phase": "qualified-native-idle", "controlSequence": control_sequence,
+            "attempt": row["controlAttempt"], "databaseNativeOwners": row["databaseNativeOwners"]})
         idle_vector = None
         while time.monotonic() - begun < seconds:
             if stopping.is_set(): raise InterruptedError("Stage interrupted")
@@ -453,6 +547,8 @@ def main():
             config.update(runWorkers=True, maxBlobBytes=settings["applicationBlobBudgetBytes"])
             sql = Database(args.provider, database, str(cluster.binary / "psql") if cluster else None)
             with Service(traced_command, config, output / "service", observed=True, http2=True, certificate=args.certificate) as service:
+                receipt["executionConfigSha256"] = sha(output / "service/config.private.json")
+                receipt["serviceProcessId"] = service.process.pid
                 tail = Tail(output / "service/observations.jsonl"); tail.read()
                 workload = Workload(service, token, sql, config, settings["seed"], operations)
                 stage_start = time.monotonic_ns(); last_fault = stage_start - int(settings["faultEverySeconds"] * 1e9)
@@ -470,24 +566,31 @@ def main():
                             receipt["completedCycles"] = cycle + 1; checkpoint()
                             print(json.dumps({"stage": args.stage or args.action, "cycle": cycle + 1, "requiredCycles": count, "elapsedSeconds": receipt["stageElapsedSeconds"]}), flush=True)
                 require(service.protocols == {"HTTP/2"}, "Ordinary soak requests did not use the frozen HTTP2/TLS profile")
+                receipt["observedOrdinaryHttpVersions"] = sorted(service.protocols)
                 receipt["stageCompletedBeforeClosureNs"] = time.monotonic_ns()
             tail.read(); final = tail.latest
             require(final["phase"] == "observer-stop" and set(final["databaseNativeOwners"]) == expected_providers and
                 all(len(values) == 6 and all(value == 0 for value in values) for values in final["databaseNativeOwners"].values()), "Final actual native owners did not retire")
             require(final["observerFailures"] == 0 and all(final["serverMeter"].get(key) == 0 for key in ZERO_GAUGES), "Final actual server owners did not retire")
             receipt["finalRetirement"] = final
+        revalidate_inputs(args, inputs)
+        receipt["inputRechecks"] = ["before-runtime-trace-analysis"]
         trace_receipt = trace_analyze(args, output); receipt["traceObservation"] = trace_receipt
         roots = idle_trace_windows(output / "trace-receipt.json.samples.jsonl", control_sequence)
         root_values = [max(row["trackedLiveHandles"], row["runtimeGcHandlesAtLastGc"]) for row in roots]
         receipt["idleGcHandleObservations"] = roots
+        receipt["qualifiedPostGcNativeObservations"] = post_gc_native
         if profile:
             require(all(value <= profile["idleGcHandleCap"] for value in root_values), "Frozen idle runtime handle cap exceeded")
         checkpoint()
         actual_duration = (receipt["stageCompletedBeforeClosureNs"] - stage_start) / 1e9
         require(actual_duration >= required, "The exact required elapsed duration has not completed")
+        revalidate_inputs(args, inputs)
+        receipt["inputRechecks"].append("before-final-acceptance")
         receipt.update(status="probe-passed" if args.action == "probe" else "calibration-passed" if args.action == "calibrate" else "stage-passed", completedStageSeconds=actual_duration)
         if args.action == "calibrate":
-            require(len(idle_vectors) >= 5, "The declared calibration cycles did not all finish")
+            require(len(idle_vectors) == settings["calibrationCycles"] >= 3, "The declared calibration cycles did not all finish")
+            require(all(value == post_gc_native[0] for value in post_gc_native), "Qualified post-GC native baseline did not stabilize")
             # Freeze actual measured maximum plus actual observed spread. No
             # universal percentage or unmeasured claimed benefit is introduced.
             idle_caps = {key: max(row[key] for row in idle_vectors) + max(row[key] for row in idle_vectors) - min(row[key] for row in idle_vectors) for key in idle_vectors[0]}
@@ -495,7 +598,8 @@ def main():
             candidate = {"schemaVersion": 1, "task": "B22", "status": "candidate-from-passed-calibration", "identity": inputs, "settings": settings,
                 "calibrationReceipt": str(output / "receipt.json"), "calibrationDirectory": str(output),
                 "thresholdDerivation": "observed maximum + observed idle-cycle range; exact hard Server budgets retain their accepted values; no performance-improvement threshold",
-                "peakCaps": peak_caps, "idleCaps": idle_caps, "idleGcHandleCap": max(root_values) + max(root_values) - min(root_values),
+                "peakCaps": peak_caps, "idleCaps": idle_caps, "postGcNativeBaseline": post_gc_native[0],
+                "idleGcHandleCap": max(root_values) + max(root_values) - min(root_values),
                 "requiredStages": STAGES, "durationPolicy": "Each named stage must reach its declared actual elapsed duration in this attempt. Interrupted attempts remain explicit; no silently aggregated process lifetime.",
                 "limitations": ["Process GCHandle totals/tracked kinds do not count every managed object graph root or attribute all handles exclusively to NativeWeave.", "Native allocator live/retained bytes are unavailable; RSS is recorded separately and never substituted.", "Durable database growth is intentional and independently counted; a disk limit or generator lag makes the stage fail.", "Only the declared stage/workload is accepted; the other required stages retain their own status."]}
             candidate["peakCaps"].update({"nativeweave.server.requests.active": 256, "nativeweave.server.requests.queued": 128,
@@ -509,7 +613,8 @@ def main():
     finally:
         checkpoint(); operations.close(); resources.close()
         receipt["endedUnixNs"] = time.time_ns()
-        receipt["rawHashes"] = {name: sha(output / name) for name in ("operations.jsonl", "resources.jsonl", "runtime.nettrace", "known-handles.jsonl") if (output / name).exists()}
+        receipt["rawHashes"] = {name: sha(output / name) for name in ("identity.json", "operations.jsonl", "resources.jsonl", "runtime.nettrace", "known-handles.jsonl",
+            "service/observations.jsonl", "service/service.log", "postgres/identity.json", "postgres/server.log") if (output / name).exists()}
         write_json(output / "receipt.json", receipt)
         if candidate is not None and receipt["status"] == "calibration-passed":
             candidate["calibrationReceiptSha256"] = sha(output / "receipt.json")
