@@ -32,6 +32,7 @@ import run as domain
 from supervision import supervised_command
 from perf01_affinity import cpu_list, process_masks, process_group, require_process, require_group
 from perf01_resources import identity, summarize as summarize_resources
+from scheduler_gc import policy as scheduler_gc_policy, policy_sha256, valid_receipt as valid_scheduler_gc_receipt
 
 
 def utc():
@@ -132,6 +133,7 @@ def descriptor(args):
 def prepare(args, output, route, pg):
     a21 = load_a21()
     compact_observation = bool(getattr(args, "compact_observation", False))
+    gc_policy = scheduler_gc_policy(getattr(args, "scheduler_gc_policy", "automatic"))
     service_cpus = sorted(os.sched_getaffinity(0))
     generator_cpus = getattr(args, "generator_cpus", None)
     affinity = {"mode": "inherited", "service_cpus": service_cpus, "generator_cpus": None}
@@ -164,7 +166,7 @@ def prepare(args, output, route, pg):
     resource_observer = {"controller": identity(os.getpid()), "generator_interval_seconds": 1,
                          "application_interval_seconds": .05,
                          "scope": "Independent process CPU/memory/fd fields; generator roles are target, scheduler and controller"}
-    paths = [HERE / "run.py", HERE / "target.py", HERE / "perf01_affinity.py", HERE / "perf01_resources.py", HERE / "perf01_outcomes.py",
+    paths = [HERE / "run.py", HERE / "target.py", HERE / "scheduler_gc.py", HERE / "perf01_affinity.py", HERE / "perf01_resources.py", HERE / "perf01_outcomes.py",
              DOMAIN / "run.py", DOMAIN / "http_target.py", DOMAIN / "common.py",
              DOMAIN / "cell_worker.py", DOMAIN / "supervision.py", ROOT / "src/Benchmarks.Harness/nativeweave_bench.py",
              ROOT / "tests/Reference.TaskService/golden.py"]
@@ -201,6 +203,7 @@ def prepare(args, output, route, pg):
                 "perf01": {"scenario": args.scenario, "stage": args.stage, "idle_seconds": args.idle_seconds,
                            "recovery_requests": args.recovery_requests,
                            "compact_observation": compact_observation,
+                           "scheduler_gc_policy": gc_policy,
                            "continue_classified_overload": args.continue_classified_overload, "affinity": affinity,
                            "resource_observer": resource_observer}}
     if args.protocol != "http1":
@@ -223,6 +226,7 @@ def prepare(args, output, route, pg):
                 "warmup_requests": args.warmup, "features": {"scenario": args.scenario, "concurrency": args.concurrency,
                     "continue_classified_overload": args.continue_classified_overload,
                     "compact_observation": compact_observation,
+                    "scheduler_gc_policy": gc_policy,
                     "service_cpus": service_cpus, "generator_cpus": generator_cpus},
                 "instrumentation": "External procfs application at nominal 20 Hz and target/scheduler/controller at nominal 1 Hz, independent CPU/memory/fd fields; optional identical exception catch/log/rethrow observer"},
             "timing": {"requests": count, "period_ns": period, "timeout_ns": 30_000_000_000,
@@ -242,6 +246,7 @@ def prepare(args, output, route, pg):
               "host": a21.host_metadata(), "python_libraries": client, "isolation_note": args.isolation_note,
               "affinity": affinity,
               "compact_observation": compact_observation,
+              "scheduler_gc_policy": gc_policy, "scheduler_gc_policy_sha256": policy_sha256(gc_policy),
               "resource_observer": resource_observer,
               "plan_sha256": digest(output / "plan.json"), "dataset_sha256": digest(data_path),
               "planned_load_seconds": (count - 1) * period / 1e9,
@@ -276,7 +281,7 @@ async def execute(args, output, plan, frozen):
 
 
 async def execute_cell(args, output, plan, frozen):
-    command = [str(Path(sys.executable).resolve()), str(DOMAIN / "cell_worker.py"), "--plan", str(output / "plan.json"),
+    command = [str(Path(sys.executable).resolve()), str(HERE / "scheduler_gc.py"), "--plan", str(output / "plan.json"),
                "--route", args.route, "--repetition", str(args.repetition), "--output", str(output / "observation.json"),
                "--a21", str(ROOT / "src/Benchmarks.Harness/nativeweave_bench.py")]
     if frozen.get("compact_observation", False):
@@ -284,6 +289,10 @@ async def execute_cell(args, output, plan, frozen):
     save(output / "progress.json", {"state": "running", "started_utc": utc(), "frozen_inputs_sha256": digest(output / "frozen-inputs.json")})
     timeout = 20 * args.warmup + frozen["planned_load_seconds"] + 225
     receipt = await supervised_command(command, output / "supervision", timeout, 5, output / "control.json", load_a21())
+    gc_path = output / "observation.scheduler-gc.json"
+    gc_receipt = load(gc_path) if gc_path.exists() else None
+    gc_valid = valid_scheduler_gc_receipt(gc_receipt, frozen["scheduler_gc_policy"], receipt,
+                                         frozen["plan_sha256"], frozen["source_files"])
     if frozen["affinity"]["mode"] == "split":
         affinity = frozen["affinity"]
         observed = {"controller": process_masks(os.getpid())}
@@ -297,6 +306,10 @@ async def execute_cell(args, output, plan, frozen):
                "provider": args.provider, "scenario": args.scenario, "rate": args.rate, "concurrency": args.concurrency,
                "finished_utc": utc(), "valid": False, "qualifies_service_standard": False,
                "supervision": receipt["status"], "frozen_inputs_sha256": digest(output / "frozen-inputs.json")}
+    summary.update(scheduler_gc_policy=frozen["scheduler_gc_policy"],
+                   scheduler_gc_policy_sha256=frozen["scheduler_gc_policy_sha256"],
+                   scheduler_gc_policy_valid=gc_valid,
+                   scheduler_gc_receipt={"path": str(gc_path), "sha256": digest(gc_path) if gc_path.exists() else None})
     if receipt["status"] == "completed" and (output / "observation.json").exists():
         row = load_compact_observation(output / "observation.json") if frozen.get("compact_observation", False) else load(output / "observation.json")
         domain.validate_observation(row, args.route, args.repetition, plan["timing"]["requests"], load_a21())
@@ -315,7 +328,7 @@ async def execute_cell(args, output, plan, frozen):
                                for role in ("target", "scheduler", "controller")}
         phase = resources.get("measurement", {})
         latency = row["histograms"]["arrival_success"]["percentiles_from_exact_samples_ns"]
-        valid = bool(row["valid"] and app["status"] == "passed" and extra["status"] == "passed" and duration_valid
+        valid = bool(row["valid"] and app["status"] == "passed" and extra["status"] == "passed" and duration_valid and gc_valid
                      and not receipt.get("live_owned_processes_after_cleanup") and not receipt.get("cleanup_error"))
         p99 = latency["p99"]
         peak = phase.get("rss_peak_bytes")
@@ -332,7 +345,8 @@ async def execute_cell(args, output, plan, frozen):
             successful_per_second=row["successful"] * 1e9 / row["measurement_window_ns"]["elapsed"],
             planned_load_seconds=expected_span, actual_dispatch_span_seconds=span, duration_valid=duration_valid,
             observation_seconds=row["measurement_window_ns"]["elapsed"] / 1e9,
-            invalid_reasons=row.get("invalid_reasons", []) + ([] if duration_valid else ["Actual uninterrupted dispatched span below 1800 seconds"]),
+            invalid_reasons=row.get("invalid_reasons", []) + ([] if duration_valid else ["Actual uninterrupted dispatched span below 1800 seconds"])
+                + ([] if gc_valid else ["Scheduler GC policy receipt is missing, incomplete or inconsistent"]),
             application_receipt={"path": str(directory / "receipt.json"), "sha256": digest(directory / "receipt.json")},
             perf01_receipt={"path": str(directory / "perf01.json"), "sha256": digest(directory / "perf01.json")},
             resources=resources, generator_resources=generator_resources,
@@ -373,6 +387,8 @@ def main():
                         help="Continue real HTTP after declared service-error statuses/timeouts; every error still fails the cell")
     parser.add_argument("--compact-observation", action="store_true",
                         help="Share bounded immutable oracle values before timing and replay accepted result payloads after timing")
+    parser.add_argument("--scheduler-gc-policy", choices=["automatic", "deferred"], default="automatic",
+                        help="DB scheduler only: defer automatic cyclic GC through the complete original worker; freeze one policy for every route/cohort")
     parser.add_argument("--max-p99-ms", type=float, default=500)
     parser.add_argument("--max-rss-mib", type=float, default=256)
     parser.add_argument("--seed", type=int, default=20261119)

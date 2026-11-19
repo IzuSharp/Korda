@@ -2,8 +2,8 @@
 
 Status: harness preparation. No measured result or completed long stage is
 established by these files. Product behavior and packages are not modified here.
-The explicitly selected compact-observation mode below changes only the external
-controller's preparation, retention and evidence serialization.
+The explicitly selected compact-observation and scheduler-GC modes below change
+only the measurement processes, not the package/application implementation.
 
 ## Measured path
 
@@ -221,6 +221,95 @@ python3 -m unittest discover -s tests/Benchmarks.Harness -v
 python3 tests/Perf01.Database/test_streaming.py -v
 python3 tests/Perf01/test_verify_long.py -v
 ```
+
+### Optional scheduler cyclic-GC deferral
+
+The [separate PostgreSQL generator diagnostic](https://github.com/IzuSharp/Plan/blob/7394f2be4d3bbf6c7930796ec503f72ff7cef64b/ledger/evidence/batches/Perf-01/checks/postgresql-generator-gc-001/analysis-001/README.md)
+observed a scheduler generation2
+collection interval of 240.004324 ms and process-CPU delta of 236.181418 ms during
+effective load. The original 52 dispatch-budget violations remain an invalid
+cell. The profile is intentionally partial and earns no long-duration credit;
+it does not reconstruct the lost exact dispatch ledger. The linked Plan record
+binds the source and actual diagnostic evidence.
+
+`--scheduler-gc-policy automatic` is the default. Selecting `deferred` disables
+only automatic cyclic collection in the DB scheduler Python process for the
+complete call to the original `src/Benchmarks.Domain/cell_worker.py:main`.
+The small `scheduler_gc.py` wrapper imports that unchanged worker and forwards
+the complete original argument vector. It does not intercept scheduling,
+change clocks, force collection, alter a threshold, skip records, replace an
+oracle, or weaken the 100 ms dispatch-lag limit. Both modes keep the same
+dataset generation, scheduled operation count and preallocated A21 state for
+the selected original workload parameters.
+
+Ordinary reference-count cleanup continues. The Python target starts through
+the original new-interpreter exec, with its ordinary automatic GC; the wrapper
+changes no environment, target code, .NET GC or Rust allocator. Deferral can
+retain unreachable cycles until automatic collection resumes or the process
+exits. No claim of a constant-memory scheduler or a bound on retained cycle
+bytes follows from this option. Keep the original generator/application CPU
+and memory constraints and review the existing per-role RSS/time series. A
+short gate cannot establish the 259,526-entry long-plan heap or its memory
+trend; a new full DB long measurement is still required. Resource pressure or
+continuing growth requires rejection or a further prospective remedy, not an
+unannounced higher limit.
+
+Normal worker return occurs after original target drain, replay, observation
+publication and asyncio shutdown. The wrapper restores its initial automatic-GC
+state in `finally`, outside the original measured window, and then records the
+restored state. Python exceptions and `KeyboardInterrupt` also restore and
+retain a failed receipt. Default SIGTERM and SIGKILL can bypass Python `finally`;
+the initial running receipt remains incomplete. Existing bounded supervisor
+TERM/KILL cleanup still applies, and cannot prove normal GC restoration or
+application retirement. No custom signal handler is installed.
+
+`observation.scheduler-gc.json` records the actual supervised PID/start_ticks,
+plan hash, wrapper/original-worker/common/A21 source hashes, policy hash,
+initial/entry/exit/restored GC states and thresholds, and collection counters.
+The parent requires a completed source- and process-matching receipt, unchanged
+thresholds and restored state; `deferred` also requires zero collection-count
+deltas inside the scope. A missing, interrupted or inconsistent receipt prevents
+the cell from being valid even if all business operations succeeded. The
+policy and its stable hash are included in frozen inputs and the summary;
+the complete descriptor is also in target metadata and plan features. The
+wrapper is part of the frozen source/artifact map.
+
+This is a measurement-policy change, not a product improvement. A new DB-only
+prospective freeze must bind the exact driver commit/source hashes, policy,
+package identities and unchanged resource/arrival/error settings. All new
+before/after/direct-Rust/managed DB comparisons, noise strata, capacity cells
+and long cells must use the same explicit policy. Earlier automatic-GC DB
+noise/capacity samples retain their original identities and cannot be pooled
+with a deferred cohort or relabeled. Independently accepted HTTP/gRPC evidence
+continues using its original driver and requires no source change here.
+
+The wrapper is smaller than rewriting A21 record retention, resource sampling
+or raw replay, and directly controls the measured scheduler pause mechanism.
+A retention rewrite could reduce scanned live objects without deferring
+unreachable cycles, but would also change central accounting/replay code and
+need separate equivalence evidence. Those larger changes are not included.
+
+The finite ownership gate checks normal and exceptional restoration, ordinary
+refcount release, the retention risk, a fresh child interpreter's enabled GC,
+and rejection of incomplete/wrong-policy/wrong-source/wrong-PID receipts:
+
+```sh
+python3 tests/Perf01.Database/test_scheduler_gc.py -v
+```
+
+Before any new calibration, run a fresh fixed-before-package pair with this
+same committed driver: PostgreSQL mixed, 144/s, C16, 120 s, seed 20261119,
+warmup16, recovery32, idle60, compact observation and the original split CPUs.
+The two cells differ only in `--scheduler-gc-policy automatic` versus
+`--scheduler-gc-policy deferred`, plus fresh output paths. Use
+`--stage short --variant diagnostic`; neither cell earns long credit. Require
+normal completion, original correctness/persistence/drain checks, policy
+receipt validity and identical dataset hash, planned/offered/successful counts,
+operation mix, before executable/native hashes and source identity. Retain
+any invalid or nonqualifying result as such. Compare scheduler RSS/CPU and
+all dispatch-lag evidence separately; this pair is an equivalence gate, not
+a product before/after performance comparison. It is insufficient to prove
+absence of a later stall in a full 1802 s run.
 
 ### Optional generator CPU isolation
 
