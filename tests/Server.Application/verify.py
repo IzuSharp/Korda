@@ -53,7 +53,9 @@ try:
     apiresult=run('api-exact',['dotnet',api.parent/'bin/Release/net11.0/NativeWeave.Server.Application.ApiCheck.dll',ROOT,a.design,a.sdk]);assert '278 exact symbols' in apiresult
     run('restore-aot',['dotnet','restore',project,'-r','linux-x64','-p:PublishAot=true','--locked-mode','--ignore-failed-sources',*common])
     run('publish-aot',['dotnet','publish',project,'-c','Release','-r','linux-x64','-p:PublishAot=true','--no-restore',asset,'-o',out/'aot',*common])
-    aotexe=out/'aot/NativeWeave.Server.Application.Tests';aot=run('actual-aot',[aotexe,'--real']);assert '85 assertions' in aot and 'dynamic=False' in aot
+    aotexe=out/'aot/NativeWeave.Server.Application.Tests'
+    run('managed-component-aot',[aotexe])
+    aot=run('actual-aot',[aotexe,'--real']);assert '85 assertions' in aot and 'dynamic=False' in aot
     run('package-consumer',['python3',ROOT/'tests/Server.Application/package_probe.py','--output',out/'package','--native',native])
     result.update(status='passed',jit_assertions=85,aot_assertions=85,public_symbols=278,source_dirty=False,aot_executable_sha256=sha(aotexe),package_summary_sha256=sha(out/'package/summary.json'))
 except Exception as error:

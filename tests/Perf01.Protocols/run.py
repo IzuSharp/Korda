@@ -71,12 +71,14 @@ def prepare(args):
     expected_server_isa = 'x86-64-default' if route == 'direct-rust' else 'x86-64-v2'
     if build['toolchain'].get('isa') != expected_server_isa or client_build['toolchain'].get('isa') != 'x86-64-v2':
         raise ValueError('Pinned Native AOT x86-64-v2 / generic x86-64 Rust producers are required')
-    if not 0 < args.rate <= 10000 or not 0 < args.duration <= 1800 or not 1 <= args.concurrency <= 512:
+    if not 0 < args.rate <= 10000 or not 0 < args.duration <= 1802 or not 1 <= args.concurrency <= 512:
         raise ValueError('Invalid finite rate, duration or concurrency')
     if route not in {'nativeweave-aot-rust', 'direct-rust'}: raise ValueError('Unknown route')
     period = round(1e9 / args.rate)
     # The first dispatch may lag while the final one catches up. Preserve an
     # extra lag allowance, then still require the ACTUAL dispatch span below.
+    # A prospective 1802-second schedule also leaves room for the stricter
+    # post-run ordinary-operation D-C proof; its guard is not duration evidence.
     count = math.ceil((args.duration * 1e9 + profile['timing']['max_dispatch_lag_ns']) / period) + 1
     if count > 1_000_000: raise ValueError('A21 finite observation bound is one million operations')
     if bool(args.certificate) != bool(args.private_key): raise ValueError('Provide both TLS files or neither')

@@ -144,7 +144,11 @@ taskset -c 2,3 python3 tests/Perf01.Protocols/run.py run \
 ```
 
 For HTTP use `--group http`. For the high-load acceptance cell use
-`--duration 1800` and the prospectively selected, stable rate/concurrency. For a
+`--duration 1802` and the prospectively selected, stable rate/concurrency. The
+bounded two-second allowance is a prospective schedule guard, not credited
+duration. The same value must be frozen for both versions. Preparation still
+accepts shorter schedules including 1800 seconds; none qualifies automatically.
+For a
 short ladder prepare independent cells at `(8,1)`, `(16,4)`, `(32,16)`, `(64,32)`
 and `(128,64)`, then extend the rate until observed queueing/error/recovery bounds
 are established. Rates are candidates, not established sustainable capacity.
@@ -231,6 +235,9 @@ The following phases are distinct:
    maximum generator lag (100 ms) and in-flight bound. The scheduled span includes
    a lag guard, and a 30-minute result must still prove the **actual first-to-last
    dispatch span** is at least 1800 seconds. The planned and actual counts are kept.
+   Final Perf-01 acceptance additionally requires the conservative ordinary
+   operation bound below; scheduled time and admission acknowledgements do not
+   establish wire-operation duration.
 3. Thirty-two low-rate recovery calls on the same still-running server/client,
    covering every path again, separately counted and bounded to 60 seconds.
 4. Client closure followed by sixty seconds without load. Request/owner gauges
@@ -247,9 +254,21 @@ remains an observed outcome and fails the predefined service standard.
 
 The prospective common standard is zero unexpected errors, success-arrival p99
 at most 500 ms and application RSS at most 256 MiB, plus both payload budgets,
-successful recovery and owner drain. A `full_30_minute_valid_load` requires both
-the real duration and the service standard. `full_30_minute_completed_duration`
-distinguishes a fully run but failing segment. Partial attempts are retained with
+successful recovery and owner drain. The existing `full_30_minute_valid_load`
+requires the actual dispatch span and service standard;
+`full_30_minute_completed_duration` records that dispatch-span test separately.
+These driver fields are necessary but not sufficient for final long-run
+acceptance. The common post-run verifier must also require `D - C >= 1800 s`,
+where `C` is the controller-observed completion of the first successful ordinary
+measurement operation and `D` is a later successful ordinary operation's last
+controller dispatch-start. Completion follows full response validation, while
+dispatch-start precedes that command's actual wire operation. Thus the interval
+is conservative and excludes the leading completion and trailing call time.
+Frozen oracle tokens exclude `http-cancel`, `grpc-cancel` and `grpc-deadline`
+from both endpoints; they remain checked and counted separately. Controller
+success, matching correct client results, complete load, unchanged SLO/resource
+limits, recovery and owner drain all remain required. The 1802-second schedule
+guard alone cannot satisfy this proof. Partial attempts are retained with
 dispatch journals, raw events, any partial request ledger and supervised process
 outcomes; they never count as completed acceptance.
 

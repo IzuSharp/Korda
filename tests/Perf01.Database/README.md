@@ -139,7 +139,7 @@ taskset -c CPU_A,CPU_B python3 tests/Perf01.Database/run.py \
   --observer /absolute/before-exception-observer/manifest.json \
   --provider sqlite --scenario mixed --stage soak --variant before \
   --continue-classified-overload \
-  --rate FROZEN_RATE --seconds 1800 --concurrency 16 \
+  --rate FROZEN_RATE --seconds 1802 --concurrency 16 \
   --output /absolute/before-sqlite-soak \
   --isolation-note 'Actual exclusive host window; fixed two CPU IDs and no concurrent timing'
 ```
@@ -212,12 +212,24 @@ are not service latency measurements.
 
 ## Duration, evidence and interpretation
 
-A soak schedules just over 1,800 seconds (250-ms guard plus period rounding) and
-requires at least 1,800 seconds between the **actual first and last dispatches**.
-It rejects a late-first-dispatch 1,799-second stage. Warmup, recovery, idle and
-shutdown receive no load-duration credit. Every process must finish normally,
-pass durable oracles and show valid generator accounting; elapsed wall time alone
-cannot make a stage pass.
+Formal Perf-01 before/after soaks prospectively use `--seconds 1802`. The driver
+retains its additional 250-ms scheduling guard and period rounding, and its
+original `actual_dispatch_span_seconds`/`duration_valid` receipt fields. Those
+timestamps are controller dispatch-start observations before command encoding and
+IPC send, not exact socket-send times. Their at-least-1800-second span remains a
+necessary check and rejects a late-first-dispatch 1,799-second stage.
+
+Final acceptance also uses `tests/Perf01/verify_long.py`: the last successful
+ordinary operation's controller dispatch-start minus the earliest successful
+ordinary operation's observed completion must be at least 1800 seconds. Completion
+follows actual business work; the later command's work cannot precede its
+dispatch-start. This gives a conservative real-operation span. The two-second
+schedule guard never assumes a pass. Warmup, recovery, protocol probes, idle and
+shutdown do not extend those endpoints. Every process must finish normally,
+pass independent durable oracles and show complete valid generator accounting,
+the unchanged service/resource limits, recovery and resource drain. A new
+verification receipt supplements the preserved driver result; elapsed wall time
+or a scheduled duration alone cannot make a stage pass.
 
 Each invocation requires a new output directory. It writes frozen source/tool/
 artifact/client/configuration hashes, raw A21 records/events, application and
@@ -229,8 +241,10 @@ failed evidence. Private generated configuration/TLS keys remain local.
 
 `summary.json` separates successful throughput, p50/p95/p99, per-kind counts,
 planned/dispatched load, actual duration and SLO eligibility. CPU/RSS samples
-describe the application process and generator separately; PostgreSQL backend
-resources require the integration profiler. Database execution/lock/pool timing,
+describe the application process and generator separately. PostgreSQL backend
+CPU/RSS time series are unavailable in this timed driver; its PG process-tree
+snapshots establish identity/affinity only. SQLite engine CPU/RSS is included in
+the application process and is not separately attributed. Database execution/lock/pool timing,
 copy bytes and FFI counts remain unavailable in this whole-app adapter. The
 shared-path profiler and layered probes must establish any bottleneck attribution.
 Short-process mean/noise comparisons use A21's existing `noise_comparison` over

@@ -137,6 +137,7 @@ Throws<RequestBindingException>(() => repeated.Get<int>("none"));
 var self = await Execute(app => app.MapRaw("/", ["GET"], async (_, _) => await app.DisposeAsync()));
 Check(self.request.Status == 500 && self.request.Completions == 1, "Self dispose fails without deadlock");
 await self.app.DisposeAsync();
+checks += await JsonBufferAcceptance.RunAsync();
 Console.WriteLine($"B15 managed application component: {checks} assertions passed; fake transport scope, actual B17 acceptance required.");
 
 internal sealed class FakeHost : ServerHost
@@ -153,7 +154,7 @@ internal sealed class FakeHost : ServerHost
 }
 internal sealed class FakeRequest(long route, string method, byte[] input) : HostRequest
 {
-    internal int Status, Heads, Finishes, Completions;
+    internal int Status, Heads, Finishes, Completions, Aborts;
     internal MemoryStream Output { get; } = new();
     private FakeBody? _body;
     internal FakeBody BodyImpl => _body ??= new(this, input);
@@ -177,13 +178,17 @@ internal sealed class FakeRequest(long route, string method, byte[] input) : Hos
     internal override Task CommitHeadersAsync(int status, IReadOnlyDictionary<string, IReadOnlyList<string>> headers, CancellationToken cancellationToken) { Status = status; Heads++; return Task.CompletedTask; }
     internal override Task CommitTrailersAsync(IReadOnlyDictionary<string, IReadOnlyList<string>> trailers, CancellationToken cancellationToken) => Task.CompletedTask;
     internal override Task WriteServerEventAsync(ServerEvent value, CancellationToken cancellationToken) => Task.CompletedTask;
-    internal override void Abort() { }
+    internal override void Abort() { Aborts++; }
     internal override Task CompleteDispatchAsync() { Completions++; BodyImpl.Ended = true; return Task.CompletedTask; }
 }
 internal sealed class FakeBody(FakeRequest request, byte[] input) : ServerBodyTransport
 {
     internal bool Ended;
     internal int CurrentManaged, PeakManaged;
+    internal int ManagedLimit = 4194304;
+    internal int CreditsAcquired, CreditsReleased;
+    internal List<int> CreditRequests { get; } = [];
+    internal Func<ReadOnlyMemory<byte>, CancellationToken, Task>? BeforeWrite;
     private int _offset;
     internal override int MaxChunkBytes => 32768;
     internal override void ThrowIfUnavailable() => ObjectDisposedException.ThrowIf(Ended, this);
@@ -195,11 +200,22 @@ internal sealed class FakeBody(FakeRequest request, byte[] input) : ServerBodyTr
         var chunk = new BodyChunk(new ManagedChunkOwner(input.AsSpan(_offset, count).ToArray(), this)); _offset += count;
         return Task.FromResult<BodyChunk?>(chunk);
     }
-    internal override Task WriteAsync(ReadOnlyMemory<byte> data, CancellationToken cancellationToken) { request.Output.Write(data.Span); return Task.CompletedTask; }
+    internal override Task WriteAsync(ReadOnlyMemory<byte> data, CancellationToken cancellationToken)
+    {
+        if (BeforeWrite is null) { request.Output.Write(data.Span); return Task.CompletedTask; }
+        return WriteObservedAsync(data, cancellationToken);
+    }
+    private async Task WriteObservedAsync(ReadOnlyMemory<byte> data, CancellationToken token)
+    { await BeforeWrite!(data, token); request.Output.Write(data.Span); }
     internal override Task FlushAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     internal override Task FinishAsync(CancellationToken cancellationToken) { request.Finishes++; return Task.CompletedTask; }
     internal override IDisposable AcquireManagedCredit(int capacity)
-    { if (capacity > 4194304 - CurrentManaged) throw new InvalidOperationException("credit exhausted"); CurrentManaged += capacity; PeakManaged = Math.Max(PeakManaged, CurrentManaged); return new Credit(() => CurrentManaged -= capacity); }
+    {
+        CreditRequests.Add(capacity);
+        if (capacity > ManagedLimit - CurrentManaged) throw new InvalidOperationException("credit exhausted");
+        CurrentManaged += capacity; CreditsAcquired++; PeakManaged = Math.Max(PeakManaged, CurrentManaged);
+        return new Credit(() => { CurrentManaged -= capacity; CreditsReleased++; });
+    }
     internal override void CloseRead() { }
     internal override void CloseWrite() { }
     private sealed class Credit(Action release) : IDisposable { public void Dispose() => release(); }
