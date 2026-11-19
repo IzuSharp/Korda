@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net11.0</TargetFramework>
+    <LangVersion>15.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- Existing test-only friend access: no new product API or instrumentation. -->
+    <AssemblyName>NativeWeave.Data.NativeHost.Tests</AssemblyName>
+    <IsAotCompatible>true</IsAotCompatible>
+    <EventSourceSupport>true</EventSourceSupport>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="NativeWeave.Database.Sqlite" Version="[$(NativeWeavePackageVersion)]" />
+    <PackageReference Include="NativeWeave.Database.PostgreSql" Version="[$(NativeWeavePackageVersion)]" />
+  </ItemGroup>
+</Project>
