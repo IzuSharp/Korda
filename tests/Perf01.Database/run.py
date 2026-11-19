@@ -43,13 +43,54 @@ def payload(scenario, index, seed):
     return {"kind": kind, "title": ("perf01-" + str(seed) + "-" + str(index))[:32]} if kind == "cycle" else {"kind": "list", "limit": 100}
 
 
+def dataset_entry(scenario, index, seed):
+    value = payload(scenario, index, seed)
+    encoded = base64.urlsafe_b64encode(json.dumps(value, separators=(",", ":")).encode()).decode()
+    return {"input": encoded, "expected": expected_value(value)}
+
+
 def dataset(scenario, count, seed):
-    result = []
-    for index in range(count):
-        value = payload(scenario, index, seed)
-        encoded = base64.urlsafe_b64encode(json.dumps(value, separators=(",", ":")).encode()).decode()
-        result.append({"input": encoded, "expected": expected_value(value)})
-    return result
+    return [dataset_entry(scenario, index, seed) for index in range(count)]
+
+
+def write_compact_dataset(path, scenario, count, seed):
+    """Exact common.save JSON bytes, with only one generated entry in memory."""
+    temporary = path.with_name(path.name + ".tmp")
+    with temporary.open("x", encoding="utf-8", newline="\n") as stream:
+        stream.write("[")
+        for index in range(count):
+            stream.write(",\n  " if index else "\n  ")
+            stream.write(json.dumps(dataset_entry(scenario, index, seed), indent=2, sort_keys=True).replace("\n", "\n  "))
+        stream.write("\n]\n" if count else "]\n")
+    temporary.replace(path)
+
+
+def load_json_reader():
+    path = ROOT / "tests/Perf01/verify_long.py"
+    spec = importlib.util.spec_from_file_location("perf01_database_json_reader", path)
+    reader = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(reader)
+    return reader
+
+
+def load_compact_observation(path):
+    """Retain only scalar rows used by the unchanged B23 shape validator."""
+    reader = load_json_reader()
+    names = ("valid", "route", "repetition", "invalid_reasons", "hello", "offered", "admitted", "completed",
+             "successful", "outcome_counts", "histograms", "measurement_window_ns", "rates_per_second", "exit_code")
+    metadata = dict.fromkeys(names)
+    selectors = {"histograms": {
+        "arrival_all_outcomes": {"resolution_ns": None, "maximum_ns": None},
+        "arrival_success": {"percentiles_from_exact_samples_ns": None}}}
+    fields = ("id", "scheduled_ns", "dispatch_ns", "admission_ns", "completion_ns", "status")
+    records = []
+    for row in reader.array_records(path, "records", metadata, metadata_selectors=selectors):
+        # Preserve malformed-record failure; only payload graphs are discarded.
+        if not isinstance(row, dict):
+            raise ValueError("Malformed A21 observation: record object required")
+        records.append({key: row[key] for key in fields if key in row})
+    metadata["records"] = records
+    return metadata
 
 
 def observed_resources(path, role=None):
@@ -121,6 +162,8 @@ def prepare(args, output, route, pg):
              DOMAIN / "run.py", DOMAIN / "http_target.py", DOMAIN / "common.py",
              DOMAIN / "cell_worker.py", DOMAIN / "supervision.py", ROOT / "src/Benchmarks.Harness/nativeweave_bench.py",
              ROOT / "tests/Reference.TaskService/golden.py"]
+    if compact_observation:
+        paths.append(ROOT / "tests/Perf01/verify_long.py")
     files = {str(path): digest(path) for path in paths}
     if generator_cpus is not None:
         files[affinity["launcher"]] = digest(Path(affinity["launcher"]))
@@ -136,9 +179,12 @@ def prepare(args, output, route, pg):
         for name in ("localhost.pem", "localhost.private.pem"):
             path = args.package_probe.resolve() / "tls" / name
             files[str(path)] = digest(path)
-    data = dataset(args.scenario, count, args.seed)
     data_path = output / "dataset.json"
-    save(data_path, data)
+    if compact_observation:
+        write_compact_dataset(data_path, args.scenario, count, args.seed)
+    else:
+        data = dataset(args.scenario, count, args.seed)
+        save(data_path, data)
     profile = {"id": "perf01-" + args.scenario, "kind": "list", "rate": args.rate,
                "requests": count, "warmup": args.warmup, "client_concurrency": args.concurrency,
                "cache": "128 fixed ordered seed rows, equivalent new database, warm mappings; new durable mutation keys"}
@@ -181,7 +227,9 @@ def prepare(args, output, route, pg):
     # A21's command-level comparative schema demands all three routes. This is
     # explicitly one scoped cell; run_cell never claims
     # unexecuted route/cohort acceptance. Artifact/oracle checks still run here.
-    check_files(target["artifacts"]); check_files(target["lock_hashes"]); a21.Oracle(plan, output)
+    check_files(target["artifacts"]); check_files(target["lock_hashes"])
+    a21.Oracle(plan, output, canonicalize_expected=compact_observation,
+               expected_values_reader=load_json_reader().array_records if compact_observation else None)
     save(output / "plan.json", plan)
     frozen = {"task": "Perf-01", "stage": args.stage, "variant": args.variant, "created_utc": utc(),
               "driver_source": source_identity(ROOT), "source_files": files, "route": route,
@@ -244,7 +292,7 @@ async def execute_cell(args, output, plan, frozen):
                "finished_utc": utc(), "valid": False, "qualifies_service_standard": False,
                "supervision": receipt["status"], "frozen_inputs_sha256": digest(output / "frozen-inputs.json")}
     if receipt["status"] == "completed" and (output / "observation.json").exists():
-        row = load(output / "observation.json")
+        row = load_compact_observation(output / "observation.json") if frozen.get("compact_observation", False) else load(output / "observation.json")
         domain.validate_observation(row, args.route, args.repetition, plan["timing"]["requests"], load_a21())
         directory = Path(row["hello"]["receipt_directory"])
         app = load(directory / "receipt.json")

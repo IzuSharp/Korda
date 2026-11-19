@@ -2,8 +2,8 @@
 
 Status: harness preparation. No measured result or completed long stage is
 established by these files. Product behavior and packages are not modified here.
-The explicitly selected compact-observation mode below changes only how the
-external A21 controller retains validated result objects during measurement.
+The explicitly selected compact-observation mode below changes only the external
+controller's preparation, retention and evidence serialization.
 
 ## Measured path
 
@@ -154,25 +154,28 @@ The comparator path retains its narrower B23 cleanup/capability caveats.
 
 ### Optional compact observation
 
-`--compact-observation` explicitly selects two external-controller changes on
+`--compact-observation` explicitly selects the external-controller changes below on
 all routes of a new Perf-01 DB cohort. Without the flag, A21 and its direct
 `RunState` callers retain the original behavior. The flag is recorded in the
 target manifest, plan features and frozen inputs, and passed to the existing
 supervised cell worker. It must match before/after/direct/managed cells; old
 driver hashes or calibration cells cannot be silently rebound to this mode.
 
-Before target startup and timing, identical JSON expected results share their
-read-only oracle value. Input tokens, dataset bytes/hash and live equality checks
-are unchanged. The temporary cache permits at most 1024 unique keys and 4 MiB of
-key bytes, with at most 64 KiB/key, 4096 traversal nodes and depth 64. Values that
-exceed a bound keep their independent objects. This reduces the retained graph;
-the original dataset still has to be parsed in full before measurement.
+Before target startup and timing, the dataset is generated incrementally with
+the same formatted JSON bytes as the original list writer. The existing bounded
+JSON-array reader loads each entry, validates it, and shares identical read-only
+expected results before appending the entry to the oracle. All entries are still
+validated before measurement; input tokens, dataset hash and live equality checks
+are unchanged. The temporary sharing cache permits at most 1024 unique keys and
+4 MiB of key bytes, with at most 64 KiB/key, 4096 traversal nodes and depth 64.
+Values that exceed a bound keep their independent objects. The reader source is
+part of the frozen input hashes and calibration-controller pins.
 
 During timing, every completion is parsed, ordered, checked against the oracle
 and counter schema, and accepted or rejected by the original rules. The
 controller retains scalar operation state, observer timestamps, one last-counter
 snapshot, a byte flag and an int64 raw-line index per scheduled operation.
-Per-record result/counter objects and full late-event payloads are restored only
+Per-record result/counter objects and full late-event payloads are read again only
 after target/reader/sampler drain and after the original measurement endpoint is
 fixed. Replay matches the accepted ID, observer timestamp and raw-line index;
 same-timestamp duplicates cannot replace an accepted result. An incremental
@@ -180,16 +183,44 @@ SHA-256 of the exact live-written UTF-8 log binds replay to the original bytes;
 changing a valid counter, failed result or late status cannot pass by retaining
 the same event identity. Malformed and
 unaccepted records are skipped. Missing or invalid accepted payloads fail the
-cell. Complete result fields, late metadata and exact raw wire bytes remain in
-the final evidence.
+cell. The streamed finalizer first exhausts these checks and builds a finite
+offset/length/per-line-digest index. It then writes reconstructed rows in original
+ID order and late events in original arrival order, with bounded per-row formatted
+emission. Metadata and resource arrays use incremental JSON encoding. Per-line
+digests protect indexed reads; a second whole-raw-file digest check includes all
+unaccepted and malformed bytes before the temporary observation is atomically
+published. A failed check cannot publish a final observation. Replay and output
+are each one-shot, including failed attempts.
+
+The complete on-disk observation retains the original schema, values, key order,
+pretty JSON bytes and exact raw wire evidence. Only this opt-in worker asks A21
+to return scalar in-memory records after writing the complete file; default A21
+callers and the original full-rehydration helper keep their full return objects.
+The profiling receipt labels that distinction explicitly. The DB parent streams
+the observation and keeps the scalar fields used by the unchanged B23 shape
+validator and Perf-01 summary calculations. It skips histogram bins structurally
+while retaining their scale and the exact saved percentiles.
+
+Memory remains finite and proportional to operation count: scheduled scalar
+records, oracle input entries, timestamp/histogram work and resource samples are
+retained. The post-window index adds offsets, lengths, digests and late IDs. This
+is not constant-memory execution or a measured upper bound on finalization RSS.
+Iteration can briefly retain the prior row while decoding the next; the claim is
+bounded per-row payload emission, not exactly one live payload allocation.
 
 Replay can increase post-window CPU/RSS and serialization time. Those costs are
 not reported as application CPU or included in an operation latency/window.
 This mode does not disable or force GC, change a GC threshold, alter an arrival,
 deadline, capacity limit, correctness oracle, or database/application setting.
 It is a measurement-tool candidate, not a product performance improvement.
-Run the finite A21 equivalence gates and repeat the diagnostic/calibration with
-fresh source hashes before freezing any formal DB cohort.
+Run the finite A21 and compact parent gates, then repeat the diagnostic/calibration
+with fresh source hashes before freezing any formal DB cohort:
+
+```sh
+python3 -m unittest discover -s tests/Benchmarks.Harness -v
+python3 tests/Perf01.Database/test_streaming.py -v
+python3 tests/Perf01/test_verify_long.py -v
+```
 
 ### Optional generator CPU isolation
 

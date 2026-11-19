@@ -1,9 +1,8 @@
 # Perf-01 A21 generator profiling
 
-Status: source-prepared diagnostic launcher. Root and the independent codec-domain
-reviewer reported no source blocker. No syntax check, finite fixture, application
-or profiling execution is claimed yet. Use only in root's separate exclusive
-execution window; the independent reviewer ran no tests or workloads.
+This file describes the diagnostic launcher; actual execution, source identities
+and finite-test receipts are recorded separately in the Perf-01 Plan evidence.
+Use only in the integration owner's separate exclusive execution window.
 
 `profile_a21_generator.py` runs the existing Perf-01 DB driver and its ordinary
 PostgreSQL supervisor, package consumer, exception observer, HTTP target,
@@ -21,6 +20,11 @@ The source-defined hooks record:
   1 ms and GC events are retained in bounded numeric buffers, capped at 20,000
   records each, with explicit dropped-record counts. No extra diagnostic file
   write occurs in a load hook.
+- Linux scheduler-process RSS high water from `getrusage(RUSAGE_SELF).ru_maxrss`,
+  converted from KiB to bytes. It covers the whole process lifetime through
+  completion/failure, including preparation, load and post-window finalization.
+  The snapshot precedes graph introspection and receipt serialization. It is not
+  a per-phase peak, application RSS, or a reconstruction of missing old peaks.
 - After `run_cell` returns, retained-result container cardinalities and one
   `gc.get_objects(generation)` count for each generation. The returned result
   and RunState/Oracle stay referenced through this post-run snapshot. The first
@@ -35,9 +39,15 @@ The source-defined hooks record:
 
 The diagnostic wrapper forwards an explicitly supplied `--compact-observation`
 unchanged. Its raw-file write wrapper applies only to writing; post-window replay
-reads the ordinary file. Replay gets the distinct
-`post-window-completion-replay` phase label, so its GC/JSON work cannot be
-mistaken for a measured event-loop pause. A fresh compact diagnostic must use a
+reads the ordinary file. The legacy full replay gets the distinct
+`post-window-completion-replay` phase label; the opt-in disk-index writer uses
+`post-window-streamed-finalization`. These labels include subsequent result
+construction/serialization until `run_cell` returns, not just the named helper.
+The compact worker's returned records contain only scalar state; its complete
+accepted values/counters and late events remain in the published observation.
+The receipt records this return/disk distinction, so retained-return cardinalities
+must not be mistaken for missing on-disk evidence. Post-window GC/JSON work cannot
+be mistaken for a measured event-loop pause. A fresh compact diagnostic must use a
 new output directory and newly captured source hashes; retain the earlier full-
 retention profile and its invalid generator verdict.
 

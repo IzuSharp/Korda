@@ -14,6 +14,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import resource
 import runpy
 import sys
 import time
@@ -128,6 +129,9 @@ class Diagnostics:
     def finish(self, status, error=None):
         if self.callback in gc.callbacks:
             gc.callbacks.remove(self.callback)
+        worker_high_water = {"bytes": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024,
+            "method": "Linux resource.getrusage(RUSAGE_SELF).ru_maxrss, KiB multiplied by 1024",
+            "scope": "Whole scheduler process lifetime through run_cell completion/failure, including preparation, load and post-window finalization; sampled before post-run graph introspection and receipt serialization; not a per-phase or application RSS peak"}
         self.phase = "post-run-introspection"
         entries = getattr(getattr(self.retained_state, "oracle", None), "entries", None)
         oracle = {"availability": "unavailable", "reason": "No retained expected-value Oracle"}
@@ -156,6 +160,7 @@ class Diagnostics:
                        gc_callback_incomplete=self.gc_start, methods=self.methods, generations=self.generations,
                        slow_call_records_dropped=self.call_dropped, gc_records_dropped=self.collection_dropped,
                        tracked_objects_after_run=graph, retained_result_shape=self.result_shape, retained_oracle_shape=oracle,
+                       worker_rss_high_water=worker_high_water,
                        tracked_graph_scope="len(gc.get_objects(generation)) once after the worker run while the original returned result and RunState/Oracle are retained; enumeration allocates temporary lists and is not a during-load sample",
                        gc_count_scope="gc.get_count reports allocation/collection counters, not the number of live tracked objects",
                        final_gc_stats_scope="gc_count_after/gc_stats_after include post-run introspection after this profiler's callback was removed; use gc_events for the observed callback intervals",
@@ -233,7 +238,8 @@ class Diagnostics:
                 "records": len(rows), "records_with_target_counters": sum("target_counters" in row for row in rows),
                 "retained_target_counter_entries": sum(len(row.get("target_counters", {})) for row in rows),
                 "records_with_normalized_value": sum("value" in row for row in rows), "resource_samples": len(result.get("resource_samples", [])),
-                "scope": "Container cardinalities of the retained result immediately after run_cell; not allocated bytes or unique-object counts"}
+                "streamed_observation_return": result.get("streamed_observation_return"),
+                "scope": "Container cardinalities of the retained return immediately after run_cell; streamed mode retains scalar rows while full accepted payloads remain on disk; not allocated bytes or unique-object counts"}
             return result
 
         a21.json = JsonProxy()
@@ -246,6 +252,14 @@ class Diagnostics:
                 return original_rehydrate(state, *args, **kwargs)
 
             a21.RunState.rehydrate_completion_payloads = rehydrate
+        if hasattr(a21.RunState, "index_completion_payloads"):
+            original_index = a21.RunState.index_completion_payloads
+
+            def index(state, *args, **kwargs):
+                diagnostics.phase = "post-window-streamed-finalization"
+                return original_index(state, *args, **kwargs)
+
+            a21.RunState.index_completion_payloads = index
         a21.observe_process = lambda *args, **kwargs: diagnostics.call("observe_process", original_observe, *args, **kwargs)
         a21.run_cell = run_cell
 
@@ -316,7 +330,8 @@ def launch(args):
     driver = import_driver()
     original_prepare, original_supervised = driver.prepare, driver.supervised_command
     marker = {"task": "Perf-01", "formal_timing_eligible": False, "status": "starting", "started": anchor(), "python": python,
-              "source_files": {str(path): sha(path) for path in (Path(__file__), HERE / "run.py", DOMAIN / "cell_worker.py", ROOT / "src/Benchmarks.Harness/nativeweave_bench.py")},
+              "source_files": {str(path): sha(path) for path in (Path(__file__), HERE / "run.py", DOMAIN / "cell_worker.py",
+                  ROOT / "src/Benchmarks.Harness/nativeweave_bench.py", ROOT / "tests/Perf01/verify_long.py")},
               "driver_arguments": command, "profile_scope": "Existing application load with instrumented child A21 generator; no GC policy change"}
     launcher_receipt = output.with_name(output.name + "-launcher.json")
     require(not launcher_receipt.exists(), "Launcher receipt already exists")

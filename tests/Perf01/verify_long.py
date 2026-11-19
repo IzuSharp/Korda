@@ -113,8 +113,29 @@ class JsonStream:
                 self.take(",")
         self.take("]")
 
+    def selected_object(self, selection):
+        """Read explicit small metadata fields while skipping large siblings."""
+        require(isinstance(selection, dict), "Metadata projection must be an object")
+        result = {}
+        self.take("{")
+        while self.peek() != "}":
+            name = self.value()
+            require(isinstance(name, str), "JSON object key is not a string")
+            self.take(":")
+            if name in selection:
+                nested = selection[name]
+                result[name] = self.selected_object(nested) if isinstance(nested, dict) else self.value()
+            else:
+                self.skip()
+            if self.peek() == "}":
+                break
+            self.take(",")
+            require(self.peek() != "}", "Trailing comma in streamed JSON object")
+        self.take("}")
+        return result
 
-def array_records(path, key=None, metadata=None):
+
+def array_records(path, key=None, metadata=None, *, metadata_selectors=None):
     with path.open(encoding="utf-8") as stream:
         reader = JsonStream(stream)
         if key is None:
@@ -131,12 +152,13 @@ def array_records(path, key=None, metadata=None):
                     found = True
                     yield from reader.array()
                 elif metadata is not None and name in metadata:
-                    metadata[name] = reader.value()
+                    metadata[name] = reader.selected_object(metadata_selectors[name]) if metadata_selectors is not None and name in metadata_selectors else reader.value()
                 else:
                     reader.skip()
                 if reader.peek() == "}":
                     break
                 reader.take(",")
+                require(reader.peek() != "}", "Trailing comma in streamed JSON object")
             reader.take("}")
             require(found, "Missing measurement ledger")
         require(reader.peek() == "", "Trailing evidence after JSON document")

@@ -9,11 +9,15 @@ from pathlib import Path
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location("bench", ROOT / "src/Benchmarks.Harness/nativeweave_bench.py")
 bench = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(bench)
+reader_spec = importlib.util.spec_from_file_location("perf01_stream_reader", ROOT / "tests/Perf01/verify_long.py")
+reader = importlib.util.module_from_spec(reader_spec)
+reader_spec.loader.exec_module(reader)
 
 
 def counters():
@@ -145,7 +149,7 @@ class CompactObservationTests(unittest.TestCase):
                 "last_admission_observed_ns": state.last_admission_observed_ns,
                 "in_flight": sorted(state.in_flight), "deadlines": state.deadlines}
 
-    def exercise(self, trace, count, root, mutate_raw=None, rebind_digest=False):
+    def exercise(self, trace, count, root, mutate_raw=None, rebind_digest=False, streamed=False):
         ordinary = bench.RunState(count)
         compact = bench.RunState(count, compact_completion_payloads=True)
         for state in (ordinary, compact):
@@ -180,6 +184,19 @@ class CompactObservationTests(unittest.TestCase):
         expected_digest = hashlib.sha256(("\n".join(raw) + "\n").encode()).hexdigest()
         path.write_text("\n".join(mutate_raw(raw) if mutate_raw else raw) + "\n")
         before_hash = bench.sha256(path)
+        if streamed:
+            index = compact.index_completion_payloads(path, expected_sha256=before_hash if rebind_digest else expected_digest)
+            output = root / "observation.json"
+            expected = {"records": ordinary.records, "late_events": ordinary.late_events, "last_target_counters": ordinary.last_counters,
+                        "resource_samples": [{"nested": [1, {"unicode": "雪"}]}], "histograms": {"bins": {"1000": 2}}}
+            actual = {**expected, "records": compact.records, "late_events": compact.late_events}
+            bench.write_streamed_observation(output, actual, index)
+            self.assertEqual(json.dumps(expected, indent=2) + "\n", output.read_text())
+            self.assertEqual(snapshot, self.visible(compact, False))
+            self.assertTrue(all("target_counters" not in row and "value" not in row for row in compact.records))
+            with self.assertRaisesRegex(ValueError, "one-shot"):
+                bench.write_streamed_observation(root / "again.json", actual, index)
+            return ordinary, compact, failures
         compact.rehydrate_completion_payloads(path, expected_sha256=before_hash if rebind_digest else expected_digest)
         self.assertEqual(before_hash, bench.sha256(path))
         self.assertEqual(snapshot, self.visible(compact, False))
@@ -334,9 +351,66 @@ class CompactObservationTests(unittest.TestCase):
         self.assertIsNot(entries[3]["expected"], entries[4]["expected"])
         self.assertIsNot(entries[5]["expected"], entries[6]["expected"])
 
+    def test_streamed_file_matches_full_rows_late_order_and_unicode_exactly(self):
+        trace = [("event", 2, {"kind": "admitted", "id": 0}),
+                 ("event", 3, {"kind": "admitted", "id": 1}),
+                 ("event", 10, self.completed(1)), ("event", 11, self.completed(0)),
+                 ("event", 11, self.completed(0)), ("event", 12, b"not-json\n"),
+                 ("expire", 110, None),
+                 ("event", 120, self.completed(3, "failed", value={"unicode": "雪" * 1000}, extra=[1, 2])),
+                 ("event", 121, self.completed(2, "rejected", value=None))]
+        with tempfile.TemporaryDirectory() as temporary:
+            self.exercise(trace, 5, Path(temporary), streamed=True)
+
+    def test_streamed_missing_or_modified_raw_never_publishes_final_output(self):
+        for mode in ("missing", "wrong-digest", "changed-indexed", "changed-unaccepted"):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary); raw = root / "events.jsonl"; output = root / "observation.json"
+                state = bench.RunState(1, compact_completion_payloads=True)
+                state.records[0].update(scheduled_ns=0, dispatch_ns=1, admission_ns=2)
+                event = self.completed(0); wire = (json.dumps(event) + "\n").encode()
+                line = json.dumps({"observed_ns": 3, "wire_base64": base64.b64encode(wire).decode()}) + "\n"
+                tail = "malformed-tail\n"
+                raw.write_text(line + tail)
+                expected = bench.sha256(raw)
+                state.event(event, 3, raw_event_index=0)
+                if mode == "missing": raw.write_text(tail)
+                if mode in ("missing", "wrong-digest"):
+                    with self.assertRaises(ValueError):
+                        state.index_completion_payloads(raw, expected_sha256="0" * 64 if mode == "wrong-digest" else expected)
+                    with self.assertRaisesRegex(ValueError, "fresh compact"):
+                        state.index_completion_payloads(raw, expected_sha256=bench.sha256(raw))
+                else:
+                    index = state.index_completion_payloads(raw, expected_sha256=expected)
+                    raw.write_text(line.replace('"observed_ns": 3', '"observed_ns": 4') + tail if mode == "changed-indexed" else line + "changed-tail!!\n")
+                    with self.assertRaisesRegex(ValueError, "changed"):
+                        bench.write_streamed_observation(output, {"records": state.records, "late_events": []}, index)
+                self.assertFalse(output.exists())
+
+    def test_streaming_oracle_canonicalizes_before_accumulation_and_keeps_input_gates(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary); path = root / "oracle.json"
+            entries = [{"input": str(i), "expected": {"page": ["row"] * 20}} for i in range(4)]
+            path.write_text(json.dumps(entries))
+            plan = {"timing": {"requests": 4}, "oracle": {"kind": "expected-values", "dataset": path.name, "sha256": bench.sha256(path)}}
+            with patch.object(Path, "read_text", side_effect=AssertionError("Whole oracle read is forbidden")):
+                oracle = bench.Oracle(plan, root, canonicalize_expected=True, expected_values_reader=reader.array_records)
+            self.assertEqual(entries, oracle.entries)
+            self.assertEqual(1, len({id(entry["expected"]) for entry in oracle.entries}))
+            self.assertEqual(3, oracle.expected_canonicalization["reused_entries"])
+            for bad in (entries[:3], entries + [entries[0]], [{"input": "bad\n", "expected": {}}] * 4,
+                        [{"input": True, "expected": {}}] * 4, [{"input": "missing"}] * 4):
+                path.write_text(json.dumps(bad)); plan["oracle"]["sha256"] = bench.sha256(path)
+                with self.assertRaises((ValueError, TypeError)):
+                    bench.Oracle(plan, root, canonicalize_expected=True, expected_values_reader=reader.array_records)
+            for suffix in (" trailing", " []"):
+                path.write_text(json.dumps(entries) + suffix); plan["oracle"]["sha256"] = bench.sha256(path)
+                with self.assertRaises(ValueError):
+                    bench.Oracle(plan, root, canonicalize_expected=True, expected_values_reader=reader.array_records)
+
 
 class ProcessTests(unittest.IsolatedAsyncioTestCase):
-    async def fixture(self, fault=None, requests=4, max_in_flight=8, lag=100_000_000, compact=False):
+    async def fixture(self, fault=None, requests=4, max_in_flight=8, lag=100_000_000, compact=False, streamed=False):
         with tempfile.TemporaryDirectory(prefix="nw-a21-") as temporary:
             base = Path(temporary)
             source = base / "target.py"
@@ -362,8 +436,15 @@ for line in sys.stdin:
                     "faults": fault or {}}
             route = {"id": "managed-aot", "command": [sys.executable, str(source), str(ROOT / "src/Benchmarks.Harness/nativeweave_bench.py")], "artifacts": {}}
             options = {"compact_completion_payloads": True, "canonicalize_expected": True} if compact else {}
+            if streamed:
+                options.update(stream_compact_output=True, expected_values_reader=reader.array_records)
             result = await bench.run_cell(plan, route, 0, base, base / "result.json", **options)
             self.assertTrue((base / "result.json").exists())
+            if streamed:
+                self.assertTrue(all("target_counters" not in row and "value" not in row for row in result["records"]))
+                self.assertEqual(requests, result["streamed_observation_return"]["records_written"])
+                result = json.loads((base / "result.json").read_text())
+                self.assertNotIn("streamed_observation_return", result)
             result["test_raw_lines"] = [json.loads(line) for line in (base / result["raw_events"]["path"]).read_text().splitlines()]
             return result
 
@@ -425,6 +506,19 @@ for line in sys.stdin:
         self.assertGreaterEqual(result["measurement_window_ns"]["end"], result["late_events"][0]["observed_ns"])
         self.assertAlmostEqual(1e9 / result["measurement_window_ns"]["elapsed"], result["rates_per_second"]["completed"])
         self.assertLess(result["rates_per_second"]["completed"], 15)
+
+    async def test_streamed_process_publishes_full_schema_and_preserves_invalid_outcomes(self):
+        for faults, count in (({}, 2), ({"0": "late"}, 1), ({"0": "corrupt"}, 4), ({"0": "malformed"}, 4)):
+            result = await self.fixture(faults, requests=count, compact=True, streamed=True)
+            if not faults:
+                self.assertTrue(result["valid"], result["invalid_reasons"])
+                self.assertEqual([1, 2], [row["target_counters"]["managed_allocated_bytes"]["value"] for row in result["records"]])
+            elif faults["0"] == "late":
+                self.assertEqual("timeout", result["records"][0]["status"])
+                self.assertEqual(1, len(result["late_events"]))
+            else:
+                self.assertFalse(result["valid"])
+                self.assertIn("cancelled", result["outcome_counts"])
 
 
 if __name__ == "__main__":

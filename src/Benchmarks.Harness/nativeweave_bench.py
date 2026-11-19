@@ -165,23 +165,43 @@ def canonicalize_expected_values(entries, *, max_unique=1024, max_cache_bytes=4 
 class Oracle:
     """A fixture oracle or immutable domain input/expected-value dataset supplied by B23."""
 
-    def __init__(self, plan, base, *, canonicalize_expected=False):
+    def __init__(self, plan, base, *, canonicalize_expected=False, expected_values_reader=None):
         definition = plan.get("oracle", {"kind": "scalar-mix64"})
         self.entries = None
         if definition["kind"] == "expected-values":
             path = (base / definition["dataset"]).resolve()
             if sha256(path) != definition["sha256"]:
                 raise ValueError("Functional oracle dataset hash mismatch")
-            self.entries = json.loads(path.read_text())
-            if not isinstance(self.entries, list) or len(self.entries) != plan["timing"]["requests"]:
-                raise ValueError("Expected-value dataset must cover every scheduled request")
-            for entry in self.entries:
+            def validate_entry(entry):
                 if "expected" not in entry or type(entry.get("input")) not in {str, int}:
                     raise ValueError("Oracle entries require an input token and expected result")
                 if any(character in str(entry["input"]) for character in "\t\r\n"):
                     raise ValueError("Input tokens cannot contain line-protocol separators")
-            if canonicalize_expected:
-                self.expected_canonicalization = canonicalize_expected_values(self.entries)
+
+            if canonicalize_expected and expected_values_reader is not None:
+                self.entries = []
+
+                def entries():
+                    for entry in expected_values_reader(path):
+                        if len(self.entries) >= plan["timing"]["requests"]:
+                            raise ValueError("Expected-value dataset must cover every scheduled request")
+                        validate_entry(entry)
+                        # The cache mutates this entry before requesting the
+                        # next item. Append only the already shared value.
+                        yield entry
+                        self.entries.append(entry)
+                    if len(self.entries) != plan["timing"]["requests"]:
+                        raise ValueError("Expected-value dataset must cover every scheduled request")
+
+                self.expected_canonicalization = canonicalize_expected_values(entries())
+            else:
+                self.entries = json.loads(path.read_text())
+                if not isinstance(self.entries, list) or len(self.entries) != plan["timing"]["requests"]:
+                    raise ValueError("Expected-value dataset must cover every scheduled request")
+                for entry in self.entries:
+                    validate_entry(entry)
+                if canonicalize_expected:
+                    self.expected_canonicalization = canonicalize_expected_values(self.entries)
         elif definition["kind"] != "scalar-mix64":
             raise ValueError("Unsupported functional oracle")
 
@@ -438,17 +458,8 @@ class RunState:
         if not self._compact_completion_payloads:
             row["value"] = event.get("value")
 
-    def rehydrate_completion_payloads(self, raw_path, *, expected_sha256):
-        """Restore only live-accepted completions after the timing window.
-
-        Match the persisted raw-line ordinal, ID and observer timestamp. Raw
-        admissions, rejected/duplicate events and malformed lines are skipped;
-        every accepted completion must be recovered or the cell fails. The
-        entire file must also match the digest accumulated from the exact
-        persisted bytes during live observation. The
-        finite stream reader admits at most 65536 bytes per target line, so a
-        128 KiB envelope bound covers every accepted base64 record.
-        """
+    def _accepted_completion_payloads(self, raw_path, expected_sha256):
+        """One-shot bounded raw replay; consumers must exhaust the digest gate."""
         if not self._compact_completion_payloads or self._payload_replay_attempted:
             raise ValueError("Completion payload replay requires a fresh compact state")
         if not isinstance(expected_sha256, str) or len(expected_sha256) != 64 or any(c not in "0123456789abcdef" for c in expected_sha256):
@@ -461,7 +472,11 @@ class RunState:
         limit = 128 * 1024
         with raw_path.open("rb") as stream:
             index = -1
-            while line := stream.readline(limit + 1):
+            while True:
+                offset = stream.tell()
+                line = stream.readline(limit + 1)
+                if not line:
+                    break
                 index += 1
                 replay_digest.update(line)
                 if len(line) > limit:
@@ -492,30 +507,140 @@ class RunState:
                     validate_counters(event["counters"])
                 except (ValueError, KeyError, TypeError, OverflowError, RecursionError):
                     continue
-                # Restore the original insertion order as well as values.
-                replacement = {}
-                for key, value in row.items():
-                    if key == "target_completion_observed_ns":
-                        replacement["target_counters"] = event["counters"]
-                    replacement[key] = value
-                if kind == 1:
-                    replacement["value"] = event.get("value")
-                else:
-                    self.late_events.append({"observed_ns": envelope["observed_ns"], "event": event})
-                row.clear()
-                row.update(replacement)
                 restored[identifier] = 1
+                yield identifier, kind, event, envelope["observed_ns"], offset, len(line), hashlib.sha256(line).digest()
         if replay_digest.hexdigest() != expected_sha256:
             raise ValueError("Preserved raw events differ from the live observation digest")
         if sum(restored) != len(self.seen_completion):
             raise ValueError("Accepted completion payload missing or invalid in preserved raw events")
 
 
+    def _record_with_payload(self, identifier, event):
+        """A single restored copy, preserving the original record key order."""
+        row = self.records[identifier]
+        replacement = {}
+        for key, value in row.items():
+            if key == "target_completion_observed_ns":
+                replacement["target_counters"] = event["counters"]
+            replacement[key] = value
+        if self._completion_payload_kind[identifier] == 1:
+            replacement["value"] = event.get("value")
+        return replacement
+
+    def rehydrate_completion_payloads(self, raw_path, *, expected_sha256):
+        """Restore full rows for existing compact callers; defaults unchanged.
+
+        Ordinal/ID/time, live validation, entire raw digest, accepted coverage
+        and one-shot failure behavior match the streamed finalization path.
+        """
+        for identifier, kind, event, observed, *_ in self._accepted_completion_payloads(raw_path, expected_sha256):
+            replacement = self._record_with_payload(identifier, event)
+            if kind == 2:
+                self.late_events.append({"observed_ns": observed, "event": event})
+            self.records[identifier].clear()
+            self.records[identifier].update(replacement)
+
+    def index_completion_payloads(self, raw_path, *, expected_sha256):
+        """Index validated disk payloads without retaining their object graphs."""
+        if not self._compact_completion_payloads or self._payload_replay_attempted:
+            raise ValueError("Completion payload replay requires a fresh compact state")
+        return CompletionPayloadIndex(self, raw_path, expected_sha256)
+
+
+class CompletionPayloadIndex:
+    """Finite scalar index; at most one decoded accepted payload is emitted."""
+
+    def __init__(self, state, path, expected_sha256):
+        self.state, self.path, self.expected_sha256 = state, path, expected_sha256
+        count = len(state.records)
+        self.offsets = array("q", [-1]) * count
+        self.lengths = array("I", [0]) * count
+        self.digests = bytearray(count * 32)
+        self.late_ids = array("I")
+        self.write_attempted = False
+        # Exhaustion proves full raw digest and accepted coverage BEFORE a
+        # final result file can be opened or published.
+        for identifier, kind, event, observed, offset, length, digest in state._accepted_completion_payloads(path, expected_sha256):
+            self.offsets[identifier], self.lengths[identifier] = offset, length
+            self.digests[identifier * 32:(identifier + 1) * 32] = digest
+            if kind == 2:
+                self.late_ids.append(identifier)
+
+    def event(self, stream, identifier):
+        stream.seek(self.offsets[identifier])
+        line = stream.read(self.lengths[identifier])
+        if hashlib.sha256(line).digest() != self.digests[identifier * 32:(identifier + 1) * 32]:
+            raise ValueError("Indexed raw completion changed before streamed emission")
+        envelope = json.loads(line)
+        event = json.loads(base64.b64decode(envelope["wire_base64"], validate=True))
+        if event.get("id") != identifier or envelope["observed_ns"] != self.state.records[identifier]["target_completion_observed_ns"]:
+            raise ValueError("Indexed raw completion identity differs")
+        return event
+
+    def records(self, stream):
+        for identifier, row in enumerate(self.state.records):
+            yield self.state._record_with_payload(identifier, self.event(stream, identifier)) if self.offsets[identifier] >= 0 else row
+
+    def late_events(self, stream):
+        for identifier in self.late_ids:
+            yield {"observed_ns": self.state.records[identifier]["target_completion_observed_ns"],
+                   "event": self.event(stream, identifier)}
+
+
+class _IndentedJsonWriter:
+    def __init__(self, stream, indentation):
+        self.stream, self.indentation = stream, indentation
+
+    def write(self, text):
+        return self.stream.write(text.replace("\n", "\n" + self.indentation))
+
+
+def write_streamed_observation(output, result, payloads):
+    """Atomically publish the original pretty JSON without a full payload graph."""
+    if payloads.write_attempted:
+        raise ValueError("Streamed observation emission is one-shot")
+    payloads.write_attempted = True
+    if output.exists():
+        raise ValueError("Streamed observation output must be new")
+    partial = output.with_name(output.name + ".partial")
+
+    def write_records(stream, rows):
+        stream.write("[")
+        seen = False
+        for row in rows:
+            stream.write(",\n    " if seen else "\n    ")
+            # One bounded event/row only; never join the complete observation.
+            stream.write(json.dumps(row, indent=2).replace("\n", "\n    "))
+            seen = True
+        stream.write("\n  ]" if seen else "]")
+
+    with payloads.path.open("rb") as raw, partial.open("x", encoding="utf-8", newline="\n") as stream:
+        stream.write("{\n")
+        for position, (name, value) in enumerate(result.items()):
+            if position:
+                stream.write(",\n")
+            stream.write("  " + json.dumps(name) + ": ")
+            if name == "records":
+                write_records(stream, payloads.records(raw))
+            elif name == "late_events":
+                write_records(stream, payloads.late_events(raw))
+            else:
+                json.dump(value, _IndentedJsonWriter(stream, "  "), indent=2)
+        stream.write("\n}\n")
+    # Per-row hashes protect random-access reads; the final full digest also
+    # covers unaccepted/malformed raw records that are absent from the output.
+    if sha256(payloads.path) != payloads.expected_sha256:
+        raise ValueError("Preserved raw events changed during streamed emission")
+    partial.replace(output)
+
+
 async def run_cell(plan, route, repetition, base, output, *, compact_completion_payloads=False,
-                   canonicalize_expected=False):
+                   canonicalize_expected=False, expected_values_reader=None, stream_compact_output=False):
     """One fresh process per cell; dispatch scheduling never awaits responses."""
     timing = plan["timing"]
-    oracle = Oracle(plan, base, canonicalize_expected=canonicalize_expected)
+    if stream_compact_output and not compact_completion_payloads:
+        raise ValueError("Streamed observation requires explicit compact completion retention")
+    oracle = Oracle(plan, base, canonicalize_expected=canonicalize_expected, expected_values_reader=expected_values_reader)
     state = RunState(timing["requests"], oracle, compact_completion_payloads=compact_completion_payloads)
     command = list(route["command"])
     command[0] = str((base / command[0]).resolve())
@@ -640,11 +765,15 @@ async def run_cell(plan, route, repetition, base, output, *, compact_completion_
         observation_end = max(max(row["completion_ns"] for row in state.records),
                               state.last_completion_observed_ns or origin, state.last_admission_observed_ns or origin)
         elapsed = observation_end - origin
+        payload_index = None
         if compact_completion_payloads:
             # The target, reader and sampler have stopped. Replay cannot extend
             # any recorded operation/window timestamp or enter resource samples.
             raw_events.flush()
-            state.rehydrate_completion_payloads(raw_path, expected_sha256=raw_digest.hexdigest())
+            if stream_compact_output:
+                payload_index = state.index_completion_payloads(raw_path, expected_sha256=raw_digest.hexdigest())
+            else:
+                state.rehydrate_completion_payloads(raw_path, expected_sha256=raw_digest.hexdigest())
         histograms = {}
         for label, start, end, success_only in [
                 ("arrival_all_outcomes", "scheduled_ns", "completion_ns", False),
@@ -672,7 +801,15 @@ async def run_cell(plan, route, repetition, base, output, *, compact_completion_
                   "cleanup": cleanup, "stderr": stderr, "exit_code": process.returncode,
                   "clock_scope": "one controller monotonic clock; admission event observed over IPC",
                   "target_artifacts": route["artifacts"], "instrumentation": plan["settings"]["instrumentation"]}
-        output.write_text(json.dumps(result, indent=2) + "\n")
+        if stream_compact_output:
+            write_streamed_observation(output, result, payload_index)
+            # The cell worker ignores this return. Explicit streamed callers
+            # receive scalar rows; the complete original schema is on disk.
+            result["streamed_observation_return"] = {"scope": "Scalar in-memory records; full accepted payloads and late events are on disk",
+                "records_written": len(state.records), "accepted_payloads_written": len(state.seen_completion),
+                "late_events_written": len(payload_index.late_ids)}
+        else:
+            output.write_text(json.dumps(result, indent=2) + "\n")
         return result
     finally:
         raw_events.close()

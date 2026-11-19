@@ -2,6 +2,7 @@
 """One A21 cell in an externally supervised process; defaults retain A21 semantics."""
 import argparse
 import asyncio
+import importlib.util
 from pathlib import Path
 import traceback
 
@@ -22,7 +23,14 @@ def main():
     plan = load(args.plan)
     route = next(value for value in plan['routes'] if value['id'] == args.route)
     try:
-        options = {'compact_completion_payloads': True, 'canonicalize_expected': True} if args.compact_observation else {}
+        options = {}
+        if args.compact_observation:
+            path = args.a21.resolve().parents[2] / 'tests/Perf01/verify_long.py'
+            spec = importlib.util.spec_from_file_location('nativeweave_compact_json_reader', path)
+            reader = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(reader)
+            options = {'compact_completion_payloads': True, 'canonicalize_expected': True,
+                       'expected_values_reader': reader.array_records, 'stream_compact_output': True}
         asyncio.run(a21.run_cell(plan, route, args.repetition, args.plan.parent, args.output, **options))
         return 0
     except BaseException as error:
