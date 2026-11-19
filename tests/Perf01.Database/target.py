@@ -70,6 +70,10 @@ class PerfTarget(Target):
             "all_observed_errors_fail_cell": True,
             "halt_rule": "Successful-response payload/protocol violations, authentication/validation statuses, and unclassified errors permanently stop measured HTTP dispatch",
             "provider_rule": "No HTTP status or timeout implies SQLite BUSY; exact provider codes come only from the exception observer"}
+        self.resource_sampling_policy = self.manifest["perf01"].get("resource_sampling_policy")
+        self.application.resource_sampling_policy = self.resource_sampling_policy
+        if self.resource_sampling_policy is not None:
+            self.extra["resource_sampling_policy"] = self.resource_sampling_policy
         self.affinity = self.manifest["perf01"].get("affinity", {"mode": "inherited"})
         if self.affinity["mode"] == "split":
             # taskset execs the real app in the same PID before it creates any
@@ -117,18 +121,34 @@ class PerfTarget(Target):
         return None
 
     async def sample_generator_resources(self, stopped, receipt):
+        threaded = self.resource_sampling_policy is not None and self.a21.threaded_observation(self.resource_sampling_policy)
         try:
             with (self.directory / "generator-resources.jsonl").open("w") as stream:
+                def publish(role, row):
+                    row["role"] = role
+                    if row["identity_matches"] is False and role not in receipt["identity_failures"]:
+                        receipt["identity_failures"].append(role)
+                        receipt["errors"].append("Process start identity changed for generator role " + role)
+                    stream.write(json.dumps(row, separators=(",", ":")) + "\n")
+                    if threaded:
+                        stream.flush()
+                    receipt["samples"][role] += 1
+
                 while True:
                     for role, process in receipt["roles"].items():
-                        row = process_sample(self.a21, process["pid"], process["start_ticks"])
-                        row.update(role=role, phase=self.application.phase)
-                        if row["identity_matches"] is False and role not in receipt["identity_failures"]:
-                            receipt["identity_failures"].append(role)
-                            receipt["errors"].append("Process start identity changed for generator role " + role)
-                        stream.write(json.dumps(row, separators=(",", ":")) + "\n")
-                        receipt["samples"][role] += 1
-                    stream.flush()
+                        if threaded:
+                            if stopped.is_set():
+                                break
+                            pid, start_ticks = process["pid"], process["start_ticks"]
+                            await self.a21.sample_in_worker(stopped,
+                                lambda: process_sample(self.a21, pid, start_ticks),
+                                lambda row: publish(role, row), lambda: self.application.phase)
+                        else:
+                            row = process_sample(self.a21, process["pid"], process["start_ticks"])
+                            row["phase"] = self.application.phase
+                            publish(role, row)
+                    if not threaded:
+                        stream.flush()
                     if stopped.is_set():
                         break
                     try:
@@ -139,6 +159,8 @@ class PerfTarget(Target):
         except BaseException as error:
             receipt["status"] = "failed"
             receipt["errors"].append(type(error).__name__ + ": " + str(error)[:512])
+            if threaded:
+                raise
         finally:
             receipt["finished_utc"] = utc()
             save(self.directory / "generator-observer-receipt.json", receipt)
@@ -300,6 +322,10 @@ class PerfTarget(Target):
                    "roles": {"target": target, "scheduler": scheduler, "controller": controller},
                    "samples": {role: 0 for role in ("target", "scheduler", "controller")},
                    "scope": "Nominal 1 Hz process observations including a final sample; actual timestamps and phase labels are retained. Read failures remain per-field unavailability."}
+        if self.resource_sampling_policy is not None:
+            receipt["resource_sampling_policy"] = self.resource_sampling_policy
+            if self.a21.threaded_observation(self.resource_sampling_policy):
+                receipt["scope"] = "Nominal 1 Hz serial role observations; publish in-flight reads before stop/cancellation, no new job after stop. Worker times/phases and read failures are retained."
         save(self.directory / "generator-observer-receipt.json", receipt)
         stopped = asyncio.Event()
         sampler = asyncio.create_task(self.sample_generator_resources(stopped, receipt))

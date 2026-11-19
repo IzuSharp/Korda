@@ -60,6 +60,7 @@ class Application:
         self.closed = None
         self.process = None
         self.phase = 'startup-and-seed'
+        self.resource_sampling_policy = None
 
     async def start(self):
         self.directory.mkdir(parents=True, exist_ok=False)
@@ -109,15 +110,24 @@ class Application:
         self.stop_sampling = asyncio.Event()
         self.sample_file = (self.directory / 'resources.jsonl').open('w')
 
+        def publish_sample(row):
+            if self.latest_probe is not None:
+                row['managed_probe'] = self.latest_probe
+            self.samples.append(row)
+            self.sample_file.write(json.dumps(row, separators=(',', ':')) + '\n')
+            self.sample_file.flush()
+
         async def sample():
+            threaded = self.resource_sampling_policy is not None and self.a21.threaded_observation(self.resource_sampling_policy)
             while not self.stop_sampling.is_set():
-                row = process_sample(self.a21, self.process.pid)
-                row['phase'] = self.phase
-                if self.latest_probe is not None:
-                    row['managed_probe'] = self.latest_probe
-                self.samples.append(row)
-                self.sample_file.write(json.dumps(row, separators=(',', ':')) + '\n')
-                self.sample_file.flush()
+                if threaded:
+                    pid = self.process.pid
+                    await self.a21.sample_in_worker(self.stop_sampling,
+                        lambda: process_sample(self.a21, pid), publish_sample, lambda: self.phase)
+                else:
+                    row = process_sample(self.a21, self.process.pid)
+                    row['phase'] = self.phase
+                    publish_sample(row)
                 try:
                     await asyncio.wait_for(self.stop_sampling.wait(), .05)
                 except asyncio.TimeoutError:
@@ -138,8 +148,10 @@ class Application:
             await asyncio.gather(*self.readers)
         if hasattr(self, 'stop_sampling'):
             self.stop_sampling.set()
-            await self.sampler
-            self.sample_file.close()
+            try:
+                await self.sampler
+            finally:
+                self.sample_file.close()
         for name in ('stdout_log', 'stderr_log'):
             if hasattr(self, name):
                 getattr(self, name).close()

@@ -530,3 +530,128 @@ polling add overhead, and the output is always marked `formal_timing_eligible:
 false`. The source contract was checked against the locked PostgreSQL 18.0
 `doc/src/sgml/config.sgml` duration/parameter logging entries and
 `doc/src/sgml/monitoring.sgml` activity/wait-state caveat.
+
+
+## Perf-01 observer offload candidate (not performance accepted)
+
+This independent `task/Perf-01-db-observer-linux` checkout starts at immutable
+`0b2af54419ecf6a11ec83a45725b1c5fbbaeb0d0`. It changes measurement code only. The
+original `0b2af544` / `ce2a3c75` checkouts and all C#/Rust runtime sources remain
+unchanged. Other domains retain their existing frozen A21 source. Integration of
+this candidate's optional A21 helper requires the integration owner's separate
+source-identity decision; it must not silently change HTTP/gRPC/codec drivers.
+
+The observed motivation is the completed deferred-PG calibration numeric audit,
+Plan `bc1e867fc19b6ae7c1c6784b569f2949f9138c9f`,
+`ledger/evidence/batches/Perf-01/checks/database-gc-calibration-001/numeric-audit-001`.
+That audit records an application-resource read spanning 219.076152 ms and
+intersecting a generator-lag cluster. It does not establish procfs reads, GC or
+host scheduling as the sole cause, and it does not explain the 40/s product-path
+tail by itself. Existing invalid/failing cells remain unchanged.
+
+### Explicit execution policy and unchanged workload
+
+`--resource-sampling-policy synchronous|threaded` selects an explicit measured
+observer contract. Omitting it retains the previous synchronous paths and
+phase-based resource aggregation, including compatibility with callers that
+construct an older `argparse.Namespace`. Both explicit modes use the same
+conservative RSS inclusion rule below. The descriptor and its canonical SHA-256
+are retained in frozen inputs and the final summary; the same descriptor is
+embedded in the A21 plan and DB target manifest and checked against their
+observed receipts. Driver source hashes remain part of the existing frozen map.
+
+The shared `sample_in_worker` helper resides only in this checkout's A21 source.
+Its three callers are A21's process observer, the DB target's application
+observer, and the DB target's generator-role observer. They preserve the
+original **0.02 / 0.05 / 1 second sleep-after-sample periods**, named process
+roles, fields, request scheduling, correctness checks, durable oracles,
+100 ms generator-lag limit, 500 ms arrival-p99 limit and 256 MiB application RSS
+limit. No arrival timestamp, timeout, in-flight request limit, connection pool,
+SQL setting, business operation, recovery count or offered rate is changed.
+PG144/C16 and SQLite40/C16 remain the paired long loads.
+
+All current candidate load commands must use fresh outputs and
+`--variant diagnostic`; selecting an explicit observer policy with that variant
+writes `profiling.json` with `formal_timing_eligible=false`. Those outputs remain
+ineligible for formal timing and must never be relabeled. The driver is not
+permanently restricted to diagnostics: future formal use requires an explicit
+new policy/source freeze, fresh outputs and independent owner acceptance. A
+policy descriptor records execution behavior; selecting it does not grant
+performance acceptance. Old noise/capacity receipts cannot be reused as the new
+policy's before/after/direct/managed comparison identity.
+
+### Awaited job, cancellation and actual clocks
+
+Each sampler awaits one submitted job before its original periodic wait. Stop
+is checked before synchronous `run_in_executor` submission, with no intervening
+await. No job is submitted after that sampler observes stop. A strong reference
+to the inner future is shielded from the first await. Repeated caller
+cancellation keeps joining that same future; the completed row is published
+once by the event-loop owner before the first saved cancellation is propagated.
+A worker-raised `CancelledError`, read error or publication error remains a
+failure and cannot produce a retry/busy loop or a fabricated successful row.
+
+Only procfs reading and row construction move to the worker. Evidence-file
+writing, JSON encoding and flush remain on the loop thread. Generator reads
+for the three roles remain serial within their sampler. The threaded generator
+sampler publishes its last already-submitted read, then stops; it does not start
+the legacy extra final read after observing stop. Resource files close after
+the current job has joined and published, including cancellation paths.
+
+A worker captures its actual native thread ID, affinity, monotonic start/end,
+and read-only start/end phase snapshots. Submission time/phase is separately
+identified. Existing reader `time_ns`, `cpu_observed_ns`, `finished_ns`, CPU and
+RSS fields are retained. `row.phase` is the observed worker-start phase and
+`phase_at_finish` is retained; the loop's later phase never rewrites the row.
+A21 previously had no target-application phase label, so its worker phase
+snapshots remain explicitly null rather than inventing a measurement phase.
+All procfs clocks/labels/counters are non-atomic observations.
+
+A completed future proves that its callable ended, not that its pool thread
+exited. The existing `asyncio.run` owns final default-executor shutdown. The
+samplers do not shut down a shared default executor while other users may still
+need it. Actual process exit and the existing supervision cleanup remain the
+normal teardown evidence. TERM/KILL or an interrupted/stuck read can produce
+partial/invalid evidence; there is no promise of a normal drain in that case.
+
+### Conservative RSS boundary
+
+For either explicit policy, the unchanged measurement-phase RSS maximum is
+retained. The summary additionally includes RSS from any read whose complete
+worker `[started_ns, finished_ns]` span intersects the actual A21 measurement
+window; synchronous controls use the original reader span. This also catches a
+long read that crosses the whole measurement phase even when neither endpoint
+phase label says measurement. The added overlap count/peak is separately
+reported. No sample is discarded, and CPU continues to use the original actual
+`cpu_observed_ns` brackets; wall-clock observer duration is never called CPU
+time. Missing original CPU/RSS fields remain unavailable.
+
+### Finite checks and remaining measurement gate
+
+`test_observer_sampling.py` contains six finite tests for blocking reads with
+loop progress and one serial job, default/unknown policy behavior, repeated
+cancellation with exactly one final publication before close, worker/read/write
+exceptions, executor-queue phase changes, and conservative RSS when a read spans
+an entire measured window. The tests use actual worker threads and affinity;
+after `asyncio.run` they check both thread liveness and `/proc/self/task` removal.
+They start no application, database, network service or benchmark workload.
+
+Run on the permitted source CPU only outside an exclusive measurement window:
+
+```sh
+taskset -c 8 /opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python3 -B \
+  tests/Perf01.Database/test_observer_sampling.py
+taskset -c 8 /opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python3 -B \
+  tests/Perf01.Database/test_scheduler_gc.py
+```
+
+Actual finite-execution receipts belong in the matching Plan candidate check,
+with exact source/Python hashes and argv. These checks do not measure throughput,
+tail latency, workload equivalence or 30-minute memory stability. Default-pool
+threads, executor/asyncio/shield futures and cross-thread scheduling add CPU,
+allocation and RSS costs; deferred scheduler cyclic GC can change their retention.
+Only the current job is retained by each sampler, but there is no memory-neutral
+claim. The owner must measure those costs, actual sample counts/intervals,
+affinity, cancellation/cleanup and full correctness with the same before package
+before accepting any new measurement policy. No product performance gain or
+long-duration credit follows from this source candidate or its unit checks.
