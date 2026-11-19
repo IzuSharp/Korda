@@ -34,9 +34,23 @@ transactions. The reference application keeps 16 database connections, 64 waiter
 100-row/512-KiB batches and its existing bounded retirement rules.
 
 No retry policy is added. `business_retry_attempts` is exactly zero; the requested
-same-key replay is counted as business work, not hidden retry. An error stops new
-application dispatch through the existing B23 fail-fast oracle. Failed, canceled
-and generator-saturated cells remain invalid and cannot qualify as capacity.
+same-key replay is counted as business work, not hidden retry. Perf-01 short,
+capacity and soak cohorts explicitly require `--continue-classified-overload`
+on both versions. Subsequent real HTTP arrivals continue after a complete
+HTTP 408/429/500/502/503/504 response or an HTTPX connect/read/write/pool timeout.
+These observations are still failed operations, remain in the exact B23 error
+evidence, and make the cell invalid under its unchanged zero-error criterion.
+They are called service errors or client timeouts; an HTTP 500 does not establish
+database BUSY or prove that overload caused the error. Per-request classifications
+are retained in `classified-errors.jsonl`.
+
+A successful-status payload violation, unexpected protocol, authentication or
+validation response, or unclassified failure permanently stops measured HTTP
+dispatch. A concurrent ordinary service error cannot reset that integrity halt.
+The scoped adapter changes no B23 source or correctness oracle. Smokes can omit
+the opt-in and retain historical fail-fast behavior, but their cancelled tail
+does not establish sustained service overload. Failed, canceled and
+generator-saturated cells cannot qualify as capacity.
 After measured work drains, 32 new cycles at four/s check recovery in the **same
 live application process**, followed by at least 60 seconds idle for a soak.
 Recovery and idle are separately timed and excluded from measured load.
@@ -79,6 +93,9 @@ extended code is reduced with `code & 255`; primary 5 and 6 are separately repor
 as BUSY and LOCKED. The count scope includes setup and recovery and is stated in
 the receipt. Timed logical errors remain separately counted by A21. Without the
 observer these counts are unavailable, never inferred from HTTP 500 or set to zero.
+The zero application-retry count does not count SQLite's internal busy-handler
+sleep/retry work under its existing five-second `busy_timeout`. Internal busy
+handler attempts and time are unavailable in this external adapter.
 
 Independent SQL snapshots before recovery and before shutdown also retain the
 persisted mutation count, partitioned by seed, warmup, measured work and recovery
@@ -108,6 +125,7 @@ taskset -c CPU_A,CPU_B python3 tests/Perf01.Database/run.py \
   --package-probe /absolute/before-package-probe \
   --observer /absolute/before-exception-observer/manifest.json \
   --provider sqlite --scenario mixed --stage short --variant before \
+  --continue-classified-overload \
   --rate 40 --seconds 20 --concurrency 16 --repetition 0 \
   --output /absolute/before-sqlite-mixed-40-process0 \
   --isolation-note 'Actual exclusive host window; all builders and other loads stopped'
@@ -120,6 +138,7 @@ taskset -c CPU_A,CPU_B python3 tests/Perf01.Database/run.py \
   --package-probe /absolute/before-package-probe \
   --observer /absolute/before-exception-observer/manifest.json \
   --provider sqlite --scenario mixed --stage soak --variant before \
+  --continue-classified-overload \
   --rate FROZEN_RATE --seconds 1800 --concurrency 16 \
   --output /absolute/before-sqlite-soak \
   --isolation-note 'Actual exclusive host window; fixed two CPU IDs and no concurrent timing'
@@ -184,3 +203,39 @@ copy bytes and FFI counts remain unavailable in this whole-app adapter. The
 shared-path profiler and layered probes must establish any bottleneck attribution.
 Short-process mean/noise comparisons use A21's existing `noise_comparison` over
 independent interleaved processes; a single long stage is not a confidence interval.
+
+## Separate PostgreSQL attribution profile
+
+`profile_postgresql.py` reuses the same unchanged package application, typed
+query/business workload, private PostgreSQL 18.0 supervisor and full durability.
+It enables `log_min_duration_statement=0` only in that disposable cluster and
+samples `pg_stat_activity` through one independent psql connection. The script
+does not build or modify application/runtime packages. Run it only in an
+exclusive profiling window, before or after an uninstrumented cohort:
+
+```sh
+taskset -c CPU_A,CPU_B python3 tests/Perf01.Database/profile_postgresql.py \
+  --package-probe /absolute/before-package-probe \
+  --observer /absolute/before-exception-observer/manifest.json \
+  --postgres-bin /absolute/postgresql-18.0/bin \
+  --scenario mixed --rate FROZEN_RATE --seconds 20 --concurrency 16 \
+  --wait-sample-ms 100 --output /absolute/before-postgresql-profile
+```
+
+Raw `postgres/server.log` is retained. Parse, Bind, Execute and simple-statement
+durations are separated; three protocol-step records are not three business
+queries. The summary groups by phase and SQL first log line, and excludes psql
+oracle/observer queries from application aggregates. Full multiline SQL remains
+in the raw server log. Bind parameter logging is disabled. The wait file records
+actual observer query start/end timestamps and server timestamps, so observer
+query time is visible rather than treated as an exact fixed sampling interval.
+
+Server elapsed time includes lock/I/O waits and may overlap across connections;
+it is not database CPU time and cannot be subtracted from aggregate application
+wall time to infer FFI overhead. Activity snapshots provide sampled wait
+occupancy, not exact per-request lock duration. Connection-pool waits and SQLite
+execution/lock duration remain unavailable in this adapter. Both logging and
+polling add overhead, and the output is always marked `formal_timing_eligible:
+false`. The source contract was checked against the locked PostgreSQL 18.0
+`doc/src/sgml/config.sgml` duration/parameter logging entries and
+`doc/src/sgml/monitoring.sgml` activity/wait-state caveat.

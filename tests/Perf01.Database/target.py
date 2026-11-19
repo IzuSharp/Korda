@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 from collections import Counter
+from contextvars import ContextVar
 from datetime import datetime, timezone
 import json
 import os
@@ -21,6 +22,23 @@ from common import digest, load, load_a21, mapping_sample, process_sample, save
 from http_target import Target, require
 from supervision import register_process
 
+CONTINUED_SERVICE_STATUSES = frozenset({408, 429, 500, 502, 503, 504})
+
+
+def classify_failure(error, response, expected_protocol):
+    """Classify failed observations; this never turns a failure into success."""
+    if isinstance(error, httpx.TimeoutException):
+        return {"continuable": True, "category": "client_timeout", "error_type": type(error).__name__,
+                "http_status": None, "provider_code": None}
+    if response is not None and response.http_version != expected_protocol:
+        return {"continuable": False, "category": "protocol_integrity", "error_type": type(error).__name__,
+                "http_status": response.status_code, "observed_protocol": response.http_version,
+                "expected_protocol": expected_protocol, "provider_code": None}
+    status = response.status_code if response is not None else None
+    return {"continuable": status in CONTINUED_SERVICE_STATUSES,
+            "category": "service_error_status" if status in CONTINUED_SERVICE_STATUSES else "integrity_or_unclassified_failure",
+            "error_type": type(error).__name__, "http_status": status, "provider_code": None}
+
 
 def utc():
     return datetime.now(timezone.utc).isoformat()
@@ -33,8 +51,44 @@ class PerfTarget(Target):
                       "business_retry_attempts": 0,
                       "retry_policy": "No retry; same-key replay is a declared business operation, not a retry",
                       "phases": {}, "loaded_files": {}}
+        self._request = ContextVar("perf01_request", default=None)
+        self._integrity_halt = False
+        self._classified_counts = Counter()
+        self.extra["error_policy"] = {
+            "continue_classified_overload": self.manifest["perf01"].get("continue_classified_overload", False),
+            "continuable_http_statuses": sorted(CONTINUED_SERVICE_STATUSES),
+            "continuable_exceptions": ["httpx.ConnectTimeout", "httpx.ReadTimeout", "httpx.WriteTimeout", "httpx.PoolTimeout"],
+            "all_observed_errors_fail_cell": True,
+            "halt_rule": "Successful-response payload/protocol violations, authentication/validation statuses, and unclassified errors permanently stop measured HTTP dispatch",
+            "provider_rule": "No HTTP status or timeout implies SQLite BUSY; exact provider codes come only from the exception observer"}
         self.original_stop = self.application.stop
         self.application.stop = self.finish
+
+    async def request(self, method, path, *, body=None, headers=None, stage=None):
+        self._request.set({"method": method, "path": path, "stage": stage})
+        return await super().request(method, path, body=body, headers=headers, stage=stage)
+
+    def capture_error(self, identifier, error):
+        # B23 has already marked this operation failed and set halt_dispatch.
+        # Keep its exact error evidence and failed verdict before deciding
+        # whether subsequent ordinary arrivals may still reach the real app.
+        super().capture_error(identifier, error)
+        observed = self.last_response.get()
+        response = observed[0] if observed is not None else None
+        expected = "HTTP/2" if self.manifest["protocol"] == "http2-tls" else "HTTP/1.1"
+        classification = classify_failure(error, response, expected)
+        if not classification["continuable"]:
+            self._integrity_halt = True
+        enabled = self.extra["error_policy"]["continue_classified_overload"]
+        continued = enabled and classification["continuable"] and not self._integrity_halt
+        if continued:
+            self.halt_dispatch = False
+        self._classified_counts[classification["category"]] += 1
+        row = {"logical_id": identifier, "observed_ns": time.monotonic_ns(), **classification,
+               "next_arrivals_continue": continued, "permanent_integrity_halt": self._integrity_halt,
+               "request_attempt": self._request.get()}
+        with (self.directory / "classified-errors.jsonl").open("a") as stream:
+            stream.write(json.dumps(row, separators=(",", ":")) + "\n")
 
     async def seed(self):
         # Every scenario starts from exactly the same 128 HTTP-created fixtures.
@@ -136,6 +190,10 @@ class PerfTarget(Target):
             self.extra["status"] = "passed" if result == 0 else "failed"
             return result
         finally:
+            self.extra["classified_error_counts"] = dict(self._classified_counts)
+            classified = self.directory / "classified-errors.jsonl"
+            self.extra["classified_error_evidence"] = {"path": classified.name, "sha256": digest(classified)} if classified.exists() else None
+            self.extra["permanent_integrity_halt"] = self._integrity_halt
             log = self.directory / "application/stderr.log"
             counts = Counter()
             codes = Counter()
@@ -164,7 +222,7 @@ class PerfTarget(Target):
                     "method": "Ordinary HTTP status cannot identify a database provider code"}
             self.extra["counter_limits"] = {name: {"availability": "unavailable", "value": None} for name in (
                 "database_execution_ns", "database_lock_wait_ns", "connection_pool_wait_ns", "ffi_calls",
-                "copied_bytes", "native_allocator_live_bytes")}
+                "copied_bytes", "native_allocator_live_bytes", "sqlite_busy_handler_attempts")}
             save(self.directory / "perf01.json", self.extra)
 
 

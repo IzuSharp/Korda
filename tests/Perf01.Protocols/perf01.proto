@@ -1,0 +1,11 @@
+syntax = "proto3";
+package nativeweave.perf01;
+option csharp_namespace = "NativeWeave.Perf01.Wire";
+
+message Payload {
+  int64 sequence = 1;
+  bytes data = 2;
+  int32 count = 3;
+  string digest = 4;
+  int64 total_bytes = 5;
+}

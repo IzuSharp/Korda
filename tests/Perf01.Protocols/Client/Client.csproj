@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>Perf01.ProtocolClient</AssemblyName>
+    <TargetFramework>net11.0</TargetFramework>
+    <LangVersion>15.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsAotCompatible>true</IsAotCompatible>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Google.Protobuf" Version="[3.36.2]" />
+    <PackageReference Include="Grpc.Tools" Version="[2.85.0]" PrivateAssets="All" />
+    <PackageReference Include="Grpc.Net.Client" Version="[2.85.0]" />
+    <Protobuf Include="../perf01.proto" GrpcServices="None" />
+    <Compile Include="../Shared.cs" Link="Shared.cs" />
+  </ItemGroup>
+</Project>

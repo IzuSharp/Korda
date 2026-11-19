@@ -129,7 +129,8 @@ def prepare(args, output, route, pg):
                 "diagnostic_snapshot_settle_ms": 1100, "run_directory": str(output / "applications"),
                 "golden": str(ROOT / "tests/Reference.TaskService/golden.py"), "files": files, **pg,
                 "perf01": {"scenario": args.scenario, "stage": args.stage, "idle_seconds": args.idle_seconds,
-                           "recovery_requests": args.recovery_requests}}
+                           "recovery_requests": args.recovery_requests,
+                           "continue_classified_overload": args.continue_classified_overload}}
     if args.protocol != "http1":
         manifest.update(tls_certificate=str(args.package_probe.resolve() / "tls/localhost.pem"),
                         tls_private_key=str(args.package_probe.resolve() / "tls/localhost.private.pem"))
@@ -147,7 +148,8 @@ def prepare(args, output, route, pg):
             "settings": {"cache": profile["cache"], "connection_reuse": "Persistent HTTPX bounded client pool",
                 "durability": settings[args.provider], "tls": args.protocol, "serialization": "Unchanged B21 static JSON, typed Fluent and DTO path",
                 "allocator": "Unchanged package/comparator allocator", "isa_profile": "portable-x86-64-default-no-host-native",
-                "warmup_requests": args.warmup, "features": {"scenario": args.scenario, "concurrency": args.concurrency},
+                "warmup_requests": args.warmup, "features": {"scenario": args.scenario, "concurrency": args.concurrency,
+                    "continue_classified_overload": args.continue_classified_overload},
                 "instrumentation": "External procfs; optional identical exception catch/log/rethrow observer"},
             "timing": {"requests": count, "period_ns": period, "timeout_ns": 30_000_000_000,
                 "max_dispatch_lag_ns": 100_000_000, "max_in_flight": 512, "cleanup_timeout_ns": 180_000_000_000},
@@ -219,6 +221,8 @@ async def execute(args, output, plan, frozen):
             application_receipt={"path": str(directory / "receipt.json"), "sha256": digest(directory / "receipt.json")},
             perf01_receipt={"path": str(directory / "perf01.json"), "sha256": digest(directory / "perf01.json")},
             resources=resources, provider_errors=extra["provider_errors"], business_retry_attempts=extra["business_retry_attempts"],
+            error_policy=extra["error_policy"], classified_error_counts=extra["classified_error_counts"],
+            classified_error_evidence=extra["classified_error_evidence"], permanent_integrity_halt=extra["permanent_integrity_halt"],
             durable_oracle=app.get("durable_oracle"), persisted_before_recovery=extra.get("persisted_before_recovery"),
             persisted_before_shutdown=extra.get("persisted_before_shutdown"), closed=app.get("closed"),
             loaded_files=extra["loaded_files"], phases=extra["phases"])
@@ -245,6 +249,8 @@ def main():
     parser.add_argument("--warmup", type=int, default=32)
     parser.add_argument("--idle-seconds", type=float, default=60)
     parser.add_argument("--recovery-requests", type=int, default=32)
+    parser.add_argument("--continue-classified-overload", action="store_true",
+                        help="Continue real HTTP after declared service-error statuses/timeouts; every error still fails the cell")
     parser.add_argument("--max-p99-ms", type=float, default=500)
     parser.add_argument("--max-rss-mib", type=float, default=256)
     parser.add_argument("--seed", type=int, default=20261119)
@@ -261,6 +267,8 @@ def main():
         parser.error("PostgreSQL requires exact PostgreSQL 18.0 --postgres-bin")
     if args.stage == "soak" and (args.idle_seconds < 60 or args.recovery_requests < 32):
         parser.error("Soak requires at least 60 seconds idle and 32 same-process recovery requests")
+    if args.stage != "smoke" and not args.continue_classified_overload:
+        parser.error("Perf-01 short/capacity/soak cohorts require explicit --continue-classified-overload; freeze the same policy for both versions")
     route = descriptor(args)
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
