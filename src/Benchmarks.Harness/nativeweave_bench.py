@@ -22,6 +22,7 @@ import platform
 import random
 import statistics
 import sys
+import threading
 import time
 
 ROUTES = {"direct-rust", "nativeweave-aot-rust", "managed-aot"}
@@ -293,6 +294,68 @@ def observe_process(pid):
     except (OSError, ValueError) as error:
         result["observation_note"] = type(error).__name__ + ": process data unavailable or process exited"
     return result
+
+
+def threaded_observation(policy):
+    """Absent policy preserves existing synchronous observers."""
+    if policy is None:
+        return False
+    if policy.get("mode") not in ("synchronous", "threaded"):
+        raise ValueError("Unknown resource sampling execution policy")
+    return policy["mode"] == "threaded"
+
+
+async def sample_in_worker(stopped, read, publish, phase=None):
+    """One awaited job; publish its complete result before propagating cancellation.
+
+    The caller keeps this await inside its serial sampler loop. A completed job
+    does not mean its default-pool thread exited; asyncio.run owns pool shutdown.
+    Procfs errors retain the reader's existing unavailable/error semantics.
+    """
+    if stopped.is_set():
+        return False
+    submitted = time.monotonic_ns()
+    submission_phase = phase() if phase is not None else None
+    caller_thread = threading.get_native_id()
+
+    def snapshot():
+        started = time.monotonic_ns()
+        first_phase = phase() if phase is not None else None
+        worker_thread = threading.get_native_id()
+        worker_affinity = sorted(os.sched_getaffinity(0))
+        row = read()
+        final_phase = phase() if phase is not None else None
+        finished = time.monotonic_ns()
+        row.setdefault("time_ns", started)
+        row.setdefault("finished_ns", finished)
+        row["sampling_worker"] = {
+            "submitted_ns": submitted, "started_ns": started, "finished_ns": finished,
+            "caller_native_thread_id": caller_thread, "worker_native_thread_id": worker_thread,
+            "worker_affinity_cpus": worker_affinity, "submission_phase": submission_phase,
+            "phase_started": first_phase, "phase_finished": final_phase}
+        if phase is not None:
+            row["phase"] = first_phase
+            row["phase_at_finish"] = final_phase
+        return row
+
+    # No await between the stop check and actual executor submission. Shield
+    # from the FIRST await: cancellation of a bare wrapper loses its result
+    # although the underlying running callable can continue.
+    job = asyncio.get_running_loop().run_in_executor(None, snapshot)
+    cancelled = None
+    while not job.done():
+        try:
+            await asyncio.shield(job)
+        except asyncio.CancelledError as error:
+            if job.cancelled():
+                raise
+            if cancelled is None:
+                cancelled = error
+    row = job.result()  # A worker-raised CancelledError/error must not busy-loop.
+    publish(row)  # Loop-owned records/files; once only, after the job completed.
+    if cancelled is not None:
+        raise cancelled
+    return True
 
 
 def host_metadata():
@@ -638,6 +701,8 @@ async def run_cell(plan, route, repetition, base, output, *, compact_completion_
                    canonicalize_expected=False, expected_values_reader=None, stream_compact_output=False):
     """One fresh process per cell; dispatch scheduling never awaits responses."""
     timing = plan["timing"]
+    resource_policy = plan["settings"].get("features", {}).get("resource_sampling_policy")
+    threaded_resources = threaded_observation(resource_policy)
     if stream_compact_output and not compact_completion_payloads:
         raise ValueError("Streamed observation requires explicit compact completion retention")
     oracle = Oracle(plan, base, canonicalize_expected=canonicalize_expected, expected_values_reader=expected_values_reader)
@@ -650,6 +715,7 @@ async def run_cell(plan, route, repetition, base, output, *, compact_completion_
     stop = asyncio.Event()
     stderr_task = asyncio.create_task(process.stderr.read(1_048_576))
     resources = []
+    sampler = None
     raw_path = output.with_suffix(".events.jsonl")
     raw_events = raw_path.open("w", encoding="utf-8", **({"newline": "\n"} if compact_completion_payloads else {}))
     raw_digest = hashlib.sha256() if compact_completion_payloads else None
@@ -697,7 +763,10 @@ async def run_cell(plan, route, repetition, base, output, *, compact_completion_
 
         async def sample_resources():
             while not stop.is_set():
-                resources.append({"time_ns": time.monotonic_ns(), "counters": observe_process(process.pid)})
+                if threaded_resources:
+                    await sample_in_worker(stop, lambda: {"counters": observe_process(process.pid)}, resources.append)
+                else:
+                    resources.append({"time_ns": time.monotonic_ns(), "counters": observe_process(process.pid)})
                 try:
                     await asyncio.wait_for(stop.wait(), .02)
                 except asyncio.TimeoutError:
@@ -801,6 +870,8 @@ async def run_cell(plan, route, repetition, base, output, *, compact_completion_
                   "cleanup": cleanup, "stderr": stderr, "exit_code": process.returncode,
                   "clock_scope": "one controller monotonic clock; admission event observed over IPC",
                   "target_artifacts": route["artifacts"], "instrumentation": plan["settings"]["instrumentation"]}
+        if resource_policy is not None:
+            result["resource_sampling_policy"] = resource_policy
         if stream_compact_output:
             write_streamed_observation(output, result, payload_index)
             # The cell worker ignores this return. Explicit streamed callers
@@ -812,13 +883,19 @@ async def run_cell(plan, route, repetition, base, output, *, compact_completion_
             output.write_text(json.dumps(result, indent=2) + "\n")
         return result
     finally:
-        raw_events.close()
         stop.set()
-        if process.returncode is None:
-            process.kill()
-            await process.wait()
-        if not stderr_task.done():
-            stderr_task.cancel()
+        try:
+            if threaded_resources and sampler is not None:
+                # A cancellation cannot leave the current observer job behind
+                # a closed evidence file. Its helper publishes before rethrow.
+                await sampler
+        finally:
+            raw_events.close()
+            if process.returncode is None:
+                process.kill()
+                await process.wait()
+            if not stderr_task.done():
+                stderr_task.cancel()
 
 
 def noise_comparison(baseline, candidate, band, seed):

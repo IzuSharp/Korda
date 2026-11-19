@@ -60,15 +60,20 @@ def process_sample(a21, pid, expected_start_ticks=None):
     return value
 
 
-def summarize(rows):
+def summarize(rows, measurement_window_ns=None):
     """Aggregate each phase without requiring CPU and RSS in the same samples."""
     by_phase = {}
-    for row in rows:
-        phase = by_phase.setdefault(row["phase"], {
+    overlap_peak = None
+    overlap_samples = 0
+    def phase_start(row):
+        return {
             "samples": 0, "rss_peak_bytes": None, "fd_peak_count": None, "socket_peak_count": None,
             "cpu_samples": 0, "cpu_first": None, "cpu_last": None, "first": row, "last": row,
             "error_samples": {name: 0 for name in ("cpu", "memory", "descriptor", "affinity", "identity")},
-            "descriptor_scan_misses": None, "identities": [], "affinity_masks": []})
+            "descriptor_scan_misses": None, "identities": [], "affinity_masks": []}
+    overlap_first = None
+    for row in rows:
+        phase = by_phase.setdefault(row["phase"], phase_start(row))
         phase["samples"] += 1
         phase["last"] = row
         for name in phase["error_samples"]:
@@ -83,6 +88,19 @@ def summarize(rows):
             phase["affinity_masks"].append(mask)
         if ("expected_start_ticks" in row and row.get("identity_matches") is not True) or row.get("identity_matches") is False:
             continue  # Preserve the raw observation, but do not attribute it to this role.
+        if measurement_window_ns is not None:
+            window_start, window_end = measurement_window_ns["start"], measurement_window_ns["end"]
+            if not isinstance(window_start, int) or not isinstance(window_end, int) or window_end <= window_start:
+                raise ValueError("Invalid observed measurement window for RSS inclusion")
+            worker = row.get("sampling_worker", {})
+            read_start = worker.get("started_ns", row["time_ns"])
+            read_end = worker.get("finished_ns", row["finished_ns"])
+            value = row["counters"]["rss_bytes"]["value"]
+            if read_start <= window_end and read_end >= window_start and value is not None:
+                overlap_peak = max(overlap_peak if overlap_peak is not None else value, value)
+                overlap_samples += 1
+                if overlap_first is None:
+                    overlap_first = row
         for key, value in (("rss_peak_bytes", row["counters"]["rss_bytes"]["value"]),
                            ("fd_peak_count", row.get("fd_count")), ("socket_peak_count", row.get("socket_count"))):
             if value is not None:
@@ -92,6 +110,12 @@ def summarize(rows):
             if phase["cpu_first"] is None:
                 phase["cpu_first"] = row
             phase["cpu_last"] = row
+    if overlap_peak is not None:
+        measured = by_phase.setdefault("measurement", phase_start(overlap_first))
+        measured["rss_peak_bytes"] = max(measured["rss_peak_bytes"] or 0, overlap_peak)
+        measured["rss_window_overlap_samples"] = overlap_samples
+        measured["rss_window_overlap_peak_bytes"] = overlap_peak
+        measured["rss_inclusion_policy"] = "Worker-start phase measurement OR read span overlaps actual A21 measurement window"
     for phase in by_phase.values():
         first, last = phase["cpu_first"], phase["cpu_last"]
         phase.update(cpu_seconds=None, cpu_percent_one_core=None, cpu_span_seconds=None,

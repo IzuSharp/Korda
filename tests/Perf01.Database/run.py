@@ -39,6 +39,20 @@ def utc():
     return datetime.now(timezone.utc).isoformat()
 
 
+def resource_sampling_policy(mode):
+    if mode not in ("synchronous", "threaded"):
+        raise ValueError("Unknown DB resource sampling policy")
+    return {"id": "Perf-01-db-resource-observer-v1", "mode": mode,
+            "sleep_after_sample_seconds": {"a21": .02, "application": .05, "generator": 1},
+            "maximum_in_flight_per_sampler": 1,
+            "cancellation": ("Shield first await, join same job, publish once, then propagate" if mode == "threaded"
+                             else "Inline read completes before the event loop observes cancellation"),
+            "worker_clock_and_phase": ("Observed inside worker; submission snapshot separate" if mode == "threaded"
+                                       else "Existing synchronous reader clocks and loop-owned phase"),
+            "rss_inclusion": "Keep measurement phase; also include reads overlapping actual A21 measurement window",
+            "acceptance": "Execution contract only; requires a new external source/policy freeze"}
+
+
 def payload(scenario, index, seed):
     kind = "cycle" if scenario == "cycle" or scenario == "mixed" and index % 2 == 0 else "list"
     return {"kind": kind, "title": ("perf01-" + str(seed) + "-" + str(index))[:32]} if kind == "cycle" else {"kind": "list", "limit": 100}
@@ -78,7 +92,7 @@ def load_compact_observation(path):
     """Retain only scalar rows used by the unchanged B23 shape validator."""
     reader = load_json_reader()
     names = ("valid", "route", "repetition", "invalid_reasons", "hello", "offered", "admitted", "completed",
-             "successful", "outcome_counts", "histograms", "measurement_window_ns", "rates_per_second", "exit_code")
+             "successful", "outcome_counts", "histograms", "measurement_window_ns", "rates_per_second", "exit_code", "resource_sampling_policy")
     metadata = dict.fromkeys(names)
     selectors = {"histograms": {
         "arrival_all_outcomes": {"resolution_ns": None, "maximum_ns": None},
@@ -100,10 +114,10 @@ def load_compact_application_receipt(path):
     return load_json_reader().object_metadata(path, ("status", "durable_oracle", "closed"))
 
 
-def observed_resources(path, role=None):
+def observed_resources(path, role=None, measurement_window_ns=None):
     with path.open() as stream:
         rows = (json.loads(line) for line in stream)
-        by_phase = summarize_resources(row for row in rows if role is None or row["role"] == role)
+        by_phase = summarize_resources((row for row in rows if role is None or row["role"] == role), measurement_window_ns)
     if role is None:
         for phase in by_phase.values():
             phase["app_cpu_seconds"] = phase["cpu_seconds"]
@@ -134,6 +148,8 @@ def prepare(args, output, route, pg):
     a21 = load_a21()
     compact_observation = bool(getattr(args, "compact_observation", False))
     gc_policy = scheduler_gc_policy(getattr(args, "scheduler_gc_policy", "automatic"))
+    sampling_mode = getattr(args, "resource_sampling_policy", None)
+    sampling_policy = resource_sampling_policy(sampling_mode) if sampling_mode is not None else None
     service_cpus = sorted(os.sched_getaffinity(0))
     generator_cpus = getattr(args, "generator_cpus", None)
     affinity = {"mode": "inherited", "service_cpus": service_cpus, "generator_cpus": None}
@@ -209,6 +225,8 @@ def prepare(args, output, route, pg):
     if args.protocol != "http1":
         manifest.update(tls_certificate=str(args.package_probe.resolve() / "tls/localhost.pem"),
                         tls_private_key=str(args.package_probe.resolve() / "tls/localhost.private.pem"))
+    if sampling_policy is not None:
+        manifest["perf01"]["resource_sampling_policy"] = sampling_policy
     manifest_path = output / "target.json"
     save(manifest_path, manifest)
     python = Path(sys.executable).resolve()
@@ -234,6 +252,8 @@ def prepare(args, output, route, pg):
             "histogram": {"resolution_ns": 1000, "maximum_ns": 60_000_000_000},
             "regression": {"enabled": False, "baseline_id": "Perf-01-independent-cohort-analysis", "absolute_noise_ns": 0, "relative_noise": 0},
             "routes": [target]}
+    if sampling_policy is not None:
+        plan["settings"]["features"]["resource_sampling_policy"] = sampling_policy
     # A21's command-level comparative schema demands all three routes. This is
     # explicitly one scoped cell; run_cell never claims
     # unexecuted route/cohort acceptance. Artifact/oracle checks still run here.
@@ -253,6 +273,13 @@ def prepare(args, output, route, pg):
               "service_standard": {"max_unexpected_errors": 0, "max_p99_ms": args.max_p99_ms,
                                    "max_app_rss_mib": args.max_rss_mib, "max_generator_dispatch_lag_ms": 100},
               "scope": "Whole application, real HTTP and durable DB; no isolated database latency attribution"}
+    if sampling_policy is not None:
+        frozen.update(resource_sampling_policy=sampling_policy,
+                      resource_sampling_policy_sha256=policy_sha256(sampling_policy))
+        if args.variant == "diagnostic":
+            save(output / "profiling.json", {"task": "Perf-01", "formal_timing_eligible": False,
+                "resource_sampling_policy": sampling_policy, "duration_credit_seconds": 0,
+                "claim": "Measurement-only candidate diagnostic; never relabel this output as formal evidence"})
     save(output / "frozen-inputs.json", frozen)
     return plan, frozen
 
@@ -323,12 +350,16 @@ async def execute_cell(args, output, plan, frozen):
         # A scheduler may send the first request late then catch up. The full
         # >=1800 s requirement therefore uses observed dispatch span as well.
         duration_valid = args.stage != "soak" or span >= 1800
-        resources = observed_resources(directory / "application/resources.jsonl")
-        generator_resources = {role: observed_resources(directory / "generator-resources.jsonl", role)
+        sampling_policy = frozen.get("resource_sampling_policy")
+        sampling_valid = sampling_policy is None or (row.get("resource_sampling_policy") == sampling_policy
+            and extra.get("resource_sampling_policy") == sampling_policy)
+        rss_window = row["measurement_window_ns"] if sampling_policy is not None else None
+        resources = observed_resources(directory / "application/resources.jsonl", measurement_window_ns=rss_window)
+        generator_resources = {role: observed_resources(directory / "generator-resources.jsonl", role, measurement_window_ns=rss_window)
                                for role in ("target", "scheduler", "controller")}
         phase = resources.get("measurement", {})
         latency = row["histograms"]["arrival_success"]["percentiles_from_exact_samples_ns"]
-        valid = bool(row["valid"] and app["status"] == "passed" and extra["status"] == "passed" and duration_valid and gc_valid
+        valid = bool(row["valid"] and app["status"] == "passed" and extra["status"] == "passed" and duration_valid and gc_valid and sampling_valid
                      and not receipt.get("live_owned_processes_after_cleanup") and not receipt.get("cleanup_error"))
         p99 = latency["p99"]
         peak = phase.get("rss_peak_bytes")
@@ -346,7 +377,8 @@ async def execute_cell(args, output, plan, frozen):
             planned_load_seconds=expected_span, actual_dispatch_span_seconds=span, duration_valid=duration_valid,
             observation_seconds=row["measurement_window_ns"]["elapsed"] / 1e9,
             invalid_reasons=row.get("invalid_reasons", []) + ([] if duration_valid else ["Actual uninterrupted dispatched span below 1800 seconds"])
-                + ([] if gc_valid else ["Scheduler GC policy receipt is missing, incomplete or inconsistent"]),
+                + ([] if gc_valid else ["Scheduler GC policy receipt is missing, incomplete or inconsistent"])
+                + ([] if sampling_valid else ["Resource sampling execution policy differs"]),
             application_receipt={"path": str(directory / "receipt.json"), "sha256": digest(directory / "receipt.json")},
             perf01_receipt={"path": str(directory / "perf01.json"), "sha256": digest(directory / "perf01.json")},
             resources=resources, generator_resources=generator_resources,
@@ -358,6 +390,9 @@ async def execute_cell(args, output, plan, frozen):
             durable_oracle=app.get("durable_oracle"), persisted_before_recovery=extra.get("persisted_before_recovery"),
             persisted_before_shutdown=extra.get("persisted_before_shutdown"), closed=app.get("closed"),
             loaded_files=extra["loaded_files"], phases=extra["phases"])
+    if frozen.get("resource_sampling_policy") is not None:
+        summary.update(resource_sampling_policy=frozen["resource_sampling_policy"],
+                       resource_sampling_policy_sha256=frozen["resource_sampling_policy_sha256"])
     save(output / "summary.json", summary)
     save(output / "progress.json", {"state": "completed" if summary["valid"] else "completed-invalid", "summary_sha256": digest(output / "summary.json")})
     print(json.dumps({key: summary[key] for key in ("valid", "qualifies_service_standard", "stage", "route", "provider", "scenario")}))
@@ -389,6 +424,8 @@ def main():
                         help="Share bounded immutable oracle values before timing and replay accepted result payloads after timing")
     parser.add_argument("--scheduler-gc-policy", choices=["automatic", "deferred"], default="automatic",
                         help="DB scheduler only: defer automatic cyclic GC through the complete original worker; freeze one policy for every route/cohort")
+    parser.add_argument("--resource-sampling-policy", choices=["synchronous", "threaded"],
+                        help="Explicit measurement-only observer policy; default keeps existing synchronous behavior")
     parser.add_argument("--max-p99-ms", type=float, default=500)
     parser.add_argument("--max-rss-mib", type=float, default=256)
     parser.add_argument("--seed", type=int, default=20261119)
