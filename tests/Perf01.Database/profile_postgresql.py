@@ -78,21 +78,23 @@ async def profile(args, output, pg):
     driver.save(output / "frozen-inputs.json", frozen)
     stopped = asyncio.Event()
     samples = output / "postgres-waits.jsonl"
-    stderr = (output / "postgres-observer.stderr").open("wb")
-    observer = await asyncio.create_subprocess_exec(pg["psql"], pg["postgres_base"], "-X", "-q", "-A", "-t",
-        "-v", "ON_ERROR_STOP=1", "--no-password", stdin=asyncio.subprocess.PIPE,
-        stdout=asyncio.subprocess.PIPE, stderr=stderr)
     failures = []
-    observer.stdin.write(b"SET application_name='perf01_wait_observer'; SET log_min_duration_statement=-1; SET stats_fetch_consistency='none';\n")
-    await observer.stdin.drain()
+    observer = sampler = stderr = None
+    primary_failure = None
+    result = 1
+    receipt = {"status": "starting", "errors": failures,
+        "requested_idle_between_samples_ms": args.wait_sample_ms,
+        "timing": "Actual query start/end is retained per sample; query time adds to the requested interval",
+        "scope": "Sampled wait occupancy only; no per-request lock or pool duration is inferred"}
+    driver.save(output / "postgres-observer-receipt.json", receipt)
 
     async def sample():
-        with samples.open("w") as stream:
-            try:
+        try:
+            with samples.open("w") as stream:
                 while not stopped.is_set():
                     started = time.monotonic_ns()
                     observer.stdin.write((SNAPSHOT + "\n").encode())
-                    await observer.stdin.drain()
+                    await asyncio.wait_for(observer.stdin.drain(), 5)
                     line = await asyncio.wait_for(observer.stdout.readline(), 5)
                     value = json.loads(line)
                     value.update(observer_started_ns=started, observer_finished_ns=time.monotonic_ns())
@@ -101,28 +103,60 @@ async def profile(args, output, pg):
                         await asyncio.wait_for(stopped.wait(), args.wait_sample_ms / 1000)
                     except asyncio.TimeoutError:
                         pass
-            except Exception as error:
-                failures.append(type(error).__name__ + ": " + str(error))
+        except Exception as error:
+            failures.append("sample: " + type(error).__name__ + ": " + str(error))
 
-    sampler = asyncio.create_task(sample())
     try:
+        # Ownership begins before spawn/setup. Even a failed initial stdin
+        # write must close and reap the private observer and retain a receipt.
+        stderr = (output / "postgres-observer.stderr").open("wb")
+        observer = await asyncio.create_subprocess_exec(pg["psql"], pg["postgres_base"], "-X", "-q", "-A", "-t",
+            "-v", "ON_ERROR_STOP=1", "--no-password", stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE, stderr=stderr)
+        receipt["observer_pid"] = observer.pid
+        observer.stdin.write(b"SET application_name='perf01_wait_observer'; SET log_min_duration_statement=-1; SET stats_fetch_consistency='none';\n")
+        await asyncio.wait_for(observer.stdin.drain(), 5)
+        receipt["status"] = "running"
+        driver.save(output / "postgres-observer-receipt.json", receipt)
+        sampler = asyncio.create_task(sample())
         result = await driver.execute(args, output, plan, frozen)
+    except BaseException as error:
+        primary_failure = error
+        failures.append("profile: " + type(error).__name__ + ": " + str(error)[:1024])
+        raise
     finally:
         stopped.set()
-        await sampler
-        observer.stdin.close()
+        if sampler is not None:
+            try:
+                await asyncio.wait_for(sampler, 11)
+            except BaseException as error:
+                failures.append("sampler cleanup: " + type(error).__name__)
+        if observer is not None:
+            try:
+                observer.stdin.close()
+                await asyncio.wait_for(observer.wait(), 5)
+            except BaseException as error:
+                failures.append("observer cleanup: " + type(error).__name__)
+                if observer.returncode is None:
+                    try:
+                        observer.kill()
+                        await asyncio.wait_for(observer.wait(), 5)
+                    except BaseException as cleanup_error:
+                        failures.append("observer kill/reap: " + type(cleanup_error).__name__)
+            receipt["observer_exit_code"] = observer.returncode
+            if observer.returncode != 0:
+                failures.append("wait observer exit " + str(observer.returncode))
+        if stderr is not None:
+            try:
+                stderr.close()
+            except Exception as error:
+                failures.append("observer stderr close: " + type(error).__name__)
+        receipt["status"] = "failed" if failures else "completed"
         try:
-            await asyncio.wait_for(observer.wait(), 5)
-        except asyncio.TimeoutError:
-            observer.kill(); await observer.wait()
-            failures.append("wait observer exceeded its five-second shutdown budget")
-        if observer.returncode != 0:
-            failures.append("wait observer exit " + str(observer.returncode))
-        stderr.close()
-        driver.save(output / "postgres-observer-receipt.json", {"errors": failures,
-            "requested_idle_between_samples_ms": args.wait_sample_ms,
-            "timing": "Actual query start/end is retained per sample; query time adds to the requested interval",
-            "scope": "Sampled wait occupancy only; no per-request lock or pool duration is inferred"})
+            driver.save(output / "postgres-observer-receipt.json", receipt)
+        except Exception:
+            if primary_failure is None:
+                raise  # A receipt failure must not replace an existing setup/load failure.
     return result if not failures else 1
 
 
@@ -202,9 +236,15 @@ def summarize(output):
                     continue
                 waits[(phase(float(row["server_epoch"])), backend["state"],
                        backend["wait_event_type"], backend["wait_event"])] += 1
+    observer_path = output / "postgres-observer-receipt.json"
+    observer_receipt = driver.load(observer_path) if observer_path.is_file() else {
+        "status": "unavailable", "errors": ["Observer receipt was not created"]}
+    evidence = ["postgres/server.log", "postgres-statements.jsonl", "postgres-waits.jsonl",
+                "postgres-observer-receipt.json", "postgres-profile-settings.json"]
     driver.save(output / "postgres-profile-summary.json", {
         "task": "Perf-01", "kind": "profiling-only", "formal_timing_eligible": False,
-        "wait_observer_passed": sample_count > 0 and not driver.load(output / "postgres-observer-receipt.json")["errors"],
+        "wait_observer_passed": sample_count > 0 and observer_receipt.get("status") == "completed" and not observer_receipt["errors"],
+        "wait_observer_receipt": observer_receipt,
         "load_statement_logging_observed": any(value["phase"] == "load" and value["protocol_step"] in {"execute", "statement"} for value in summaries),
         "application_summary_sha256": driver.digest(output / "summary.json") if (output / "summary.json").exists() else None,
         "statement_observations": summaries, "unparsed_duration_lines": unknown,
@@ -212,7 +252,8 @@ def summarize(output):
             ["phase", "state", "wait_event_type", "wait_event", "samples"], [*key, count])) for key, count in waits.items()],
         "unavailable": ["exact_per_request_lock_wait_ns", "connection_pool_wait_ns", "pure_database_cpu_ns", "sqlite_execution_or_lock_wait_ns"],
         "scope": "Server elapsed times include waits. Parse/Bind/Execute are distinct and must not be counted as separate business queries. Concurrent durations cannot be subtracted from aggregate application wall time. Activity rows are unsynchronized sampled states, not exact duration. PostgreSQL and observer overhead exclude this profile from formal timing.",
-        "files": {name: driver.digest(output / name) for name in ["postgres/server.log", "postgres-statements.jsonl", "postgres-waits.jsonl", "postgres-observer-receipt.json", "postgres-profile-settings.json"]}})
+        "files": {name: driver.digest(output / name) for name in evidence if (output / name).is_file()},
+        "missing_files": [name for name in evidence if not (output / name).is_file()]})
 
 
 def main():
@@ -243,14 +284,32 @@ def main():
     output = args.output.resolve(); output.mkdir(parents=True, exist_ok=False)
     driver.save(output / "profile-driver.json", {"path": str(Path(__file__).resolve()), "sha256": driver.digest(Path(__file__)),
         "source": driver.source_identity(driver.ROOT), "query": SNAPSHOT, "formal_timing_eligible": False})
+    failure = None
     try:
         with driver.domain.postgres(output / "postgres", args.postgres_bin) as pg:
             configure(pg, output)
             result = asyncio.run(profile(args, output, pg))
+    except BaseException as error:
+        failure = error
+        raise
     finally:
         if (output / "postgres-waits.jsonl").exists():
-            summarize(output)
-            print(output / "postgres-profile-summary.json")
+            try:
+                summarize(output)
+                print(output / "postgres-profile-summary.json")
+            except Exception as error:
+                # Partial evidence can be malformed or missing after failure;
+                # retain that fact without replacing the original exception.
+                try:
+                    driver.save(output / "postgres-profile-summary-failure.json", {
+                        "error": type(error).__name__, "message": str(error)[:1024],
+                        "original_failure": type(failure).__name__ if failure is not None else None,
+                        "formal_timing_eligible": False})
+                except Exception:
+                    if failure is None:
+                        raise
+                if failure is None:
+                    raise
     return result
 
 

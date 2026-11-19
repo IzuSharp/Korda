@@ -20,6 +20,7 @@ import json
 import math
 import os
 from pathlib import Path
+import shutil
 import sys
 
 HERE = Path(__file__).resolve().parent
@@ -29,6 +30,8 @@ sys.path.insert(0, str(DOMAIN))
 from common import check_files, digest, expected_value, load, load_a21, save, source_identity
 import run as domain
 from supervision import supervised_command
+from perf01_affinity import cpu_list, process_masks, process_group, require_process, require_group
+from perf01_resources import identity, summarize as summarize_resources
 
 
 def utc():
@@ -49,23 +52,14 @@ def dataset(scenario, count, seed):
     return result
 
 
-def observed_resources(path):
-    by_phase = {}
+def observed_resources(path, role=None):
     with path.open() as stream:
-        for line in stream:
-            row = json.loads(line)
-            phase = by_phase.setdefault(row["phase"], {"samples": 0, "rss_peak_bytes": None, "first": row, "last": row})
-            phase["samples"] += 1
-            phase["last"] = row
-            rss = row["counters"]["rss_bytes"]["value"]
-            if rss is not None:
-                phase["rss_peak_bytes"] = max(phase["rss_peak_bytes"] or 0, rss)
-    for phase in by_phase.values():
-        first, last = phase["first"], phase["last"]
-        span = last["time_ns"] - first["time_ns"]
-        ticks = None if first.get("cpu_ticks") is None or last.get("cpu_ticks") is None else last["cpu_ticks"] - first["cpu_ticks"]
-        phase["app_cpu_seconds"] = None if ticks is None else ticks / last["clock_ticks_per_second"]
-        phase["app_cpu_percent_one_core"] = None if ticks is None or span <= 0 else phase["app_cpu_seconds"] * 1e11 / span
+        rows = (json.loads(line) for line in stream)
+        by_phase = summarize_resources(row for row in rows if role is None or row["role"] == role)
+    if role is None:
+        for phase in by_phase.values():
+            phase["app_cpu_seconds"] = phase["cpu_seconds"]
+            phase["app_cpu_percent_one_core"] = phase["cpu_percent_one_core"]
     return by_phase
 
 
@@ -90,6 +84,23 @@ def descriptor(args):
 
 def prepare(args, output, route, pg):
     a21 = load_a21()
+    service_cpus = sorted(os.sched_getaffinity(0))
+    generator_cpus = getattr(args, "generator_cpus", None)
+    affinity = {"mode": "inherited", "service_cpus": service_cpus, "generator_cpus": None}
+    if generator_cpus is not None:
+        if len(service_cpus) != 2 or len(generator_cpus) != 2 or set(service_cpus).intersection(generator_cpus):
+            raise ValueError("Generator isolation requires two service CPUs and two distinct generator CPUs")
+        launcher = shutil.which("taskset")
+        if launcher is None:
+            raise ValueError("Optional generator isolation requires the existing taskset executable")
+        affinity.update(mode="split", generator_cpus=generator_cpus, launcher=str(Path(launcher).resolve()))
+        affinity["controller_before"] = process_masks(os.getpid())
+        require_process(affinity["controller_before"], service_cpus)
+        if args.provider == "postgresql":
+            pid = int((output / "postgres/data/postmaster.pid").read_text().splitlines()[0])
+            group = process_group(pid); require_group(group, service_cpus)
+            root = next(row for row in group["processes"] if row["pid"] == pid)
+            affinity.update(postgres_root_pid=pid, postgres_start_ticks=root["start_ticks"], postgres_before=group)
     period = round(1e9 / args.rate)
     # A21 permits up to 100 ms dispatch lag. The first dispatch can be late
     # while the last catches up, so reserve 250 ms beyond a named long stage.
@@ -102,10 +113,16 @@ def prepare(args, output, route, pg):
         raise ValueError("A Perf-01 soak needs at least 1800 seconds of scheduled offered load")
     if args.stage != "smoke" and len(os.sched_getaffinity(0)) != 2:
         raise ValueError("Timed DB cells require an explicit fixed two-CPU affinity; launch through taskset")
-    paths = [HERE / "run.py", HERE / "target.py", DOMAIN / "run.py", DOMAIN / "http_target.py", DOMAIN / "common.py",
+    resource_observer = {"controller": identity(os.getpid()), "generator_interval_seconds": 1,
+                         "application_interval_seconds": .05,
+                         "scope": "Independent process CPU/memory/fd fields; generator roles are target, scheduler and controller"}
+    paths = [HERE / "run.py", HERE / "target.py", HERE / "perf01_affinity.py", HERE / "perf01_resources.py",
+             DOMAIN / "run.py", DOMAIN / "http_target.py", DOMAIN / "common.py",
              DOMAIN / "cell_worker.py", DOMAIN / "supervision.py", ROOT / "src/Benchmarks.Harness/nativeweave_bench.py",
              ROOT / "tests/Reference.TaskService/golden.py"]
     files = {str(path): digest(path) for path in paths}
+    if generator_cpus is not None:
+        files[affinity["launcher"]] = digest(Path(affinity["launcher"]))
     client = {}
     for name in ("httpx", "httpcore", "h11", "h2", "hpack", "hyperframe"):
         path = Path(importlib.util.find_spec(name).origin).resolve()
@@ -130,7 +147,8 @@ def prepare(args, output, route, pg):
                 "golden": str(ROOT / "tests/Reference.TaskService/golden.py"), "files": files, **pg,
                 "perf01": {"scenario": args.scenario, "stage": args.stage, "idle_seconds": args.idle_seconds,
                            "recovery_requests": args.recovery_requests,
-                           "continue_classified_overload": args.continue_classified_overload}}
+                           "continue_classified_overload": args.continue_classified_overload, "affinity": affinity,
+                           "resource_observer": resource_observer}}
     if args.protocol != "http1":
         manifest.update(tls_certificate=str(args.package_probe.resolve() / "tls/localhost.pem"),
                         tls_private_key=str(args.package_probe.resolve() / "tls/localhost.private.pem"))
@@ -149,8 +167,9 @@ def prepare(args, output, route, pg):
                 "durability": settings[args.provider], "tls": args.protocol, "serialization": "Unchanged B21 static JSON, typed Fluent and DTO path",
                 "allocator": "Unchanged package/comparator allocator", "isa_profile": "portable-x86-64-default-no-host-native",
                 "warmup_requests": args.warmup, "features": {"scenario": args.scenario, "concurrency": args.concurrency,
-                    "continue_classified_overload": args.continue_classified_overload},
-                "instrumentation": "External procfs; optional identical exception catch/log/rethrow observer"},
+                    "continue_classified_overload": args.continue_classified_overload,
+                    "service_cpus": service_cpus, "generator_cpus": generator_cpus},
+                "instrumentation": "External procfs application at nominal 20 Hz and target/scheduler/controller at nominal 1 Hz, independent CPU/memory/fd fields; optional identical exception catch/log/rethrow observer"},
             "timing": {"requests": count, "period_ns": period, "timeout_ns": 30_000_000_000,
                 "max_dispatch_lag_ns": 100_000_000, "max_in_flight": 512, "cleanup_timeout_ns": 180_000_000_000},
             "histogram": {"resolution_ns": 1000, "maximum_ns": 60_000_000_000},
@@ -164,6 +183,8 @@ def prepare(args, output, route, pg):
     frozen = {"task": "Perf-01", "stage": args.stage, "variant": args.variant, "created_utc": utc(),
               "driver_source": source_identity(ROOT), "source_files": files, "route": route,
               "host": a21.host_metadata(), "python_libraries": client, "isolation_note": args.isolation_note,
+              "affinity": affinity,
+              "resource_observer": resource_observer,
               "plan_sha256": digest(output / "plan.json"), "dataset_sha256": digest(data_path),
               "planned_load_seconds": (count - 1) * period / 1e9,
               "service_standard": {"max_unexpected_errors": 0, "max_p99_ms": args.max_p99_ms,
@@ -174,12 +195,44 @@ def prepare(args, output, route, pg):
 
 
 async def execute(args, output, plan, frozen):
+    affinity = frozen["affinity"]
+    if affinity["mode"] != "split":
+        return await execute_cell(args, output, plan, frozen)
+    before = process_masks(os.getpid())
+    require_process(before, affinity["service_cpus"])
+    after = None
+    try:
+        # PostgreSQL has already started on the original service CPUs. Only
+        # subsequently spawned A21/HTTPX processes inherit the generator mask.
+        os.sched_setaffinity(0, affinity["generator_cpus"])
+        during = process_masks(os.getpid()); require_process(during, affinity["generator_cpus"])
+        save(output / "controller-affinity-before.json", {"before": before, "during": during, "plan": affinity})
+        return await execute_cell(args, output, plan, frozen)
+    finally:
+        try:
+            after = process_masks(os.getpid())
+        finally:
+            os.sched_setaffinity(0, affinity["service_cpus"])
+            save(output / "controller-affinity-after.json", {"before_restore": after,
+                 "restored": process_masks(os.getpid()), "scope": "Controller main mask restored before PostgreSQL teardown"})
+
+
+async def execute_cell(args, output, plan, frozen):
     command = [str(Path(sys.executable).resolve()), str(DOMAIN / "cell_worker.py"), "--plan", str(output / "plan.json"),
                "--route", args.route, "--repetition", str(args.repetition), "--output", str(output / "observation.json"),
                "--a21", str(ROOT / "src/Benchmarks.Harness/nativeweave_bench.py")]
     save(output / "progress.json", {"state": "running", "started_utc": utc(), "frozen_inputs_sha256": digest(output / "frozen-inputs.json")})
     timeout = 20 * args.warmup + frozen["planned_load_seconds"] + 225
     receipt = await supervised_command(command, output / "supervision", timeout, 5, output / "control.json", load_a21())
+    if frozen["affinity"]["mode"] == "split":
+        affinity = frozen["affinity"]
+        observed = {"controller": process_masks(os.getpid())}
+        if args.provider == "postgresql":
+            observed["postgres"] = process_group(affinity["postgres_root_pid"])
+        save(output / "controller-affinity-end.json", observed)
+        require_process(observed["controller"], affinity["generator_cpus"])
+        if "postgres" in observed:
+            require_group(observed["postgres"], affinity["service_cpus"], affinity["postgres_start_ticks"])
     summary = {"task": "Perf-01", "variant": args.variant, "stage": args.stage, "route": args.route,
                "provider": args.provider, "scenario": args.scenario, "rate": args.rate, "concurrency": args.concurrency,
                "finished_utc": utc(), "valid": False, "qualifies_service_standard": False,
@@ -198,6 +251,8 @@ async def execute(args, output, plan, frozen):
         # >=1800 s requirement therefore uses observed dispatch span as well.
         duration_valid = args.stage != "soak" or span >= 1800
         resources = observed_resources(directory / "application/resources.jsonl")
+        generator_resources = {role: observed_resources(directory / "generator-resources.jsonl", role)
+                               for role in ("target", "scheduler", "controller")}
         phase = resources.get("measurement", {})
         latency = row["histograms"]["arrival_success"]["percentiles_from_exact_samples_ns"]
         valid = bool(row["valid"] and app["status"] == "passed" and extra["status"] == "passed" and duration_valid
@@ -220,9 +275,12 @@ async def execute(args, output, plan, frozen):
             invalid_reasons=row.get("invalid_reasons", []) + ([] if duration_valid else ["Actual uninterrupted dispatched span below 1800 seconds"]),
             application_receipt={"path": str(directory / "receipt.json"), "sha256": digest(directory / "receipt.json")},
             perf01_receipt={"path": str(directory / "perf01.json"), "sha256": digest(directory / "perf01.json")},
-            resources=resources, provider_errors=extra["provider_errors"], business_retry_attempts=extra["business_retry_attempts"],
+            resources=resources, generator_resources=generator_resources,
+            generator_resource_observer=extra["generator_resource_observer"],
+            provider_errors=extra["provider_errors"], business_retry_attempts=extra["business_retry_attempts"],
             error_policy=extra["error_policy"], classified_error_counts=extra["classified_error_counts"],
             classified_error_evidence=extra["classified_error_evidence"], permanent_integrity_halt=extra["permanent_integrity_halt"],
+            affinity=extra.get("affinity", frozen["affinity"]),
             durable_oracle=app.get("durable_oracle"), persisted_before_recovery=extra.get("persisted_before_recovery"),
             persisted_before_shutdown=extra.get("persisted_before_shutdown"), closed=app.get("closed"),
             loaded_files=extra["loaded_files"], phases=extra["phases"])
@@ -246,6 +304,8 @@ def main():
     parser.add_argument("--rate", type=float, required=True)
     parser.add_argument("--seconds", type=float, required=True)
     parser.add_argument("--concurrency", type=int, default=16)
+    parser.add_argument("--generator-cpus", type=cpu_list,
+                        help="Optional separate two-CPU generator mask; launch this controller on the two service CPUs first")
     parser.add_argument("--warmup", type=int, default=32)
     parser.add_argument("--idle-seconds", type=float, default=60)
     parser.add_argument("--recovery-requests", type=int, default=32)

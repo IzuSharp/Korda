@@ -41,6 +41,7 @@ def load_module(name, path):
 
 
 A21 = load_module('perf01_codec_a21', ROOT / 'src/Benchmarks.Harness/nativeweave_bench.py')
+AFFINITY = load_module('perf01_codec_affinity', HERE / 'affinity.py')
 sha = A21.sha256
 
 
@@ -191,6 +192,10 @@ def process_sample(pid):
         result['open_file_descriptors'] = len(list(Path(f'/proc/{pid}/fd').iterdir()))
     except (OSError, ValueError, IndexError):
         result['cpu_seconds'] = None; result['open_file_descriptors'] = None
+    try:
+        result['affinity'] = AFFINITY.observe(pid)
+    except (OSError, ValueError, IndexError):
+        result['affinity'] = None
     return result
 
 
@@ -228,6 +233,18 @@ def validate_completion(value, row, corpus_manifest, route):
 
 
 async def measure(args):
+    finite = [args.duration_seconds, args.rate, args.warmup_seconds, args.deadline_ms,
+              args.max_lag_ms, args.recovery_seconds, args.recovery_rate]
+    if not all(math.isfinite(value) for value in finite):
+        raise ValueError('Timing/rate values must be finite.')
+    if args.duration_seconds <= 0 or args.rate <= 0 or not 1 <= args.workers <= 256 or args.queue <= 0 or args.inflight <= 0 or args.deadline_ms <= 0 or args.max_lag_ms <= 0 or args.recovery_rate <= 0 or args.recovery_seconds < 0 or args.warmup_seconds < 0 or args.idle_seconds < 0:
+        raise ValueError('Positive rate/duration/resources/thresholds and 1..256 workers required.')
+    if round(1e9 / args.rate) < 1 or round(1e9 / args.recovery_rate) < 1:
+        raise ValueError('Arrival periods must be at least one nanosecond.')
+    original_cpus = sorted(os.sched_getaffinity(0))
+    generator_cpus = args.generator_cpus if args.generator_cpus is not None else original_cpus
+    if args.generator_cpus is not None and (len(original_cpus) != 2 or len(generator_cpus) != 2 or set(original_cpus) & set(generator_cpus)):
+        raise ValueError('Launch on two target CPUs and select two distinct, disjoint generator CPUs.')
     manifest = json.loads(args.manifest.read_text())
     if driver_inventory() != manifest['driver_sha256'] or sha(ROOT / 'src/Benchmarks.Harness/nativeweave_bench.py') != manifest['a21_sha256']:
         raise RuntimeError('Driver/A21 source changed after artifact preparation; rebuild both variants with the same frozen driver.')
@@ -240,13 +257,14 @@ async def measure(args):
         for suffix, key in [('raw', 'raw_sha256'), ('zlib', 'encoded_sha256')]:
             if sha(args.corpus / f"{item['id']}.{suffix}") != item[key]: raise RuntimeError('Corpus hash mismatch.')
     output = args.output.resolve(); output.mkdir(parents=True, exist_ok=False)
-    if args.duration_seconds <= 0 or args.rate <= 0 or args.workers <= 0 or args.queue <= 0 or args.inflight <= 0 or args.deadline_ms <= 0 or args.max_lag_ms <= 0 or args.recovery_rate <= 0 or args.recovery_seconds < 0 or args.warmup_seconds < 0 or args.idle_seconds < 0:
-        raise ValueError('Positive rate/duration/resources/thresholds required.')
     plan = {'schema_version': 1, 'task': 'Perf-01', 'domain': 'codec',
             'source_commit': manifest['source_commit'], 'manifest_sha256': sha(args.manifest),
             'corpus_manifest_sha256': sha(args.corpus / 'manifest.json'),
             'controller_sha256': sha(Path(__file__)), 'a21_sha256': manifest['a21_sha256'],
             'host': A21.host_metadata(), 'seed': SEED, 'route': args.route,
+            'affinity_policy': {'mode': 'split-generator-diagnostic' if args.generator_cpus is not None else 'inherited',
+                                'target_cpus': original_cpus, 'generator_cpus': generator_cpus,
+                                'initial_controller': AFFINITY.observe(os.getpid())},
             'interface': args.interface, 'action': args.action, 'case': args.case,
             'workers': args.workers, 'queue_capacity': args.queue, 'max_in_flight': args.inflight,
             'planned_rate': args.rate, 'period_ns': round(1e9 / args.rate),
@@ -279,6 +297,13 @@ async def measure(args):
     stats = Counter()
     phase_counts = defaultdict(Counter)
     phase_progress = {}
+
+    def check_affinity(phase):
+        observed = {'target': AFFINITY.observe(process.pid), 'generator': AFFINITY.observe(os.getpid())}
+        plan.setdefault('affinity_observations', {})[phase] = observed
+        dump(output / 'plan.json', plan)
+        AFFINITY.require(observed['target'], original_cpus)
+        AFFINITY.require(observed['generator'], generator_cpus)
 
     def event(value):
         raw.write(json.dumps({'observer_ns': time.monotonic_ns(), **value}, separators=(',', ':')) + '\n'); raw.flush()
@@ -327,7 +352,18 @@ async def measure(args):
 
     async def sample():
         while not stopped.is_set():
-            resources.write(json.dumps({'observer_ns': time.monotonic_ns(), 'target': process_sample(process.pid), 'generator': process_sample(os.getpid())}, separators=(',', ':')) + '\n'); resources.flush()
+            observation = {'observer_ns': time.monotonic_ns(), 'target': process_sample(process.pid), 'generator': process_sample(os.getpid())}
+            resources.write(json.dumps(observation, separators=(',', ':')) + '\n'); resources.flush()
+            for name, expected in [('target', original_cpus), ('generator', generator_cpus)]:
+                snapshot = observation[name]['affinity']
+                if snapshot is None:
+                    if name == 'generator' or process.returncode is None:
+                        failures.append('affinity_unavailable:' + name); stopped.set()
+                    continue
+                try:
+                    AFFINITY.require(snapshot, expected)
+                except ValueError as error:
+                    failures.append('affinity_mismatch:' + str(error)); stopped.set()
             try: await asyncio.wait_for(stopped.wait(), 1)
             except asyncio.TimeoutError: pass
 
@@ -385,6 +421,12 @@ async def measure(args):
 
     reader_task = sample_task = None
     try:
+        # The target was spawned on the original mask. Move only this Python
+        # controller after spawn, including any already-created child watcher.
+        # A rejected mask remains inside this try so the target is always reaped.
+        if args.generator_cpus is not None:
+            plan['affinity_policy']['controller_after_move'] = AFFINITY.pin_current_threads(generator_cpus)
+            dump(output / 'plan.json', plan)
         ready = json.loads(await asyncio.wait_for(process.stdout.readline(), 60)); event(ready)
         if ready.get('kind') != 'ready' or ready.get('dynamic_code_supported') is not False:
             raise RuntimeError('Target did not establish real AOT/direct readiness.')
@@ -392,24 +434,30 @@ async def measure(args):
             raise RuntimeError('Target resource configuration differs from frozen plan.')
         if args.route == 'nativeweave':
             plan['actual_loaded_native'] = loaded_native(process.pid, manifest['native_sha256'])
-        dump(output / 'plan.json', plan)
+        check_affinity('ready')
         reader_task = asyncio.create_task(reader()); sample_task = asyncio.create_task(sample())
         if args.warmup_seconds: await schedule('warmup', args.warmup_seconds)
         process.stdin.write(b'snapshot\n'); await process.stdin.drain()
         resource_before = process_sample(process.pid)
         measured_start, measured_end, start_utc, dispatch_span = await schedule('measurement', args.duration_seconds)
         resource_after = process_sample(process.pid)
+        check_affinity('after_measurement')
         end_utc = last_measurement_completion_utc
         if args.recovery_seconds:
             await schedule('recovery', args.recovery_seconds, args.recovery_rate)
         process.stdin.write(b'drain\n'); await process.stdin.drain()
         await asyncio.wait_for(drained.wait(), 30)
         drain_utc = utc()
+        check_affinity('drained')
         # The whole idle interval is separately timestamped and never receives load credit.
         idle_start = time.monotonic_ns()
         for _ in range(args.idle_seconds):
             process.stdin.write(b'snapshot\n'); await process.stdin.drain(); await asyncio.sleep(1)
         idle_end = time.monotonic_ns()
+        check_affinity('after_idle')
+        # Sampling ends while the target still waits on stdin. Its expected
+        # subsequent exit must not be mistaken for an unobservable live mask.
+        stopped.set()
         process.stdin.close(); await asyncio.wait_for(process.wait(), 30)
         await reader_task
         if process.returncode != 0: failures.append('target_exit_' + str(process.returncode))
@@ -425,7 +473,11 @@ async def measure(args):
                    'recovery_standard_met': bool(phase_counts['recovery']['ok']) and all(phase_counts['recovery'][key] == 0 for key in ['failed', 'timeout', 'rejected', 'generator_capacity']) if args.recovery_seconds else None,
                    'exit_code': process.returncode, 'complete': True}
     except BaseException as error:
-        if process.returncode is None: process.kill(); await process.wait()
+        stopped.set()
+        if process.returncode is None:
+            try: process.kill()
+            except ProcessLookupError: pass
+            await process.wait()
         if reader_task and not reader_task.done(): await reader_task
         for row in pending.values():
             records.write(json.dumps({**row, 'outcome': 'interrupted', 'completion_ns': None}, separators=(',', ':')) + '\n')
@@ -442,6 +494,13 @@ async def measure(args):
         raw.close(); records.close(); resources.close()
         (output / 'target.stderr').write_bytes(await stderr_task)
         dump(output / 'phase-progress.json', phase_progress)
+        if args.generator_cpus is not None:
+            try:
+                restored = AFFINITY.pin_current_threads(original_cpus)
+                dump(output / 'controller-affinity-restored.json', restored)
+            except BaseException as error:
+                outcome['valid'] = False
+                outcome['invalid_reasons'].append('affinity_restore:' + type(error).__name__ + ': ' + str(error))
     outcome['closed_at_utc'] = utc()
     dump(output / 'result.json', outcome)
     summarize(output)
@@ -522,6 +581,8 @@ def main():
     run.add_argument('--idle-seconds', type=int, default=60); run.add_argument('--deadline-ms', type=float, default=1000)
     run.add_argument('--recovery-seconds', type=float, default=10); run.add_argument('--recovery-rate', type=float, default=1)
     run.add_argument('--max-lag-ms', type=float, default=50); run.add_argument('--output', type=Path, required=True)
+    run.add_argument('--generator-cpus', type=AFFINITY.cpu_pair,
+                     help='Optional two-CPU generator diagnostic, e.g. 0,1; launch on two disjoint target CPUs.')
     args = parser.parse_args()
     if args.command == 'prepare': prepare(args)
     elif args.command == 'corpus': corpus(args)

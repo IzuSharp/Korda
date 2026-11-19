@@ -18,9 +18,12 @@ import time
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src/Benchmarks.Domain"))
 import httpx
-from common import digest, load, load_a21, mapping_sample, process_sample, save
+import http_target
+from common import digest, load, load_a21, mapping_sample, save
 from http_target import Target, require
 from supervision import register_process
+from perf01_affinity import process_masks, process_group, require_process, require_group
+from perf01_resources import identity, process_sample
 
 CONTINUED_SERVICE_STATUSES = frozenset({408, 429, 500, 502, 503, 504})
 
@@ -46,6 +49,9 @@ def utc():
 
 class PerfTarget(Target):
     def __init__(self, args):
+        # Replace only this benchmark process's observation function. Historical
+        # B23/A21 sources, application behavior and request timing stay unchanged.
+        http_target.process_sample = process_sample
         super().__init__(args)
         self.extra = {"schema_version": 1, "task": "Perf-01", "status": "running",
                       "business_retry_attempts": 0,
@@ -61,8 +67,56 @@ class PerfTarget(Target):
             "all_observed_errors_fail_cell": True,
             "halt_rule": "Successful-response payload/protocol violations, authentication/validation statuses, and unclassified errors permanently stop measured HTTP dispatch",
             "provider_rule": "No HTTP status or timeout implies SQLite BUSY; exact provider codes come only from the exception observer"}
+        self.affinity = self.manifest["perf01"].get("affinity", {"mode": "inherited"})
+        if self.affinity["mode"] == "split":
+            # taskset execs the real app in the same PID before it creates any
+            # .NET/Rust threads. The Python target never leaves generator CPUs.
+            command = [self.affinity["launcher"], "--cpu-list", ",".join(map(str, self.affinity["service_cpus"])),
+                       *self.descriptor["command"]]
+            self.application.descriptor = dict(self.descriptor, command=command)
+            self.extra["affinity"] = {"plan": self.affinity, "application_launch_command": command, "observations": {}}
         self.original_stop = self.application.stop
         self.application.stop = self.finish
+
+    async def sample_generator_resources(self, stopped, receipt):
+        try:
+            with (self.directory / "generator-resources.jsonl").open("w") as stream:
+                while True:
+                    for role, process in receipt["roles"].items():
+                        row = process_sample(self.a21, process["pid"], process["start_ticks"])
+                        row.update(role=role, phase=self.application.phase)
+                        if row["identity_matches"] is False and role not in receipt["identity_failures"]:
+                            receipt["identity_failures"].append(role)
+                            receipt["errors"].append("Process start identity changed for generator role " + role)
+                        stream.write(json.dumps(row, separators=(",", ":")) + "\n")
+                        receipt["samples"][role] += 1
+                    stream.flush()
+                    if stopped.is_set():
+                        break
+                    try:
+                        await asyncio.wait_for(stopped.wait(), receipt["interval_seconds"])
+                    except asyncio.TimeoutError:
+                        pass
+            receipt["status"] = "failed" if receipt["errors"] else "completed"
+        except BaseException as error:
+            receipt["status"] = "failed"
+            receipt["errors"].append(type(error).__name__ + ": " + str(error)[:512])
+        finally:
+            receipt["finished_utc"] = utc()
+            save(self.directory / "generator-observer-receipt.json", receipt)
+
+    def observe_affinity(self, phase):
+        if self.affinity["mode"] != "split":
+            return
+        observation = {"target": process_masks(os.getpid()), "scheduler": process_masks(os.getppid()),
+                       "application": process_masks(self.application.process.pid)}
+        self.extra["affinity"]["observations"][phase] = observation
+        require_process(observation["target"], self.affinity["generator_cpus"])
+        require_process(observation["scheduler"], self.affinity["generator_cpus"])
+        require_process(observation["application"], self.affinity["service_cpus"])
+        if self.manifest["provider"] == "postgresql":
+            observation["postgres"] = process_group(self.affinity["postgres_root_pid"])
+            require_group(observation["postgres"], self.affinity["service_cpus"], self.affinity["postgres_start_ticks"])
 
     async def request(self, method, path, *, body=None, headers=None, stage=None):
         self._request.set({"method": method, "path": path, "stage": stage})
@@ -94,10 +148,20 @@ class PerfTarget(Target):
         # Every scenario starts from exactly the same 128 HTTP-created fixtures.
         # B23 assigns old fixed timestamps, so later writes cannot change page 1.
         await super().seed()
+        self.observe_affinity("after_seed")
+        executable = Path(f"/proc/{self.application.process.pid}/exe")
+        executable_hash = digest(executable)
+        route_executable = self.descriptor["command"][0]
+        expected_hash = self.descriptor["artifacts"].get(route_executable)
+        require(expected_hash is not None and executable_hash == expected_hash,
+                "Actual mapped application executable differs from the pinned route")
+        self.extra["loaded_files"][os.readlink(executable)] = {"sha256": executable_hash,
+            "route_executable": route_executable, "expected_sha256": expected_hash,
+            "method": "Actual /proc/application_pid/exe after READY, including taskset exec replacement"}
         mappings = mapping_sample(self.application.process.pid)
         for path, value in mappings.get("modules", {}).items():
             candidate = Path(path)
-            if candidate.is_file() and (candidate.name.endswith(".so") or path == self.descriptor["command"][0]):
+            if candidate.is_file() and candidate.name.endswith(".so"):
                 self.extra["loaded_files"][path] = {"sha256": digest(candidate), **value}
         self.extra["phases"]["seed_finished"] = {"utc": utc(), "monotonic_ns": time.monotonic_ns()}
 
@@ -146,6 +210,7 @@ class PerfTarget(Target):
         """After measured work drains, check low-rate recovery in the SAME process."""
         try:
             if self.application.process is not None and self.application.process.returncode is None and hasattr(self.application, "url"):
+                self.observe_affinity("after_load_before_recovery")
                 self.extra["persisted_before_recovery"] = self.persisted_counts()
                 verify = ssl.create_default_context(cafile=self.config["tlsCertificatePem"]) if self.config.get("tlsCertificatePem") else True
                 self.application.phase = "post-load-recovery"
@@ -179,17 +244,43 @@ class PerfTarget(Target):
                     require(self.application.process.returncode is None, "Application exited during idle observation")
                 idle.update(end_ns=time.monotonic_ns(), end_utc=utc(),
                             after=process_sample(self.a21, self.application.process.pid))
+                self.observe_affinity("after_idle_before_shutdown")
         finally:
+            self.application.phase = "final-reconciliation-and-shutdown"
             self.extra["persisted_before_shutdown"] = self.persisted_counts()
             await self.original_stop()
 
     async def run(self):
         result = 1
+        controller = self.manifest["perf01"]["resource_observer"]["controller"]
+        actual_controller = identity(controller["pid"])
+        target, scheduler = identity(os.getpid()), identity(os.getppid())
+        require(actual_controller["start_ticks"] == controller["start_ticks"] and
+                scheduler["parent_pid"] == controller["pid"], "Generator role process identity differs from its controller")
+        receipt = {"status": "running", "started_utc": utc(), "errors": [], "identity_failures": [],
+                   "interval_seconds": self.manifest["perf01"]["resource_observer"]["generator_interval_seconds"],
+                   "roles": {"target": target, "scheduler": scheduler, "controller": controller},
+                   "samples": {role: 0 for role in ("target", "scheduler", "controller")},
+                   "scope": "Nominal 1 Hz process observations including a final sample; actual timestamps and phase labels are retained. Read failures remain per-field unavailability."}
+        save(self.directory / "generator-observer-receipt.json", receipt)
+        stopped = asyncio.Event()
+        sampler = asyncio.create_task(self.sample_generator_resources(stopped, receipt))
         try:
             result = await super().run()
             self.extra["status"] = "passed" if result == 0 else "failed"
             return result
         finally:
+            stopped.set()
+            try:
+                await sampler
+            except BaseException as error:
+                receipt["status"] = "failed"
+                receipt["errors"].append(type(error).__name__ + ": " + str(error)[:512])
+            resources = self.directory / "generator-resources.jsonl"
+            self.extra["generator_resource_observer"] = {**receipt,
+                "path": resources.name, "sha256": digest(resources) if resources.exists() else None}
+            if receipt["status"] != "completed":
+                self.extra["status"] = "failed"
             self.extra["classified_error_counts"] = dict(self._classified_counts)
             classified = self.directory / "classified-errors.jsonl"
             self.extra["classified_error_evidence"] = {"path": classified.name, "sha256": digest(classified)} if classified.exists() else None

@@ -178,6 +178,71 @@ foreach (var provider in new uint[] { 1, 2 })
     catch (Exception e) when (e is OperationCanceledException or ObjectDisposedException) { assertions++; }
     await disposal; await concurrent.DisposeAsync(); Clean("concurrent-dispose", provider, transport);
 
+    foreach (var mapperThrows in new[] { false, true })
+    {
+        transport = null;
+        GatedRetirementTransport? observed = null;
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseJoin = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var releaseMapper = new ManualResetEventSlim();
+        var mapped = 0;
+        var mapperFailure = new InvalidDataException("Controlled synchronous materializer failure.");
+        var blockedProjection = Projection<Item>.Create(ordinary.Fields, row =>
+        {
+            if (Interlocked.Increment(ref mapped) == 2)
+            {
+                entered.TrySetResult();
+                if (!releaseMapper.Wait(TimeSpan.FromSeconds(10))) throw new TimeoutException("Controlled materializer was not released.");
+                if (mapperThrows) throw mapperFailure;
+            }
+            return new(row.Read(0, Codecs.Int64), row.Read(1, Codecs.NullableReference(Codecs.String)));
+        });
+        var blocked = Make(provider, 2, blockedProjection, value => transport = value,
+            decorate: inner => observed = new GatedRetirementTransport(inner, releaseJoin.Task)).GetAsyncEnumerator();
+        try
+        {
+            Check(await blocked.MoveNextAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(10)) && blocked.Current == new Item(1, "row-1"), "prime one live batch before blocking its next materializer");
+            var activeTransport = transport ?? throw new InvalidOperationException("Expected the primed native transport.");
+            var tracked = observed ?? throw new InvalidOperationException("Expected the retirement observer.");
+            Check(activeTransport.Fetches == 1, "priming used one actual provider batch");
+            // The next row is already in that batch, so MoveNext itself enters
+            // the synchronous mapper on this dedicated worker before returning.
+            var moving = Task.Factory.StartNew(() => blocked.MoveNextAsync().AsTask(), CancellationToken.None,
+                TaskCreationOptions.LongRunning, TaskScheduler.Default).Unwrap();
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Check(activeTransport.Fetches == 1 && !moving.IsCompleted, "blocked materializer is an active move without another fetch");
+            await Expect<DatabaseException>(async () => { await blocked.MoveNextAsync(); }, e => e.Kind == DatabaseErrorKind.ConcurrentUse);
+            var firstDispose = blocked.DisposeAsync().AsTask();
+            var secondDispose = blocked.DisposeAsync().AsTask();
+            Check(!firstDispose.IsCompleted && !secondDispose.IsCompleted, "all concurrent disposals join the active synchronous materializer");
+            Check(tracked.BatchDisposeCalls == 0 && tracked.JoinCalls == 0 && NativeBatch.LiveBytes > 0,
+                "disposal cannot release a batch or start cleanup while its materializer is using the lease");
+            await Expect<ObjectDisposedException>(async () => { await blocked.MoveNextAsync(); });
+
+            releaseMapper.Set();
+            await tracked.JoinEntered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Check(tracked.BatchDisposeCalls == 1 && tracked.JoinCalls == 1, "one cleanup releases the batch and starts one retirement join");
+            Check(!firstDispose.IsCompleted && !secondDispose.IsCompleted, "disposal still awaits the provider retirement receipt");
+            if (mapperThrows)
+                Check(!moving.IsCompleted, "failed materialization awaits cleanup before publishing its original exception");
+            else
+                Check(await moving.WaitAsync(TimeSpan.FromSeconds(5)) && blocked.Current == new Item(2, "row-2"), "admitted materialization retains readable bytes through concurrent disposal");
+            releaseJoin.TrySetResult();
+            if (mapperThrows)
+                await Expect<InvalidDataException>(async () => { await moving.WaitAsync(TimeSpan.FromSeconds(10)); }, error => ReferenceEquals(error, mapperFailure));
+            await Task.WhenAll(firstDispose, secondDispose).WaitAsync(TimeSpan.FromSeconds(10));
+            await blocked.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(10));
+            Check(tracked.JoinCalls == 1 && tracked.BatchDisposeCalls == 1, "repeated disposal shares the completed once-only cleanup");
+        }
+        finally
+        {
+            // Failure paths also unblock both barriers before joining disposal.
+            releaseMapper.Set(); releaseJoin.TrySetResult();
+            await blocked.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(10));
+        }
+        Clean(mapperThrows ? "blocked-mapper-failure-dispose" : "blocked-mapper-dispose", provider, transport, mapperThrows ? 1 : 2);
+    }
+
     transport = null;
     using (var method = new CancellationTokenSource())
     using (var enumeration = new CancellationTokenSource())
@@ -239,6 +304,31 @@ Console.WriteLine($"PASS B06 assertions={assertions} cases={cases.Count} jit={Ru
 
 internal sealed record Item(long Id, string? Label);
 internal sealed record Observation(string Name, uint Provider, int Rows, int Fetches, int DuplicateTakes, ulong[] Stats);
+internal sealed class GatedRetirementTransport(IStreamTransport inner, Task releaseJoin) : IStreamTransport
+{
+    private int _joinCalls, _batchDisposeCalls;
+    internal int JoinCalls => Volatile.Read(ref _joinCalls);
+    internal int BatchDisposeCalls => Volatile.Read(ref _batchDisposeCalls);
+    internal TaskCompletionSource JoinEntered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    public async Task<IStreamBatch> FetchAsync() => new TrackedBatch(await inner.FetchAsync().ConfigureAwait(false), this);
+    public void RequestStop() => inner.RequestStop();
+    public async Task<StreamRetirement> JoinAsync()
+    {
+        Interlocked.Increment(ref _joinCalls); JoinEntered.TrySetResult();
+        await releaseJoin.ConfigureAwait(false);
+        return await inner.JoinAsync().ConfigureAwait(false);
+    }
+    private sealed class TrackedBatch(IStreamBatch innerBatch, GatedRetirementTransport observer) : IStreamBatch
+    {
+        public ReadOnlyMemory<byte> Bytes => innerBatch.Bytes;
+        public bool End => innerBatch.End;
+        public void Dispose()
+        {
+            Interlocked.Increment(ref observer._batchDisposeCalls);
+            innerBatch.Dispose();
+        }
+    }
+}
 internal sealed class FailingCleanupTransport(IStreamTransport inner) : IStreamTransport
 {
     public Task<IStreamBatch> FetchAsync() => inner.FetchAsync();

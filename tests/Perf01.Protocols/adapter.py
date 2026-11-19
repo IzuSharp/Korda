@@ -9,6 +9,7 @@ from pathlib import Path
 import signal
 import sys
 import time
+from affinity import observe as observe_affinity, require as require_affinity, pin_current_threads
 
 
 def load_module(name, path):
@@ -21,8 +22,44 @@ def save(path, value):
     path.write_text(json.dumps(value, indent=2, sort_keys=True) + '\n')
 
 
+def process_sample(a21, pid):
+    """Keep CPU/memory evidence independent of raced procfs descriptor scans."""
+    value = {'pid': pid, 'time_ns': time.monotonic_ns(), 'counters': a21.observe_process(pid),
+             'clock_ticks_per_second': os.sysconf('SC_CLK_TCK'), 'cpu_ticks': None,
+             'fd_count': None, 'socket_count': None, 'descriptor_scan_misses': None,
+             'method': 'Linux procfs for the named PID; descriptor counts are observations during a non-atomic scan'}
+    try:
+        fields = (Path('/proc') / str(pid) / 'stat').read_text().rsplit(')', 1)[1].split()
+        value['cpu_ticks'] = int(fields[11]) + int(fields[12])
+    except (OSError, ValueError, IndexError) as error:
+        value['cpu_error'] = type(error).__name__
+    try:
+        descriptors = list((Path('/proc') / str(pid) / 'fd').iterdir())
+        disappeared = sockets = 0
+        complete = True
+        for descriptor in descriptors:
+            try:
+                sockets += os.readlink(descriptor).startswith('socket:')
+            except FileNotFoundError:
+                # In a self-sample, the enumeration FD has already closed.
+                # Another process can close descriptors during the scan too.
+                disappeared += 1
+            except OSError as error:
+                complete = False
+                value['descriptor_error'] = type(error).__name__
+        value['descriptor_scan_misses'] = disappeared
+        value['fd_count'] = len(descriptors) - disappeared
+        value['socket_count'] = sockets if complete else None
+    except OSError as error:
+        value['descriptor_error'] = type(error).__name__
+    return value
+
+
 async def main(args):
     manifest = json.loads(args.manifest.read_text())
+    service_cpus = manifest['service_cpus'] or sorted(os.sched_getaffinity(0))
+    generator_cpus = manifest['generator_cpus'] or service_cpus
+    if sorted(os.sched_getaffinity(0)) != service_cpus: raise ValueError('Adapter did not inherit the service CPU mask')
     a21 = load_module('perf01_a21', manifest['a21'])
     sys.path.insert(0, str(Path(manifest['domain_common']).parent))
     common = load_module('perf01_domain_common', manifest['domain_common'])
@@ -40,14 +77,20 @@ async def main(args):
     async def send_server(phase):
         if server and server.returncode is None:
             server.stdin.write((phase + '\n').encode()); await server.stdin.drain()
+    def check_affinity(phase, include_client=True):
+        observed = {'server': observe_affinity(server.pid),
+                    'adapter': observe_affinity(os.getpid()), 'controller': observe_affinity(os.getppid())}
+        if include_client: observed['client'] = observe_affinity(client.pid)
+        receipt.setdefault('affinity', {})[phase] = observed
+        for name, snapshot in observed.items(): require_affinity(snapshot, service_cpus if name == 'server' else generator_cpus)
     async def sample():
         with (out / 'process-resources.jsonl').open('w') as log:
             while not stop_sampling.is_set():
                 row = {'monotonic_ns': time.monotonic_ns(), 'utc_ns': time.time_ns(),
-                       'server': common.process_sample(a21, server.pid),
-                       'client': common.process_sample(a21, client.pid) if client else None,
-                       'adapter': common.process_sample(a21, os.getpid()),
-                       'controller': common.process_sample(a21, os.getppid()),
+                       'server': process_sample(a21, server.pid),
+                       'client': process_sample(a21, client.pid) if client else None,
+                       'adapter': process_sample(a21, os.getpid()),
+                       'controller': process_sample(a21, os.getppid()),
                        'load_average': os.getloadavg()}
                 resources.append(row); log.write(json.dumps(row, separators=(',', ':')) + '\n'); log.flush()
                 try: await asyncio.wait_for(stop_sampling.wait(), 1)
@@ -76,6 +119,7 @@ async def main(args):
             raise ValueError('Actually loaded native modules differ from build manifest')
         if manifest['route'] == 'direct-rust' and actual: raise ValueError('Direct Rust server unexpectedly loaded a NativeWeave module')
         receipt['loaded_native_sha256'] = ready['loaded_native_sha256']
+        if manifest['generator_cpus'] is not None: pin_current_threads(generator_cpus)
         client_config = dict(manifest['client_config'], http1=ready['addresses'][0], http2=ready['addresses'][1])
         save(out / 'client-config.json', client_config)
         client = await asyncio.create_subprocess_exec(manifest['client'], '--config', str(out / 'client-config.json'), '--output', str(out / 'client'),
@@ -86,6 +130,7 @@ async def main(args):
         if client_hello.get('kind') != 'hello' or client_hello.get('dynamic_code_supported') is not False:
             raise ValueError('Independent client is not Native AOT or did not emit hello')
         receipt.update(server_pid=server.pid, client_pid=client.pid, client_hello=client_hello)
+        check_affinity('ready')
         sampling = asyncio.create_task(sample())
         print(json.dumps({'kind': 'hello', 'route': manifest['route'], 'dynamic_code_supported': False,
                           'server_pid': server.pid, 'client_pid': client.pid}), flush=True)
@@ -102,26 +147,28 @@ async def main(args):
             identifier = int(line.split(b'\t', 1)[0])
             if first and identifier < manifest['requests']:
                 first = False; receipt['measurement_dispatch_start_utc_ns'] = time.time_ns()
-                receipt['measurement_resources_before'] = common.process_sample(a21, server.pid)
+                receipt['measurement_resources_before'] = process_sample(a21, server.pid)
                 await send_server('measurement')
             if not first and not recovery and identifier >= manifest['requests']:
                 recovery = True
-                receipt['measurement_resources_after'] = common.process_sample(a21, server.pid)
+                receipt['measurement_resources_after'] = process_sample(a21, server.pid)
                 receipt['measurement_dispatch_end_utc_ns'] = time.time_ns()
                 receipt['recovery_start_utc_ns'] = time.time_ns()
                 await send_server('recovery')
             client.stdin.write(line); await client.stdin.drain()
+        check_affinity('after_load_and_recovery')
         client.stdin.close()
         await asyncio.wait_for(client.wait(), manifest['client_timeout_seconds'] + 10)
         await forwarding
         receipt['recovery_end_utc_ns'] = time.time_ns()
-        receipt['recovery_resources_after'] = common.process_sample(a21, server.pid)
+        receipt['recovery_resources_after'] = process_sample(a21, server.pid)
         if client.returncode != 0: raise ValueError('Independent client exited with ' + str(client.returncode))
         await send_server('idle')
         receipt['idle_start_utc_ns'] = time.time_ns()
         await asyncio.sleep(manifest['idle_seconds'])
         receipt['idle_end_utc_ns'] = time.time_ns()
-        receipt['after_idle_resources'] = common.process_sample(a21, server.pid)
+        receipt['after_idle_resources'] = process_sample(a21, server.pid)
+        check_affinity('after_idle', include_client=False)
         await send_server('stop'); server.stdin.close()
         tail = await asyncio.wait_for(server.stdout.read(), 40)
         (out / 'server-stdout-tail.log').write_bytes(tail)

@@ -159,6 +159,34 @@ hashes must match the common client build; only the package closure changes.
 common client executable. A direct Rust cell uses its own `--build` and that same
 common client; its fixture identity remains comparable.
 
+### Optional generator CPU isolation
+
+For a separately calibrated diagnostic cohort, prepare and run from the two
+service CPUs and add `--generator-cpus 0,1` to **prepare**:
+
+```bash
+taskset -c 2,3 python3 tests/Perf01.Protocols/run.py prepare \
+  --build /absolute/build.json --client-build /absolute/common-client-build.json \
+  --group grpc --rate 32 --concurrency 16 --duration 30 \
+  --generator-cpus 0,1 --output /absolute/new-split-attempt
+taskset -c 2,3 python3 tests/Perf01.Protocols/run.py run \
+  --plan /absolute/new-split-attempt/plan.json --exclusive-lock /absolute/timing.lock
+```
+
+The adapter inherits service CPUs 2,3 and starts the server there. It then moves
+its own current threads to 0,1 before spawning the independent client. The parent
+controller moves its current threads after spawning the adapter. Moving all
+current Python threads includes an asyncio child-watcher thread that might have
+been created by the first spawn. No server/runtime thread is migrated afterward.
+Both masks must contain two CPUs and be disjoint. Actual main masks and all live
+thread-mask subsets are checked at ready and after load/recovery; surviving
+processes are checked after idle. Controller affinity is restored during cleanup.
+
+The choice is part of the frozen comparison identity and receipts. The default
+performs no affinity changes. A split result belongs to a new calibrated cohort;
+it cannot be compared with a shared-CPU result as if resource allocation had not
+changed. This Python-only option does not require C# application/native rebuilds.
+
 ## Measurement and acceptance accounting
 
 The controller reuses A21's immutable expected-value Oracle, strict RunState,
@@ -168,6 +196,33 @@ not substituted for arrival latency. The adapter wire is compact because all
 nineteen per-operation A21 counters are unavailable here. They are represented
 once in the result, while actual process/GC/native counters have separate traces.
 This is a single-route cell and does not claim the A21 three-route plan gate.
+
+The protocol sampler reads CPU, memory and descriptor evidence independently.
+A descriptor that closes between enumeration and `readlink` increments
+`descriptor_scan_misses`; it does not erase already observed CPU/RSS values.
+This includes the sampler's own temporary procfs enumeration descriptor.
+Descriptor/socket totals describe the non-atomic scan, while unavailable CPU
+and descriptor fields retain separate error markers. The summary preserves
+available RSS/thread observations even when a CPU observation is unavailable.
+
+`result.json.scenarios` groups every planned operation by its frozen oracle
+scenario, protocol and unary payload size, including operations rejected before
+client dispatch. Each group records offered/dispatched/admitted counts, A21
+controller outcomes, independent client/wire outcomes, expected probes, and
+`arrival_success` plus `arrival_all_outcomes` p50/p95/p99 histograms. Successful
+business calls require both an on-time A21 success and a correct ordinary client
+result. Expected cancellation/deadline checks remain separately counted and do
+not inflate business throughput. An eventual client success after an A21
+deadline is not a successful business call under that deadline.
+
+`successful_business_totals` and `successful_business_rates` provide validated
+request/response message counts and payload throughput for those ordinary
+successful calls. Existing `totals` retain all observed client bytes/messages,
+including partial failures and probes. Bytes submitted before cancellation do
+not prove server receipt. Per-scenario rates divide by the same complete measured
+window as the mixed result; they describe each scenario's contribution to that
+mix, not a separately measured standalone capacity. CPU/RSS remains measured for
+the whole server process and cannot be attributed to an individual scenario.
 
 The following phases are distinct:
 

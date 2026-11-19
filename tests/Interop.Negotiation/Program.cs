@@ -46,6 +46,10 @@ internal static class Suite
             case "preload-retry": PreloadRetry(); break;
             case "default-missing": Failure(() => Descriptor("missing-record", "alpha").Inspect(), EngineLoadFailure.MissingAsset); break;
             case "cached-override": CachedOverride(); break;
+            case "default-concurrent": DefaultConcurrent(); break;
+            case "default-retry": DefaultRetry(); break;
+            case "default-options": DefaultOptions(); break;
+            case "default-conflict": DefaultConflict(); break;
             default:
                 if (!name.StartsWith("bad-", StringComparison.Ordinal)) throw new ArgumentException("Unknown case.");
                 Failure(() => Inspect(name, name), EngineLoadFailure.IncompatibleAbi);
@@ -256,6 +260,106 @@ internal static class Suite
         Assert(ReferenceEquals(info, descriptor.Inspect()));
     }
 
+    private static void DefaultConcurrent()
+    {
+        EngineDescriptor descriptor = Descriptor("default.concurrent", "alpha");
+        using var asset = new DefaultAsset(descriptor);
+        EngineInfo?[] results = new EngineInfo[64];
+        using var ready = new CountdownEvent(8);
+        using var start = new ManualResetEventSlim();
+        // Dedicated workers avoid a blocked thread-pool barrier. No inspection
+        // or native import occurs before all first callers reach the start gate.
+        Task[] workers = Enumerable.Range(0, 8).Select(worker => Task.Factory.StartNew(() =>
+        {
+            ready.Signal();
+            start.Wait();
+            for (int i = worker; i < results.Length; i += 8)
+            {
+                results[i] = descriptor.Inspect();
+                if (Native.Alpha((ulong)i) != ((ulong)i ^ 0xa102))
+                    throw new InvalidOperationException("Default inspection did not publish a usable native import.");
+            }
+        }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default)).ToArray();
+        bool allReady = ready.Wait(TimeSpan.FromSeconds(10));
+        start.Set();
+        bool allCompleted = Task.WaitAll(workers, TimeSpan.FromSeconds(10));
+        Assert(allReady && allCompleted);
+        Assert(results[0] is not null && results.All(info => ReferenceEquals(info, results[0])));
+        Assert(results[0]!.Supports(Alpha));
+        Assert(ReferenceEquals(results[0], descriptor.Inspect()));
+        Assert(Native.Alpha(123) == (123UL ^ 0xa102) && Native.AlphaCalls() == 1);
+    }
+
+    private static void DefaultRetry()
+    {
+        EngineDescriptor descriptor = Descriptor("default.retry", "alpha");
+        using var asset = new DefaultAsset(descriptor);
+        File.Delete(asset.RecordPath);
+        Failure(() => descriptor.Inspect(), EngineLoadFailure.MissingAsset);
+        File.WriteAllText(asset.RecordPath, "{}");
+        Failure(() => descriptor.Inspect(), EngineLoadFailure.InvalidManifest);
+        File.WriteAllText(asset.RecordPath, asset.RecordContents);
+        File.Delete(asset.AssetPath);
+        Failure(() => descriptor.Inspect(), EngineLoadFailure.MissingAsset);
+        File.WriteAllBytes(asset.AssetPath, new byte[64]);
+        Failure(() => descriptor.Inspect(), EngineLoadFailure.AssetIntegrityMismatch);
+        // All prior failures occurred before mapping. The same descriptor must
+        // recover after the default record and its native bytes are repaired.
+        File.Copy(Fixture("alpha"), asset.AssetPath, true);
+        EngineInfo info = descriptor.Inspect();
+        Assert(info.Supports(Alpha) && ReferenceEquals(info, descriptor.Inspect()));
+        Assert(Native.Alpha(5) == (5UL ^ 0xa102) && Native.AlphaCalls() == 1);
+    }
+
+    private static void DefaultOptions()
+    {
+        EngineDescriptor descriptor = Descriptor("default.options", "alpha");
+        using var asset = new DefaultAsset(descriptor);
+        EngineInfo info = descriptor.Inspect();
+        Assert(ReferenceEquals(info, descriptor.Inspect()));
+        // A successful default inspection does not waive any later explicit
+        // option validation, even when an options object is reused.
+        Throws<ArgumentException>(() => descriptor.Inspect(new() { NativeAssetPath = "relative.so" }));
+        Throws<ArgumentNullException>(() => descriptor.Inspect(new() { RequiredCapabilities = null! }));
+        Throws<ArgumentException>(() => descriptor.Inspect(new() { RequiredCapabilities = [default] }));
+        Throws<ArgumentException>(() => descriptor.Inspect(new() { RequiredCapabilities = [Alpha, Alpha] }));
+        Failure(() => descriptor.Inspect(PathOptions("beta")), EngineLoadFailure.AssetIntegrityMismatch);
+        Failure(() => descriptor.Inspect(new() { RequiredCapabilities = [Beta] }), EngineLoadFailure.MissingCapability);
+        var capabilities = new List<EngineCapability> { Alpha };
+        var options = new EngineLoadOptions { NativeAssetPath = asset.AssetPath, RequiredCapabilities = capabilities };
+        Assert(ReferenceEquals(info, descriptor.Inspect(options)));
+        capabilities[0] = Beta;
+        Failure(() => descriptor.Inspect(options), EngineLoadFailure.MissingCapability);
+        capabilities[0] = Alpha;
+        Assert(ReferenceEquals(info, descriptor.Inspect(options)));
+        // Resident default metadata and code remain valid after unlinking the
+        // test output. An explicit path still has to verify current file bytes.
+        File.Delete(asset.RecordPath);
+        File.Delete(asset.AssetPath);
+        Assert(ReferenceEquals(info, descriptor.Inspect()));
+        Failure(() => descriptor.Inspect(options), EngineLoadFailure.MissingAsset);
+        Assert(Native.Alpha(7) == (7UL ^ 0xa102) && Native.AlphaCalls() == 1);
+    }
+
+    private static void DefaultConflict()
+    {
+        EngineDescriptor descriptor = Descriptor("default.conflict", "alpha");
+        using var asset = new DefaultAsset(descriptor);
+        EngineInfo info = descriptor.Inspect();
+        Assert(ReferenceEquals(info, descriptor.Inspect()));
+        Assert(ReferenceEquals(info, Descriptor(descriptor.EngineId, "alpha").Inspect()));
+        // A new descriptor must validate its complete identity even when the
+        // original descriptor already has successful resident default metadata.
+        Failure(() => Descriptor(descriptor.EngineId, "beta").Inspect(), EngineLoadFailure.ConflictingModule);
+        Failure(() => Descriptor(descriptor.EngineId, "alpha", major: 2).Inspect(), EngineLoadFailure.ConflictingModule);
+        Failure(() => Descriptor(descriptor.EngineId, "alpha", version: "0.2.0").Inspect(), EngineLoadFailure.ConflictingModule);
+        EngineDescriptor differentCapabilities = EnginePackage.CreateDescriptor(
+            Manifest(descriptor.EngineId, [Asset("alpha")], [new(Alpha, 1), new(Beta, 0)]), typeof(Suite).Assembly);
+        Failure(() => differentCapabilities.Inspect(), EngineLoadFailure.ConflictingModule);
+        Assert(ReferenceEquals(info, descriptor.Inspect()));
+        Assert(Native.Alpha(11) == (11UL ^ 0xa102) && Native.AlphaCalls() == 1);
+    }
+
     private static EngineInfo Inspect(string id, string fixture, uint major = 1, uint minimumMinor = 0, string? bootstrap = null) =>
         Descriptor(id, fixture, major, minimumMinor, bootstrap: bootstrap).Inspect(PathOptions(fixture));
 
@@ -312,6 +416,34 @@ internal static class Suite
     {
         Assertions++;
         if (!condition) throw new InvalidOperationException("Assertion failed.");
+    }
+
+    private sealed class DefaultAsset : IDisposable
+    {
+        private readonly string _directory;
+        internal string RecordPath { get; }
+        internal string AssetPath { get; }
+        internal string RecordContents { get; }
+
+        internal DefaultAsset(EngineDescriptor descriptor)
+        {
+            string relative = $"A02-default-assets/{descriptor.EngineId}/libnw_a02_alpha.so";
+            AssetPath = Path.Combine(AppContext.BaseDirectory, relative);
+            _directory = Path.GetDirectoryName(AssetPath)!;
+            RecordPath = Path.Combine(AppContext.BaseDirectory, $"NativeWeave.{descriptor.EngineId}.assets.json");
+            RecordContents = Record(descriptor, relative);
+            Directory.CreateDirectory(_directory);
+            File.Copy(Fixture("alpha"), AssetPath, true);
+            File.WriteAllText(RecordPath, RecordContents);
+        }
+
+        public void Dispose()
+        {
+            File.Delete(RecordPath);
+            // Linux keeps the loaded module resident after its test copy is
+            // unlinked. Never rewrite a file that has already been mapped.
+            Directory.Delete(_directory, recursive: true);
+        }
     }
 
     private sealed class BoundedDescriptors(Func<int, EngineDescriptor> factory) : IEnumerable<EngineDescriptor>

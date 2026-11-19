@@ -151,6 +151,38 @@ optimization. Comparator cells add the exact comparator manifest and
 `--route direct-rust --variant direct` or `--route managed-aot --variant managed`.
 The comparator path retains its narrower B23 cleanup/capability caveats.
 
+### Optional generator CPU isolation
+
+Launch the controller on its two **service** CPUs first. Adding
+`--generator-cpus 0,1` uses two separate CPUs for the A21 scheduler and HTTPX
+adapter while keeping the actual application and PostgreSQL on the original
+service mask. For example, `taskset -c 2,3 ... --generator-cpus 0,1` assigns the
+application/database to 2,3 and the generator to 0,1. The two sets must be
+disjoint and each must contain exactly two CPUs. A different affinity layout
+requires a new calibration/frozen cohort; do not compare it with old shared-CPU
+measurements as though the resources were unchanged.
+
+The PostgreSQL cluster starts before the controller changes its own mask. A21
+and the HTTPX adapter subsequently inherit the generator mask. Only the actual
+application command is wrapped with the existing, hash-pinned `taskset`, which
+execs the application before its .NET/Rust threads start. No Python target thread
+temporarily adopts the service mask. The real application executable is hashed
+through `/proc/<application-pid>/exe` after READY, independently of that launcher.
+Existing route artifact/package/native pins remain in force.
+
+Frozen inputs record both masks and the launcher hash. `perf01.json` captures
+actual application, HTTPX adapter, A21 scheduler and currently live PostgreSQL
+descendant/thread masks after seeding, after measured load and after idle. Main
+thread masks must match exactly; runtime-pinned worker threads may use a subset
+but cannot run outside their declared mask. Controller before/end/restored
+observations are separate files. PostgreSQL postmaster start identity is checked
+to avoid confusing a reused PID. These are live snapshots, not continuous
+observations of every transient thread/backend.
+
+Without the option the driver performs no affinity mutation. The separate
+PostgreSQL attribution script does not supply the option and retains its existing
+CPU behavior. No package rebuild is needed for this harness-only setting.
+
 Prepare fresh comparator executables instead of using the historical absolute
 paths in B23's checked-in manifest:
 
@@ -203,6 +235,46 @@ copy bytes and FFI counts remain unavailable in this whole-app adapter. The
 shared-path profiler and layered probes must establish any bottleneck attribution.
 Short-process mean/noise comparisons use A21's existing `noise_comparison` over
 independent interleaved processes; a single long stage is not a confidence interval.
+
+### Independent resource fields and generator roles
+
+The scoped `perf01_resources.py` helper retains A21's memory observations and
+reads CPU, file descriptors and main-thread affinity independently. A descriptor
+that closes during enumeration cannot erase valid CPU or RSS evidence. Read
+errors remain named per-field errors and unavailable values remain null. FD and
+socket counts are non-atomic observations; disappeared entries are counted as
+`descriptor_scan_misses`, including the self-enumeration descriptor when present.
+The historical A21/B23 files are unchanged. Only this benchmark target process
+substitutes its application observation function; the existing nominal 20 Hz
+application sampler and request timing are retained.
+
+The target additionally writes `generator-resources.jsonl` at nominal 1 Hz,
+including a final observation, with roles `target` (HTTPX client/adapter),
+`scheduler` (A21 cell worker), and `controller` (this driver's supervisor).
+Each role is bound to an actual PID and procfs start time; rows retain phase,
+monotonic/UTC timestamps, CPU ticks, A21 memory fields, descriptor counts and the
+observed main-thread CPU mask. The controller identity, sample intervals and
+helper hash are frozen before launch. Actual timestamps establish the observation
+interval; the sampler does not infer missed samples or per-thread CPU use.
+
+`generator-observer-receipt.json` is written before observation and on completion;
+raw batches are flushed as they are written. The sampler is stopped and joined
+when the target finishes, including failure cleanup. A killed process leaves its
+partial records and running receipt. An observer task failure cannot yield a
+passed Perf-01 receipt. Individual unavailable procfs fields are recorded without
+discarding other observations. A definite role identity mismatch fails the
+observer; rows whose bound identity could not be verified remain raw evidence
+and are excluded from that role's attributed aggregates.
+
+`summary.json` exposes `generator_resources.<role>.<phase>` with `cpu_seconds`,
+`cpu_percent_one_core`, `cpu_span_seconds`, `rss_peak_bytes`, `fd_peak_count`,
+`socket_peak_count`, sample errors, PID/start identities and observed masks.
+Application phases keep their existing `app_cpu_seconds` and
+`app_cpu_percent_one_core` aliases under `resources`. CPU deltas use the first
+and last CPU-bearing samples for the same process identity, independently of RSS
+peaks. Fewer than two valid CPU observations produce null CPU summaries. These
+observations do not change arrivals, functional/persistence oracles, resource
+caps, dispatch-lag thresholds or latency acceptance criteria.
 
 ## Separate PostgreSQL attribution profile
 

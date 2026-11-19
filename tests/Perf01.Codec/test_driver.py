@@ -1,5 +1,6 @@
 """Finite accounting/negative controls; never product performance evidence."""
 import importlib.util
+import argparse
 import json
 from pathlib import Path
 import tempfile
@@ -12,6 +13,20 @@ spec.loader.exec_module(driver)
 
 
 class ControllerContract(unittest.TestCase):
+    def test_generator_mask_is_exact_and_finite(self):
+        self.assertEqual(driver.AFFINITY.cpu_pair('1,0'), [0, 1])
+        for value in ['', '0', '0,0', '0,1,2', '-1,0', '0,nan', '0,inf', '0,65536', '0-1']:
+            with self.subTest(value=value), self.assertRaises(argparse.ArgumentTypeError):
+                driver.AFFINITY.cpu_pair(value)
+
+    def test_affinity_observer_rejects_a_leaked_watcher_thread(self):
+        snapshot = {'pid': 123, 'main_cpus': [0, 1], 'threads': {'123': [0, 1], '124': [1]}}
+        driver.AFFINITY.require(snapshot, [0, 1])
+        with self.assertRaises(ValueError):
+            driver.AFFINITY.require({**snapshot, 'threads': {**snapshot['threads'], '125': [2, 3]}}, [0, 1])
+        with self.assertRaises(ValueError):
+            driver.AFFINITY.require({**snapshot, 'main_cpus': [0]}, [0, 1])
+
     def test_frozen_cycle_balances_every_dimension(self):
         rows = driver.cycle()
         self.assertEqual(len(rows), 160)

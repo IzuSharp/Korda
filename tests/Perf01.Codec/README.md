@@ -135,6 +135,39 @@ The codec is synchronous and noninterruptible after admission. There is no
 native async executor, callback, per-operation cancellation or protocol
 compression in this codec group.
 
+## Optional generator CPU diagnostic
+
+By default, the controller and target retain their inherited affinity. To
+investigate generator scheduling separately, launch the controller on the two
+target CPUs and explicitly give it a disjoint two-CPU generator mask:
+
+```sh
+taskset -c 2,3 python3 tests/Perf01.Codec/driver.py run \
+  --manifest "$EVIDENCE/codec-build-before/manifest.json" \
+  --corpus "$EVIDENCE/codec-corpus" --route nativeweave \
+  --workers 2 --rate "$RATE" --duration-seconds 30 \
+  --generator-cpus 0,1 --output "$NEW_DIAGNOSTIC_DIRECTORY"
+```
+
+The target inherits CPUs 2,3 when spawned. Only afterward, inside protected
+cleanup, the controller moves its main thread and every current Python TID to
+0,1. This includes an asyncio child-watcher thread that may already exist.
+Future controller-created threads inherit the new main-thread mask. The target
+and its threads are never migrated. Requested masks, observed main masks and
+every live thread mask are recorded in the plan and one-second resources.
+Phase checks and resource observations require the exact main mask and reject
+any live thread outside its declared mask. Narrower runtime thread masks within
+the target's two CPUs remain allowed. Affinity setup failure reaps the target;
+cleanup restores all current controller threads to their original mask and
+records failure if restoration cannot be verified.
+
+This optional mode allocates two additional generator CPUs. It is a separate
+diagnostic cohort until root freezes a final resource policy. Never compare a
+split run against a shared-CPU run as if their resources were identical. The
+new controller/helper hashes require a fresh `prepare` manifest for both product
+variants; do not edit an old manifest to bypass the driver source guard. The
+target C#/Rust source and fixed payload corpus remain identical.
+
 Run finite tooling/functional checks separately:
 
 ```sh

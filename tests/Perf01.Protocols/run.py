@@ -23,6 +23,7 @@ import signal
 import subprocess
 import sys
 import time
+from affinity import cpu_list, observe as observe_affinity, require as require_affinity, pin_current_threads
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -60,6 +61,9 @@ def prepare(args):
     profile = json.loads(args.profile.read_text())
     build = json.loads(args.build.read_text())
     route = build.get('route', 'nativeweave-aot-rust')
+    service_cpus = sorted(os.sched_getaffinity(0)) if args.generator_cpus is not None else None
+    if args.generator_cpus is not None and (len(service_cpus) != 2 or len(args.generator_cpus) != 2 or set(service_cpus) & set(args.generator_cpus)):
+        raise ValueError('Prepare a split cohort on its two service CPUs; generator CPUs must be two distinct CPUs')
     client_build_path = (args.client_build or args.build).resolve()
     client_build = json.loads(client_build_path.read_text())
     if not build['eligible_for_measurement'] or not client_build['eligible_for_measurement']:
@@ -103,7 +107,7 @@ def prepare(args):
     for inputs in (build, client_build):
         for name in ['artifacts_sha256', 'lock_hashes', 'source_files_sha256', 'package_archives_sha256', 'resolved_package_archives_sha256', 'producer_manifests_sha256']:
             artifacts.update(inputs.get(name, {}))
-    for path in [HERE / 'run.py', HERE / 'adapter.py', a21, common, ROOT / 'src/Benchmarks.Domain/supervision.py',
+    for path in [HERE / 'run.py', HERE / 'adapter.py', HERE / 'affinity.py', a21, common, ROOT / 'src/Benchmarks.Domain/supervision.py',
                  args.build.resolve(), client_build_path, certificate, key, out / 'oracle.json', out / 'profile.json', out / 'server-config.json']:
         artifacts[str(path)] = sha(path)
     for path, digest in artifacts.items():
@@ -114,11 +118,13 @@ def prepare(args):
                 'server': build['server'], 'client': client_build['client'], 'server_config': str(out / 'server-config.json'),
                 'client_config': client_config, 'client_timeout_seconds': client_config['timeout_seconds'],
                 'native_sha256': build.get('server_native_sha256', {}), 'process_cpu_count': profile['process_cpu_count'],
-                'idle_seconds': timing['idle_seconds'], 'requests': count, 'artifacts': artifacts}
+                'idle_seconds': timing['idle_seconds'], 'requests': count, 'artifacts': artifacts,
+                'service_cpus': service_cpus, 'generator_cpus': args.generator_cpus}
     save(out / 'adapter.json', manifest)
     schedule = {'group': args.group, 'rate': args.rate, 'period_ns': period, 'duration_seconds': args.duration,
                 'concurrency': args.concurrency, 'profile_sha256': sha(out / 'profile.json'), 'oracle_sha256': sha(out / 'oracle.json'),
                 'certificate_sha256': sha(certificate), 'client_executable_sha256': sha(client_build['client']),
+                'service_cpus': service_cpus, 'generator_cpus': args.generator_cpus,
                 'application_sources_sha256': {name: digest for name, digest in client_build.get('driver_source_sha256', {}).items() if name.endswith(('.cs', '.proto', '.csproj'))}}
     if route == 'nativeweave-aot-rust':
         for name, digest in build['driver_source_sha256'].items():
@@ -153,6 +159,10 @@ async def run_cell(plan_path):
     if (base / 'result.json').exists() or (base / 'execution').exists():
         raise ValueError('Results and partial attempts are immutable; prepare a new attempt directory')
     adapter = json.loads(manifest.read_text())
+    original_cpus = sorted(os.sched_getaffinity(0))
+    service_cpus = adapter['service_cpus'] or original_cpus
+    generator_cpus = adapter['generator_cpus'] or service_cpus
+    if original_cpus != service_cpus: raise ValueError('Controller must start on the declared service CPUs so the server inherits them')
     a21 = load_module('perf01_measurement_a21', adapter['a21'])
     oracle = a21.Oracle(plan, base)
     timing = plan['timing']; state = a21.RunState(timing['requests'], oracle)
@@ -196,6 +206,11 @@ async def run_cell(plan_path):
             raw.flush()
             if process.returncode not in (None, 0): stopped.set()
     try:
+        # The newly spawned adapter still has the original service mask. It
+        # starts the server there, then moves itself before creating the client.
+        if adapter['generator_cpus'] is not None: pin_current_threads(generator_cpus)
+        result['controller_affinity_after_launch'] = observe_affinity(os.getpid())
+        require_affinity(result['controller_affinity_after_launch'], generator_cpus)
         hello = json.loads(await asyncio.wait_for(process.stdout.readline(), 20))
         if hello.get('kind') != 'hello' or hello.get('route') != plan['route'] or hello.get('dynamic_code_supported') is not False:
             raise ValueError('Invalid target hello')
@@ -295,7 +310,7 @@ async def run_cell(plan_path):
             for row in state.records:
                 row.pop('target_counters', None)
                 records.write(json.dumps(row, separators=(',', ':')) + '\n')
-        summarize(plan, result, state.records, a21, base)
+        summarize(plan, result, state.records, a21, base, oracle)
         result['valid'] = not result['invalid_reasons']
     except BaseException as error:
         result.update(status='failed', valid=False, failure=type(error).__name__ + ': ' + str(error)[:2000])
@@ -323,6 +338,12 @@ async def run_cell(plan_path):
                 'scheduled_origin_ns': origin, 'errors': sorted(set(state.errors)), 'recovery_events': recovery_records}
         (base / 'adapter-stderr.log').write_bytes(await stderr_task)
         result['exit_code'] = process.returncode
+        if adapter['generator_cpus'] is not None:
+            try:
+                restored = pin_current_threads(original_cpus)
+                save(base / 'controller-affinity-restored.json', restored)
+            except BaseException as error:
+                result.update(valid=False, affinity_restore_error=type(error).__name__ + ': ' + str(error))
         result['evidence_sha256'] = {str(path.relative_to(base)): sha(path) for path in sorted(base.rglob('*'))
                                      if path.is_file() and path.name not in {'result.json', 'result.json.tmp'}}
         save(base / 'result.json', result)
@@ -330,14 +351,42 @@ async def run_cell(plan_path):
     return result
 
 
-def summarize(plan, result, records, a21, base):
+def summarize(plan, result, records, a21, base, oracle=None):
     out = base / 'execution'
     receipt = json.loads((out / 'receipt.json').read_text())
     result['retirement'] = receipt
     if receipt['status'] != 'passed': result['invalid_reasons'].append('server/adapter retirement validation failed')
     sums = ['request_messages', 'response_messages', 'request_payload_bytes', 'response_payload_bytes', 'request_encoded_bytes', 'response_encoded_bytes']
     seen = bytearray(plan['timing']['requests']); observed = 0
-    scenarios = {}; latencies = defaultdict(lambda: array('q')); frequency = receipt['client_hello']['timestamp_frequency']
+    oracle = oracle or a21.Oracle(plan, base)
+    tokens = {}; scenarios = {}; latencies = defaultdict(lambda: array('q')); all_latencies = defaultdict(lambda: array('q'))
+    frequency = receipt['client_hello']['timestamp_frequency']
+    probes = {'http-cancel', 'grpc-cancel', 'grpc-deadline'}
+    def expected_scenario(identifier):
+        token = oracle.input(identifier)
+        if token not in tokens:
+            scenario, protocol, payload, messages = token.split('|')
+            key = scenario + '/' + protocol + ('/' + payload if scenario == 'grpc-unary' else '')
+            tokens[token] = (key, scenario, protocol, int(payload), int(messages))
+        return tokens[token]
+    for measured in records:
+        key, scenario, protocol, payload, messages = expected_scenario(measured['id'])
+        summary = scenarios.setdefault(key, {'scenario': scenario, 'protocol': protocol,
+            'configured_payload_bytes': payload, 'configured_messages': messages,
+            'offered': 0, 'dispatched': 0, 'admitted': 0, 'controller_outcomes': Counter(),
+            'successful_logical_checks': 0, 'successful_expected_probe_checks': 0,
+            'business_successful_calls': 0, 'calls': 0, 'outcomes': Counter(), 'wire_statuses': Counter(),
+            'intentional_cancel': 0, 'intentional_deadline': 0, 'correctness_failures': 0,
+            'totals': Counter(), 'successful_business_totals': Counter()})
+        summary['offered'] += 1
+        summary['dispatched'] += measured['dispatch_ns'] is not None
+        summary['admitted'] += measured['admission_ns'] is not None
+        summary['controller_outcomes'][measured['status']] += 1
+        summary['successful_logical_checks'] += measured['status'] == 'ok'
+        summary['successful_expected_probe_checks'] += measured['status'] == 'ok' and scenario in probes
+        if measured['completion_ns'] is not None and measured['scheduled_ns'] is not None:
+            all_latencies[key].append(measured['completion_ns'] - measured['scheduled_ns'])
+            if measured['status'] == 'ok': latencies[key].append(measured['completion_ns'] - measured['scheduled_ns'])
     concurrency_events = array('q'); business_success = intentional_cancel = intentional_deadline = 0
     with (out / 'client/operations.jsonl').open() as stream:
         for line in stream:
@@ -347,20 +396,27 @@ def summarize(plan, result, records, a21, base):
                 if recovery_start <= identifier < recovery_start + plan['settings']['recovery_requests'] and row['correctness_failure']:
                     result['invalid_reasons'].append('response/protobuf/hash correctness failure during recovery')
                 continue
-            if seen[identifier]: result['invalid_reasons'].append('duplicate independent client result')
+            if seen[identifier]:
+                result['invalid_reasons'].append('duplicate independent client result')
+                continue
             seen[identifier] = 1; observed += 1
             if row['correctness_failure']: result['invalid_reasons'].append('response/protobuf/hash correctness failure')
-            key = row['scenario'] + '/' + row['protocol'] + ('/' + str(row['request_payload_bytes']) if row['scenario'] == 'grpc-unary' else '')
-            summary = scenarios.setdefault(key, {'calls': 0, 'outcomes': Counter(), 'wire_statuses': Counter(),
-                'intentional_cancel': 0, 'intentional_deadline': 0, 'correctness_failures': 0, 'totals': Counter()})
+            key, scenario, protocol, _, _ = expected_scenario(identifier)
+            if row['scenario'] != scenario or row['protocol'] != protocol:
+                result['invalid_reasons'].append('independent client scenario differs from frozen oracle')
+            summary = scenarios[key]
             summary['calls'] += 1; summary['outcomes'][row['logical_status']] += 1; summary['wire_statuses'][row['wire_status']] += 1
             summary['intentional_cancel'] += row['intentional_cancellation']; summary['intentional_deadline'] += row['intentional_deadline']
             summary['correctness_failures'] += row['correctness_failure']
             for name in sums: summary['totals'][name] += row[name]
             measured = records[identifier]
-            if measured['status'] == 'ok': latencies[key].append(measured['completion_ns'] - measured['scheduled_ns'])
             intentional_cancel += row['intentional_cancellation']; intentional_deadline += row['intentional_deadline']
-            business_success += row['logical_status'] == 'ok' and not row['intentional_cancellation'] and not row['intentional_deadline']
+            successful = (measured['status'] == 'ok' and row['logical_status'] == 'ok'
+                          and not row['correctness_failure'] and scenario not in probes)
+            business_success += successful
+            summary['business_successful_calls'] += successful
+            if successful:
+                for name in sums: summary['successful_business_totals'][name] += row[name]
             # Encode start/end tie ordering without retaining one Python dict per operation.
             concurrency_events.append(row['started_timestamp'] * 2 + 1); concurrency_events.append(row['completed_timestamp'] * 2)
     if observed != result['actually_dispatched']: result['invalid_reasons'].append('missing independent client results')
@@ -371,18 +427,28 @@ def summarize(plan, result, records, a21, base):
         'business_successful_calls': business_success, 'intentional_cancel_calls': intentional_cancel, 'intentional_deadline_calls': intentional_deadline,
         'business_success_per_second': business_success * 1e9 / result['measurement_window']['elapsed_ns']}
     result['scenarios'] = {}
+    seconds = result['measurement_window']['elapsed_ns'] / 1e9
     for key, summary in scenarios.items():
         summary['arrival_success'] = a21.histogram(latencies[key], plan['histogram']['resolution_ns'], plan['histogram']['maximum_ns'])
+        summary['arrival_all_outcomes'] = a21.histogram(all_latencies[key], plan['histogram']['resolution_ns'], plan['histogram']['maximum_ns'])
+        summary['successful_logical_checks_per_second'] = summary['successful_logical_checks'] / seconds
+        summary['business_successful_per_second'] = summary['business_successful_calls'] / seconds
+        summary['successful_business_rates'] = {
+            'request_messages_per_second': summary['successful_business_totals']['request_messages'] / seconds,
+            'response_messages_per_second': summary['successful_business_totals']['response_messages'] / seconds,
+            'request_payload_mib_per_second': summary['successful_business_totals']['request_payload_bytes'] / (seconds * 1048576),
+            'response_payload_mib_per_second': summary['successful_business_totals']['response_payload_bytes'] / (seconds * 1048576)}
         result['scenarios'][key] = summary
     samples = [json.loads(line) for line in (out / 'process-resources.jsonl').read_text().splitlines()]
     window = result['measurement_window']
     active = [row for row in samples if window['start_monotonic_ns'] <= row['monotonic_ns'] <= window['end_monotonic_ns']]
     resource = {}
     for process in ('server', 'client', 'adapter', 'controller'):
-        observed = [(row['monotonic_ns'], row[process]) for row in active if row.get(process) and row[process].get('cpu_ticks') is not None]
+        observed = [(row['monotonic_ns'], row[process]) for row in active if row.get(process)]
+        cpu_samples = [(timestamp, row) for timestamp, row in observed if row.get('cpu_ticks') is not None]
         values = {}
-        if len(observed) >= 2:
-            first, last = observed[0], observed[-1]
+        if len(cpu_samples) >= 2:
+            first, last = cpu_samples[0], cpu_samples[-1]
             cpu = (last[1]['cpu_ticks'] - first[1]['cpu_ticks']) / first[1]['clock_ticks_per_second']
             values['cpu_seconds'] = cpu; values['cpu_percent_one_core'] = cpu * 1e11 / (last[0] - first[0])
         else: values['cpu_seconds'] = values['cpu_percent_one_core'] = None
@@ -444,7 +510,9 @@ def summarize(plan, result, records, a21, base):
         'Messages submitted by a client are not asserted to be received after cancellation; successful response/hash acknowledgement proves the completed transfers.',
         'HTTP/2 stream/connection limits are configured; kernel socket descriptor count is not an active-stream measurement.',
         'Native allocation, exact memcpy/FFI counts and scheduler switches are unavailable in timed cells; collect profiler observations separately.',
-        'A21 timestamps share one controller clock and include queue/IPC in arrival latency; client Stopwatch frequency is explicit in the receipt.']
+        'A21 timestamps share one controller clock and include queue/IPC in arrival latency; client Stopwatch frequency is explicit in the receipt.',
+        'Per-scenario rates share the whole measured window; they are contributions to the frozen mix, not standalone scenario capacity.',
+        'Business success and successful-business bytes/messages require an A21 on-time success and a correct ordinary client result; expected cancel/deadline probes remain separate.']
 
 
 def main():
@@ -456,6 +524,7 @@ def main():
     p.add_argument('--group', choices=['http', 'grpc'], required=True)
     p.add_argument('--rate', type=float, required=True); p.add_argument('--duration', type=float, required=True)
     p.add_argument('--concurrency', type=int, required=True); p.add_argument('--output', type=Path, required=True)
+    p.add_argument('--generator-cpus', type=cpu_list, help='Optional two-CPU generator mask; prepare/run from the two service CPUs')
     p.add_argument('--certificate', type=Path); p.add_argument('--private-key', type=Path)
     p = sub.add_parser('run'); p.add_argument('--plan', type=Path, required=True)
     p.add_argument('--exclusive-lock', type=Path, required=True, help='Shared root-owned timing resource lock; coordinate all domains')

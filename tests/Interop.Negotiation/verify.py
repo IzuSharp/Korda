@@ -24,7 +24,8 @@ CASES = ["metadata", "coexist", "concurrent", "output-record", "options", "minor
          "bad-major", "bad-size", "bad-pointer", "bad-reserved", "bad-pending", "bad-unknown",
          "missing-export", "major-requirement", "minor-requirement", "missing-asset", "hash-mismatch",
          "invalid-binary", "wrong-rid", "cpu-profile", "conflict", "latched-failure", "preload-retry",
-         "default-missing", "cached-override"]
+         "default-missing", "cached-override", "default-concurrent", "default-retry",
+         "default-options", "default-conflict"]
 VARIANTS = {"alpha": None, "beta": "fixture_beta", "minor-zero": "minor_zero", "future-size": "future_size",
             **{name: name.replace("-", "_") for name in CASES if name.startswith("bad-")}}
 
