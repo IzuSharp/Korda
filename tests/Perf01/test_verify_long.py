@@ -214,6 +214,96 @@ def protocol_fixture(root, *, endpoint_probes=False, bad_client=False):
 
 
 class ProtocolAcceptanceTests(unittest.TestCase):
+    def test_sparse_result_is_streamed_with_complete_hash_and_no_summary_size_gate(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); protocol_fixture(root)
+            path = root / "result.json"
+            full = json.loads(path.read_text())
+            bins = {str(index * 1000): index + 1 for index in range(2048)}
+            full["histograms"]["arrival_success"].update(bins=bins, overflow_ns=[])
+            full["histograms"]["arrival_all_outcomes"] = {"bins": bins}
+            full["scenarios"] = {"http-tiny/http1-tls": {"arrival_success": {"bins": bins}}}
+            path.write_text(json.dumps(full))
+            wanted_hash = verifier.digest(path)
+            original_stat, original_read, original_value = Path.stat, Path.read_text, verifier.JsonStream.value
+
+            class OversizedMetadata:
+                # Exercise the exact 64 MiB gate without writing a 65 MiB test
+                # file. Real JSON spans multiple reader chunks; this is no RSS
+                # or large-file performance measurement.
+                st_size = 65 * 1024**2
+
+                def __init__(self, actual):
+                    self.actual = actual
+
+                def __getattr__(self, name):
+                    return getattr(self.actual, name)
+
+            def stat(candidate, *args, **kwargs):
+                actual = original_stat(candidate, *args, **kwargs)
+                return OversizedMetadata(actual) if candidate == path else actual
+
+            def no_full_text(candidate, *args, **kwargs):
+                if candidate == path:
+                    raise AssertionError("Protocol result must not be read as a whole string")
+                return original_read(candidate, *args, **kwargs)
+
+            def no_decoded_bins(instance):
+                value = original_value(instance)
+                if isinstance(value, dict) and ("bins" in value or "0" in value):
+                    raise AssertionError("Sparse histogram maps must be structurally skipped")
+                return value
+
+            with patch.object(Path, "stat", stat):
+                with self.assertRaisesRegex(ValueError, "Oversized summary"):
+                    verifier.Evidence(root).load("result.json")
+                with patch.object(Path, "read_text", no_full_text), patch.object(verifier.JsonStream, "value", no_decoded_bins):
+                    receipt = verifier.verify("http", root)
+            self.assertTrue(receipt["accepted"], receipt["failure_reasons"])
+            self.assertEqual(wanted_hash, receipt["evidence_sha256"]["result.json"])
+            self.assertEqual(100_000_000, receipt["driver_arrival_p99_ns"])
+
+    def test_projected_result_keeps_flags_counts_recovery_tail_and_hash_gates(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); protocol_fixture(root)
+            path = root / "result.json"; full = json.loads(path.read_text())
+            changes = [(name, False) for name in ("valid", "service_standard_met", "full_30_minute_valid_load",
+                       "idle_owner_and_request_gauges_receded", "formal_timing_eligible")]
+            changes += [(name, 101) for name in ("offered", "actually_dispatched", "admitted", "completed", "successful")]
+            changes += [("status", "failed"), ("exit_code", 1), ("invalid_reasons", ["original driver failure"]),
+                ("recovery", {"status": "failed", "failures": [], "calls": 32}),
+                ("recovery", {"status": "passed", "failures": ["failed probe"], "calls": 32}),
+                ("recovery", {"status": "passed", "failures": [], "calls": 31}),
+                ("histograms", {"arrival_success": {"percentiles_from_exact_samples_ns": {"p99": 600_000_000}}}),
+                ("histograms", {"arrival_success": {"percentiles_from_exact_samples_ns": {}}}),
+                ("measurement_window", dict(full["measurement_window"], actual_dispatch_span_ns=1)),
+                ("plan_sha256", "0" * 64),
+                ("evidence_sha256", dict(full["evidence_sha256"], **{"requests.jsonl": "0" * 64}))]
+            for name, value in changes:
+                with self.subTest(field=name, value=value):
+                    path.write_text(json.dumps(dict(full, **{name: value})))
+                    receipt = verifier.verify("http", root)
+                    self.assertFalse(receipt["accepted"], name)
+                    self.assertEqual(0, receipt["duration_credit_seconds"])
+                    self.assertTrue(receipt["failure_reasons"])
+
+    def test_malformed_skipped_result_json_and_missing_metadata_fail(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); protocol_fixture(root)
+            path = root / "result.json"; valid = path.read_text()
+            documents = (valid[:-1], valid + " {}", "[]",
+                         valid[:-1] + ',"ignored":[1,]}',
+                         valid.replace('"histograms": {', '"histograms": {"ignored": {"1000": 1,},', 1),
+                         valid.replace('"recovery": {', '"recovery": {"ignored": [1,],', 1),
+                         '{"status":"completed","histograms":{}}')
+            for document in documents:
+                with self.subTest(document=document[:100]):
+                    path.write_text(document)
+                    receipt = verifier.verify("http", root)
+                    self.assertFalse(receipt["accepted"])
+                    self.assertEqual(0, receipt["duration_credit_seconds"])
+                    self.assertTrue(receipt["failure_reasons"])
+
     def test_actual_frozen_tokens_and_independent_client_are_required(self):
         for options, expected in (({}, True), ({"endpoint_probes": True}, False), ({"bad_client": True}, False)):
             with tempfile.TemporaryDirectory() as directory:

@@ -364,7 +364,22 @@ def check_db(evidence, group):
 
 
 def check_protocol(evidence, group):
-    result = evidence.load("result.json")
+    # Sparse histogram maps can exceed the small-summary limit during a full
+    # long run. Pin the complete original file, validate all its JSON, and retain
+    # only the fields consumed below. Timing, result bytes and checks are intact.
+    selection = dict.fromkeys(("formal_timing_eligible", "valid", "service_standard_met",
+        "full_30_minute_valid_load", "idle_owner_and_request_gauges_receded", "invalid_reasons",
+        "status", "exit_code", "evidence_sha256", "plan_sha256",
+        "offered", "actually_dispatched", "admitted", "completed", "successful"))
+    selection.update(
+        recovery=dict.fromkeys(("status", "failures", "calls")),
+        measurement_window=dict.fromkeys(("actual_dispatch_span_ns", "start_monotonic_ns", "end_monotonic_ns")),
+        histograms={"arrival_success": {"percentiles_from_exact_samples_ns": {"p99": None}}})
+    with evidence.pin(evidence.root / "result.json").open(encoding="utf-8") as stream:
+        reader = JsonStream(stream)
+        result = reader.selected_object(selection)
+        require(reader.peek() == "", "Trailing evidence after JSON document")
+    require(result.get("formal_timing_eligible") is not False, "Profiling-only evidence is ineligible for long acceptance")
     passed(result, "valid", "service_standard_met", "full_30_minute_valid_load", "idle_owner_and_request_gauges_receded")
     require(result["status"] == "completed" and result["exit_code"] == 0, "Protocol process tree did not complete")
     hashes = result["evidence_sha256"]

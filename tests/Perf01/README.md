@@ -17,6 +17,27 @@ receipt path is refused. Missing, interrupted, profiling-only, invalid, hash-
 mismatched or internally inconsistent evidence cannot receive long-load credit. Raw record arrays and
 JSONL are streamed, with a finite one-million-operation identity ledger.
 
+Protocol `result.json` is also streamed. Its sparse histogram maps can grow past
+the 64 MiB small-summary limit during a long run. The verifier hashes the complete
+original file and validates all JSON, retaining only the original acceptance
+flags, counts, recovery, measurement-window metadata, evidence hashes, and nested
+arrival p99. It skips the histogram maps structurally; it does not rewrite them,
+change the result schema, or remove any duration, correctness, service or drain
+check. Other small summaries keep their existing size guard. The finite tests
+simulate the oversized stat boundary while using small multi-chunk JSON; they do
+not measure large-file performance or postprocessing RSS.
+
+The integration plan requires keeping the DB timing driver at an immutable
+`ce2a3c75cbd535490897d062b6cbb7c095408307` checkout under
+`ROOT/.worktree/Perf-01-frozen-drivers-linux/NativeWeave`, including its original
+`verify_long.py` parser hash
+`8034692b643f4dbb1385cd61e25c9d4d6f084d7b71268fec02411b5c2fcdbeb4`.
+The integration owner must create and verify that checkout before using it; the
+source-only patch does not establish that it already exists. This post-run
+verifier can advance separately. Its own exact source hash is
+recorded in every new verification receipt; it must not replace the parser bytes
+in already-frozen DB timing plans or their before-only noise cohorts.
+
 ## Conservative duration proof
 
 Let **C** be the earliest controller-observed completion of a successful
