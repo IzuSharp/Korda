@@ -93,6 +93,12 @@ def load_compact_observation(path):
     return metadata
 
 
+def load_compact_application_receipt(path):
+    # The full operation_outcomes array remains in the receipt. These are the
+    # only fields the existing parent consumes; skip every other JSON value.
+    return load_json_reader().object_metadata(path, ("status", "durable_oracle", "closed"))
+
+
 def observed_resources(path, role=None):
     with path.open() as stream:
         rows = (json.loads(line) for line in stream)
@@ -158,7 +164,7 @@ def prepare(args, output, route, pg):
     resource_observer = {"controller": identity(os.getpid()), "generator_interval_seconds": 1,
                          "application_interval_seconds": .05,
                          "scope": "Independent process CPU/memory/fd fields; generator roles are target, scheduler and controller"}
-    paths = [HERE / "run.py", HERE / "target.py", HERE / "perf01_affinity.py", HERE / "perf01_resources.py",
+    paths = [HERE / "run.py", HERE / "target.py", HERE / "perf01_affinity.py", HERE / "perf01_resources.py", HERE / "perf01_outcomes.py",
              DOMAIN / "run.py", DOMAIN / "http_target.py", DOMAIN / "common.py",
              DOMAIN / "cell_worker.py", DOMAIN / "supervision.py", ROOT / "src/Benchmarks.Harness/nativeweave_bench.py",
              ROOT / "tests/Reference.TaskService/golden.py"]
@@ -295,7 +301,7 @@ async def execute_cell(args, output, plan, frozen):
         row = load_compact_observation(output / "observation.json") if frozen.get("compact_observation", False) else load(output / "observation.json")
         domain.validate_observation(row, args.route, args.repetition, plan["timing"]["requests"], load_a21())
         directory = Path(row["hello"]["receipt_directory"])
-        app = load(directory / "receipt.json")
+        app = load_compact_application_receipt(directory / "receipt.json") if frozen.get("compact_observation", False) else load(directory / "receipt.json")
         extra = load(directory / "perf01.json")
         records = row.get("records", [])
         sent = [value for value in records if value["dispatch_ns"] is not None]

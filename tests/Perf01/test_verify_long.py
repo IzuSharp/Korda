@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import verify_long as verifier
 
@@ -262,6 +263,39 @@ def database_fixture(root, provider):
 
 
 class DatabaseAcceptanceTests(unittest.TestCase):
+    def test_full_application_receipt_is_hash_pinned_but_only_metadata_is_retained(self):
+        for provider in ("sqlite", "postgresql"):
+            with self.subTest(provider=provider), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory); database_fixture(root, provider)
+                path = root / "applications/one/receipt.json"
+                full = json.loads(path.read_text())
+                full["operation_outcomes"] = [{"id": 2, "status": "ok", "value": {"titles": ["snow-雪"] * 100, "versions": [1] * 100}}]
+                def bind(document):
+                    path.write_text(document)
+                    summary = json.loads((root / "summary.json").read_text())
+                    summary["application_receipt"]["sha256"] = verifier.digest(path)
+                    (root / "summary.json").write_text(json.dumps(summary))
+                    (root / "progress.json").write_text(json.dumps({"state": "completed", "summary_sha256": verifier.digest(root / "summary.json")}))
+                original = verifier.Evidence.load
+                def no_whole_receipt(instance, name, expected=None):
+                    if Path(name) == path:
+                        raise AssertionError("Complete application receipt must not use the summary loader")
+                    return original(instance, name, expected)
+                bind(json.dumps(full))
+                with patch.object(verifier.Evidence, "load", no_whole_receipt):
+                    accepted = verifier.verify(provider, root)
+                self.assertTrue(accepted["accepted"], accepted["failure_reasons"])
+                self.assertEqual(verifier.digest(path), accepted["evidence_sha256"]["applications/one/receipt.json"])
+                # A changed but valid JSON payload still fails its prior hash.
+                path.write_text(json.dumps(full) + " ")
+                self.assertFalse(verifier.verify(provider, root)["accepted"])
+                for changed in (dict(full, formal_timing_eligible=False), dict(full, errors=["observed failure"]),
+                                dict(full, durable_oracle={"passed": False}), dict(full, closed={"serverState": "Stopping"})):
+                    bind(json.dumps(changed))
+                    self.assertFalse(verifier.verify(provider, root)["accepted"])
+                bind(json.dumps(full) + " false")
+                self.assertFalse(verifier.verify(provider, root)["accepted"])
+
     def test_both_provider_arrays_and_durable_oracle(self):
         for provider in ("sqlite", "postgresql"):
             with tempfile.TemporaryDirectory() as directory:

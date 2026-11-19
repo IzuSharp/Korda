@@ -24,6 +24,7 @@ from http_target import Target, require
 from supervision import register_process
 from perf01_affinity import process_masks, process_group, require_process, require_group
 from perf01_resources import identity, process_sample
+from perf01_outcomes import OutcomeJournal, save_receipt
 
 CONTINUED_SERVICE_STATUSES = frozenset({408, 429, 500, 502, 503, 504})
 
@@ -60,6 +61,8 @@ class PerfTarget(Target):
         self._request = ContextVar("perf01_request", default=None)
         self._integrity_halt = False
         self._classified_counts = Counter()
+        self._outcome_journal = None
+        self._original_receipt_save = self._compact_receipt_save = None
         self.extra["error_policy"] = {
             "continue_classified_overload": self.manifest["perf01"].get("continue_classified_overload", False),
             "continuable_http_statuses": sorted(CONTINUED_SERVICE_STATUSES),
@@ -77,6 +80,41 @@ class PerfTarget(Target):
             self.extra["affinity"] = {"plan": self.affinity, "application_launch_command": command, "observations": {}}
         self.original_stop = self.application.stop
         self.application.stop = self.finish
+
+    def start_outcome_journal(self):
+        if self.manifest["perf01"].get("compact_observation", False) is not True:
+            return
+        journal = OutcomeJournal(self.directory / "outcomes.jsonl")
+        self._outcome_journal = journal
+        self.operations = journal
+        self._original_receipt_save = http_target.save
+
+        def compact_save(path, value):
+            if Path(path) == self.directory / "receipt.json" and "operation_outcomes" in value:
+                save_receipt(path, value, journal)
+            else:
+                self._original_receipt_save(path, value)
+
+        self._compact_receipt_save = compact_save
+        http_target.save = compact_save
+
+    def finish_outcome_journal(self):
+        journal = self._outcome_journal
+        if journal is None:
+            return None
+        try:
+            journal.seal()
+        except BaseException as error:
+            journal.poison(error)
+        finally:
+            # The override belongs only to this explicitly compact target.
+            if http_target.save is self._compact_receipt_save:
+                http_target.save = self._original_receipt_save
+        self.extra["outcome_journal"] = journal.receipt()
+        if self.extra["outcome_journal"]["status"] != "completed":
+            self.extra["status"] = "failed"
+            return ValueError("Compact outcome journal did not publish completely: " + str(journal.error))
+        return None
 
     async def sample_generator_resources(self, stopped, receipt):
         try:
@@ -266,6 +304,7 @@ class PerfTarget(Target):
         stopped = asyncio.Event()
         sampler = asyncio.create_task(self.sample_generator_resources(stopped, receipt))
         try:
+            self.start_outcome_journal()
             result = await super().run()
             self.extra["status"] = "passed" if result == 0 else "failed"
             return result
@@ -276,6 +315,7 @@ class PerfTarget(Target):
             except BaseException as error:
                 receipt["status"] = "failed"
                 receipt["errors"].append(type(error).__name__ + ": " + str(error)[:512])
+            journal_error = self.finish_outcome_journal()
             resources = self.directory / "generator-resources.jsonl"
             self.extra["generator_resource_observer"] = {**receipt,
                 "path": resources.name, "sha256": digest(resources) if resources.exists() else None}
@@ -315,6 +355,10 @@ class PerfTarget(Target):
                 "database_execution_ns", "database_lock_wait_ns", "connection_pool_wait_ns", "ffi_calls",
                 "copied_bytes", "native_allocator_live_bytes", "sqlite_busy_handler_attempts")}
             save(self.directory / "perf01.json", self.extra)
+            if journal_error is not None and result == 0:
+                # Do not mask an earlier setup/load exception. A previously
+                # successful return must still fail after a late append error.
+                raise journal_error
 
 
 def main():

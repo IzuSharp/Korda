@@ -361,6 +361,51 @@ peaks. Fewer than two valid CPU observations produce null CPU summaries. These
 observations do not change arrivals, functional/persistence oracles, resource
 caps, dispatch-lag thresholds or latency acceptance criteria.
 
+## Compact target outcome journal and receipt memory
+
+The explicit `--compact-observation` path also replaces only the Perf-01 HTTPX
+target's inherited outcome list with `outcomes.jsonl`. Each warmup or measured
+outcome is serialized at the original append point, before its existing completed
+event is emitted. Full normalized page titles/versions and scalar business
+results remain on disk in the original completion order, including duplicate or
+failed IDs if they occur; A21 remains the authority for ID/outcome correctness.
+No HTTP, SQL, admission, timeout, cancellation, retry or workload logic changes.
+The same helper applies to NativeWeave, direct Rust and managed AOT routes.
+
+After tasks drain, the journal seals and is streamed into the complete historical
+`receipt.json` schema. Final pretty JSON bytes match the original serializer for
+the same values. Metadata uses incremental encoding; each outcome is formatted
+separately. Count, byte count and the digest of live appended bytes must agree,
+and the sealed journal is hashed again before atomic final publication. A failed
+append, serialization, flush, close, post-seal append or replay poisons its owner.
+It cannot become a passed compact result even if the failing task had already
+left the active task set. Any initial running receipt, journal and partial `.tmp`
+remain available when final publication fails.
+
+The target's save override exists only inside the explicitly compact PerfTarget
+process and only intercepts the final application receipt; initial and other
+receipts use the original writer. The override is restored during cleanup.
+`perf01.json` records the journal path, count, byte count, live SHA, sealed/closed
+state and publication verdict. A successful full receipt contains every outcome
+and is sufficient for the existing public archive; the duplicate journal is also
+retained locally, particularly to diagnose an interrupted finalization. A failed
+or partial journal does not earn measurement credit.
+
+The compact parent reads only its consumed `status`, `durable_oracle` and `closed`
+fields while structurally validating/skipping the full receipt. The common long
+verifier likewise keeps its existing whole-file SHA check and correctness /
+profiling-only guards while projecting only the fields it uses. A large valid
+outcome array is not subject to the small-summary 64 MiB limit. The original
+B23 default, A21 source and other domain timing drivers remain unchanged.
+
+This is not a constant-memory claim for the entire target. The mutation ledger
+needed by the independent durable SQL oracle, its SQL-query transients, the
+nominal 20 Hz application samples and scalar accounting remain finite O(requests)
+or O(duration). All of their original correctness and resource checks remain.
+The helper and reader source hashes are frozen for every compact cohort; earlier
+DB calibration using the retained in-memory outcome list is preparation evidence,
+not a substitute for the fresh final target-storage cohort.
+
 ## Separate PostgreSQL attribution profile
 
 `profile_postgresql.py` reuses the same unchanged package application, typed

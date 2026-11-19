@@ -164,6 +164,15 @@ def array_records(path, key=None, metadata=None, *, metadata_selectors=None):
         require(reader.peek() == "", "Trailing evidence after JSON document")
 
 
+def object_metadata(path, names):
+    """Project a few small fields while validating/skipping all other JSON."""
+    with path.open(encoding="utf-8") as stream:
+        reader = JsonStream(stream)
+        result = reader.selected_object(dict.fromkeys(names))
+        require(reader.peek() == "", "Trailing evidence after JSON document")
+        return result
+
+
 class Evidence:
     def __init__(self, root):
         self.root = root.resolve()
@@ -315,7 +324,11 @@ def check_db(evidence, group):
     target = evidence.load("target.json", plan["routes"][0]["artifacts"][str(Path(plan["oracle"]["dataset"]).parent / "target.json")])
     original_root = Path(plan["oracle"]["dataset"]).parent
     app_path = evidence.local(summary["application_receipt"]["path"], original_root)
-    app = evidence.load(app_path, summary["application_receipt"]["sha256"])
+    # A valid long receipt contains every full outcome and may exceed the
+    # small-summary limit. Pin all bytes, then retain only the consumed fields.
+    app = object_metadata(evidence.pin(app_path, summary["application_receipt"]["sha256"]),
+                          ("status", "errors", "durable_oracle", "closed", "formal_timing_eligible"))
+    require(app.get("formal_timing_eligible") is not False, "Profiling-only evidence is ineligible for long acceptance")
     extra_path = evidence.local(summary["perf01_receipt"]["path"], original_root)
     extra = evidence.load(extra_path, summary["perf01_receipt"]["sha256"])
     require(app["status"] == extra["status"] == "passed" and not app["errors"], "Application correctness or diagnostics failed")
