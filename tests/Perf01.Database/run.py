@@ -84,6 +84,7 @@ def descriptor(args):
 
 def prepare(args, output, route, pg):
     a21 = load_a21()
+    compact_observation = bool(getattr(args, "compact_observation", False))
     service_cpus = sorted(os.sched_getaffinity(0))
     generator_cpus = getattr(args, "generator_cpus", None)
     affinity = {"mode": "inherited", "service_cpus": service_cpus, "generator_cpus": None}
@@ -147,6 +148,7 @@ def prepare(args, output, route, pg):
                 "golden": str(ROOT / "tests/Reference.TaskService/golden.py"), "files": files, **pg,
                 "perf01": {"scenario": args.scenario, "stage": args.stage, "idle_seconds": args.idle_seconds,
                            "recovery_requests": args.recovery_requests,
+                           "compact_observation": compact_observation,
                            "continue_classified_overload": args.continue_classified_overload, "affinity": affinity,
                            "resource_observer": resource_observer}}
     if args.protocol != "http1":
@@ -168,6 +170,7 @@ def prepare(args, output, route, pg):
                 "allocator": "Unchanged package/comparator allocator", "isa_profile": "portable-x86-64-default-no-host-native",
                 "warmup_requests": args.warmup, "features": {"scenario": args.scenario, "concurrency": args.concurrency,
                     "continue_classified_overload": args.continue_classified_overload,
+                    "compact_observation": compact_observation,
                     "service_cpus": service_cpus, "generator_cpus": generator_cpus},
                 "instrumentation": "External procfs application at nominal 20 Hz and target/scheduler/controller at nominal 1 Hz, independent CPU/memory/fd fields; optional identical exception catch/log/rethrow observer"},
             "timing": {"requests": count, "period_ns": period, "timeout_ns": 30_000_000_000,
@@ -176,7 +179,7 @@ def prepare(args, output, route, pg):
             "regression": {"enabled": False, "baseline_id": "Perf-01-independent-cohort-analysis", "absolute_noise_ns": 0, "relative_noise": 0},
             "routes": [target]}
     # A21's command-level comparative schema demands all three routes. This is
-    # explicitly one scoped cell; run_cell is reused unchanged and never claims
+    # explicitly one scoped cell; run_cell never claims
     # unexecuted route/cohort acceptance. Artifact/oracle checks still run here.
     check_files(target["artifacts"]); check_files(target["lock_hashes"]); a21.Oracle(plan, output)
     save(output / "plan.json", plan)
@@ -184,6 +187,7 @@ def prepare(args, output, route, pg):
               "driver_source": source_identity(ROOT), "source_files": files, "route": route,
               "host": a21.host_metadata(), "python_libraries": client, "isolation_note": args.isolation_note,
               "affinity": affinity,
+              "compact_observation": compact_observation,
               "resource_observer": resource_observer,
               "plan_sha256": digest(output / "plan.json"), "dataset_sha256": digest(data_path),
               "planned_load_seconds": (count - 1) * period / 1e9,
@@ -221,6 +225,8 @@ async def execute_cell(args, output, plan, frozen):
     command = [str(Path(sys.executable).resolve()), str(DOMAIN / "cell_worker.py"), "--plan", str(output / "plan.json"),
                "--route", args.route, "--repetition", str(args.repetition), "--output", str(output / "observation.json"),
                "--a21", str(ROOT / "src/Benchmarks.Harness/nativeweave_bench.py")]
+    if frozen.get("compact_observation", False):
+        command.append("--compact-observation")
     save(output / "progress.json", {"state": "running", "started_utc": utc(), "frozen_inputs_sha256": digest(output / "frozen-inputs.json")})
     timeout = 20 * args.warmup + frozen["planned_load_seconds"] + 225
     receipt = await supervised_command(command, output / "supervision", timeout, 5, output / "control.json", load_a21())
@@ -311,6 +317,8 @@ def main():
     parser.add_argument("--recovery-requests", type=int, default=32)
     parser.add_argument("--continue-classified-overload", action="store_true",
                         help="Continue real HTTP after declared service-error statuses/timeouts; every error still fails the cell")
+    parser.add_argument("--compact-observation", action="store_true",
+                        help="Share bounded immutable oracle values before timing and replay accepted result payloads after timing")
     parser.add_argument("--max-p99-ms", type=float, default=500)
     parser.add_argument("--max-rss-mib", type=float, default=256)
     parser.add_argument("--seed", type=int, default=20261119)

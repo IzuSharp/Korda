@@ -8,7 +8,7 @@ execution window; the independent reviewer ran no tests or workloads.
 `profile_a21_generator.py` runs the existing Perf-01 DB driver and its ordinary
 PostgreSQL supervisor, package consumer, exception observer, HTTP target,
 workload and correctness/retirement checks. Only the supervised A21 child
-scheduler command is wrapped. The child loads the unchanged A21 file once and
+scheduler command is wrapped. The child loads the selected A21 file once and
 adds in-memory timing wrappers; no formal driver file is modified.
 
 The source-defined hooks record:
@@ -23,10 +23,23 @@ The source-defined hooks record:
   write occurs in a load hook.
 - After `run_cell` returns, retained-result container cardinalities and one
   `gc.get_objects(generation)` count for each generation. The returned result
-  stays referenced through this post-run snapshot. The enumeration creates
+  and RunState/Oracle stay referenced through this post-run snapshot. The first
+  existing event hook retains one state reference; there is no extra hook or
+  graph traversal during load. After the callback is removed, the receipt counts
+  Oracle entries, distinct entry/expected/list identities and input tokens, and
+  checks whether all page expected values equal the first. These are post-run
+  identity/equality counts, not deep allocated-byte estimates. The enumeration creates
   temporary lists and is deliberately outside the application load; it is not
   a during-load graph-size series. `gc.get_count()` likewise is not a live-object
   count.
+
+The diagnostic wrapper forwards an explicitly supplied `--compact-observation`
+unchanged. Its raw-file write wrapper applies only to writing; post-window replay
+reads the ordinary file. Replay gets the distinct
+`post-window-completion-replay` phase label, so its GC/JSON work cannot be
+mistaken for a measured event-loop pause. A fresh compact diagnostic must use a
+new output directory and newly captured source hashes; retain the earlier full-
+retention profile and its invalid generator verdict.
 
 The launcher never disables GC, invokes a manual collection, or changes GC
 thresholds. It records their before/after values and requires the worker receipt

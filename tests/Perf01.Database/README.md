@@ -1,8 +1,9 @@
 # Perf-01 database application measurements
 
 Status: harness preparation. No measured result or completed long stage is
-established by these files. Product behavior, packages and A21/B23 machinery are
-not modified here.
+established by these files. Product behavior and packages are not modified here.
+The explicitly selected compact-observation mode below changes only how the
+external A21 controller retains validated result objects during measurement.
 
 ## Measured path
 
@@ -13,7 +14,7 @@ Rust SQLx, and durable PostgreSQL/SQLite transactions. These are **whole-applica
 latencies**, including HTTP, authentication, JSON and cleanup; they are not isolated
 database execution, pool-wait or lock-wait measurements.
 
-The unchanged A21 `run_cell` supplies all scheduled-arrival timing, generator
+The A21 `run_cell` supplies all scheduled-arrival timing, generator
 saturation accounting, histograms and percentiles. The unchanged B23 `Target`
 supplies business checks and independent SQL persistence verification. B23's
 external supervisor owns bounded cleanup. This controller runs one selected route
@@ -150,6 +151,45 @@ same protocol, fixed arrivals, concurrency, payload, seed and limits after
 optimization. Comparator cells add the exact comparator manifest and
 `--route direct-rust --variant direct` or `--route managed-aot --variant managed`.
 The comparator path retains its narrower B23 cleanup/capability caveats.
+
+### Optional compact observation
+
+`--compact-observation` explicitly selects two external-controller changes on
+all routes of a new Perf-01 DB cohort. Without the flag, A21 and its direct
+`RunState` callers retain the original behavior. The flag is recorded in the
+target manifest, plan features and frozen inputs, and passed to the existing
+supervised cell worker. It must match before/after/direct/managed cells; old
+driver hashes or calibration cells cannot be silently rebound to this mode.
+
+Before target startup and timing, identical JSON expected results share their
+read-only oracle value. Input tokens, dataset bytes/hash and live equality checks
+are unchanged. The temporary cache permits at most 1024 unique keys and 4 MiB of
+key bytes, with at most 64 KiB/key, 4096 traversal nodes and depth 64. Values that
+exceed a bound keep their independent objects. This reduces the retained graph;
+the original dataset still has to be parsed in full before measurement.
+
+During timing, every completion is parsed, ordered, checked against the oracle
+and counter schema, and accepted or rejected by the original rules. The
+controller retains scalar operation state, observer timestamps, one last-counter
+snapshot, a byte flag and an int64 raw-line index per scheduled operation.
+Per-record result/counter objects and full late-event payloads are restored only
+after target/reader/sampler drain and after the original measurement endpoint is
+fixed. Replay matches the accepted ID, observer timestamp and raw-line index;
+same-timestamp duplicates cannot replace an accepted result. An incremental
+SHA-256 of the exact live-written UTF-8 log binds replay to the original bytes;
+changing a valid counter, failed result or late status cannot pass by retaining
+the same event identity. Malformed and
+unaccepted records are skipped. Missing or invalid accepted payloads fail the
+cell. Complete result fields, late metadata and exact raw wire bytes remain in
+the final evidence.
+
+Replay can increase post-window CPU/RSS and serialization time. Those costs are
+not reported as application CPU or included in an operation latency/window.
+This mode does not disable or force GC, change a GC threshold, alter an arrival,
+deadline, capacity limit, correctness oracle, or database/application setting.
+It is a measurement-tool candidate, not a product performance improvement.
+Run the finite A21 equivalence gates and repeat the diagnostic/calibration with
+fresh source hashes before freezing any formal DB cohort.
 
 ### Optional generator CPU isolation
 

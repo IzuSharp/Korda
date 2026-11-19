@@ -1,6 +1,8 @@
 """Behavioral and corruption tests for A21, independent of unfinished engines."""
 import asyncio
 import base64
+import copy
+import hashlib
 import importlib.util
 import json
 from pathlib import Path
@@ -122,8 +124,219 @@ class AccountingTests(unittest.TestCase):
         self.assertIsNone(result["all_thread_stacks_bytes"]["value"])
 
 
+class CompactObservationTests(unittest.TestCase):
+    """Identical synthetic events/clocks, with the old live state as the oracle."""
+
+    @staticmethod
+    def completed(identifier, status="ok", **extra):
+        values = counters()
+        values["managed_allocated_bytes"] = bench.measured(identifier + 7, "bytes", "synthetic completion")
+        return {"kind": "completed", "id": identifier, "status": status,
+                "value": bench.mix64(identifier + 1), "counters": values, **extra}
+
+    @staticmethod
+    def visible(state, payloads=True):
+        rows = state.records if payloads else [
+            {key: value for key, value in row.items() if key not in {"value", "target_counters"}}
+            for row in state.records]
+        return {"records": rows, "errors": state.errors, "late_events": state.late_events if payloads else None,
+                "seen_completion": sorted(state.seen_completion), "last_counters": state.last_counters,
+                "last_completion_observed_ns": state.last_completion_observed_ns,
+                "last_admission_observed_ns": state.last_admission_observed_ns,
+                "in_flight": sorted(state.in_flight), "deadlines": state.deadlines}
+
+    def exercise(self, trace, count, root, mutate_raw=None, rebind_digest=False):
+        ordinary = bench.RunState(count)
+        compact = bench.RunState(count, compact_completion_payloads=True)
+        for state in (ordinary, compact):
+            for row in state.records:
+                row.update(scheduled_ns=0, dispatch_ns=1, deadline_ns=100, attempts=1)
+                state.in_flight.add(row["id"])
+            state.deadlines = [(100, identifier) for identifier in range(count)]
+        raw = []
+        failures = []
+        for operation, now, event in trace:
+            if operation == "expire":
+                ordinary.expire(now); compact.expire(now)
+                continue
+            wire = event if isinstance(event, bytes) else (json.dumps(event) + "\n").encode()
+            index = len(raw)
+            raw.append(json.dumps({"observed_ns": now, "wire_base64": base64.b64encode(wire).decode()}))
+            outcomes = []
+            for state in (ordinary, compact):
+                try:
+                    options = {"raw_event_index": index} if state is compact else {}
+                    state.event(json.loads(wire), now, len(wire), **options)
+                    outcomes.append(None)
+                except (ValueError, KeyError, TypeError) as error:
+                    outcomes.append((type(error).__name__, str(error)))
+            self.assertEqual(*outcomes)
+            failures.append(outcomes[0])
+            self.assertEqual(self.visible(ordinary, False), self.visible(compact, False))
+        self.assertTrue(all("target_counters" not in row and "value" not in row for row in compact.records))
+        self.assertEqual([], compact.late_events)
+        snapshot = copy.deepcopy(self.visible(compact, False))
+        path = root / "events.jsonl"
+        expected_digest = hashlib.sha256(("\n".join(raw) + "\n").encode()).hexdigest()
+        path.write_text("\n".join(mutate_raw(raw) if mutate_raw else raw) + "\n")
+        before_hash = bench.sha256(path)
+        compact.rehydrate_completion_payloads(path, expected_sha256=before_hash if rebind_digest else expected_digest)
+        self.assertEqual(before_hash, bench.sha256(path))
+        self.assertEqual(snapshot, self.visible(compact, False))
+        # Equality covers every public field, and serialized equality also
+        # checks restored record key order and complete late-event metadata.
+        self.assertEqual(json.dumps(self.visible(ordinary)), json.dumps(self.visible(compact)))
+        with self.assertRaisesRegex(ValueError, "fresh compact"):
+            compact.rehydrate_completion_payloads(path, expected_sha256=before_hash)
+        return ordinary, compact, failures
+
+    def test_success_and_every_non_success_payload_are_exact(self):
+        trace = []
+        statuses = ["ok", "failed", "rejected", "cancelled", "timeout", "unsupported"]
+        for identifier, status in enumerate(statuses):
+            if status == "ok":
+                trace.append(("event", 2, {"kind": "admitted", "id": identifier}))
+            event = self.completed(identifier, status)
+            if status != "ok":
+                event["value"] = {"reason": status, "optional": None, "bytes": [identifier, 0]}
+            trace.append(("event", 10 + identifier, event))
+        with tempfile.TemporaryDirectory() as temporary:
+            self.exercise(trace, len(statuses), Path(temporary))
+
+    def test_timeout_poller_and_late_admission_keep_full_late_events(self):
+        trace = [("event", 2, {"kind": "admitted", "id": 0}),
+                 # Event itself wins the scheduling race with expire(), but
+                 # the deadline still wins the logical outcome.
+                 ("event", 100, self.completed(0, extension={"trace": [1, 2]})),
+                 ("expire", 110, None),
+                 ("event", 120, {"kind": "admitted", "id": 1}),
+                 ("event", 130, self.completed(1, extension={"late": True})),
+                 ("event", 140, self.completed(2, "failed", value={"failure": [3]}))]
+        with tempfile.TemporaryDirectory() as temporary:
+            ordinary, compact, _ = self.exercise(trace, 3, Path(temporary))
+        self.assertEqual(["timeout"] * 3, [row["status"] for row in compact.records])
+        self.assertTrue(all("value" not in row for row in compact.records))
+        self.assertEqual(3, len(compact.late_events))
+        self.assertEqual(ordinary.last_counters, compact.last_counters)
+
+    def test_same_timestamp_duplicates_and_malformed_events_are_not_replayed(self):
+        accepted = self.completed(0)
+        duplicate = copy.deepcopy(accepted)
+        duplicate["counters"]["managed_allocated_bytes"]["value"] = 999
+        malformed_counters = self.completed(1)
+        malformed_counters["counters"] = []
+        trace = [("event", 2, {"kind": "admitted", "id": 0}),
+                 ("event", 3, {"kind": "admitted", "id": 1}),
+                 ("event", 10, accepted), ("event", 10, duplicate),
+                 ("event", 11, malformed_counters),
+                 ("event", 11, self.completed(1)),
+                 ("event", 12, b"[]\n"), ("event", 13, b"not-json\n"),
+                 ("event", 14, {"kind": "admitted", "id": 0}),
+                 ("event", 15, self.completed(99))]
+        # Direct event callers may catch a rejection and continue. run_cell's
+        # separate process tests retain its stricter stop-after-first-error rule.
+        with tempfile.TemporaryDirectory() as temporary:
+            _, compact, failures = self.exercise(trace, 2, Path(temporary))
+        self.assertEqual(6, sum(error is not None for error in failures))
+        self.assertEqual(7, compact.records[0]["target_counters"]["managed_allocated_bytes"]["value"])
+
+    def test_missing_or_corrupt_accepted_raw_payload_fails_closed(self):
+        trace = [("event", 2, {"kind": "admitted", "id": 0}), ("event", 3, self.completed(0))]
+
+        def wrong_time(rows):
+            envelope = json.loads(rows[1]); envelope["observed_ns"] += 1
+            return [rows[0], json.dumps(envelope)]
+
+        for mutate in (lambda rows: rows[:1], lambda rows: [rows[0], "[]"], wrong_time,
+                       lambda rows: [rows[0], "x" * (128 * 1024 + 1)]):
+            with self.subTest(mutate=mutate), tempfile.TemporaryDirectory() as temporary:
+                with self.assertRaisesRegex(ValueError, "raw events|Accepted completion payload"):
+                    self.exercise(trace, 1, Path(temporary), mutate)
+
+    def test_valid_counter_failed_value_and_late_status_tampering_are_rejected(self):
+        def changed(rows, update):
+            envelope = json.loads(rows[-1])
+            event = json.loads(base64.b64decode(envelope["wire_base64"]))
+            update(event)
+            envelope["wire_base64"] = base64.b64encode((json.dumps(event) + "\n").encode()).decode()
+            return rows[:-1] + [json.dumps(envelope)]
+
+        cases = [
+            ([("event", 2, {"kind": "admitted", "id": 0}), ("event", 3, self.completed(0))],
+             lambda event: event["counters"]["managed_allocated_bytes"].update(value=999)),
+            ([("event", 3, self.completed(0, "failed", value={"reason": "original"}))],
+             lambda event: event.update(value={"reason": "changed"})),
+            ([("event", 2, {"kind": "admitted", "id": 0}), ("event", 101, self.completed(0))],
+             lambda event: event.update(status="failed"))]
+        for trace, update in cases:
+            with self.subTest(trace=trace), tempfile.TemporaryDirectory() as temporary:
+                with self.assertRaisesRegex(ValueError, "raw events differ"):
+                    self.exercise(trace, 1, Path(temporary), lambda rows: changed(rows, update))
+
+    def test_failed_replay_is_one_shot_even_when_some_late_payloads_were_restored(self):
+        state = bench.RunState(1, compact_completion_payloads=True)
+        state.records[0].update(scheduled_ns=0, dispatch_ns=1, admission_ns=2, deadline_ns=10)
+        event = self.completed(0)
+        state.event(event, 11, raw_event_index=0)
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "events.jsonl"
+            wire = (json.dumps(event) + "\n").encode()
+            path.write_text(json.dumps({"observed_ns": 11, "wire_base64": base64.b64encode(wire).decode()}) + "\n")
+            with self.assertRaisesRegex(ValueError, "raw events differ"):
+                state.rehydrate_completion_payloads(path, expected_sha256="0" * 64)
+            self.assertEqual(1, len(state.late_events))
+            with self.assertRaisesRegex(ValueError, "fresh compact"):
+                state.rehydrate_completion_payloads(path, expected_sha256=bench.sha256(path))
+            self.assertEqual(1, len(state.late_events))
+
+    def test_malformed_unaccepted_envelopes_are_safely_skipped(self):
+        trace = [("event", 2, {"kind": "admitted", "id": 0}),
+                 ("event", 3, self.completed(0)), ("event", 4, b"bad-json\n")]
+        for replacement in ("[]", '{"observed_ns":4,"wire_base64":"%%%"}', "x" * (128 * 1024 + 1)):
+            with self.subTest(replacement=replacement[:20]), tempfile.TemporaryDirectory() as temporary:
+                # This fixture declares the malformed envelope as the original
+                # persisted bytes, rather than simulating an unbound edit.
+                self.exercise(trace, 1, Path(temporary), lambda rows: rows[:2] + [replacement], rebind_digest=True)
+
+    def test_oracle_sharing_keeps_hash_shape_types_and_default_independence(self):
+        page = {"titles": ["seed-0000", "seed-0001"], "versions": [1, 1]}
+        entries = [{"input": str(i), "expected": copy.deepcopy(value)}
+                   for i, value in enumerate([page, page, 1, True, 1.0])]
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary); path = root / "oracle.json"
+            path.write_text(json.dumps(entries))
+            original_hash = bench.sha256(path)
+            plan = {"timing": {"requests": len(entries)}, "oracle": {
+                "kind": "expected-values", "dataset": path.name, "sha256": original_hash}}
+            ordinary = bench.Oracle(plan, root)
+            compact = bench.Oracle(plan, root, canonicalize_expected=True)
+            self.assertEqual(ordinary.entries, compact.entries)
+            self.assertIsNot(ordinary.expected(0), ordinary.expected(1))
+            self.assertIs(compact.expected(0), compact.expected(1))
+            self.assertEqual([int, bool, float], [type(compact.expected(i)) for i in (2, 3, 4)])
+            self.assertEqual(1, compact.expected_canonicalization["reused_entries"])
+            self.assertEqual(original_hash, bench.sha256(path))
+            path.write_text("[]")
+            with self.assertRaisesRegex(ValueError, "hash"):
+                bench.Oracle(plan, root, canonicalize_expected=True)
+
+    def test_oracle_cache_bounds_do_not_change_uncached_values(self):
+        entries = [{"expected": value} for value in ({"a": [1]}, {"b": [2]}, {"a": [1]},
+                   {"huge": "x" * 100}, {"huge": "x" * 100}, list(range(20)), list(range(20)))]
+        before = copy.deepcopy(entries)
+        report = bench.canonicalize_expected_values(entries, max_unique=1, max_cache_bytes=32,
+                                                    max_key_bytes=32, max_nodes=10, max_depth=4)
+        self.assertEqual(before, entries)
+        self.assertEqual(1, report["unique_cached"])
+        self.assertLessEqual(report["cache_key_bytes"], 32)
+        self.assertEqual(1, report["reused_entries"])
+        self.assertIs(entries[0]["expected"], entries[2]["expected"])
+        self.assertIsNot(entries[3]["expected"], entries[4]["expected"])
+        self.assertIsNot(entries[5]["expected"], entries[6]["expected"])
+
+
 class ProcessTests(unittest.IsolatedAsyncioTestCase):
-    async def fixture(self, fault=None, requests=4, max_in_flight=8, lag=100_000_000):
+    async def fixture(self, fault=None, requests=4, max_in_flight=8, lag=100_000_000, compact=False):
         with tempfile.TemporaryDirectory(prefix="nw-a21-") as temporary:
             base = Path(temporary)
             source = base / "target.py"
@@ -148,7 +361,8 @@ for line in sys.stdin:
                     "histogram": {"resolution_ns": 1000, "maximum_ns": 1_000_000_000}, "workload_kind": "harness-smoke",
                     "faults": fault or {}}
             route = {"id": "managed-aot", "command": [sys.executable, str(source), str(ROOT / "src/Benchmarks.Harness/nativeweave_bench.py")], "artifacts": {}}
-            result = await bench.run_cell(plan, route, 0, base, base / "result.json")
+            options = {"compact_completion_payloads": True, "canonicalize_expected": True} if compact else {}
+            result = await bench.run_cell(plan, route, 0, base, base / "result.json", **options)
             self.assertTrue((base / "result.json").exists())
             result["test_raw_lines"] = [json.loads(line) for line in (base / result["raw_events"]["path"]).read_text().splitlines()]
             return result
@@ -189,6 +403,20 @@ for line in sys.stdin:
     async def test_every_completion_counter_is_retained(self):
         result = await self.fixture(requests=2)
         self.assertEqual([1, 2], [row["target_counters"]["managed_allocated_bytes"]["value"] for row in result["records"]])
+
+    async def test_compact_process_rehydrates_without_weakening_integrity_or_late_outcomes(self):
+        result = await self.fixture(requests=2, compact=True)
+        self.assertTrue(result["valid"], result["invalid_reasons"])
+        self.assertEqual([1, 2], [row["target_counters"]["managed_allocated_bytes"]["value"] for row in result["records"]])
+        for fault in ("corrupt", "malformed"):
+            result = await self.fixture({"0": fault}, compact=True)
+            self.assertFalse(result["valid"])
+            self.assertIn("cancelled", result["outcome_counts"])
+        late = await self.fixture({"0": "late"}, requests=1, compact=True)
+        self.assertEqual("timeout", late["records"][0]["status"])
+        self.assertEqual(1, len(late["late_events"]))
+        self.assertGreaterEqual(late["measurement_window_ns"]["end"], late["late_events"][0]["observed_ns"])
+        self.assertNotIn("value", late["records"][0])
 
     async def test_late_completion_throughput_uses_observed_endpoint(self):
         result = await self.fixture({"0": "late"}, requests=1)

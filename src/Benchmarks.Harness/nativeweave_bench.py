@@ -8,6 +8,7 @@ subtraction of unrelated clocks. IPC and observer scheduling are included.
 from __future__ import annotations
 
 import argparse
+from array import array
 import asyncio
 import base64
 from collections import Counter
@@ -83,10 +84,88 @@ def mix64(value):
     return value
 
 
+def canonicalize_expected_values(entries, *, max_unique=1024, max_cache_bytes=4 * 1024 * 1024,
+                                 max_key_bytes=65536, max_nodes=4096, max_depth=64):
+    """Share bounded identical JSON values that the oracle treats as immutable.
+
+    This runs before target startup and measurement. Oversized or unsupported
+    values retain their original objects; equality and the serialized dataset
+    are unchanged. The cache is local and is discarded after construction.
+    """
+    if any(type(value) is not int or value <= 0 for value in
+           (max_unique, max_cache_bytes, max_key_bytes, max_nodes, max_depth)):
+        raise ValueError("Expected-value canonicalization limits must be positive integers")
+    encoder = json.JSONEncoder(sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False)
+    cache, cache_bytes, reused, skipped = {}, 0, 0, 0
+    missing = object()
+
+    def bounded_key(value):
+        # Bound both traversal and an encoder's largest string/container chunk.
+        pending, nodes, characters = [(value, 0)], 0, 0
+        while pending:
+            item, depth = pending.pop()
+            nodes += 1
+            if nodes > max_nodes or depth > max_depth:
+                return None
+            if type(item) is str:
+                characters += len(item)
+                if characters > max_key_bytes:
+                    return None
+            elif type(item) is dict:
+                if len(item) * 2 > max_nodes - nodes - len(pending):
+                    return None
+                for key, nested in item.items():
+                    if type(key) is not str:
+                        return None
+                    pending.extend(((key, depth + 1), (nested, depth + 1)))
+            elif type(item) is list:
+                if len(item) > max_nodes - nodes - len(pending):
+                    return None
+                pending.extend((nested, depth + 1) for nested in item)
+            elif item is None or type(item) is bool:
+                pass
+            elif type(item) is int:
+                if item.bit_length() > 16384:
+                    return None
+            elif type(item) is float:
+                if not math.isfinite(item):
+                    return None
+            else:
+                return None
+        chunks, size = [], 0
+        for chunk in encoder.iterencode(value):
+            size += len(chunk)  # ASCII encoding makes this the exact key byte count.
+            if size > max_key_bytes:
+                return None
+            chunks.append(chunk)
+        return "".join(chunks)
+
+    for entry in entries:
+        try:
+            key = bounded_key(entry["expected"])
+        except (ValueError, OverflowError, RecursionError):
+            key = None
+        if key is None:
+            skipped += 1
+            continue
+        existing = cache.get(key, missing)
+        if existing is not missing:
+            entry["expected"] = existing
+            reused += 1
+        elif len(cache) < max_unique and cache_bytes + len(key) <= max_cache_bytes:
+            cache[key] = entry["expected"]
+            cache_bytes += len(key)
+        else:
+            skipped += 1
+    return {"unique_cached": len(cache), "cache_key_bytes": cache_bytes, "reused_entries": reused,
+            "uncached_entries": skipped, "max_unique": max_unique, "max_cache_bytes": max_cache_bytes,
+            "max_key_bytes": max_key_bytes, "max_nodes": max_nodes, "max_depth": max_depth}
+
+
 class Oracle:
     """A fixture oracle or immutable domain input/expected-value dataset supplied by B23."""
 
-    def __init__(self, plan, base):
+    def __init__(self, plan, base, *, canonicalize_expected=False):
         definition = plan.get("oracle", {"kind": "scalar-mix64"})
         self.entries = None
         if definition["kind"] == "expected-values":
@@ -101,6 +180,8 @@ class Oracle:
                     raise ValueError("Oracle entries require an input token and expected result")
                 if any(character in str(entry["input"]) for character in "\t\r\n"):
                     raise ValueError("Input tokens cannot contain line-protocol separators")
+            if canonicalize_expected:
+                self.expected_canonicalization = canonicalize_expected_values(self.entries)
         elif definition["kind"] != "scalar-mix64":
             raise ValueError("Unsupported functional oracle")
 
@@ -278,7 +359,7 @@ def validate_plan(plan, base):
 class RunState:
     """Bounded finite request ledger and strict event-state validation."""
 
-    def __init__(self, count, oracle=None):
+    def __init__(self, count, oracle=None, *, compact_completion_payloads=False):
         self.records = [{"id": i, "scheduled_ns": None, "dispatch_ns": None, "admission_ns": None,
                          "completion_ns": None, "status": None, "deadline_ns": None,
                          "attempts": 0, "request_wire_bytes": 0, "response_wire_bytes": 0} for i in range(count)]
@@ -291,6 +372,12 @@ class RunState:
         self.in_flight = set()
         self.deadlines = []
         self.oracle = oracle
+        self._compact_completion_payloads = compact_completion_payloads
+        # Two bounded scalar arrays replace per-completion object graphs only
+        # in the explicit opt-in. 0 = absent, 1 = ordinary, 2 = late completion.
+        self._completion_payload_kind = bytearray(count) if compact_completion_payloads else None
+        self._completion_raw_index = array("q", [-1]) * count if compact_completion_payloads else None
+        self._payload_replay_attempted = False
 
     def expire(self, now):
         while self.deadlines and self.deadlines[0][0] <= now:
@@ -300,7 +387,7 @@ class RunState:
                 row["completion_ns"], row["status"] = now, "timeout"
                 row["timeout_observed_ns"] = now
 
-    def event(self, event, now, wire_bytes=0):
+    def event(self, event, now, wire_bytes=0, *, raw_event_index=None):
         if not isinstance(event, dict):
             raise ValueError("Target event must be an object")
         identifier = event.get("id")
@@ -330,25 +417,106 @@ class RunState:
         if status == "ok" and event.get("value") != expected:
             raise ValueError("Functional oracle mismatch")
         validate_counters(event["counters"])
+        if self._compact_completion_payloads and (type(raw_event_index) is not int or not 0 <= raw_event_index < 2**63):
+            raise ValueError("Compact completion requires its persisted raw event index")
         self.seen_completion.add(identifier)
         self.in_flight.discard(identifier)
         self.last_completion_observed_ns = now
         self.last_counters = event["counters"]
-        row["target_counters"] = event["counters"]
+        if self._compact_completion_payloads:
+            self._completion_raw_index[identifier] = raw_event_index
+            self._completion_payload_kind[identifier] = 2 if row["status"] is not None else 1
+        else:
+            row["target_counters"] = event["counters"]
         row["target_completion_observed_ns"] = now
         if row["status"] is not None:
-            self.late_events.append({"observed_ns": now, "event": event})
+            if not self._compact_completion_payloads:
+                self.late_events.append({"observed_ns": now, "event": event})
             return
         row["completion_ns"] = now
         row["status"] = status
-        row["value"] = event.get("value")
+        if not self._compact_completion_payloads:
+            row["value"] = event.get("value")
+
+    def rehydrate_completion_payloads(self, raw_path, *, expected_sha256):
+        """Restore only live-accepted completions after the timing window.
+
+        Match the persisted raw-line ordinal, ID and observer timestamp. Raw
+        admissions, rejected/duplicate events and malformed lines are skipped;
+        every accepted completion must be recovered or the cell fails. The
+        entire file must also match the digest accumulated from the exact
+        persisted bytes during live observation. The
+        finite stream reader admits at most 65536 bytes per target line, so a
+        128 KiB envelope bound covers every accepted base64 record.
+        """
+        if not self._compact_completion_payloads or self._payload_replay_attempted:
+            raise ValueError("Completion payload replay requires a fresh compact state")
+        if not isinstance(expected_sha256, str) or len(expected_sha256) != 64 or any(c not in "0123456789abcdef" for c in expected_sha256):
+            raise ValueError("Completion payload replay requires the live raw event digest")
+        # A failed read/digest/coverage check may have restored part of a row.
+        # Never permit retrying that partially mutated state as a fresh replay.
+        self._payload_replay_attempted = True
+        restored = bytearray(len(self.records))
+        replay_digest = hashlib.sha256()
+        limit = 128 * 1024
+        with raw_path.open("rb") as stream:
+            index = -1
+            while line := stream.readline(limit + 1):
+                index += 1
+                replay_digest.update(line)
+                if len(line) > limit:
+                    while line and not line.endswith(b"\n"):
+                        line = stream.readline(limit + 1)
+                        replay_digest.update(line)
+                    continue
+                try:
+                    envelope = json.loads(line)
+                    if not isinstance(envelope, dict) or type(envelope.get("observed_ns")) is not int or type(envelope.get("wire_base64")) is not str:
+                        continue
+                    event = json.loads(base64.b64decode(envelope["wire_base64"], validate=True))
+                    if not isinstance(event, dict) or event.get("kind") != "completed":
+                        continue
+                    identifier = event.get("id")
+                    if type(identifier) is not int or not 0 <= identifier < len(self.records):
+                        continue
+                    kind = self._completion_payload_kind[identifier]
+                    row = self.records[identifier]
+                    if not kind or restored[identifier] or self._completion_raw_index[identifier] != index or row["target_completion_observed_ns"] != envelope["observed_ns"]:
+                        continue
+                    status = event.get("status")
+                    if status not in OUTCOMES or kind == 1 and status != row["status"]:
+                        continue
+                    expected = mix64(identifier + 1) if self.oracle is None else self.oracle.expected(identifier)
+                    if status == "ok" and (row["admission_ns"] is None or event.get("value") != expected):
+                        continue
+                    validate_counters(event["counters"])
+                except (ValueError, KeyError, TypeError, OverflowError, RecursionError):
+                    continue
+                # Restore the original insertion order as well as values.
+                replacement = {}
+                for key, value in row.items():
+                    if key == "target_completion_observed_ns":
+                        replacement["target_counters"] = event["counters"]
+                    replacement[key] = value
+                if kind == 1:
+                    replacement["value"] = event.get("value")
+                else:
+                    self.late_events.append({"observed_ns": envelope["observed_ns"], "event": event})
+                row.clear()
+                row.update(replacement)
+                restored[identifier] = 1
+        if replay_digest.hexdigest() != expected_sha256:
+            raise ValueError("Preserved raw events differ from the live observation digest")
+        if sum(restored) != len(self.seen_completion):
+            raise ValueError("Accepted completion payload missing or invalid in preserved raw events")
 
 
-async def run_cell(plan, route, repetition, base, output):
+async def run_cell(plan, route, repetition, base, output, *, compact_completion_payloads=False,
+                   canonicalize_expected=False):
     """One fresh process per cell; dispatch scheduling never awaits responses."""
     timing = plan["timing"]
-    oracle = Oracle(plan, base)
-    state = RunState(timing["requests"], oracle)
+    oracle = Oracle(plan, base, canonicalize_expected=canonicalize_expected)
+    state = RunState(timing["requests"], oracle, compact_completion_payloads=compact_completion_payloads)
     command = list(route["command"])
     command[0] = str((base / command[0]).resolve())
     process = await asyncio.create_subprocess_exec(*command, cwd=base, stdin=asyncio.subprocess.PIPE,
@@ -358,7 +526,8 @@ async def run_cell(plan, route, repetition, base, output):
     stderr_task = asyncio.create_task(process.stderr.read(1_048_576))
     resources = []
     raw_path = output.with_suffix(".events.jsonl")
-    raw_events = raw_path.open("w", encoding="utf-8")
+    raw_events = raw_path.open("w", encoding="utf-8", **({"newline": "\n"} if compact_completion_payloads else {}))
+    raw_digest = hashlib.sha256() if compact_completion_payloads else None
     try:
         hello = json.loads(await asyncio.wait_for(process.stdout.readline(), 10))
         if not isinstance(hello, dict) or hello.get("kind") != "hello" or hello.get("route") != route["id"]:
@@ -381,14 +550,22 @@ async def run_cell(plan, route, repetition, base, output):
             row["deadline_ns"] = row["scheduled_ns"] + timing["timeout_ns"]
 
         async def read_events():
+            raw_event_index = 0
             try:
                 while line := await process.stdout.readline():
                     observed = time.monotonic_ns()
                     # Persist exact bytes before parsing; malformed events are evidence too.
-                    raw_events.write(json.dumps({"observed_ns": observed,
-                                                 "wire_base64": base64.b64encode(line).decode("ascii")}) + "\n")
+                    raw_record = json.dumps({"observed_ns": observed,
+                                             "wire_base64": base64.b64encode(line).decode("ascii")}) + "\n"
+                    raw_events.write(raw_record)
                     raw_events.flush()
-                    state.event(json.loads(line), observed, len(line))
+                    if raw_digest is not None:
+                        raw_digest.update(raw_record.encode("utf-8"))
+                    if compact_completion_payloads:
+                        state.event(json.loads(line), observed, len(line), raw_event_index=raw_event_index)
+                    else:
+                        state.event(json.loads(line), observed, len(line))
+                    raw_event_index += 1
             except (ValueError, KeyError, TypeError) as error:
                 state.errors.append("integrity: " + str(error))
                 stop.set()
@@ -463,6 +640,11 @@ async def run_cell(plan, route, repetition, base, output):
         observation_end = max(max(row["completion_ns"] for row in state.records),
                               state.last_completion_observed_ns or origin, state.last_admission_observed_ns or origin)
         elapsed = observation_end - origin
+        if compact_completion_payloads:
+            # The target, reader and sampler have stopped. Replay cannot extend
+            # any recorded operation/window timestamp or enter resource samples.
+            raw_events.flush()
+            state.rehydrate_completion_payloads(raw_path, expected_sha256=raw_digest.hexdigest())
         histograms = {}
         for label, start, end, success_only in [
                 ("arrival_all_outcomes", "scheduled_ns", "completion_ns", False),
@@ -484,7 +666,8 @@ async def run_cell(plan, route, repetition, base, output):
                                        "admitted": sum(row["admission_ns"] is not None for row in state.records) * 1e9 / max(1, elapsed),
                                        "completed": len(state.seen_completion) * 1e9 / max(1, elapsed)},
                   "histograms": histograms, "late_events": state.late_events,
-                  "raw_events": {"path": raw_path.name, "sha256": sha256(raw_path), "encoding": "JSONL records with exact base64 wire bytes"},
+                  "raw_events": {"path": raw_path.name, "sha256": raw_digest.hexdigest() if raw_digest is not None else sha256(raw_path),
+                                 "encoding": "JSONL records with exact base64 wire bytes"},
                   "last_target_counters": state.last_counters, "resource_samples": resources,
                   "cleanup": cleanup, "stderr": stderr, "exit_code": process.returncode,
                   "clock_scope": "one controller monotonic clock; admission event observed over IPC",

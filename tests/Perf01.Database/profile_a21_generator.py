@@ -67,6 +67,7 @@ class Diagnostics:
         self.callback = self.gc_event
         self.result_shape = None
         self.retained_result = None
+        self.retained_state = None
         self.initial = {"task": "Perf-01", "formal_timing_eligible": False, "status": "running", "pid": os.getpid(),
                         "python": exact_python(), "started": anchor(), "gc_enabled_before": gc.isenabled(),
                         "gc_threshold_before": gc.get_threshold(), "gc_count_before": gc.get_count(),
@@ -128,6 +129,24 @@ class Diagnostics:
         if self.callback in gc.callbacks:
             gc.callbacks.remove(self.callback)
         self.phase = "post-run-introspection"
+        entries = getattr(getattr(self.retained_state, "oracle", None), "entries", None)
+        oracle = {"availability": "unavailable", "reason": "No retained expected-value Oracle"}
+        if isinstance(entries, list):
+            pages = [entry for entry in entries if isinstance(entry.get("expected"), dict)
+                     and entry["expected"].get("kind") == "list"]
+            oracle = {"availability": "measured-after-run", "entries": len(entries),
+                      "distinct_entry_object_ids": len({id(entry) for entry in entries}),
+                      "distinct_expected_object_ids": len({id(entry["expected"]) for entry in entries}),
+                      "distinct_input_tokens": len({entry["input"] for entry in entries}), "page_entries": len(pages),
+                      "distinct_page_expected_object_ids": len({id(entry["expected"]) for entry in pages}),
+                      "distinct_page_titles_list_ids": len({id(entry["expected"]["titles"]) for entry in pages}),
+                      "distinct_page_versions_list_ids": len({id(entry["expected"]["versions"]) for entry in pages}),
+                      "page_title_lengths": sorted({len(entry["expected"]["titles"]) for entry in pages}),
+                      "page_version_lengths": sorted({len(entry["expected"]["versions"]) for entry in pages}),
+                      "distinct_page_input_tokens": len({entry["input"] for entry in pages}),
+                      "all_page_expected_equal_first": all(entry["expected"] == pages[0]["expected"] for entry in pages) if pages else None,
+                      "scope": "Post-run traversal only; identity cardinality and equality, not allocated bytes. No expected payload is copied into this receipt."}
+            del pages
         # No full tracked-graph enumeration runs during the application load.
         # This allocates a temporary list and is deliberately after run_cell.
         graph = {str(generation): len(gc.get_objects(generation)) for generation in (0, 1, 2)}
@@ -136,8 +155,8 @@ class Diagnostics:
                        gc_count_after=gc.get_count(), gc_stats_after=gc.get_stats(),
                        gc_callback_incomplete=self.gc_start, methods=self.methods, generations=self.generations,
                        slow_call_records_dropped=self.call_dropped, gc_records_dropped=self.collection_dropped,
-                       tracked_objects_after_run=graph, retained_result_shape=self.result_shape,
-                       tracked_graph_scope="len(gc.get_objects(generation)) once after the worker run while the original returned result is retained; enumeration allocates temporary lists and is not a during-load sample",
+                       tracked_objects_after_run=graph, retained_result_shape=self.result_shape, retained_oracle_shape=oracle,
+                       tracked_graph_scope="len(gc.get_objects(generation)) once after the worker run while the original returned result and RunState/Oracle are retained; enumeration allocates temporary lists and is not a during-load sample",
                        gc_count_scope="gc.get_count reports allocation/collection counters, not the number of live tracked objects",
                        final_gc_stats_scope="gc_count_after/gc_stats_after include post-run introspection after this profiler's callback was removed; use gc_events for the observed callback intervals",
                        clock="Linux time.monotonic_ns; directly align with this child's A21 dispatch and observed-event timestamps",
@@ -186,11 +205,14 @@ class Diagnostics:
         class ProfilePath(type(Path())):
             def open(self, *args, **kwargs):
                 stream = super().open(*args, **kwargs)
-                return EventWriter(stream) if self == event_path else stream
+                mode = args[0] if args else kwargs.get("mode", "r")
+                return EventWriter(stream) if self == event_path and "w" in mode else stream
 
         event_path = None
 
         def event(state, value, *args, **kwargs):
+            if diagnostics.retained_state is None:
+                diagnostics.retained_state = state
             if diagnostics.phase == "run-cell-startup-and-warmup":
                 diagnostics.phase = "measurement-events"
             result = diagnostics.call("state_event", original_event, state, value, *args, **kwargs)
@@ -199,11 +221,11 @@ class Diagnostics:
                 diagnostics.phase = "after-last-controller-completion"
             return result
 
-        async def run_cell(plan, route, repetition, base, output):
+        async def run_cell(plan, route, repetition, base, output, **options):
             nonlocal event_path
             event_path = Path(output).with_suffix(".events.jsonl")
             diagnostics.phase = "run-cell-startup-and-warmup"
-            result = await original_run(plan, route, repetition, base, ProfilePath(output))
+            result = await original_run(plan, route, repetition, base, ProfilePath(output), **options)
             diagnostics.phase = "after-run-cell"
             diagnostics.retained_result = result
             rows = result.get("records", [])
@@ -216,6 +238,14 @@ class Diagnostics:
 
         a21.json = JsonProxy()
         a21.RunState.event = event
+        if hasattr(a21.RunState, "rehydrate_completion_payloads"):
+            original_rehydrate = a21.RunState.rehydrate_completion_payloads
+
+            def rehydrate(state, *args, **kwargs):
+                diagnostics.phase = "post-window-completion-replay"
+                return original_rehydrate(state, *args, **kwargs)
+
+            a21.RunState.rehydrate_completion_payloads = rehydrate
         a21.observe_process = lambda *args, **kwargs: diagnostics.call("observe_process", original_observe, *args, **kwargs)
         a21.run_cell = run_cell
 
