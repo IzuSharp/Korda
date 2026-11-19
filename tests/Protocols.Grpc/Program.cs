@@ -47,6 +47,7 @@ internal static partial class Acceptance
         {
             await StartupContracts();
             foreach (bool tls in new[] { false, true }) await RunHost(tls, certPath, keyPath);
+            await WriterContracts(certPath, keyPath);
             await PressureContracts();
             Check(_retirements > 50 && _retirementFailures == 0, "Separately observed managed A07 retirement fields");
             Check(hash == Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(native))), "Native asset unchanged across services and transports");
