@@ -90,9 +90,13 @@ def prepare(args):
                         '-days', '7', '-subj', '/CN=localhost', '-addext', 'subjectAltName=DNS:localhost,IP:127.0.0.1'],
                        check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         key.chmod(0o600)
+    protocols = profile.get('http_protocols', ['http1-tls', 'http2-tls']) if args.group == 'http' else ['http2-tls']
+    if (not isinstance(protocols, list) or not protocols
+            or any(type(value) is not str or value not in {'http1-tls', 'http2-tls'} for value in protocols)
+            or len(protocols) != len(set(protocols))):
+        raise ValueError('HTTP protocols must be a nonempty unique list of http1-tls and/or http2-tls')
     pattern, warmup = [], []
     for item in profile[args.group + '_mix']:
-        protocols = ['http1-tls', 'http2-tls'] if args.group == 'http' else ['http2-tls']
         for protocol in protocols:
             token = '|'.join(map(str, (item['scenario'], protocol, item['bytes'], item['messages'])))
             pattern.extend([token] * item['weight']); warmup.append(token)

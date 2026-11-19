@@ -128,17 +128,17 @@ internal sealed class JsonBufferAcceptance
     private async Task ExactJsonAsync()
     {
         foreach (int maximum in new[] { 5000, 10000, 65539 })
-        foreach (bool flush in new[] { false, true })
-        {
-            var value = new JsonBoundaryValue(maximum, flush);
-            var request = await RunRequestAsync(maximum, (context, _, token) =>
-                context.Response.WriteJsonAsync(value, JsonBoundaryContext.Default.JsonBoundaryValue, token));
-            CheckBody(request, value);
-            Check(value.SerializeCalls == 1 && (value.Flushes > 0) == flush, "explicit static converter and requested Flush path execute");
-            Check(request.Status == 200 && request.Heads == 1 && request.Finishes == 1 && request.Completions == 1,
-                "exact-limit JSON completes once");
-            CheckCredits(request.BodyImpl, maximum, 1);
-        }
+            foreach (bool flush in new[] { false, true })
+            {
+                var value = new JsonBoundaryValue(maximum, flush);
+                var request = await RunRequestAsync(maximum, (context, _, token) =>
+                    context.Response.WriteJsonAsync(value, JsonBoundaryContext.Default.JsonBoundaryValue, token));
+                CheckBody(request, value);
+                Check(value.SerializeCalls == 1 && (value.Flushes > 0) == flush, "explicit static converter and requested Flush path execute");
+                Check(request.Status == 200 && request.Heads == 1 && request.Finishes == 1 && request.Completions == 1,
+                    "exact-limit JSON completes once");
+                CheckCredits(request.BodyImpl, maximum, 1);
+            }
 
         // A small result retains the same request admission even when its route
         // permits a much larger document.

@@ -163,6 +163,18 @@ hashes must match the common client build; only the package closure changes.
 common client executable. A direct Rust cell uses its own `--build` and that same
 common client; its fixture identity remains comparable.
 
+For a separately frozen HTTP comparison profile, optional `http_protocols` may
+select `["http1-tls"]`, `["http2-tls"]` or both. It must be a nonempty list of
+unique supported TLS protocol names. Omission preserves the existing equal
+HTTP/1.1-TLS and HTTP/2-TLS expansion; the long profile remains unchanged. gRPC
+always uses HTTP/2-TLS. The profile hash already binds this selection into each
+comparison identity. Both listeners remain present in the immutable server even
+when one protocol is selected, and the same common client is reused.
+
+HTTP result scenario keys distinguish the path and protocol, but not multiple
+payload sizes of the same path inside one cell. Put 1 MiB and 8 MiB upload/download
+comparisons in separate profiles so their p99/byte results remain distinct.
+
 ### Optional generator CPU isolation
 
 For a separately calibrated diagnostic cohort, prepare and run from the two

@@ -51,24 +51,82 @@ def require_process(snapshot, cpus):
         raise ValueError("A process thread can run outside the frozen CPU mask: " + str(snapshot["pid"]))
 
 
+def _process_identity(pid):
+    fields = (Path("/proc") / str(pid) / "stat").read_text().rsplit(")", 1)[1].split()
+    return {"pid": pid, "parent_pid": int(fields[1]), "start_ticks": int(fields[19]), "state": fields[0]}
+
+
 def process_group(root):
-    """Observe the private postmaster and currently live descendants, read-only."""
-    pending, seen, rows = [root], set(), []
-    while pending:
-        pid = pending.pop()
-        if pid in seen:
+    """Observe the private postmaster tree without requiring procfs children files."""
+    initial = _process_identity(root)
+    if initial["state"] in ("Z", "X", "x"):
+        raise ValueError("Private PostgreSQL postmaster has exited")
+    captured, unavailable = {root: initial}, []
+    # Some Linux execution environments expose stat/status/task but not
+    # task/<tid>/children. Discover one parent/start-time snapshot instead.
+    for directory in Path("/proc").iterdir():
+        if not directory.name.isdigit():
             continue
-        seen.add(pid)
+        pid = int(directory.name)
         try:
-            row = process_masks(pid)
-            children = (Path("/proc") / str(pid) / "task" / str(pid) / "children").read_text()
-            pending.extend(int(child) for child in children.split())
-            rows.append(row)
+            captured[pid] = _process_identity(pid)
         except (FileNotFoundError, ProcessLookupError):
             if pid == root:
                 raise
-    return {"root_pid": root, "processes": rows,
-            "scope": "Live descendant/thread snapshots; transient exited backends are not continuously observed"}
+            unavailable.append({"pid": pid, "reason": "exited_during_stat_discovery"})
+    if captured[root]["start_ticks"] != initial["start_ticks"]:
+        raise ValueError("Private PostgreSQL postmaster identity changed during discovery")
+    children = {}
+    for row in captured.values():
+        children.setdefault(row["parent_pid"], []).append(row)
+    pending, seen, rows, skipped = [(captured[root], None)], set(), [], []
+    while pending:
+        expected, parent = pending.pop()
+        pid = expected["pid"]
+        identity = (pid, expected["start_ticks"])
+        if identity in seen:
+            continue
+        seen.add(identity)
+        # Traverse the complete captured ancestry even if an intermediate
+        # process exits during later observations. Each live link is checked.
+        for child in children.get(pid, []):
+            if child["start_ticks"] < expected["start_ticks"]:
+                skipped.append({**child, "reason": "parent_pid_reuse_or_inconsistent_start", "expected_parent": expected})
+            else:
+                pending.append((child, expected))
+        reason = None
+        try:
+            row = process_masks(pid)
+            current = _process_identity(pid)
+            if row["start_ticks"] != expected["start_ticks"] or current["start_ticks"] != expected["start_ticks"]:
+                reason = "identity_changed_during_masks"
+            elif current["state"] in ("Z", "X", "x"):
+                reason = "exited_during_masks"
+            elif parent is not None:
+                live_parent = _process_identity(parent["pid"])
+                if live_parent["start_ticks"] != parent["start_ticks"] or live_parent["state"] in ("Z", "X", "x"):
+                    reason = "parent_identity_changed_or_exited"
+                elif row["parent_pid"] != parent["pid"] or current["parent_pid"] != parent["pid"]:
+                    reason = "parent_changed_during_masks"
+        except (FileNotFoundError, ProcessLookupError):
+            if pid == root:
+                raise
+            reason = "process_or_captured_parent_exited_during_masks"
+        if reason is not None:
+            if pid == root:
+                raise ValueError("Private PostgreSQL postmaster identity/liveness changed: " + reason)
+            skipped.append({**expected, "reason": reason, "expected_parent": parent})
+            continue
+        rows.append(row)
+    # Retain both root observations so an earlier bad mask cannot be hidden by
+    # a later valid one. Missing/reused root always invalidates the snapshot.
+    root_after = process_masks(root)
+    final = _process_identity(root)
+    if root_after["start_ticks"] != initial["start_ticks"] or final["start_ticks"] != initial["start_ticks"] or final["state"] in ("Z", "X", "x"):
+        raise ValueError("Private PostgreSQL postmaster identity/liveness changed after discovery")
+    return {"root_pid": root, "processes": rows, "root_after": root_after,
+            "skipped_descendants": skipped, "discovery_unavailable": unavailable,
+            "scope": "Parent-PID/start-time discovery and live mask snapshots; non-atomic, no continuous observation of newly spawned or exited backends"}
 
 
 def require_group(snapshot, cpus, expected_start=None):
@@ -77,3 +135,7 @@ def require_group(snapshot, cpus, expected_start=None):
         raise ValueError("Private PostgreSQL postmaster identity changed")
     for row in snapshot["processes"]:
         require_process(row, cpus)
+    if "root_after" in snapshot:
+        if snapshot["root_after"]["start_ticks"] != root["start_ticks"]:
+            raise ValueError("Private PostgreSQL postmaster identity changed after observation")
+        require_process(snapshot["root_after"], cpus)
