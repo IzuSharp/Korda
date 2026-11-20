@@ -8,8 +8,33 @@ namespace NativeWeave.Server.Grpc;
 
 internal readonly record struct GrpcReadResult<T>(bool HasValue, T Value);
 
+/// <summary>One weak exact-capacity scratch slot owned by one method registration.</summary>
+internal sealed class GrpcWriteScratch(int capacity)
+{
+    private WeakReference<byte[]>? _buffer;
+    internal byte[] Rent(out WeakReference<byte[]> owner)
+    {
+        // The caller already holds its complete managed grant. Detaching the
+        // weak wrapper excludes another call until this synchronous loan ends.
+        var cached = Interlocked.Exchange(ref _buffer, null);
+        if (cached is not null && cached.TryGetTarget(out byte[]? bytes))
+        { owner = cached; return bytes; }
+        bytes = new byte[capacity];
+        if (cached is null) cached = new(bytes);
+        else cached.SetTarget(bytes);
+        owner = cached; return bytes;
+    }
+    internal void Return(WeakReference<byte[]> owner, byte[] bytes)
+    {
+        // Both operations are nonallocating. No writer or native copy may still
+        // use the backing. Clear uncommitted tails before another call sees it.
+        Array.Clear(bytes);
+        _ = Interlocked.CompareExchange(ref _buffer, owner, null);
+    }
+}
+
 /// <summary>Complete-message mapping only; Tonic owns every protocol frame and transport.</summary>
-internal sealed class NativeGrpcTransport(NativeRequest request, int encodedLimit, int decodedLimit, long streamLimit)
+internal sealed class NativeGrpcTransport(NativeRequest request, int encodedLimit, int decodedLimit, long streamLimit, GrpcWriteScratch? sharedWriteScratch)
 {
     private readonly object _gate = new();
     private Task _readTask = Task.CompletedTask, _writeTask = Task.CompletedTask;
@@ -134,7 +159,12 @@ internal sealed class NativeGrpcTransport(NativeRequest request, int encodedLimi
     {
         using var credit = request.AcquireProtocolManagedCredit(encodedLimit);
         byte[] bytes;
-        if (_writeBuffer is { } cached && cached.TryGetTarget(out byte[]? target))
+        WeakReference<byte[]>? sharedOwner = null;
+        if (sharedWriteScratch is not null)
+        {
+            bytes = sharedWriteScratch.Rent(out sharedOwner);
+        }
+        else if (_writeBuffer is { } cached && cached.TryGetTarget(out byte[]? target))
         {
             bytes = target;
             Array.Clear(bytes);
@@ -145,21 +175,30 @@ internal sealed class NativeGrpcTransport(NativeRequest request, int encodedLimi
             if (_writeBuffer is null) _writeBuffer = new(bytes);
             else _writeBuffer.SetTarget(bytes);
         }
-        using var writer = new MessageWriter(bytes);
-        marshaller.Encode(value, writer);
-        if (writer.Length > streamLimit - _writtenBytes) throw new GrpcException(GrpcStatusCode.ResourceExhausted, "The outbound stream limit was exceeded.");
-        bool requestLease = false, tokenLease = false; nint operation = 0;
         try
         {
-            reservation.DangerousAddRef(ref tokenLease); var error = new NwErrorInfoV1 { StructSize = 24 };
-            fixed (byte* data = writer.Written)
+            using var writer = new MessageWriter(bytes);
+            marshaller.Encode(value, writer);
+            if (writer.Length > streamLimit - _writtenBytes) throw new GrpcException(GrpcStatusCode.ResourceExhausted, "The outbound stream limit was exceeded.");
+            bool requestLease = false, tokenLease = false; nint operation = 0;
+            try
             {
-                ServerError.Check(request.Engine.Native.nw_server_grpc_write_create(request.Owner.Acquire(ref requestLease), reservation.DangerousGetHandle(),
-                    new NwBytesViewV1 { Data = data, Length = (ulong)writer.Length }, &operation, &error), in error);
+                reservation.DangerousAddRef(ref tokenLease); var error = new NwErrorInfoV1 { StructSize = 24 };
+                fixed (byte* data = writer.Written)
+                {
+                    ServerError.Check(request.Engine.Native.nw_server_grpc_write_create(request.Owner.Acquire(ref requestLease), reservation.DangerousGetHandle(),
+                        new NwBytesViewV1 { Data = data, Length = (ulong)writer.Length }, &operation, &error), in error);
+                }
+                reservation.Transfer(); _writtenBytes = checked(_writtenBytes + writer.Length); return operation;
             }
-            reservation.Transfer(); _writtenBytes = checked(_writtenBytes + writer.Length); return operation;
+            finally { if (tokenLease) reservation.DangerousRelease(); request.Owner.Release(ref requestLease); }
         }
-        finally { if (tokenLease) reservation.DangerousRelease(); request.Owner.Release(ref requestLease); }
+        finally
+        {
+            // The fresh scoped writer is disposed before clearing or publishing
+            // this array. Streaming keeps its separate per-transport weak cache.
+            if (sharedOwner is not null) sharedWriteScratch!.Return(sharedOwner, bytes);
+        }
     }
     internal Task HeadersAsync(GrpcMetadata headers, CancellationToken token)
     {
