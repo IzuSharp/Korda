@@ -13,6 +13,41 @@ concurrency:
 jobs:
   build:
     uses: ./.github/workflows/build.yml
+  interop:
+    name: A20 ownership and sanitizers
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CI: "true"
+      DOTNET_NOLOGO: "true"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          global-json-file: global.json
+      - name: Install A20 build and sanitizer prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang-18 llvm-18 libclang-rt-18-dev zlib1g-dev
+          echo "/usr/lib/llvm-18/bin" >> "$GITHUB_PATH"
+          rustup toolchain install 1.100.0 --profile minimal --component rustfmt --component clippy
+      - name: Fetch locked Rust dependencies
+        run: cargo fetch --locked
+      - name: Verify Core ownership, races and sanitizers
+        run: python3 tests/Verification.Interop/verify.py --output artifacts/interop/A20
+      - name: Reject A20 source or dependency drift
+        run: git diff --exit-code
+      - name: Retain A20 verification evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: nativeweave-a20-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/interop/A20/
+          if-no-files-found: error
+          retention-days: 14
   security:
     uses: ./.github/workflows/security.yml
     permissions:
@@ -22,14 +57,16 @@ jobs:
   verify:
     name: Verify
     if: always()
-    needs: [build, security]
+    needs: [build, interop, security]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Require every gate
         env:
           BUILD_RESULT: ${{ needs.build.result }}
+          INTEROP_RESULT: ${{ needs.interop.result }}
           SECURITY_RESULT: ${{ needs.security.result }}
         run: |
           test "$BUILD_RESULT" = success
+          test "$INTEROP_RESULT" = success
           test "$SECURITY_RESULT" = success
