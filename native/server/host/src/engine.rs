@@ -278,13 +278,25 @@ impl Host {
         loop {
             tokio::select! {
                 ()=self.stop.cancelled()=>break,
-                result=acceptors.join_next()=>{if result.is_some(){self.fault(NW_DOMAIN_ERROR);}break;},
+                result=acceptors.join_next()=>{if let Some(result)=result{self.acceptor_finished(result);}break;},
                 ()=tokio::time::sleep(Duration::from_millis(10))=>self.reap(),
             }
         }
         self.stop.cancel();
-        while acceptors.join_next().await.is_some() {}
+        while let Some(result) = acceptors.join_next().await {
+            self.acceptor_finished(result);
+        }
         self.reap();
+    }
+    pub(crate) fn acceptor_finished(
+        &self,
+        result: std::result::Result<(), tokio::task::JoinError>,
+    ) {
+        // Stop and a successful acceptor exit may both be ready in select!.
+        // A failed task is still a fault, including during the final drain.
+        if result.is_err() || !self.stop.is_canceled() {
+            self.fault(NW_DOMAIN_ERROR);
+        }
     }
     fn router(self: &Arc<Self>) -> Result<Router> {
         let routes = lock(&self.routes)

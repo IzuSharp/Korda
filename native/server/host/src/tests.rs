@@ -308,6 +308,74 @@ fn actual_network_sticky_cancellation_before_take_and_control_retirement() {
     };
 }
 #[test]
+fn completed_acceptor_outcomes_preserve_stop_and_fault_semantics() {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .build()
+        .unwrap();
+    for (stopping, panic, expected_state, expected_fault) in [
+        (true, false, 4, NW_OK),
+        (false, false, 5, NW_DOMAIN_ERROR),
+        (true, true, 5, NW_DOMAIN_ERROR),
+        (false, true, 5, NW_DOMAIN_ERROR),
+    ] {
+        let state = Box::<Notifications>::default();
+        let host = make(&state);
+        if stopping {
+            host.initiate_close();
+        }
+        let joined = runtime.block_on(async {
+            let mut tasks = tokio::task::JoinSet::new();
+            tasks.spawn(async move {
+                assert!(!panic, "deliberate acceptor panic");
+            });
+            tasks
+                .join_next()
+                .await
+                .expect("one real completed acceptor")
+        });
+        // Exercise the selected completion branch with a real Tokio outcome;
+        // the simultaneously-ready stop branch must not hide this ordering.
+        host.acceptor_finished(joined);
+        assert_eq!(host.state.load(Ordering::Acquire), expected_state);
+        assert_eq!(state.fault.load(Ordering::Acquire), expected_fault);
+        assert_eq!(host.callbacks.load(Ordering::Acquire), 0);
+    }
+}
+#[test]
+fn actual_network_normal_shutdown_keeps_success_state_under_acceptor_race() {
+    for iteration in 0..64 {
+        let state = Box::<Notifications>::default();
+        let host = make(&state);
+        let op = start_op(&host, Job::Start, &state);
+        retire_op(op);
+        let address = lock(&host.addresses)[0]
+            .1
+            .trim_start_matches("http://")
+            .trim_end_matches('/')
+            .to_owned();
+        let peer = TcpStream::connect(address).unwrap();
+        // The stop notification and the acceptor's successful completion may
+        // both be ready when the real native host polls its supervisory select.
+        host.initiate_close();
+        drop(peer);
+        until(|| host.worker_exited.load(Ordering::Acquire));
+        close(&host, &state);
+        assert_eq!(
+            state.fault.load(Ordering::Acquire),
+            0,
+            "iteration {iteration}"
+        );
+        assert_eq!(
+            host.state.load(Ordering::Acquire),
+            4,
+            "iteration {iteration}"
+        );
+        assert!(lock(&host.requests).is_empty());
+        assert_eq!(host.budget.snapshot(), (0, 0));
+        assert_eq!(host.callbacks.load(Ordering::Acquire), 0);
+    }
+}
+#[test]
 fn actual_network_host_fault_signals_and_joins_without_unload() {
     let state = Box::<Notifications>::default();
     let host = make(&state);
