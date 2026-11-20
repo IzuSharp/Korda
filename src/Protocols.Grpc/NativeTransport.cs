@@ -18,7 +18,6 @@ internal sealed class NativeGrpcTransport(NativeRequest request, int encodedLimi
     private bool _ended, _eof, _inputStopped;
     private readonly CancellationTokenSource _stopRead = new();
     private Task? _stopTask;
-    private WeakReference<byte[]>? _writeBuffer;
     internal bool ReachedEnd => _eof;
     internal NativeRequest Request => request;
     internal Task<GrpcReadResult<T>> ReadAsync<T>(GrpcMarshaller<T> marshaller, CancellationToken token)
@@ -133,18 +132,7 @@ internal sealed class NativeGrpcTransport(NativeRequest request, int encodedLimi
     private unsafe nint EncodeAndCreate<T>(ServerHandle reservation, T value, GrpcMarshaller<T> marshaller)
     {
         using var credit = request.AcquireProtocolManagedCredit(encodedLimit);
-        byte[] bytes;
-        if (_writeBuffer is { } cached && cached.TryGetTarget(out byte[]? target))
-        {
-            bytes = target;
-            Array.Clear(bytes);
-        }
-        else
-        {
-            bytes = new byte[encodedLimit];
-            if (_writeBuffer is null) _writeBuffer = new(bytes);
-            else _writeBuffer.SetTarget(bytes);
-        }
+        byte[] bytes = new byte[encodedLimit];
         using var writer = new MessageWriter(bytes);
         marshaller.Encode(value, writer);
         if (writer.Length > streamLimit - _writtenBytes) throw new GrpcException(GrpcStatusCode.ResourceExhausted, "The outbound stream limit was exceeded.");
