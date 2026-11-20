@@ -279,8 +279,22 @@ await NonblockingCancellationCallbacks();
         catch (InvalidOperationException) { rejected = true; }
         return [1];
     });
-    await CanceledOrTransport(host.GetAsync(1)); await host.CloseAsync();
-    Check(rejected, "self-wait rejected by actual A06 scope"); await Zero();
+    // Native stop is queued; a response committed before it remains a legal winner.
+    HttpProofResponse? response = null;
+    try
+    {
+        try { response = await host.GetAsync(1); }
+        catch (OperationCanceledException) { checks++; }
+        catch (NativeEngineException error) when (error.ErrorDomain == 0x48545450) { checks++; }
+        if (response is not null) Check(response.StatusCode == 200, "committed self-close response");
+        Check(rejected, "self-wait rejected by actual A06 scope");
+    }
+    finally
+    {
+        response?.Dispose();
+        await host.CloseAsync();
+        await Zero();
+    }
 }
 // Real network completion/cancellation/GC races, with either committed result accepted.
 for (int i = 0; i < 12; i++)
