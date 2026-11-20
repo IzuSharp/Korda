@@ -50,6 +50,19 @@ internal static class LifecycleFixtures
                 await entered.Task.WaitAsync(TimeSpan.FromSeconds(5)); cts.Cancel();
                 try { using var response = await sending; } catch (OperationCanceledException) { }
                 await cancellationEntered.Task.WaitAsync(TimeSpan.FromSeconds(5)); release.TrySetResult();
+                // Establish the native-completed precondition independently of
+                // the finite managed-tail wait below. A close timeout can abort
+                // native work before its worker join has actually completed.
+                long nativeStarted = System.Diagnostics.Stopwatch.GetTimestamp();
+                while (true)
+                {
+                    await app.CloseAsync(TimeSpan.Zero);
+                    var native = engine!.Snapshot();
+                    if (native.state == 4 && native.active_requests == 0 && native.retained_native_bytes == 0 && native.retained_managed_bytes == 0) break;
+                    if (System.Diagnostics.Stopwatch.GetElapsedTime(nativeStarted) >= TimeSpan.FromSeconds(5))
+                        throw new InvalidOperationException($"Native completion prerequisite timed out: HTTP/{version}, state={native.state}, active={native.active_requests}, retiring={native.retiring_requests}, native_bytes={native.retained_native_bytes}, managed_bytes={native.retained_managed_bytes}");
+                    await Task.Delay(2);
+                }
                 long started = System.Diagnostics.Stopwatch.GetTimestamp();
                 var pending = await app.CloseAsync(TimeSpan.FromMilliseconds(100));
                 var elapsed = System.Diagnostics.Stopwatch.GetElapsedTime(started);
