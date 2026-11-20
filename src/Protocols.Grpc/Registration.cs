@@ -118,15 +118,12 @@ internal sealed class GrpcDescriptor<TRequest, TResponse> : INativeServerProtoco
     private readonly long _stream;
     private readonly TimeSpan _timeout;
     private readonly Func<GrpcCallContext, Task> _invoke;
-    private readonly GrpcWriteScratch? _writeScratch;
     public byte[] RegistrationUtf8 { get; private set; } = [];
     internal GrpcDescriptor(GrpcMethod<TRequest, TResponse> method, GrpcMethodOptions options, Func<GrpcCallContext, Task> invoke)
     {
         _method = method; _encoded = options.MaxEncodedMessageBytes; _decoded = options.MaxDecodedMessageBytes; _stream = options.MaxStreamBytes; _timeout = options.Timeout; _invoke = invoke;
         if (_encoded <= 0 || _decoded <= 0 || _stream <= 0) throw new ArgumentOutOfRangeException(nameof(options));
         ServerValidation.Duration(_timeout, false, nameof(options));
-        if (method.Kind is GrpcMethodKind.Unary or GrpcMethodKind.ClientStreaming)
-            _writeScratch = new(_encoded);
     }
     public void Freeze(RouteDefinition route, ServerConfiguration configuration)
     {
@@ -154,7 +151,7 @@ internal sealed class GrpcDescriptor<TRequest, TResponse> : INativeServerProtoco
     private GrpcCallContext Context(RequestContext context)
     {
         if (context.ProtocolState is GrpcCallContext existing) return existing;
-        var call = new GrpcCallContext(context, _method.FullName, _encoded, _decoded, _stream, _writeScratch); context.ProtocolState = call; return call;
+        var call = new GrpcCallContext(context, _method.FullName, _encoded, _decoded, _stream); context.ProtocolState = call; return call;
     }
     internal Task InvokeAsync(RequestContext context, CancellationToken token)
     { token.ThrowIfCancellationRequested(); var call = Context(context); call.Invoked = true; return _invoke(call); }

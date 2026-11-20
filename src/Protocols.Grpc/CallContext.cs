@@ -14,11 +14,11 @@ public sealed class GrpcCallContext
     private Func<ValueTask>? _disposeInbound;
     internal bool Invoked;
     internal GrpcCallContext() { }
-    internal GrpcCallContext(RequestContext context, string method, int encoded, int decoded, long stream, GrpcWriteScratch? sharedWriteScratch)
+    internal GrpcCallContext(RequestContext context, string method, int encoded, int decoded, long stream)
     {
         _context = context; _method = method;
         var native = context.Native as NativeRequest ?? throw new InvalidOperationException("gRPC requires the selected Rust Host.");
-        _transport = new(native, encoded, decoded, stream, sharedWriteScratch);
+        _transport = new(native, encoded, decoded, stream);
         _requestHeaders = GrpcMetadata.Borrow(native.GrpcMetadataBytes, Alive, native.AcquireProtocolManagedCredit);
         _responseTrailers = new(Alive, native.AcquireProtocolManagedCredit);
     }
