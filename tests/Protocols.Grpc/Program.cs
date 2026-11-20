@@ -48,6 +48,7 @@ internal static partial class Acceptance
             await StartupContracts();
             foreach (bool tls in new[] { false, true }) await RunHost(tls, certPath, keyPath);
             await WriterContracts(certPath, keyPath);
+            await PersistentHeaderCredits(certPath, keyPath);
             await WriterAcrossCalls(certPath, keyPath);
             await PressureContracts();
             Check(_retirements > 50 && _retirementFailures == 0, "Separately observed managed A07 retirement fields");

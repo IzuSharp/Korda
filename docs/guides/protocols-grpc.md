@@ -191,6 +191,18 @@ after a protocol response has committed.
 
 ## Ownership and boundary cost
 
+Response headers and trailers retain their complete native metadata grant until
+their transmitted values and clones are released. The HTTP/2 library's per-value
+sensitive flag prevents insertion of these request-owned values into its HPACK
+dynamic table, so a completed request's grant and admission slot cannot be held
+by that connection-level cache. An existing exact or static index may still be
+used without retaining this value's owner. Header names and values are unchanged;
+the sensitive flag remains set on every retained value and its clones. Global
+HTTP/2 header compression remains enabled, but these values can require more
+header bytes on repeated calls. This lifetime
+rule does not change payload compression: the implemented gRPC profile remains
+identity only. No public API or native ABI changes are required.
+
 The framework grants bounded storage for complete-message copies, its outbound
 writer and the independently retained native message buffers before allocation.
 Metadata and overlapping native/frame/output storage have their own admission

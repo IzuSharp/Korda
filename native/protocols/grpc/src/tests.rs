@@ -377,12 +377,14 @@ fn escaping_header_and_trailer_values_hold_whole_metadata_credit() {
     let mut trailers = HeaderMap::new();
     trailers.insert("grpc-status", HeaderValue::from_static("4"));
     retain_headers(&mut trailers, request.credit());
+    assert!(trailers.values().all(HeaderValue::is_sensitive));
     assert!(!request.unshared());
     let clone = trailers.clone();
     drop(trailers);
     drop(request);
     assert_eq!(global.snapshot(), (anchor, 0));
     assert_eq!(clone.get("grpc-status").unwrap(), "4");
+    assert!(clone.get("grpc-status").unwrap().is_sensitive());
     drop(clone);
     assert_eq!(global.snapshot(), (0, 0));
     let response = ResponseMetadata::empty(&budget).unwrap();
@@ -390,9 +392,16 @@ fn escaping_header_and_trailer_values_hold_whole_metadata_credit() {
     let mut headers = HeaderMap::new();
     headers.insert("content-type", HeaderValue::from_static("application/grpc"));
     retain_headers(&mut headers, response.credit());
+    assert_eq!(headers.get("content-type").unwrap(), "application/grpc");
+    assert!(headers.values().all(HeaderValue::is_sensitive));
+    let cloned_value = headers.get("content-type").unwrap().clone();
     drop(response);
     assert_eq!(global.snapshot(), (credit, 0));
     drop(headers);
+    assert_eq!(global.snapshot(), (credit, 0));
+    assert_eq!(cloned_value, "application/grpc");
+    assert!(cloned_value.is_sensitive());
+    drop(cloned_value);
     assert_eq!(global.snapshot(), (0, 0));
 }
 #[tokio::test]

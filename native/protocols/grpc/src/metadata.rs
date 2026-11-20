@@ -320,6 +320,11 @@ fn limit() -> Status {
 /// A metadata value leaving the Body keeps the complete metadata batch grant.
 /// http 1.5's public Bytes path adopts the existing immutable value without a
 /// payload copy. HeaderMap/Hyper clones retain that same Bytes owner.
+/// These request-owned values must never enter HPACK's connection-owned dynamic
+/// table: its retained credit would otherwise pin a completed request's admission
+/// slot until connection closure. The public sensitive flag prevents insertion
+/// of this HeaderValue; existing exact/static index reuse does not retain its
+/// owner. Header contents and global HPACK remain unchanged.
 pub fn retain_headers(headers: &mut HeaderMap, credit: Arc<Credit>) {
     struct Retained {
         value: HeaderValue,
@@ -337,5 +342,6 @@ pub fn retain_headers(headers: &mut HeaderMap, credit: Arc<Credit>) {
             _credit: credit.clone(),
         }))
         .expect("retained validated HeaderValue");
+        value.set_sensitive(true);
     }
 }
