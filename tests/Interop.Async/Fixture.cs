@@ -32,6 +32,7 @@ internal sealed unsafe class FixtureCalls : AsyncNativeCalls
     internal int Cancels;
     internal int Retires;
     internal bool ThrowAfterStart { get; set; }
+    internal Action<nint, uint>? AfterRetire { get; set; }
     internal override uint Start(nint operation, in NwOperationCallbacksV1 callbacks)
     {
         uint status = Fixture.Start(operation, in callbacks);
@@ -44,7 +45,15 @@ internal sealed unsafe class FixtureCalls : AsyncNativeCalls
         uint status = Fixture.Cancel(operation);
         return status;
     }
-    internal override uint TryRetire(nint operation) { Interlocked.Increment(ref Retires); return Fixture.Retire(operation); }
+    internal override uint TryRetire(nint operation)
+    {
+        Interlocked.Increment(ref Retires);
+        uint status = Fixture.Retire(operation);
+        // The real native verdict is fixed before the test releases a source.
+        // The caller's cleanup control lease still protects this exact pointer.
+        AfterRetire?.Invoke(operation, status);
+        return status;
+    }
     internal override void Poison() => Interlocked.Increment(ref Poisoned);
 }
 

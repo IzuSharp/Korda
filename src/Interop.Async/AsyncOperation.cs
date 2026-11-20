@@ -57,6 +57,7 @@ internal abstract class AsyncOperation : CoordinatedCallback, IDisposable, IAsyn
     private bool _cancelSent;
     private bool _nativeQuiet;
     private bool _resultProcessed;
+    private bool _postResultRetryRequested;
     private bool _releasing;
     private bool _released;
     private bool _quarantined;
@@ -524,7 +525,17 @@ internal abstract class AsyncOperation : CoordinatedCallback, IDisposable, IAsyn
                     nint pointer = AcquireControl(ref lease, cleanup: true);
                     uint status = _native.TryRetire(pointer);
                     if (status == NativeStatus.Ok) { lock (_gate) _nativeQuiet = true; }
-                    else if (status == NativeStatus.Pending) RequestRetry();
+                    else if (status == NativeStatus.Pending)
+                    {
+                        RequestRetry();
+                        bool signal;
+                        lock (_gate)
+                        {
+                            signal = _resultProcessed && !_postResultRetryRequested;
+                            if (signal) _postResultRetryRequested = true;
+                        }
+                        if (signal) Signal();
+                    }
                     else throw StatusException("try_retire", status);
                 }
                 finally { ReleaseControl(ref lease, notify: false); }

@@ -102,7 +102,8 @@ internal sealed class TypedStream<T> : IAsyncEnumerable<T>
         private readonly int _fetchRows;
         private readonly bool _buffered;
         private readonly object _gate = new();
-        private TaskCompletionSource? _activeMove;
+        private bool _moveActive;
+        private TaskCompletionSource? _moveCompletion;
         private TaskCompletionSource? _cleanup;
         private IStreamTransport? _transport;
         private CancellationTokenRegistration _registration;
@@ -124,17 +125,15 @@ internal sealed class TypedStream<T> : IAsyncEnumerable<T>
         public T Current => _current;
         public ValueTask<bool> MoveNextAsync()
         {
-            TaskCompletionSource completion;
             lock (_gate)
             {
                 ObjectDisposedException.ThrowIf(_closed, this);
-                if (_activeMove is not null) throw new DatabaseException("Another MoveNext is active.", DatabaseErrorKind.ConcurrentUse);
-                completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
-                _activeMove = completion;
+                if (_moveActive) throw new DatabaseException("Another MoveNext is active.", DatabaseErrorKind.ConcurrentUse);
+                _moveActive = true;
             }
-            return new(MoveAsync(completion));
+            return new(MoveAsync());
         }
-        private async Task<bool> MoveAsync(TaskCompletionSource completion)
+        private async Task<bool> MoveAsync()
         {
             try
             {
@@ -186,7 +185,14 @@ internal sealed class TypedStream<T> : IAsyncEnumerable<T>
             }
             finally
             {
-                lock (_gate) { _activeMove = null; completion.TrySetResult(); }
+                TaskCompletionSource? completion;
+                lock (_gate)
+                {
+                    _moveActive = false;
+                    completion = _moveCompletion;
+                    _moveCompletion = null;
+                }
+                completion?.TrySetResult();
             }
         }
         private Task CleanupAsync()
@@ -225,7 +231,13 @@ internal sealed class TypedStream<T> : IAsyncEnumerable<T>
             Task active;
             lock (_gate)
             {
-                _closed = true; active = _activeMove?.Task ?? Task.CompletedTask;
+                if (_moveActive)
+                {
+                    _moveCompletion ??= new(TaskCreationOptions.RunContinuationsAsynchronously);
+                    active = _moveCompletion.Task;
+                }
+                else active = Task.CompletedTask;
+                _closed = true;
             }
             RequestStop();
             return new(DisposeAfterMoveAsync(active));
