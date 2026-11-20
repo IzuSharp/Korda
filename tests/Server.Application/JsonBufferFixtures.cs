@@ -45,7 +45,7 @@ internal sealed class JsonBufferAcceptance
     private void BufferWriterBoundaries()
     {
         int[] fragments = [1, 7, 251, 509, 1021, 2053, 4093, 8191, 16381];
-        foreach (int maximum in new[] { 256, 5000, 10000, 65539 })
+        foreach (int maximum in new[] { 256, 5000, 10000, 16383, 16384, 16385, 20479, 20480, 20481, 65539 })
         {
             using var buffer = new BoundedJsonBuffer(maximum);
             byte[] expected = new byte[maximum];
@@ -127,7 +127,7 @@ internal sealed class JsonBufferAcceptance
 
     private async Task ExactJsonAsync()
     {
-        foreach (int maximum in new[] { 5000, 10000, 65539 })
+        foreach (int maximum in new[] { 5000, 10000, 16383, 16384, 16385, 20479, 20480, 20481, 65539 })
             foreach (bool flush in new[] { false, true })
             {
                 var value = new JsonBoundaryValue(maximum, flush);

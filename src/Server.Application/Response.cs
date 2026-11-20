@@ -240,12 +240,27 @@ public sealed class ServerResponse
 
 internal sealed class BoundedJsonBuffer(int maximum) : System.Buffers.IBufferWriter<byte>, IDisposable
 {
-    private readonly byte[] _buffer = new byte[maximum];
+    private byte[] _buffer = new byte[maximum >= 20 * 1024 ? 16 * 1024 : maximum];
     private int _written;
     internal ReadOnlyMemory<byte> WrittenMemory => _buffer.AsMemory(0, _written);
-    public void Advance(int count) { if (count < 0 || count > maximum - _written) throw new ServerException("body_limit_exceeded", "The JSON output exceeds its finite byte limit."); _written += count; }
+    public void Advance(int count)
+    {
+        if (count < 0 || count > maximum - _written || count > _buffer.Length - _written)
+            throw new ServerException("body_limit_exceeded", "The JSON output exceeds its finite byte limit.");
+        _written += count;
+    }
     public Memory<byte> GetMemory(int sizeHint = 0) { Ensure(sizeHint); return _buffer.AsMemory(_written); }
     public Span<byte> GetSpan(int sizeHint = 0) { Ensure(sizeHint); return _buffer.AsSpan(_written); }
-    private void Ensure(int hint) { if (hint < 0 || Math.Max(hint, 1) > maximum - _written) throw new ServerException("body_limit_exceeded", "The JSON output exceeds its finite byte limit."); }
+    private void Ensure(int hint)
+    {
+        if (hint < 0 || Math.Max(hint, 1) > maximum - _written)
+            throw new ServerException("body_limit_exceeded", "The JSON output exceeds its finite byte limit.");
+        if (Math.Max(hint, 1) > _buffer.Length - _written)
+        {
+            byte[] grown = new byte[maximum];
+            _buffer.AsSpan(0, _written).CopyTo(grown);
+            _buffer = grown;
+        }
+    }
     public void Dispose() { }
 }

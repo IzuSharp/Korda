@@ -85,10 +85,10 @@ public enum GrpcStatusCode
 public delegate T GrpcDecoder<T>(ReadOnlySpan<byte> payload);
 
 /// <summary>Encodes one complete message into a bounded managed writer.</summary>
-/// <remarks>The destination enforces the configured encoded cap before allocation or growth. Tonic adds framing and owns transport. The framework reserves the bounded writer and overlapping native copy; application-owned messages and private codec allocations are outside those payload ledgers.</remarks>
+/// <remarks>The destination and every returned span or memory are borrowed only for this synchronous encoding callback; none may be retained, used asynchronously or accessed after the callback returns. The destination enforces the configured encoded cap before allocation or growth. Tonic adds framing and owns transport. The framework reserves the bounded writer and overlapping native copy; application-owned messages and private codec allocations are outside those payload ledgers.</remarks>
 /// <typeparam name="T">The statically known request or response message type.</typeparam>
 /// <param name="value">The application-owned message to encode.</param>
-/// <param name="destination">The scoped bounded destination; it must not be retained.</param>
+/// <param name="destination">The bounded destination, borrowed with its returned span or memory only for this callback; none may escape.</param>
 public delegate void GrpcEncoder<T>(T value, IBufferWriter<byte> destination);
 
 /// <summary>Binds a statically reachable protobuf encoder and decoder.</summary>

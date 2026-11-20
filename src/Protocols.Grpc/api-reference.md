@@ -614,11 +614,11 @@ NativeWeave.Server.Grpc.GrpcEncoder<T> | kind=Delegate;static=False;sealed=True;
 
 Encodes one complete message into a bounded managed writer.
 
-The destination enforces the configured encoded cap before allocation or growth. Tonic adds framing and owns transport. The framework reserves the bounded writer and overlapping native copy; application-owned messages and private codec allocations are outside those payload ledgers.
+The destination and every returned span or memory are borrowed only for this synchronous encoding callback; none may be retained, used asynchronously or accessed after the callback returns. The destination enforces the configured encoded cap before allocation or growth. Tonic adds framing and owns transport. The framework reserves the bounded writer and overlapping native copy; application-owned messages and private codec allocations are outside those payload ledgers.
 
 - **T**: The statically known request or response message type.
 - **value**: The application-owned message to encode.
-- **destination**: The scoped bounded destination; it must not be retained.
+- **destination**: The bounded destination, borrowed with its returned span or memory only for this callback; none may escape.
 
 ## `T:NativeWeave.Server.Grpc.GrpcEndpointExtensions`
 

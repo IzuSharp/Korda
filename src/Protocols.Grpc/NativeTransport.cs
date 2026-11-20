@@ -18,6 +18,7 @@ internal sealed class NativeGrpcTransport(NativeRequest request, int encodedLimi
     private bool _ended, _eof, _inputStopped;
     private readonly CancellationTokenSource _stopRead = new();
     private Task? _stopTask;
+    private WeakReference<byte[]>? _writeBuffer;
     internal bool ReachedEnd => _eof;
     internal NativeRequest Request => request;
     internal Task<GrpcReadResult<T>> ReadAsync<T>(GrpcMarshaller<T> marshaller, CancellationToken token)
@@ -132,7 +133,20 @@ internal sealed class NativeGrpcTransport(NativeRequest request, int encodedLimi
     private unsafe nint EncodeAndCreate<T>(ServerHandle reservation, T value, GrpcMarshaller<T> marshaller)
     {
         using var credit = request.AcquireProtocolManagedCredit(encodedLimit);
-        var writer = new MessageWriter(encodedLimit); marshaller.Encode(value, writer);
+        byte[] bytes;
+        if (_writeBuffer is { } cached && cached.TryGetTarget(out byte[]? target))
+        {
+            bytes = target;
+            Array.Clear(bytes);
+        }
+        else
+        {
+            bytes = new byte[encodedLimit];
+            if (_writeBuffer is null) _writeBuffer = new(bytes);
+            else _writeBuffer.SetTarget(bytes);
+        }
+        using var writer = new MessageWriter(bytes);
+        marshaller.Encode(value, writer);
         if (writer.Length > streamLimit - _writtenBytes) throw new GrpcException(GrpcStatusCode.ResourceExhausted, "The outbound stream limit was exceeded.");
         bool requestLease = false, tokenLease = false; nint operation = 0;
         try
@@ -225,15 +239,23 @@ internal sealed class NativeGrpcTransport(NativeRequest request, int encodedLimi
         ServerException { Code: "resource_limit" or "body_limit_exceeded" } => new GrpcException(GrpcStatusCode.ResourceExhausted, "The gRPC payload budget was exhausted."),
         _ => error
     };
-    private sealed class MessageWriter(int maximum) : IBufferWriter<byte>
+    private sealed class MessageWriter : IBufferWriter<byte>, IDisposable
     {
-        private readonly byte[] _bytes = new byte[maximum];
+        private byte[]? _bytes;
+        internal MessageWriter(byte[] bytes) => _bytes = bytes;
+        private byte[] Bytes => _bytes ?? throw new ObjectDisposedException(nameof(MessageWriter));
         internal int Length { get; private set; }
-        internal ReadOnlySpan<byte> Written => _bytes.AsSpan(0, Length);
-        public void Advance(int count) { if (count < 0 || count > maximum - Length) throw Limit(); Length += count; }
-        public Memory<byte> GetMemory(int sizeHint = 0) { Ensure(sizeHint); return _bytes.AsMemory(Length); }
-        public Span<byte> GetSpan(int sizeHint = 0) { Ensure(sizeHint); return _bytes.AsSpan(Length); }
-        private void Ensure(int hint) { if (hint < 0 || Math.Max(1, hint) > maximum - Length) throw Limit(); }
+        internal ReadOnlySpan<byte> Written => Bytes.AsSpan(0, Length);
+        public void Advance(int count) { if (count < 0 || count > Bytes.Length - Length) throw Limit(); Length += count; }
+        public Memory<byte> GetMemory(int sizeHint = 0) => Ensure(sizeHint).AsMemory(Length);
+        public Span<byte> GetSpan(int sizeHint = 0) => Ensure(sizeHint).AsSpan(Length);
+        private byte[] Ensure(int hint)
+        {
+            byte[] bytes = Bytes;
+            if (hint < 0 || Math.Max(1, hint) > bytes.Length - Length) throw Limit();
+            return bytes;
+        }
+        public void Dispose() => _bytes = null;
         private static GrpcException Limit() => new(GrpcStatusCode.ResourceExhausted, "The encoded response message limit was exceeded.");
     }
 }
