@@ -29,6 +29,7 @@ internal sealed partial class NativeHost : ServerHost
     internal readonly ServerConfiguration Configuration;
     internal readonly NativeResourceOwner Owner;
     private readonly CallbackCoordinator _coordinator;
+    private readonly object _admissionGate = new();
     private readonly object _gate = new();
     private readonly Dictionary<ulong, HostTicket> _tickets;
     private readonly HashSet<AsyncOperation> _operations = [];
@@ -298,11 +299,14 @@ internal sealed partial class NativeHost : ServerHost
             lock (_gate) { if (_released || !_tickets.TryGetValue(id, out ticket!)) return 8; }
             return ticket.NotifyContinuation(handler) ? 0u : 8u;
         }
-        lock (_gate)
+        lock (_admissionGate)
         {
-            if (_released) return 8;
-            if (_tickets.Count >= Configuration.Options.Budget.MaxActiveRequests || _tickets.ContainsKey(id) || kind > 2) return 8;
-            ticket = new(this, id, handler, kind); _tickets.Add(id, ticket);
+            lock (_gate)
+            {
+                if (_released) return 8;
+                if (_tickets.Count >= Configuration.Options.Budget.MaxActiveRequests || _tickets.ContainsKey(id) || kind > 2) return 8;
+                ticket = new(this, id, handler, kind); _tickets.Add(id, ticket);
+            }
         }
         ticket.Signal(); return 0;
     }
@@ -346,7 +350,7 @@ internal sealed partial class NativeHost : ServerHost
         protected override void SchedulingFault(Exception error) => host.Fatal(error);
         internal void Stop() => CompleteScheduling();
     }
-    private sealed class HostTicket : CoordinatedCallback
+    internal sealed class HostTicket : CoordinatedCallback
     {
         private readonly NativeHost _host;
         private readonly ulong _handler;
@@ -404,6 +408,19 @@ internal sealed partial class NativeHost : ServerHost
         }
         internal void Cancel(uint status) { lock (_gate) { if (_ended) return; if (_cancellation == 0) _cancellation = status; } Signal(); }
         internal void Fail() { NativeRequest? request; lock (_gate) request = _request; request?.Abort(); Cancel(2); }
+        internal unsafe void ReleaseRequest(nint pointer)
+        {
+            // The last SafeHandle lease may be released on another thread.
+            // Native admission and its managed ticket become reusable under
+            // the same admission gate, after all managed continuations joined.
+            // Do not hold the host gate across native release: native close can
+            // deliver a cancellation control while holding its request registry.
+            lock (_host._admissionGate)
+            {
+                _host.Native.nw_server_request_release(pointer);
+                _host.Remove(this);
+            }
+        }
         protected override void Process()
         {
             bool start; NativeRequest? request; uint cancellation;
@@ -434,7 +451,16 @@ internal sealed partial class NativeHost : ServerHost
                     finally { if (request is not null) await request.CompleteDispatchAsync().ConfigureAwait(false); }
                 }
                 catch (Exception error) { _host.Fatal(error); }
-                finally { lock (_gate) { _ended = true; _request = null; } _nested?.Stop(); CompleteScheduling(); _host.Remove(this); }
+                finally
+                {
+                    bool ready = request?.ReadyToRelease ?? true;
+                    lock (_gate) { _ended = true; _request = ready ? null : request; }
+                    _nested?.Stop(); CompleteScheduling();
+                    if (request is null) _host.Remove(this);
+                    else if (ready) await request.ReleaseOwnerAsync(this).ConfigureAwait(false);
+                    // A pre-quiescence failure is fatal. Keep its request rooted
+                    // in this ticket instead of freeing a still-live native owner.
+                }
             }
         }
     }

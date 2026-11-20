@@ -155,6 +155,9 @@ foreach (var row in new[] { (ServerProtocols.Http1, (ServerTlsOptions?)null, Htt
     Console.WriteLine("PASS transport " + row.Item1 + " TLS=" + (row.Item2 is not null) + " HTTP=" + row.Item3);
 }
 
+await RetirementFixtures.RunAsync(Check, (protocol, options) => Create(protocol, tls, options),
+    (host, version) => Client(host, version));
+
 // Native validation occurs before worker admission; a failed multi-listener bind
 // must close every listener already opened and join the failed worker.
 var invalidConfig = new ServerConfiguration(ServerConfiguration.Snapshot(new ServerOptions()), [new(IPAddress.Loopback, 0, "bad", ServerProtocols.Http1AndHttp2, null)], [], null, null);

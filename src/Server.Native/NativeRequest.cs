@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Net;
+using System.Runtime.InteropServices;
 using NativeWeave.Interop.Abi;
 using NativeWeave.Interop.Async;
 using NativeWeave.Interop.Lifetime;
@@ -11,6 +12,7 @@ internal sealed partial class NativeRequest : HostRequest
 {
     internal readonly NativeHost Engine;
     internal NativeResourceOwner Owner = null!;
+    private RequestHandle? _handle;
     private readonly NativeBody _body;
     private readonly object _gate = new();
     private readonly HashSet<AsyncOperation> _operations = [];
@@ -19,6 +21,7 @@ internal sealed partial class NativeRequest : HostRequest
     private Task? _complete;
     private bool _cancelClosed;
     private int _ended;
+    private int _releaseReady;
     private long _observed;
     private TimeSpan _remaining;
     private byte[] _trailers = [0, 0, 0, 0];
@@ -33,7 +36,11 @@ internal sealed partial class NativeRequest : HostRequest
         {
             var error = new NwErrorInfoV1 { StructSize = 24 };
             ServerError.Check(host.Native.nw_server_request_take(host.Owner.Acquire(ref lease), ticket, &pointer, &metadata, &error), in error);
-            request.Owner = NativeHost.Adopt(pointer, host.Native.nw_server_request_release); pointer = 0;
+            if (pointer == 0) throw new InvalidOperationException("Successful native ownership transfer was null.");
+            request._handle = new RequestHandle(pointer, host.Native.nw_server_request_release);
+            try { request.Owner = new(request._handle); }
+            catch { request._handle.Dispose(); throw; }
+            pointer = 0;
             var info = new NwServerRequestInfoV1 { struct_size = (uint)sizeof(NwServerRequestInfoV1), version = 1 };
             ServerError.Check(host.Native.nw_server_metadata_read(metadata, &info, &error), in error);
             if (info.request_id != ticket || info.handler_id != handler || info.kind != kind) throw new InvalidOperationException("Native request identity changed across typed take.");
@@ -185,7 +192,39 @@ internal sealed partial class NativeRequest : HostRequest
         }
         Task cancellation; lock (_gate) { _cancelClosed = true; cancellation = _cancellation; }
         try { await cancellation.ConfigureAwait(false); }
-        finally { _aborted.Dispose(); await Owner.DisposeAsync().ConfigureAwait(false); }
+        finally
+        {
+            _aborted.Dispose();
+            // A completed cancellation task can be faulted by application code.
+            // Native quiescence and cancellation joining still permit release.
+            Volatile.Write(ref _releaseReady, 1);
+        }
+    }
+    internal bool ReadyToRelease => Volatile.Read(ref _releaseReady) != 0;
+    internal ValueTask ReleaseOwnerAsync(NativeHost.HostTicket ticket)
+    {
+        if (!ReadyToRelease) throw new InvalidOperationException("A request cannot release before native and managed quiescence.");
+        _handle!.ArmRetirement(ticket);
+        return Owner.DisposeAsync();
+    }
+
+    // Only request handles couple native admission release with the managed
+    // ticket. Buffer and operation handles retain their existing release path.
+    private sealed unsafe class RequestHandle : SafeHandle
+    {
+        private readonly delegate* unmanaged[Cdecl]<nint, void> _release;
+        private NativeHost.HostTicket? _ticket;
+        internal RequestHandle(nint pointer, delegate* unmanaged[Cdecl]<nint, void> release) : base(0, true)
+        { SetHandle(pointer); _release = release; }
+        internal void ArmRetirement(NativeHost.HostTicket ticket) => Volatile.Write(ref _ticket, ticket);
+        public override bool IsInvalid => handle == 0;
+        protected override bool ReleaseHandle()
+        {
+            NativeHost.HostTicket? ticket = Volatile.Read(ref _ticket);
+            if (ticket is null) _release(handle);
+            else ticket.ReleaseRequest(handle);
+            return true;
+        }
     }
     private unsafe void CompleteNativeDispatch()
     {
