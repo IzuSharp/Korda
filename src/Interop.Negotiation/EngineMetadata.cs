@@ -105,6 +105,8 @@ public sealed class EngineInfo
 /// <remarks>Metadata access performs no native load. Inspect validates local assets and caches one process-resident module; there is no disposal or hot-unload operation.</remarks>
 public sealed class EngineDescriptor
 {
+    private EngineInfo? _defaultInfo;
+
     internal EngineDescriptor(EnginePackageManifest manifest, Assembly assembly)
     {
         Manifest = manifest;
@@ -130,7 +132,14 @@ public sealed class EngineDescriptor
     /// <exception cref="ArgumentException">An option has an invalid path, capability or metadata bound.</exception>
     /// <exception cref="EngineLoadException">Platform, asset, identity, bootstrap or required capability validation fails.</exception>
     /// <remarks>First use reads and hashes the asset, loads it and calls bootstrap once. Compatible subsequent calls reuse metadata; explicit path overrides are verified. Options are snapshotted before file access. Calls are thread-safe and synchronous.</remarks>
-    public EngineInfo Inspect(EngineLoadOptions? options = null) => EngineModuleLoader.Inspect(this, options);
+    public EngineInfo Inspect(EngineLoadOptions? options = null)
+    {
+        if (options is not null) return EngineModuleLoader.Inspect(this, options);
+        EngineInfo? cached = Volatile.Read(ref _defaultInfo);
+        if (cached is not null) return cached;
+        EngineInfo inspected = EngineModuleLoader.Inspect(this, null);
+        return Interlocked.CompareExchange(ref _defaultInfo, inspected, null) ?? inspected;
+    }
 }
 
 /// <summary>Advanced first-use loading options; domain builders and Inspect snapshot the values before use.</summary>

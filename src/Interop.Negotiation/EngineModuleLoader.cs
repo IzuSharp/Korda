@@ -233,7 +233,7 @@ internal static class EngineModuleLoader
     private sealed class AssemblyResolver
     {
         private readonly object _gate = new();
-        private readonly Dictionary<string, nint> _modules = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, LoadedModule> _modules = new(StringComparer.Ordinal);
         private bool _installed;
 
         internal void Bind(EngineDescriptor descriptor, NativeAssetDescriptor asset, string rid, LoadedModule module)
@@ -244,8 +244,8 @@ internal static class EngineModuleLoader
                     ? filename[..^4] : filename;
             lock (_gate)
             {
-                if ((_modules.TryGetValue(filename, out nint existing) && existing != module.Handle) ||
-                    (_modules.TryGetValue(basename, out existing) && existing != module.Handle))
+                if ((_modules.TryGetValue(filename, out LoadedModule? existing) && existing.Handle != module.Handle) ||
+                    (_modules.TryGetValue(basename, out existing) && existing.Handle != module.Handle))
                     throw Failure(descriptor, rid, EngineLoadFailure.InvalidManifest,
                         "Two package assets use a conflicting native import basename. Use unique engine-prefixed basenames and restart the process.");
                 if (!_installed)
@@ -258,15 +258,22 @@ internal static class EngineModuleLoader
                     }
                     _installed = true;
                 }
-                _modules[filename] = module.Handle;
-                _modules[basename] = module.Handle;
+                _modules[filename] = module;
+                _modules[basename] = module;
             }
         }
 
         private nint Resolve(string libraryName, Assembly assembly, DllImportSearchPath? searchPath)
         {
+            LoadedModule? module;
             lock (_gate)
-                return _modules.GetValueOrDefault(libraryName);
+                if (!_modules.TryGetValue(libraryName, out module)) return 0;
+            // The validated resident reference remains owned by the loader.
+            // The import resolver transfers a separate OS reference to its caller.
+            nint owned = NativeLibrary.Load(module.Path);
+            if (owned == module.Handle) return owned;
+            NativeLibrary.Free(owned);
+            throw new DllNotFoundException("The native import resolver could not reacquire the validated resident module.");
         }
     }
 
