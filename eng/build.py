@@ -39,7 +39,7 @@ def digest(path):
 
 def export_fixture_results(external, destination):
     """Export bounded result JSON without private configuration or raw argv/logs."""
-    allowed = {"progress.json", "receipt.json", "result.json", "independent-sql.json",
+    allowed = {"progress.json", "receipt.json", "result.json", "summary.json", "status.json", "independent-sql.json",
                "resolved-archive-hashes.json"}
     private_keys = {"argv", "command", "config", "configuration", "database", "connectionstring",
                     "connection_string", "password", "secret", "cursorkey", "cursor_key"}
@@ -123,8 +123,11 @@ def verify(version, design, plan):
         run([sys.executable, "src/Build.Integration/compose_docs.py", "--config",
              f"src/Build.Integration/api/{component}.json", "--output", f"artifacts/docs/{component}-site"],
             component + "-api-docs")
-    run([sys.executable, "eng/database_regressions.py", "--design", design, "--plan", plan,
-         "--output", OUTPUT / "regressions"], "database-regressions")
+    try:
+        run([sys.executable, "eng/database_regressions.py", "--design", design, "--plan", plan,
+             "--output", OUTPUT / "regressions"], "database-regressions")
+    finally:
+        export_fixture_results(OUTPUT / "regressions", OUTPUT / "regression-evidence")
     pack(version, manifest)
     for name, driver in (("database-lifecycle", "tests/Verification.EndToEnd/api_probe.py"),
                          ("database-business", "tests/Reference.TaskService/package_probe.py")):

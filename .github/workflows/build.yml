@@ -103,6 +103,7 @@ jobs:
             artifacts/db-scope/regressions/result.json
             artifacts/db-scope/regressions/commands.json
             artifacts/db-scope/regressions/logs/
+            artifacts/db-scope/regression-evidence/
             artifacts/task04/
             !artifacts/task04/**/cargo-target/**
             artifacts/db-scope/native-build/manifest.json
