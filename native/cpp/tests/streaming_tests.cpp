@@ -7,6 +7,7 @@
 #include <future>
 #include <iostream>
 #include <semaphore>
+#include <source_location>
 #include <stdexcept>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -41,13 +42,17 @@ template <typename Action> Error reject(Action action)
     }
     throw std::runtime_error("expected streaming rejection");
 }
-template <typename Condition> void await(Condition condition)
+template <typename Condition>
+void await(Condition condition, const std::source_location location = std::source_location::current())
 {
     const auto deadline = Clock::now() + std::chrono::seconds(3);
     while (!condition())
     {
         if (Clock::now() >= deadline)
-            throw std::runtime_error("streaming control timeout");
+            throw std::runtime_error("streaming control timeout at line " + std::to_string(location.line()) +
+                                     "; owners=" + std::to_string(source_count.load()) + "," +
+                                     std::to_string(session_count.load()) + "," + std::to_string(cursor_count.load()) +
+                                     "," + std::to_string(buffer_count.load()));
         std::this_thread::yield();
     }
 }
@@ -272,6 +277,93 @@ void partial_fetch_cancel()
     cursor.reset();
     check(scope.budget()[1] == 0, "partial failure cleanup returns credits");
 }
+std::future<void> retirement_waiter(std::shared_ptr<Cursor> cursor, bool synchronous_close = false)
+{
+    auto completion = std::make_shared<std::promise<void>>();
+    auto future = completion->get_future();
+    std::thread(
+        [cursor = std::move(cursor), completion, synchronous_close]() mutable
+        {
+            try
+            {
+                if (synchronous_close)
+                    cursor->close_now();
+                cursor->join();
+                // The test's own waiting thread is also an actual owner.
+                cursor.reset();
+                completion->set_value();
+            }
+            catch (...)
+            {
+                cursor.reset();
+                completion->set_exception(std::current_exception());
+            }
+        })
+        .detach();
+    return future;
+}
+void retirement_worker_owner_barrier()
+{
+    Scope scope;
+    auto cursor = scope.open(0);
+    auto entered = std::make_shared<std::atomic<bool>>(false);
+    auto waiting = std::make_shared<std::atomic<bool>>(false);
+    auto proceed = std::make_shared<std::binary_semaphore>(0);
+    cursor->test_after_cleanup_gate = [entered, proceed]
+    {
+        entered->store(true);
+        proceed->acquire();
+    };
+    cursor->test_before_join_wait = [waiting] { waiting->store(true); };
+    cursor->request_close();
+    await([&] { return entered->load(); });
+    auto joined = retirement_waiter(cursor);
+    auto closed = retirement_waiter(cursor, true);
+    await([&]
+          { return waiting->load() || joined.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready; });
+    const bool pending = joined.wait_for(std::chrono::milliseconds(0)) == std::future_status::timeout &&
+                         closed.wait_for(std::chrono::milliseconds(0)) == std::future_status::timeout;
+    proceed->release();
+    check(joined.wait_for(std::chrono::seconds(3)) == std::future_status::ready &&
+              closed.wait_for(std::chrono::seconds(3)) == std::future_status::ready,
+          "concurrent cursor close/join did not finish after actual cleanup");
+    joined.get();
+    closed.get();
+    cursor.reset();
+    check(pending, "cursor join published while the cleanup worker still owned its reservation");
+    check(scope.budget()[0] == 0 && scope.budget()[1] == 0,
+          "join followed by last owner release must return stream credits immediately");
+}
+void retirement_notification_barrier()
+{
+    Scope scope;
+    auto cursor = scope.open(0);
+    auto entered = std::make_shared<std::atomic<bool>>(false);
+    auto cleaned = std::make_shared<std::atomic<bool>>(false);
+    auto proceed = std::make_shared<std::binary_semaphore>(0);
+    cursor->test_before_join_wait = [entered, proceed]
+    {
+        if (!entered->exchange(true))
+            proceed->acquire();
+    };
+    cursor->test_after_cleanup_gate = [cleaned] { cleaned->store(true); };
+    auto joined = retirement_waiter(cursor);
+    // Pause in the exact predicate-check / condition-variable-wait window.
+    await([&] { return entered->load(); });
+    cursor->request_close();
+    // Cleanup has returned and its worker released the cursor, so publication
+    // must now contend with the waiter's completion mutex, not notify past it.
+    await([&] { return cleaned->load() && cursor.use_count() == 2; });
+    proceed->release();
+    check(joined.wait_for(std::chrono::seconds(3)) == std::future_status::ready,
+          "cursor retirement lost its notification between predicate check and wait");
+    joined.get();
+    cursor->request_close();
+    cursor->join();
+    cursor.reset();
+    check(scope.budget()[0] == 0 && scope.budget()[1] == 0,
+          "notification barrier retains no worker owner after joined retirement");
+}
 void unknown_and_invalid()
 {
     // The original test deliberately quarantines an unconfirmed retirement.
@@ -319,6 +411,8 @@ int main()
         field_and_shape();
         abandoned_close();
         partial_fetch_cancel();
+        retirement_worker_owner_barrier();
+        retirement_notification_barrier();
         await([] { return source_count == 0 && session_count == 0 && cursor_count == 0 && buffer_count == 0; });
         check(source_count == 0 && session_count == 0 && cursor_count == 0 && buffer_count == 0,
               "positive paths release all native owner counters");

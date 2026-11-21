@@ -99,6 +99,9 @@ struct Source : std::enable_shared_from_this<Source>
     WorkerPool controls{2};
     std::mutex mutex, registry_mutex, shape_mutex, join_mutex;
     std::condition_variable changed;
+#ifdef NW_HOST_TEST_HOOKS
+    std::function<void()> test_before_join_wait;
+#endif
     std::vector<std::weak_ptr<Session>> children;
     std::vector<std::shared_ptr<ProviderConnection>> idle;
     std::size_t leased = 0;
@@ -263,6 +266,8 @@ struct Cursor : std::enable_shared_from_this<Cursor>
     std::atomic<bool> close_started{false}, cleanup_unconfirmed{false};
 #ifdef NW_HOST_TEST_HOOKS
     std::function<void()> test_retire_gate;
+    std::function<void()> test_after_cleanup_gate;
+    std::function<void()> test_before_join_wait;
 #endif
     static std::shared_ptr<Cursor> open(std::shared_ptr<Session> session, std::shared_ptr<SqlPlan> plan,
                                         std::shared_ptr<Cancel> cancel, std::shared_ptr<CommandGate> gate,
@@ -274,6 +279,17 @@ struct Cursor : std::enable_shared_from_this<Cursor>
     void schedule_cleanup();
     void join();
     Bytes snapshot() const;
+
+  private:
+    struct Completion
+    {
+        std::mutex mutex;
+        std::condition_variable changed;
+        bool done = false;
+        void publish();
+    };
+    std::shared_ptr<Completion> completion_ = std::make_shared<Completion>();
+    void close_resources();
 };
 
 struct TransactionOptions

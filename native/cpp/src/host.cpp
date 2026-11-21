@@ -322,7 +322,13 @@ bool Source::reserve_operation(bool control)
 }
 void Source::release_operation()
 {
-    --pending;
+    {
+        // Join checks the last operation owner under this same mutex. An
+        // atomic counter alone would still allow its notification to be lost
+        // between that predicate check and the condition-variable wait.
+        std::lock_guard lock(mutex);
+        --pending;
+    }
     changed.notify_all();
 }
 void Source::queue_admission(std::shared_ptr<DbOperation> operation)
@@ -525,7 +531,14 @@ void Source::join()
         return;
     {
         std::unique_lock lock(mutex);
-        changed.wait(lock, [&] { return leased == 0 && pending.load() == 0; });
+        while (leased != 0 || pending.load() != 0)
+        {
+#ifdef NW_HOST_TEST_HOOKS
+            if (test_before_join_wait)
+                test_before_join_wait();
+#endif
+            changed.wait(lock);
+        }
         admission_stop = true;
     }
     changed.notify_all();
@@ -1433,10 +1446,26 @@ void Cursor::schedule_cleanup()
 {
     if (active.load() || retired.load() || cleanup_scheduled.exchange(true))
         return;
+    auto completion = completion_;
     auto self = shared_from_this();
-    session->source->workers.post([self] { self->close_now(); });
+    session->source->workers.post(
+        [self = std::move(self), completion = std::move(completion)]() mutable
+        {
+            self->close_resources();
+            // A successful join must not race the cleanup worker's last owner.
+            // The independent ticket survives even if this destroys the cursor.
+            self.reset();
+            completion->publish();
+        });
 }
 void Cursor::close_now()
+{
+    if (cleanup_scheduled.exchange(true))
+        return;
+    close_resources();
+    completion_->publish();
+}
+void Cursor::close_resources()
 {
     if (close_started.exchange(true))
         return;
@@ -1459,11 +1488,16 @@ void Cursor::close_now()
             gate.reset();
         }
         retired.store(true);
+#ifdef NW_HOST_TEST_HOOKS
+        if (test_after_cleanup_gate)
+            test_after_cleanup_gate();
+#endif
     }
     catch (...)
     {
         // A cleanup exception is not evidence of native retirement. Retain the
         // bounded reservation and physical accessor instead of admitting reuse.
+        retired.store(false);
         session->discard.store(true);
         {
             std::lock_guard lock(session->source->stream_mutex);
@@ -1471,23 +1505,40 @@ void Cursor::close_now()
         }
         cleanup_unconfirmed.store(true);
     }
+}
+void Cursor::Completion::publish()
+{
+    {
+        std::lock_guard lock(mutex);
+        done = true;
+    }
     changed.notify_all();
 }
 void Cursor::join()
 {
-    std::unique_lock lock(mutex);
-    changed.wait(lock, [&] { return retired.load() || cleanup_unconfirmed.load(); });
+    auto completion = completion_;
+    std::unique_lock lock(completion->mutex);
+    while (!completion->done)
+    {
+#ifdef NW_HOST_TEST_HOOKS
+        if (test_before_join_wait)
+            test_before_join_wait();
+#endif
+        completion->changed.wait(lock);
+    }
     if (cleanup_unconfirmed.load())
         throw Error(NW_DOMAIN_ERROR, 8, "provider retirement remains unconfirmed");
 }
 Bytes Cursor::snapshot() const
 {
+    std::lock_guard lock(completion_->mutex);
+    const bool done = completion_->done && retired.load();
     return snapshot_record(0, 0, false,
                            cleanup_unconfirmed.load() ? 4
-                           : retired.load()           ? 2
+                           : done                     ? 2
                            : closing.load()           ? 1
                                                       : 0,
-                           cleanup_unconfirmed.load() ? 2 : 0, retired.load(), false, 0);
+                           cleanup_unconfirmed.load() ? 2 : 0, done, false, 0);
 }
 
 TransactionOptions TransactionOptions::parse(ByteView bytes)

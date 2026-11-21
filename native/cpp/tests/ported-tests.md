@@ -3,7 +3,7 @@
 The comparison source is merged product commit
 `465cd0f90e6af05ec50eb581156240377cf0825b`. Every Rust path below refers to
 that immutable commit, including after its replaced implementation is removed.
-The retained C# consumers and samples are unchanged. Their C++ bridges invoke
+The retained component C# business assertions and API calls are unchanged. Their C++ bridges invoke
 actual Host/provider objects; controlled completion hooks exist only in the
 `NW_HOST_TEST_HOOKS` test-support library and are absent from product binaries.
 
@@ -136,10 +136,39 @@ providers while retaining the original component C ABI and C# consumer.
 | `abandoned_partial_fetch_rejects_resume_and_close_still_joins` | `partial_fetch_cancel`: real SQLite UDF holds the second row; concurrent resume rejects, no partial batch transfers, cancel retains its charge until actual statement retirement |
 | `unknown_retirement_isolated_and_invalid_limits_never_dispatch` | `unknown_and_invalid`: a controlled unconfirmed close retains a finite quarantine charge; invalid counts/row-table capacity perform no SQL |
 
+Two additional controlled scheduling cases cover the C++ cleanup worker's
+ownership boundary. `retirement_worker_owner_barrier` pauses after actual
+provider close while the worker still owns the cursor: concurrent close/join
+must remain pending, and dropping the last caller owner after join must return
+credits immediately. `retirement_notification_barrier` pauses a waiter between
+checking completion and waiting, lets the cleanup worker drop its cursor owner,
+and then releases the waiter; publication and waiting use the same independent
+completion mutex. The original three-second timeout and immediate-zero resource
+assertions remain unchanged. A deliberate early-return mutation in `Cursor::join`
+is rejected by the worker-owner barrier case.
+
 The deliberately quarantined case runs in a subprocess and exits with its
 uncertain owner still retained, matching the original bounded isolation claim.
 It is not counted as a positive resource-release or leak-sanitizer case. All
 ordinary parent-process paths require zero source/session/cursor/buffer counters.
+
+## B07 fallibility assertion families
+
+`codec_roundtrip.cpp` retains the representable assertions from all seven
+functions in the fixed `native/database/codecs/tests/fallibility.rs`. Its
+`legacy_fallibility` group uses the unchanged managed vector metadata, performs
+24 deterministic refusals in addition to the malformed-input sweep, and sends
+valid argument owners through the actual providers.
+
+| Original Rust function | C++ assertion or explicit private-adapter replacement |
+| --- | --- |
+| `errors_propagate_and_partial_argument_values_are_rolled_back_and_dropped` | Invalid second scalar after the first prepared/bound argument; both providers retain zero writes and admit a fresh successful owner. Rust-specific partial argument-buffer length and drop counters are replaced by RAII ownership and sanitizer checks. |
+| `capacities_profiles_and_fresh_argument_owners` | Exact `hello` value rejects `max_field_bytes=4` and `max_parameters=0` with capacity code 6. A mismatched expected provider profile rejects before binding. Two separately decoded argument owners each execute successfully on SQLite. The removed private `Parameters::postgres()` method has no C++ counterpart. |
+| `null_is_not_empty_and_tampered_identity_rejects` | Distinct NULL/empty wires each retain one argument slot and roundtrip distinctly through PostgreSQL. All twelve original header/descriptor/cell offsets are mutated explicitly and rejected. |
+| `sea_query_values_share_the_checked_binder_and_reject_loss` | The shared canonical binder retains the exact three-byte JSON field-capacity refusal; unchanged managed vectors cover signed 64-bit bounds and reject oversized unsigned enums and sub-microsecond values. Heterogeneous SeaQuery `Value` conversion is removed, as described below. |
+| `malformed_offsets_lengths_tags_and_null_flags_fail_before_argument_creation` | All eight original extreme offset/length/tag/null-flag mutations reject explicitly, in addition to 4,189 rejected truncations and seeded mutations. |
+| `sqlite_partial_encoder_failure_does_not_leave_a_hidden_argument` | The real partial-bind failure and fresh-owner SQL check run on SQLite and PostgreSQL; no failed argument can leave a hidden value in a later statement. |
+| `native_leap_instants_reject_before_argument_build` | The deleted private chrono adapter accepted a leap-second representation with nanoseconds at least one billion and rejected it. Canonical microsecond wire values and C# `DateTime`/`DateTimeOffset` cannot represent that private shape; no C++ chrono conversion entry point is introduced. This is a removed implementation adapter, not a newly accepted leap-second value. |
 
 ## Private adapter tests that change with the implementation language
 

@@ -4,6 +4,7 @@
 #include "nw/host.hpp"
 
 #include <filesystem>
+#include <future>
 #include <iostream>
 #include <sqlite3.h>
 #include <stdexcept>
@@ -415,6 +416,66 @@ void control_during_runtime_join()
     check(uncounted && synchronous && source->retired.load(),
           "control creation raced the stopped-runtime gate or queued after shutdown began");
 }
+
+void source_retirement_notification()
+{
+    auto source = Source::create(configuration());
+    // A created operation already owns one admission token, even before start.
+    // Its real destructor must synchronize with the source's retirement wait.
+    auto operation = DbOperation::create(source, 102, false, [](auto) -> Value { return std::int64_t{1}; });
+    source->request_close();
+    source->admission_thread.join(); // No unrelated admission wake can mask this race.
+    auto predicate_gate = std::make_shared<BlockingPoint>();
+    source->test_before_join_wait = [predicate_gate] { predicate_gate->arrive(); };
+    std::promise<void> joined;
+    auto completion = joined.get_future();
+    std::thread joining(
+        [source, &joined]
+        {
+            try
+            {
+                source->join();
+                joined.set_value();
+            }
+            catch (...)
+            {
+                joined.set_exception(std::current_exception());
+            }
+        });
+    predicate_gate->await();
+    std::promise<void> release_started, release_completed;
+    auto started = release_started.get_future();
+    auto released = release_completed.get_future();
+    std::thread releasing(
+        [operation = std::move(operation), &release_started, &release_completed]() mutable
+        {
+            release_started.set_value();
+            operation.reset();
+            release_completed.set_value();
+        });
+    const bool release_ran = started.wait_for(std::chrono::seconds(3)) == std::future_status::ready;
+    // The join hook still owns Source::mutex in the exact check/wait gap.
+    // The old unlocked decrement finishes and notifies inside that gap; the
+    // corrected destructor must wait for the real condition-variable unlock.
+    const bool bypassed_mutex = released.wait_for(std::chrono::seconds(3)) == std::future_status::ready;
+    predicate_gate->release();
+    const bool joined_on_time = completion.wait_for(std::chrono::seconds(3)) == std::future_status::ready;
+    if (!joined_on_time)
+    {
+        // Rescue the deliberate negative control after recording its failure,
+        // so a failing test reports the lost wake instead of hanging teardown.
+        std::lock_guard lock(source->mutex);
+        source->changed.notify_all();
+    }
+    releasing.join();
+    joining.join();
+    completion.get();
+    check(release_ran, "last operation release did not enter its controlled worker");
+    check(joined_on_time, "source retirement lost the last operation notification between predicate check and wait");
+    check(!bypassed_mutex, "last operation retirement bypassed the source join predicate mutex");
+    check(source->pending.load() == 0 && source->retired.load(),
+          "source join returned before all operation owners retired");
+}
 } // namespace
 
 int main(int argc, char** argv)
@@ -437,6 +498,8 @@ int main(int argc, char** argv)
         }
         if (mode == "all" || mode == "control")
             control_during_runtime_join();
+        if (mode == "all" || mode == "notification")
+            source_retirement_notification();
         std::cout << "host review: " << mode << " passed\n";
         return 0;
     }

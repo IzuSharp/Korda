@@ -29,7 +29,10 @@ docker run --rm --network host \
     export NW_POSTGRES_BIN=/input/artifacts/postgres-tools/install/bin
     export CMAKE_PREFIX_PATH=/input/artifacts/postgres-tools/install
     python3 eng/build.py pack --version "$CPP_VERSION"
-    python3 eng/build.py consume --consumer-environment pristine
+    # This is the fresh native-builder image, not the separately pinned SDK
+    # consumer image. Preserve that distinction in both nested and outer evidence.
+    # verify-task07-linux.sh independently runs the strict pristine SDK gate.
+    python3 eng/build.py consume --consumer-environment local
     python3 - <<"PY"
 import hashlib,json,os,shutil,subprocess
 from pathlib import Path
@@ -37,13 +40,20 @@ absence={name:shutil.which(name) is None for name in ("cargo","rustc","rustup")}
 assert all(absence.values())
 native=Path("artifacts/db-scope/native-build/manifest.json")
 packages=Path("artifacts/db-scope/prepared/manifest.json")
+consumer=Path("artifacts/db-scope/local-consumer/evidence/receipt.json")
+consumer_result=json.loads(consumer.read_text())
+assert consumer_result["passed"] and consumer_result["consumer_environment"] == "local"
+assert all(consumer_result["host_rust_absence_before_isolation"].values())
 record={"task":"DB-CPP-01","status":"passed","image":os.environ["CPP_CLEAN_IMAGE"],"rustToolsAbsent":absence,
+        "freshNativeBuildImage":True,"consumerVerifierEnvironment":"local",
+        "separatePristineSdkGate":"eng/verify-task07-linux.sh",
         "sourceCommit":subprocess.check_output(["git","rev-parse","HEAD"],text=True).strip(),
         "nativeManifestSha256":hashlib.sha256(native.read_bytes()).hexdigest(),
         "packagesManifestSha256":hashlib.sha256(packages.read_bytes()).hexdigest(),
-        "commands":["eng/build.py pack (includes exact native build/install)","eng/build.py consume --consumer-environment pristine"]}
+        "consumerResultSha256":hashlib.sha256(consumer.read_bytes()).hexdigest(),
+        "commands":["eng/build.py pack (includes exact native build/install)","eng/build.py consume --consumer-environment local"]}
 Path("/output/receipt.json").write_text(json.dumps(record,indent=2)+"\n")
-for name in ("native-build","prepared/evidence","prepared/candidate/feed","local-consumer/evidence","pristine-consumer/evidence"):
+for name in ("native-build","prepared/evidence","prepared/candidate/feed","local-consumer/evidence"):
     path=Path("artifacts/db-scope")/name
     if path.exists():shutil.copytree(path,Path("/output")/name)
 for name in ("prepared/manifest.json","prepared/candidate/release.json"):

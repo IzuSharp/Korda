@@ -10,7 +10,7 @@ import subprocess
 import tempfile
 
 RUNTIME_IMAGE = "mcr.microsoft.com/dotnet/runtime-deps:10.0.15-noble-amd64@sha256:ebb73a172b49758c6de2462305e872ea0cb37ad3ca27cc0d86bc48b6271eaace"
-TASK = "DB-Scope-01"
+TASK = "DB-CPP-01"
 PROVIDERS = {"sqlite": ["sqlite"], "postgresql": ["postgresql"], "combined": ["sqlite", "postgresql"]}
 
 

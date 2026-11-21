@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import platform
+import shlex
 import shutil
 import subprocess
 import sys

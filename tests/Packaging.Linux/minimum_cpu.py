@@ -19,7 +19,7 @@ def main():
     parser.add_argument("directory", type=Path, help="A14 runtime-transfer directory")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--emulator", default="qemu-x86_64")
-    parser.add_argument("--cc", default="cc")
+    parser.add_argument("--cc", default=os.environ.get("CC", "clang"))
     parser.add_argument("--require-baseline", action="store_true")
     args = parser.parse_args()
     directory, output = args.directory.resolve(), args.output.resolve()
@@ -59,15 +59,21 @@ def main():
         emulator = shutil.which(args.emulator)
         compiler = shutil.which(args.cc)
         if emulator is None or compiler is None:
-            raise ValueError("Install qemu-user and the existing C compiler on the Linux verifier")
+            raise ValueError("Install qemu-user and the pinned Clang compiler on the Linux verifier")
         emulator, compiler = Path(emulator).resolve(), Path(compiler).resolve()
         report["emulator"] = {"path": str(emulator), "sha256": sha(emulator),
                               "version": run("emulator-version", [emulator, "--version"], timeout=60)}
         report["compiler"] = {"path": str(compiler), "sha256": sha(compiler),
-                              "version": run("compiler-version", [compiler, "--version"], env=os.environ.copy(), timeout=60)}
+                              "version": run("compiler-version", [compiler, "--version"], env=os.environ.copy(), timeout=60),
+                              "target": run("compiler-target", [compiler, "-dumpmachine"], env=os.environ.copy(), timeout=60).strip()}
+        llvm = json.loads((ROOT / "native/dependencies.lock.json").read_text())["toolchain"]["llvm"]
+        if (report["compiler"]["sha256"] != llvm["executables"]["clang"]
+                or "clang version " + llvm["version"] not in report["compiler"]["version"]
+                or not report["compiler"]["target"].startswith("x86_64-")):
+            raise ValueError("The CPU probe requires the exact locked Linux x64 Clang compiler")
         probe_source = ROOT / "tests/Packaging.Linux/cpu_profile.c"
         probe = output / "cpu-profile"
-        run("compile-cpuid-probe", [compiler, "-std=c11", "-Wall", "-Wextra", "-Werror", "-O2", "-march=x86-64",
+        run("compile-cpuid-probe", [compiler, "-std=c17", "-Wall", "-Wextra", "-Werror", "-O2", "-march=x86-64",
             probe_source, "-o", probe], env=os.environ.copy())
         profile = json.loads(run("emulated-cpuid", [emulator, "-cpu", "Nehalem", probe]))
         if profile.get("x86_64_v2") is not True or any(profile.get(name) is not False for name in ["avx", "avx2", "avx512f", "fma"]):

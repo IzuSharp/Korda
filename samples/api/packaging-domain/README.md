@@ -65,7 +65,7 @@ only; vulnerability auditing remains enabled against nuget.org. The release
 coordinator verifies whole-closure upgrade and rollback, builder/provenance
 identity, immutable versions, and refusal of unauthenticated registry signatures.
 
-The inherited `B24_RESULT` transport prefix carries a `task: DB-Scope-01` receipt
+The inherited `B24_RESULT` transport prefix carries a `task: DB-CPP-01` receipt
 only after database owners close successfully. `--require-aot` verifies actual
 Native AOT execution. `--reject-abi` exercises the existing incompatible ABI gate
 before any database owner is created.

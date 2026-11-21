@@ -11,6 +11,7 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <limits>
 #include <stdexcept>
 
 namespace
@@ -141,6 +142,92 @@ std::optional<Bytes> field(ProviderConnection& connection, std::string_view sql,
     statement->close();
     return value;
 }
+
+std::size_t legacy_fallibility(const Json& values, ProviderConnection& sqlite, ProviderConnection& postgres)
+{
+    const auto find = [&](Profile profile, std::uint32_t id, bool nullable) -> const Json&
+    {
+        for (const auto& value : values)
+            if (value.at("profile").get<std::uint32_t>() == static_cast<std::uint32_t>(profile) &&
+                value.at("logicalId").get<std::uint32_t>() == id && value.at("nullable").get<bool>() == nullable)
+                return value;
+        throw std::runtime_error("missing managed vector for original fallibility assertion");
+    };
+    std::size_t refusals = 0;
+    const auto refuse = [&](auto action, std::uint32_t code = 0)
+    {
+        reject(action, code);
+        ++refusals;
+    };
+
+    // Original capacities_profiles_and_fresh_argument_owners: retain the
+    // exact five-byte value, four-byte field limit and zero-parameter limit.
+    const auto text_shape = expectation(find(Profile::Sqlite, 5, false));
+    const Bytes hello{'h', 'e', 'l', 'l', 'o'};
+    const auto text_wire = Batch::encode(text_shape, 1, {hello});
+    refuse([&] { (void)decode_parameters(text_wire, text_shape, MAX_NODES, MAX_BYTES, 4); }, 6);
+    refuse([&] { (void)decode_parameters(text_wire, text_shape, 0, MAX_BYTES, MAX_BYTES); }, 6);
+    auto wrong_profile = text_shape;
+    wrong_profile.profile = Profile::PostgreSql;
+    refuse([&] { (void)decode_parameters(text_wire, wrong_profile, MAX_NODES, MAX_BYTES, MAX_BYTES); });
+    for (unsigned owner = 0; owner != 2; ++owner)
+    {
+        const auto parameters = decode_parameters(text_wire, text_shape, MAX_NODES, MAX_BYTES, MAX_BYTES);
+        check(parameters.size() == 1 && parameters[0].value == hello, "fresh argument owner changed its scalar");
+        check(field(sqlite, "SELECT ?1", text_shape.descriptors[0].codec, parameters) == hello,
+              "fresh argument owner could not execute independently");
+    }
+
+    // Original null_is_not_empty_and_tampered_identity_rejects, including its
+    // exact twelve header/descriptor/cell mutations rather than random sampling.
+    const auto nullable_shape = expectation(find(Profile::PostgreSql, 5, true));
+    const auto empty_wire = Batch::encode(nullable_shape, 1, {Bytes{}});
+    const auto null_wire = Batch::encode(nullable_shape, 1, {std::nullopt});
+    check(empty_wire != null_wire, "NULL and empty text have the same parameter wire");
+    const auto empty = decode_parameters(empty_wire, nullable_shape, MAX_NODES, MAX_BYTES, MAX_BYTES);
+    const auto null = decode_parameters(null_wire, nullable_shape, MAX_NODES, MAX_BYTES, MAX_BYTES);
+    check(empty.size() == 1 && empty[0].value && empty[0].value->empty(), "empty text lost its present argument");
+    check(null.size() == 1 && !null[0].value, "NULL lost its argument slot");
+    check(field(postgres, "SELECT $1::text", nullable_shape.descriptors[0].codec, empty) == Bytes{},
+          "empty text changed during provider binding");
+    check(!field(postgres, "SELECT $1::text", nullable_shape.descriptors[0].codec, null),
+          "NULL changed during provider binding");
+    for (const auto offset : {4, 6, 12, 24, 60, 76, 96, 100, 104, 112, 114, 116})
+    {
+        auto broken = empty_wire;
+        broken[offset] ^= 0x80;
+        refuse([&] { (void)decode_parameters(broken, nullable_shape, MAX_NODES, MAX_BYTES, MAX_BYTES); });
+    }
+
+    // The JSON capacity part of sea_query_values_share_the_checked_binder is
+    // still representable through the canonical binder, without SeaQuery Values.
+    const auto& json = find(Profile::Sqlite, 16, false);
+    const auto json_shape = expectation(json);
+    const auto json_wire = unhex(json.at("wire").get<std::string>());
+    refuse([&] { (void)decode_parameters(json_wire, json_shape, MAX_NODES, MAX_BYTES, 3); }, 6);
+
+    // Original malformed_offsets_lengths_tags_and_null_flags: all eight exact
+    // extreme values must fail before an argument owner can reach a provider.
+    const auto integer_shape = expectation(find(Profile::PostgreSql, 3, false));
+    Bytes integer(8);
+    put_u64(integer, 0, 42);
+    const auto integer_wire = Batch::encode(integer_shape, 1, {integer});
+    const auto malformed_integer = [&](std::size_t offset, std::size_t width, std::uint64_t value)
+    {
+        auto broken = integer_wire;
+        for (std::size_t index = 0; index < width; ++index)
+            broken[offset + index] = static_cast<std::uint8_t>(value >> (index * 8));
+        refuse([&] { (void)decode_parameters(broken, integer_shape, MAX_NODES, MAX_BYTES, MAX_BYTES); });
+    };
+    for (const auto offset : {16, 88, 120, 128})
+        malformed_integer(offset, 8, std::numeric_limits<std::uint64_t>::max());
+    for (const auto offset : {56, 60})
+        malformed_integer(offset, 4, std::numeric_limits<std::uint32_t>::max());
+    malformed_integer(100, 2, 999);
+    malformed_integer(114, 2, 1);
+    check(refusals == 24, "original deterministic fallibility cases were skipped");
+    return refusals;
+}
 } // namespace
 
 int main(int argc, char** argv)
@@ -191,6 +278,9 @@ int main(int argc, char** argv)
             results.push_back({{"name", value.at("name")}, {"hex", encoded}});
         }
         std::cout << "PASS actual C# wire/C++ provider scalar roundtrips: " << results.size() << '\n';
+        const auto legacy_refusals = legacy_fallibility(values, *sqlite, *pg);
+        std::cout << "PASS original deterministic fallibility refusals: " << legacy_refusals
+                  << "; fresh argument owners; NULL versus empty text\n";
         const Codec numeric{13, "{\"precision\":29,\"scale\":28}", false};
         for (const auto* sql : {"SELECT 1e100::numeric", "SELECT 1e-30::numeric", "SELECT 'NaN'::numeric"})
             reject([&] { (void)field(*pg, sql, numeric); });
@@ -320,6 +410,7 @@ int main(int argc, char** argv)
         std::ofstream(directory / "native-summary.json")
             << Json{{"roundtrips", results.size()},
                     {"malformedRejected", rejected},
+                    {"legacyFallibilityRefusals", legacy_refusals},
                     {"providerSendsForVectors", provider_sends},
                     {"postgres", pg_version},
                     {"sqlite", sqlite_version},

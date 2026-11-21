@@ -143,7 +143,7 @@ jobs:
             artifacts/cpp-clean/image.json
             artifacts/cpp-clean/native-build/
             artifacts/cpp-clean/prepared/evidence/
-            artifacts/cpp-clean/pristine-consumer/evidence/
+            artifacts/cpp-clean/local-consumer/evidence/
             artifacts/db-scope/regressions/result.json
             artifacts/db-scope/regressions/commands.json
             artifacts/db-scope/regressions/logs/

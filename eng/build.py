@@ -105,7 +105,7 @@ def migration_comparison(version):
         prepare.extend(["--archive", Path(archive).resolve()])
     run(prepare, "migration-rust-reference")
     common = ["--postgres-bin", os.environ["NW_POSTGRES_BIN"], "--sdk-cache",
-              os.environ.get("NUGET_PACKAGES", str(Path.home() / ".nuget/packages")),
+              os.environ.get("NUGET_PACKAGES", str(ARTIFACTS / "nuget-packages")),
               "--output", external / "comparison"]
     try:
         run([sys.executable, "tests/Migration.Cpp/run.py", "--phase", "baseline", "--feed",
