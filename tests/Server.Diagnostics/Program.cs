@@ -28,6 +28,8 @@ internal static class Program
             Layout(); await QueueAsync();
             await ActualContextAsync(ServerProtocols.Http1, HttpVersion.Version11);
             await ActualContextAsync(ServerProtocols.Http2, HttpVersion.Version20);
+            await CloseBeforeFinishAsync(ServerProtocols.Http1, HttpVersion.Version11);
+            await CloseBeforeFinishAsync(ServerProtocols.Http2, HttpVersion.Version20);
             await LifetimeAsync(); await CancellationRacesAsync(); await ListenerFaultAsync(); await ExporterStallAsync();
         }
         Console.WriteLine($"B20 actual diagnostics: {_assertions} assertions, dynamic={RuntimeFeature.IsDynamicCodeSupported}, configuration={Configuration}.");
@@ -179,6 +181,67 @@ internal static class Program
         await Eventually(() => traces.Completed.Count == 8);
         Check(traces.Completed.Last().Tags.Any(pair => pair.Key == "http.response.status_class" && pair.Value == "2xx"), "Successful final framing records the actual success status.");
         Check((await app.CloseAsync(TimeSpan.FromSeconds(2))).Status == ServerCloseStatus.Completed, "Context test native/managed retirement joined.");
+    }
+    private static async Task CloseBeforeFinishAsync(ServerProtocols protocols, Version version)
+    {
+        using var traces = new TraceCollector(ActivitySamplingResult.AllDataAndRecorded);
+        var logger = new CaptureLogger();
+        var written = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var finished = new TaskCompletionSource<Exception?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        TimeSpan bound = TimeSpan.FromSeconds(10);
+        var builder = NativeServer.CreateBuilder().Listen(IPAddress.Loopback, 0, listener => listener.Protocols = protocols);
+        builder.Services.AddLogging(logging => { logging.SetMinimumLevel(LogLevel.Warning); logging.AddProvider(logger); });
+        var app = builder.Build();
+        try
+        {
+            app.MapRaw("/close-before-finish", ["GET"], async (context, token) =>
+            {
+                try
+                {
+                    context.Response.ContentLength = 4;
+                    await context.Response.WriteAsync("body"u8.ToArray(), token);
+                    written.TrySetResult();
+                    await release.Task.WaitAsync(bound);
+                    await context.Response.CompleteAsync(token);
+                    finished.TrySetResult(null);
+                }
+                catch (Exception error) { written.TrySetException(error); finished.TrySetResult(error); throw; }
+            });
+            await app.StartAsync().WaitAsync(bound);
+            using var client = Client(app, version);
+            using var response = await client.GetAsync("close-before-finish", HttpCompletionOption.ResponseHeadersRead).WaitAsync(bound);
+            await using var stream = await response.Content.ReadAsStreamAsync().WaitAsync(bound);
+            byte[] payload = new byte[4];
+            await stream.ReadExactlyAsync(payload).AsTask().WaitAsync(bound);
+            await written.Task.WaitAsync(bound);
+            Check(response.StatusCode == HttpStatusCode.OK && response.Version == version &&
+                response.Content.Headers.ContentLength == 4 && payload.AsSpan().SequenceEqual("body"u8),
+                "Actual " + version + " delivers the exact Content-Length payload before managed Finish.");
+            long started = Stopwatch.GetTimestamp();
+            Task<ServerCloseResult> closing = app.CloseAsync(TimeSpan.FromSeconds(2));
+            await Task.Delay(250);
+            Check(Stopwatch.GetElapsedTime(started) < TimeSpan.FromSeconds(2) && !closing.IsCompleted,
+                "Close keeps admitted dispatch pending before its deadline while Finish is gated.");
+            release.TrySetResult();
+            Exception? finishFailure = await finished.Task.WaitAsync(bound);
+            ServerCloseResult close = await closing.WaitAsync(bound);
+            Check(finishFailure is null, "Accepted response Finish succeeds during graceful close: " + finishFailure);
+            Check(close.Status == ServerCloseStatus.Completed && close.PendingRequests == 0 &&
+                close.RetainedNativeBytes == 0 && close.RetainedManagedBytes == 0,
+                "Close joins the completed Finish and releases every business owner.");
+            Check(await stream.ReadAsync(new byte[1], 0, 1).WaitAsync(bound) == 0,
+                "Graceful close preserves the exact response end without extra payload.");
+            await app.DisposeAsync().AsTask().WaitAsync(bound);
+            Check(traces.Completed.Count == 1 && traces.Completed.Single().Tags.Any(pair =>
+                pair.Key == "http.response.status_class" && pair.Value == "2xx") && logger.Messages.IsEmpty,
+                "Successful close-versus-Finish emits one success Activity and no failure warning.");
+        }
+        finally
+        {
+            release.TrySetResult();
+            await app.DisposeAsync().AsTask().WaitAsync(bound);
+        }
     }
     private static async Task LifetimeAsync()
     {

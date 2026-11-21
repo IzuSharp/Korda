@@ -286,7 +286,24 @@ impl Host {
         while let Some(result) = acceptors.join_next().await {
             self.acceptor_finished(result);
         }
-        self.reap();
+        // A complete Content-Length body can leave Hyper before its managed
+        // producer submits Finish. Keep servicing admitted request operations
+        // until dispatch/callback retirement and any input-discard source has
+        // exited. Escaped payload owners do not require the runtime and must
+        // not turn this into a full-budget join.
+        loop {
+            self.reap();
+            if lock(&self.requests)
+                .values()
+                .all(|request| {
+                    request.retired.load(Ordering::Acquire)
+                        && request.live_ops.load(Ordering::Acquire) == 0
+                })
+            {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(1)).await;
+        }
     }
     pub(crate) fn acceptor_finished(
         &self,
