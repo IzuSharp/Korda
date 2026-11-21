@@ -12,12 +12,12 @@
     <ReferenceProfile Condition="'$(ReferenceIncludePostgreSql)' == 'true'">full</ReferenceProfile>
     <NativeWeavePackageVersion Condition="'$(NativeWeavePackageVersion)' == ''">0.1.0-preview.1</NativeWeavePackageVersion>
     <NuGetLockFilePath>$(MSBuildProjectDirectory)/packages.$(ReferenceProfile).lock.json</NuGetLockFilePath>
+    <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifiers)' != ''">$(MSBuildProjectDirectory)/packages.$(ReferenceProfile).$(RuntimeIdentifiers).aot.lock.json</NuGetLockFilePath>
     <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifier)' != ''">$(MSBuildProjectDirectory)/packages.$(ReferenceProfile).$(RuntimeIdentifier).aot.lock.json</NuGetLockFilePath>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="NativeWeave.Database.Sqlite" Version="$(NativeWeavePackageVersion)" />
     <PackageReference Include="NativeWeave.Database.PostgreSql" Version="$(NativeWeavePackageVersion)" Condition="'$(ReferenceIncludePostgreSql)' == 'true'" />
-    <PackageReference Include="NativeWeave.Server" Version="$(NativeWeavePackageVersion)" />
     <Compile Include="../../../src/Reference.TaskService/*.cs" Link="Application/%(Filename)%(Extension)" />
     <EmbeddedResource Include="../../../src/Reference.TaskService/Migrations/*.sql" Link="Migrations/%(Filename)%(Extension)" />
   </ItemGroup>
