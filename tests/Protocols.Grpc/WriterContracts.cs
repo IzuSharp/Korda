@@ -40,7 +40,6 @@ internal static partial class Acceptance
 
     private static async Task WriterContracts(string certificatePath, string keyPath)
     {
-        await PerMessageWriterBuffers(certificatePath, keyPath);
         foreach (int maximum in new[] { 5_000, 10_000, 65_539 })
         {
             await WriterContractHost(maximum, certificatePath, keyPath);

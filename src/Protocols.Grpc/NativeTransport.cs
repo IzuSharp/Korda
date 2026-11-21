@@ -132,7 +132,8 @@ internal sealed class NativeGrpcTransport(NativeRequest request, int encodedLimi
     private unsafe nint EncodeAndCreate<T>(ServerHandle reservation, T value, GrpcMarshaller<T> marshaller)
     {
         using var credit = request.AcquireProtocolManagedCredit(encodedLimit);
-        using var writer = new MessageWriter(encodedLimit, request);
+        byte[] bytes = new byte[encodedLimit];
+        using var writer = new MessageWriter(bytes);
         marshaller.Encode(value, writer);
         if (writer.Length > streamLimit - _writtenBytes) throw new GrpcException(GrpcStatusCode.ResourceExhausted, "The outbound stream limit was exceeded.");
         bool requestLease = false, tokenLease = false; nint operation = 0;
@@ -226,75 +227,23 @@ internal sealed class NativeGrpcTransport(NativeRequest request, int encodedLimi
         ServerException { Code: "resource_limit" or "body_limit_exceeded" } => new GrpcException(GrpcStatusCode.ResourceExhausted, "The gRPC payload budget was exhausted."),
         _ => error
     };
-    private sealed class MessageWriter(int maximum, NativeRequest request) : IBufferWriter<byte>, IDisposable
+    private sealed class MessageWriter : IBufferWriter<byte>, IDisposable
     {
-        private const int InitialCapacity = 16 * 1024;
-        private NativeRequest? _request = request;
-        private byte[]? _bytes, _growthSource;
-        private IDisposable? _overlapCredit;
-        private bool _disposed;
+        private byte[]? _bytes;
+        internal MessageWriter(byte[] bytes) => _bytes = bytes;
+        private byte[] Bytes => _bytes ?? throw new ObjectDisposedException(nameof(MessageWriter));
         internal int Length { get; private set; }
-        internal ReadOnlySpan<byte> Written
-        {
-            get { ObjectDisposedException.ThrowIf(_disposed, this); return _bytes is { } bytes ? bytes.AsSpan(0, Length) : ReadOnlySpan<byte>.Empty; }
-        }
-        public void Advance(int count)
-        {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            if (count < 0 || count > maximum - Length || count > (_bytes?.Length ?? 0) - Length) throw Limit();
-            Length += count;
-        }
+        internal ReadOnlySpan<byte> Written => Bytes.AsSpan(0, Length);
+        public void Advance(int count) { if (count < 0 || count > Bytes.Length - Length) throw Limit(); Length += count; }
         public Memory<byte> GetMemory(int sizeHint = 0) => Ensure(sizeHint).AsMemory(Length);
         public Span<byte> GetSpan(int sizeHint = 0) => Ensure(sizeHint).AsSpan(Length);
         private byte[] Ensure(int hint)
         {
-            ObjectDisposedException.ThrowIf(_disposed, this);
-            int required = Math.Max(1, hint);
-            if (hint < 0 || required > maximum - Length) throw Limit();
-            if (_bytes is null) _bytes = AllocateInitial(required);
-            if (required > _bytes.Length - Length)
-            {
-                // Only the admitted small mode can reach here. At most one growth
-                // is possible; old + new capacities already have maximum + 16 KiB
-                // credit. No retry, second encoder call or growth admission occurs.
-                byte[] grown = new byte[maximum];
-                _bytes.AsSpan(0, Length).CopyTo(grown);
-                _growthSource = _bytes;
-                _bytes = grown;
-            }
-            return _bytes;
+            byte[] bytes = Bytes;
+            if (hint < 0 || Math.Max(1, hint) > bytes.Length - Length) throw Limit();
+            return bytes;
         }
-        private byte[] AllocateInitial(int required)
-        {
-            IDisposable? overlap = null;
-            try
-            {
-                int capacity = maximum;
-                if (maximum > InitialCapacity && required <= InitialCapacity)
-                {
-                    // Full maximum credit was admitted before invoking the encoder.
-                    // Select small storage only after granting its future overlap;
-                    // a tight budget falls back before any array or bytes exist.
-                    try { overlap = _request!.AcquireProtocolManagedCredit(InitialCapacity); capacity = InitialCapacity; }
-                    catch (ServerException error) when (error.Code == "resource_limit") { }
-                }
-                byte[] bytes = new byte[capacity];
-                _overlapCredit = overlap; overlap = null; _request = null;
-                return bytes;
-            }
-            finally { overlap?.Dispose(); }
-        }
-        public void Dispose()
-        {
-            if (_disposed) return;
-            _disposed = true;
-            // Borrowed old memory can remain on the synchronous encoder's stack.
-            // Keep both backings charged through the original native-copy scope.
-            GC.KeepAlive(_bytes); GC.KeepAlive(_growthSource);
-            _bytes = null; _growthSource = null; _request = null;
-            IDisposable? overlap = _overlapCredit; _overlapCredit = null;
-            overlap?.Dispose();
-        }
+        public void Dispose() => _bytes = null;
         private static GrpcException Limit() => new(GrpcStatusCode.ResourceExhausted, "The encoded response message limit was exceeded.");
     }
 }
