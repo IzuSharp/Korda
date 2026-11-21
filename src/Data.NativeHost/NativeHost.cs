@@ -23,7 +23,7 @@ internal sealed class SourceResources : SafeHandle
     private readonly DatabaseOwner _source;
     internal CallbackCoordinator Coordinator { get; }
     internal SourceResources(DatabaseOwner source, int capacity) : base(0, true)
-    { _source = source; Coordinator = new(capacity); SetHandle(1); }
+    { _source = source; Coordinator = new(capacity, TimeSpan.FromMilliseconds(1)); SetHandle(1); }
     public override bool IsInvalid => handle == 0;
     protected override bool ReleaseHandle() { _source.Dispose(); Coordinator.Dispose(); return true; }
 }
