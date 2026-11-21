@@ -12,6 +12,7 @@
     <ReferenceProfile Condition="'$(ReferenceIncludePostgreSql)' == 'true'">full</ReferenceProfile>
     <NativeWeavePackageVersion Condition="'$(NativeWeavePackageVersion)' == ''">0.1.0-preview.1</NativeWeavePackageVersion>
     <NuGetLockFilePath>$(MSBuildProjectDirectory)/packages.$(ReferenceProfile).lock.json</NuGetLockFilePath>
+    <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifiers)' != ''">$(MSBuildProjectDirectory)/packages.$(ReferenceProfile).$(RuntimeIdentifiers).aot.lock.json</NuGetLockFilePath>
     <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifier)' != ''">$(MSBuildProjectDirectory)/packages.$(ReferenceProfile).$(RuntimeIdentifier).aot.lock.json</NuGetLockFilePath>
   </PropertyGroup>
   <ItemGroup>

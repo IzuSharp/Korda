@@ -346,8 +346,9 @@ class Consumer:
         csproj = directory / "Consumer.csproj"
         self.run(graph + "-restore", ["dotnet", "restore", csproj, *FLAGS], cwd=directory, env=env)
         resolved = self.validate_graph(graph, directory)
-        self.run(graph + "-build", ["dotnet", "build", csproj, "-c", "Release", "--no-restore", *FLAGS], cwd=directory, env=env)
-        jit = directory / "bin/Release/net11.0"
+        # Keep the actual JIT output separate from the SDK's later RID/AOT intermediates.
+        jit = directory / "jit-output"
+        self.run(graph + "-build", ["dotnet", "build", csproj, "-c", "Release", "--no-restore", "-o", jit, *FLAGS], cwd=directory, env=env)
         native_before = self.native_identity(graph, jit)
         row = {"selectedPackages": resolved, "nativeBefore": native_before,
                "initialProjectSha256": sha(csproj), "initialSourceSha256": sha(directory / "Program.cs"),
@@ -364,7 +365,7 @@ class Consumer:
             shutil.copyfile(ROOT / "samples/api/packaging-domain/AddedModels.cs.template", directory / "AddedModels.cs")
             refs, symbols, _ = GRAPHS[graph]
             project(csproj, refs, {name: item["version"] for name, item in self.items.items()}, symbols, edited=True)
-            self.run(graph + "-offline-managed-edit-build", ["dotnet", "build", csproj, "-c", "Release", "--no-restore", *FLAGS], cwd=directory, env=env)
+            self.run(graph + "-offline-managed-edit-build", ["dotnet", "build", csproj, "-c", "Release", "--no-restore", "-o", jit, *FLAGS], cwd=directory, env=env)
             row["editedJit"] = self.execute(graph, directory, ["dotnet", jit / "B24Consumer.dll"], graph + "-edited-jit", edited=True)
         published = self.output / "runtime-transfer" / graph
         publish_env = env.copy()
