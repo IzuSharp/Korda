@@ -1,5 +1,7 @@
 # Linux native packages and Native AOT
 
+> **DB-CPP-01 implementation update.** The public C# examples, signatures and ownership contracts in this guide remain the compatibility inputs. The current maintained native implementation is C++20; its module mapping, direct libpq/sqlite3 execution, Clang/CMake commands and package production are documented in [C++ native implementation](cpp-native.md). Descriptions below of Rust, SQLx, SeaQuery or Tokio internals are retained as the fixed `465cd0f` behavioral reference, not current build dependencies. The named verification entry points now build the ported C++ fixtures and retain their original managed assertions.
+
 Task A14 supports the declared GNU Linux x64 packaging profile: Ubuntu 24.04,
 glibc requirements no later than 2.39, and x86-64-v2 instructions. A local run on
 a newer distribution is useful development evidence; it does not certify that
@@ -45,7 +47,7 @@ The current database candidate composes this retained Core packaging infrastruct
 ## Reproduce the actual package check
 
 Run `python3 tests/Packaging.Linux/verify.py --require-baseline` on the declared
-Linux profile with pinned SDK 11.0.100 and Rust 1.100.0. The verifier copies the
+Linux profile with pinned SDK 11.0.100 and LLVM 23.1.5. The verifier copies the
 component consumer sources outside the checkout, replaces ProjectReferences with
 actual nupkg references, uses a fresh cache, runs RID-free JIT, and publishes and
 executes each component with Native AOT. Layout, lease, buffer, error, callback and

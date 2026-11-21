@@ -12,6 +12,8 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "tests"))
+from native_build import prepare as prepare_native, FIXTURES as CPP_FIXTURES, BINARIES as CPP_BINARIES, SOURCE_INPUTS as NATIVE_INPUTS
 
 def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
@@ -42,17 +44,16 @@ def main():
     try:
         report["source_commit"] = run("source-commit", ["git", "rev-parse", "HEAD"])[0].strip()
         report["source_dirty"] = bool(run("source-status", ["git", "status", "--porcelain"])[0].strip())
-        for label, cmd in [("rustc", ["rustc", "-Vv"]), ("cargo", ["cargo", "--version"]), ("dotnet", ["dotnet", "--version"]), ("cc", ["cc", "--version"])]:
+        for label, cmd in [("cmake", ["cmake", "--version"]), ("ninja", ["ninja", "--version"]), ("dotnet", ["dotnet", "--version"]), ("clang", ["clang", "--version"])]:
             report[label] = run(label, cmd)[0].strip()
         source_dirs = ["native/interop/errors", "tests/Interop.Errors", "src/Interop.Errors", "src/NativeWeave.Core", "src/Interop.Abi", "native/interop/abi", "samples/api/interop-errors", "docs/guides/interop-errors.md"]
-        tracked = subprocess.check_output(["git", "ls-files", "--cached", "--others", "--exclude-standard", "--", *source_dirs, "Cargo.toml", "Cargo.lock", "Directory.Build.props", "global.json", "rust-toolchain.toml"], cwd=ROOT, text=True)
+        tracked = subprocess.check_output(["git", "ls-files", "--cached", "--others", "--exclude-standard", "--", *source_dirs, *NATIVE_INPUTS, "Directory.Build.props", "global.json"], cwd=ROOT, text=True)
         report["source_sha256"] = {p: digest(ROOT / p) for p in sorted(set(tracked.splitlines())) if (ROOT / p).is_file()}
-        run("native-test", ["cargo", "test", "--release", "--locked", "-p", "nativeweave-interop-errors", "-p", "nativeweave-errors-fixture"])
-        run("native-build", ["cargo", "build", "--release", "--locked", "-p", "nativeweave-errors-fixture"])
-        native = ROOT / "target/release/libnativeweave_errors_fixture.so"
+        report["native_compiler_provenance"] = prepare_native(run, ["nativeweave_errors_fixture", "nw_error_probe", "nw_error_abort_probe"])
+        native = CPP_FIXTURES / "libnativeweave_errors_fixture.so"
         env["LD_LIBRARY_PATH"] = str(native.parent) + (":" + env["LD_LIBRARY_PATH"] if env.get("LD_LIBRARY_PATH") else "")
         report["artifacts"]["native_fixture"] = {"path": str(native), "sha256": digest(native)}
-        probe = ROOT / "target/release/panic_probe"
+        probe = CPP_BINARIES / "nw_error_probe"
         report["artifacts"]["unwind_probe"] = {"path": str(probe), "sha256": digest(probe)}
         for mode in ["ordinary", "quarantine"]:
             output, _ = run("panic-" + mode, [probe, mode])
@@ -61,10 +62,9 @@ def main():
         for mode in ["drop", "double", "hook", "ffi"]:
             output, _ = run("panic-" + mode, [probe, mode], expected=(-6, 101, 134))
             if "status=9" in output: raise RuntimeError("Fatal path was misreported as recovered")
-        abort_target = run_dir / "abort-target"
-        run("panic-abort-build", ["cargo", "build", "--release", "--locked", "-p", "nativeweave-errors-fixture", "--bin", "panic_probe", "--target-dir", abort_target], extra={"CARGO_PROFILE_RELEASE_PANIC": "abort"})
-        run("panic-abort", [abort_target / "release/panic_probe", "abort"], expected=(-6, 134))
-        report["artifacts"]["abort_probe"] = {"path": str(abort_target / "release/panic_probe"), "sha256": digest(abort_target / "release/panic_probe")}
+        abort_probe = CPP_BINARIES / "nw_error_abort_probe"
+        run("panic-abort", [abort_probe, "abort"], expected=(-6, 134))
+        report["artifacts"]["abort_probe"] = {"path": str(abort_probe), "sha256": digest(abort_probe)}
         common = ["-p:UseSharedCompilation=false", "-nr:false", "-m:1"]
         restore = ["--locked-mode"] + (["--configfile", args.nuget_config] if args.nuget_config else []) + (["-p:NuGetAudit=false"] if args.offline else [])
         projects = [("managed", "tests/Interop.Errors/Interop.Errors.Tests.csproj", "NativeWeave.Interop.Errors.Tests"),
@@ -93,7 +93,6 @@ def main():
         run("api-build", ["dotnet", "build", api_project, "-c", "Release", "--no-restore", *common])
         sdk = Path(shutil.which("dotnet")).resolve().parent
         run("api-xml-reference", ["dotnet", "tests/Interop.Errors/ApiCheck/bin/Release/net11.0/NativeWeave.Interop.Errors.ApiCheck.dll", ROOT, sdk, ROOT / "src/NativeWeave.Core/bin/Release/net11.0/NativeWeave.Core.dll"])
-        run("rust-clippy", ["cargo", "clippy", "--locked", "-p", "nativeweave-interop-errors", "-p", "nativeweave-errors-fixture", "--all-targets", "--", "-D", "warnings"])
         run("diff-check", ["git", "diff", "--check"])
         for path, expected_hash in report["source_sha256"].items():
             if not (ROOT / path).is_file() or digest(ROOT / path) != expected_hash:

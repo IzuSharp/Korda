@@ -1,4 +1,4 @@
-"""Cargo diagnostics must not corrupt the machine-readable dependency inventory."""
+"""Native tool diagnostics must not corrupt the machine-readable dependency inventory."""
 import contextlib
 import io
 import json
@@ -19,10 +19,10 @@ class BuildOutputTests(unittest.TestCase):
             with patch.object(build, 'LOGS', logs), contextlib.redirect_stdout(io.StringIO()):
                 output = build.run([
                     sys.executable, '-c',
-                    'import sys; print(\'{"packages": []}\'); print("warning: cargo diagnostic", file=sys.stderr)',
+                    'import sys; print(\'{"packages": []}\'); print("warning: native diagnostic", file=sys.stderr)',
                 ], 'metadata', json_stdout=True)
             self.assertEqual({'packages': []}, json.loads(output))
-            self.assertIn('warning: cargo diagnostic', (logs / 'metadata.log').read_text())
+            self.assertIn('warning: native diagnostic', (logs / 'metadata.log').read_text())
 
     def test_json_command_failure_retains_stderr_and_is_not_accepted(self):
         with tempfile.TemporaryDirectory() as directory:

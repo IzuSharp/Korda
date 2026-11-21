@@ -1,9 +1,11 @@
 # Compatibility and immutable updates
 
+> **DB-CPP-01 implementation update.** The public C# examples, signatures and ownership contracts in this guide remain the compatibility inputs. The current maintained native implementation is C++20; its module mapping, direct libpq/sqlite3 execution, Clang/CMake commands and package production are documented in [C++ native implementation](cpp-native.md). Descriptions below of Rust, SQLx, SeaQuery or Tokio internals are retained as the fixed `465cd0f` behavioral reference, not current build dependencies. The named verification entry points now build the ported C++ fixtures and retain their original managed assertions.
+
 The A22 maintainer tool checks an explicitly selected update and its immutable
 evidence. It does not discover updates, change dependencies, publish packages,
 or run in an application. Run it from an isolated maintainer checkout with the
-repository's fixed Python/.NET/Rust toolchain. Its CLI is
+repository's fixed Python/.NET/Clang toolchain. Its CLI is
 `src/Verification.Compatibility/compatibility.py`.
 
 This retained verifier covers Linux x64 Core ABI/API compatibility. Controlled native fixtures exercise old/new contracts and rejection paths. Current package identity, provenance, signature rejection and complete-closure rollback are tested against the actual database candidate by Packaging.Domain. Historical signed demo observations remain in the original Plan evidence and do not substitute for current database consumption.

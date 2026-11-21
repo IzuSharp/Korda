@@ -71,7 +71,7 @@ scopes = ['src/Data.Materialization', 'tests/Data.Materialization', 'samples/api
           'docs/guides/data-materialization.md', 'src/Data.Abstractions', 'src/Data.Streaming', 'src/Data.NativeHost',
           'src/Data.Sqlite', 'src/Data.Postgres', 'src/Data.Transactions', 'src/Query.Binding', 'src/Query.Generator',
           'src/Interop.Abi', 'src/NativeWeave.Core', 'Directory.Build.props', 'Directory.Build.targets', 'global.json', 'src/Packaging.Release', 'src/Packaging.Linux/packages.py', 'LICENSE']
-host_scopes = ['native/database', 'native/interop', 'Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml']
+host_scopes = ['native/cpp', 'native/database/binding', 'native/interop/abi', 'native/dependencies.lock.json', 'CMakeLists.txt', 'CMakePresets.json']
 source = inputs(ROOT, scopes)
 host_source = inputs(a.host_source.resolve(), host_scopes)
 write('source-inputs.json', source)
@@ -85,7 +85,7 @@ try:
     native_hashes = {str(module): sha(module) for module in modules}
     write('environment.json', {'utc': datetime.datetime.now(datetime.timezone.utc).isoformat(), 'platform': platform.platform(),
           'machine': platform.machine(), 'design_commit': design, 'native_sha256': native_hashes,
-          'tools': {t: shutil.which(t) for t in ['dotnet', 'cargo', 'rustc', 'clang']}})
+          'tools': {t: shutil.which(t) for t in ['dotnet', 'cmake', 'ninja', 'clang', 'clang++']}})
     run('diff-check', ['git', 'diff', '--check'])
     run('format', ['dotnet', 'format', 'whitespace', '.', '--folder', '--include', 'src/Data.Materialization', 'tests/Data.Materialization', 'samples/api/data-materialization', '--verify-no-changes', '--verbosity', 'quiet'])
     pg = a.postgres_bin.resolve()

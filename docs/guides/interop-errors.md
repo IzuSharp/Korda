@@ -1,5 +1,7 @@
 # Native failures and panic containment
 
+> **DB-CPP-01 implementation update.** The public C# examples, signatures and ownership contracts in this guide remain the compatibility inputs. The current maintained native implementation is C++20; its module mapping, direct libpq/sqlite3 execution, Clang/CMake commands and package production are documented in [C++ native implementation](cpp-native.md). Descriptions below of Rust, SQLx, SeaQuery or Tokio internals are retained as the fixed `465cd0f` behavioral reference, not current build dependencies. The named verification entry points now build the ported C++ fixtures and retain their original managed assertions.
+
 A05 implements the fixed D08 error boundary and its exact managed diagnostics.
 The canonical wire status and 24-byte error record are imported from A01, not
 redeclared. The error and negotiation sources compose into one `NativeWeave.Core`

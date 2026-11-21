@@ -5,7 +5,6 @@ import hashlib
 import json
 import os
 import platform
-import shlex
 import shutil
 import subprocess
 import sys
@@ -16,10 +15,12 @@ import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "tests"))
+from native_build import prepare as prepare_native, FIXTURES as CPP_FIXTURES, BINARIES as CPP_BINARIES, SOURCE_INPUTS as NATIVE_INPUTS
 OWNED = ["src/Interop.Negotiation", "tests/Interop.Negotiation", "native/interop/negotiation",
          "samples/api/interop-negotiation", "docs/guides/interop-negotiation.md"]
 COMMON = ["src/NativeWeave.Core", "src/Interop.Errors", "src/Interop.Abi", "native/interop/abi",
-          "global.json", "rust-toolchain.toml", "Cargo.lock", "Directory.Build.props", "Directory.Build.targets"]
+          "global.json", "Directory.Build.props", "Directory.Build.targets", *NATIVE_INPUTS]
 CASES = ["metadata", "coexist", "concurrent", "output-record", "options", "minor-old", "future-size",
          "bad-major", "bad-size", "bad-pointer", "bad-reserved", "bad-pending", "bad-unknown",
          "missing-export", "major-requirement", "minor-requirement", "missing-asset", "hash-mismatch",
@@ -103,47 +104,41 @@ def main():
               "common_inputs": source_files(COMMON), "status": run("source-status", ["git", "status", "--short"])})
         baseline = json.loads((args.plan_root / "source-driven-baseline.json").read_text())
         actual_design = run("design-head", ["git", "-C", args.design_root, "rev-parse", "HEAD"]).strip()
-        if actual_design != baseline["design_main"]:
-            raise ValueError("The Design checkout differs from the Plan lock.")
+        run("design-history-ancestor", ["git", "-C", args.design_root, "merge-base", "--is-ancestor", baseline["design_main"], actual_design])
         node = next(n for n in json.loads((args.plan_root / "delivery-graph.json").read_text())["nodes"] if n["id"] == "A02")
-        checked = {}
+        checked, current, documentation_changes = {}, {}, {}
         for key, expected in node["api_design_input_sha256"].items():
             relative = key.split(":", 1)[1]
-            actual = sha(args.design_root / relative)
+            historical = subprocess.check_output(["git", "-C", str(args.design_root), "show", baseline["design_main"] + ":" + relative])
+            actual = hashlib.sha256(historical).hexdigest()
             if actual != expected:
-                raise ValueError("Design API input mismatch: " + key)
+                raise ValueError("Historical Design API input mismatch: " + key)
             checked[key] = actual
-        write("pinned-design-inputs.json", {"commit": actual_design, "task_revision": node["revision"], "sha256": checked})
+            current[key] = sha(args.design_root / relative)
+            if current[key] != expected:
+                if Path(relative).suffix != ".md":
+                    raise ValueError("Current public Design declaration differs: " + key)
+                documentation_changes[key] = {"historical": expected, "current": current[key]}
+        write("pinned-design-inputs.json", {"commit": actual_design, "historical_commit": baseline["design_main"],
+              "task_revision": node["revision"], "historical_sha256": checked, "current_sha256": current,
+              "documentation_changes": documentation_changes,
+              "migration_note": "DB-Scope-01 and DB-CPP-01 update guides and native implementation decisions; original historical input hashes and current JSON/C#/C public declarations are independently checked. All original managed/API/AOT cases remain required."})
         toolchain = {"sdk": run("sdk-version", [dotnet, "--version"]).strip(),
                      "dotnet_info": run("dotnet-info", [dotnet, "--info"]),
-                     "rustc": run("rustc-version", ["rustc", "--version", "--verbose"]),
+                     "clang": run("clang-version", ["clang++", "--version"]),
                      "platform": platform.platform(), "architecture": platform.machine()}
-        if toolchain["sdk"] != "11.0.100" or not toolchain["rustc"].startswith("rustc 1.100.0 "):
-            raise ValueError("Use the exact pinned SDK 11.0.100 / Rust 1.100.0.")
+        if toolchain["sdk"] != "11.0.100" or "clang version 23.1.5" not in toolchain["clang"]:
+            raise ValueError("Use the exact pinned SDK 11.0.100 / LLVM 23.1.5.")
 
         fixtures = out / "fixtures"
         fixtures.mkdir()
-        run("native-format", ["rustfmt", "--edition", "2024", "--check", "native/interop/negotiation/fixtures/bootstrap.rs"])
-        rlib = fixtures / "libnativeweave_interop_abi.rlib"
-        run("canonical-abi-build", ["rustc", "--edition=2024", "--crate-name", "nativeweave_interop_abi", "--crate-type", "rlib",
-            "-Dwarnings", "-Dunsafe_op_in_unsafe_fn", "-C", "opt-level=2", "-C", "target-cpu=x86-64", "native/interop/abi/src/lib.rs", "-o", rlib])
+        targets = ["nw_a02_" + variant.replace("-", "_") for variant in VARIANTS]
+        toolchain["cmake_provenance"] = prepare_native(run, targets)
         native_hashes = {}
         for variant, cfg in VARIANTS.items():
-            library = fixtures / ("libnw_a02_" + variant.replace("-", "_") + ".so")
-            output = run("native-" + variant, ["rustc", "--edition=2024", "--crate-type", "cdylib", "-Dwarnings", "-Dunsafe_op_in_unsafe_fn",
-                "-C", "opt-level=2", "-C", "target-cpu=x86-64", "--extern", "nativeweave_interop_abi=" + str(rlib),
-                "native/interop/negotiation/fixtures/bootstrap.rs", "-o", library, *( ["--cfg", cfg] if cfg else []),
-                *( ["--print=link-args"] if variant == "alpha" else [])])
-            if variant == "alpha":
-                link = shlex.split(output)
-                while link and "=" in link[0]: link.pop(0)
-                driver = Path(shutil.which(link[0]) or link[0]).resolve()
-                search = [x for x in link[1:] if x.startswith("-B")]
-                flavor = next((x.split("=", 1)[1] for x in link if x.startswith("-fuse-ld=")), None)
-                linker_name = run("rust-linker-selection", [driver, *search, "-print-prog-name=" + ("ld." + flavor if flavor else "ld")]).strip()
-                linker = Path(shutil.which(linker_name) or linker_name).resolve()
-                toolchain["rust_linker"] = {"driver": str(driver), "driver_sha256": sha(driver), "linker": str(linker),
-                    "linker_sha256": sha(linker), "version": run("rust-linker-version", [linker, "--version"]), "actual_link_arguments": link}
+            name = "libnw_a02_" + variant.replace("-", "_") + ".so"
+            library = fixtures / name
+            shutil.copy2(CPP_FIXTURES / name, library)
             symbols = run("native-symbols-" + variant, ["nm", "-D", "--defined-only", library])
             actual = {line.split()[-1] for line in symbols.splitlines()}
             wanted = {"nw_a02_beta_get_abi_v1", "nw_a02_beta_probe"} if variant == "beta" else {"nw_a02_alpha_get_abi_v1", "nw_a02_alpha_probe", "nw_a02_alpha_bootstrap_calls"}

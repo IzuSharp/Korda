@@ -4,20 +4,24 @@ on:
     inputs:
       version:
         type: string
-        default: 0.1.0-db-scope.1
+        default: 0.1.0-db-cpp.1
       source-commit:
         type: string
         default: ""
+      compare-rust-reference:
+        type: boolean
+        default: false
     outputs:
       artifact:
         value: ${{ jobs.build.outputs.artifact }}
 permissions:
   contents: read
+  actions: read
 jobs:
   build:
     name: Build, package and Native AOT
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    timeout-minutes: 120
     services:
       postgres:
         image: postgres:18.0@sha256:41fc5342eefba6cc2ccda736aaf034bbbb7c3df0fdb81516eba1ba33f360162c
@@ -57,20 +61,40 @@ jobs:
           ref: 8afa0311f45ab8a8157fc45c51e95a0b17dd09f2
           path: artifacts/frozen-plan
           persist-credentials: false
+      - name: Read fixed database-scope compatibility inputs
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: IzuSharp/NativeWeave-Design
+          ref: 8298dc4128b745cf1809bad0c3cf02c45eb7f522
+          fetch-depth: 0
+          path: artifacts/scope-design
+          persist-credentials: false
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           global-json-file: global.json
-      - name: Install native build prerequisites and pinned Rust
+      - name: Install native build prerequisites and pinned Clang tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends clang zlib1g-dev libssl-dev qemu-user bison flex python3-cryptography
-          rustup toolchain install 1.100.0 --profile minimal --component rustfmt --component clippy
+          sudo apt-get install -y --no-install-recommends zstd zlib1g-dev libssl-dev qemu-user bison flex python3-cryptography
+          python3 eng/cpp_toolchain.py
       - name: Prepare pinned PostgreSQL tools for real TLS and process fault oracles
         run: bash eng/postgres-tools.sh
       - name: Verify database workspaces, API, regressions and actual package JIT/AOT consumers
-        run: python3 eng/build.py verify --version "$PACKAGE_VERSION"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          COMPARE_RUST_REFERENCE: ${{ inputs.compare-rust-reference }}
+        run: |
+          db_cpp_compare_args=()
+          if [ "$COMPARE_RUST_REFERENCE" = true ]; then db_cpp_compare_args+=(--compare-rust-reference); fi
+          python3 eng/build.py verify --version "$PACKAGE_VERSION" "${db_cpp_compare_args[@]}"
       - name: Reject generated source or dependency drift
         run: git diff --exit-code
+      - name: Verify shared ASan and UBSan preset with leak detection enabled
+        run: bash eng/verify-cpp-sanitizers.sh
+      - name: Verify retained cross-version compatibility and Core property/fuzz gates
+        run: |
+          python3 tests/Verification.Compatibility/verify.py --evidence artifacts/cpp-compatibility --design-root artifacts/scope-design
+          python3 tests/Verification.Interop/verify.py --output artifacts/cpp-interop-properties
       - name: Verify retained Core package closure and minimum CPU/runtime transfer
         run: bash eng/verify-task04-linux.sh
       - name: Reject shared packaging source or dependency drift
@@ -79,6 +103,8 @@ jobs:
         run: bash eng/verify-task07-linux.sh
       - name: Reject database packaging source or dependency drift
         run: git diff --exit-code
+      - name: Build and package C++ assets in a fresh Linux image without Rust
+        run: bash eng/verify-cpp-clean.sh
       - name: Restore runner ownership of exported database evidence
         if: always()
         run: |
@@ -87,7 +113,8 @@ jobs:
             artifacts/db-scope/prepared/evidence \
             artifacts/db-scope/release/evidence \
             artifacts/db-scope/runtime/evidence \
-            artifacts/db-scope/evidence; do
+            artifacts/db-scope/evidence \
+            artifacts/cpp-clean; do
             if sudo test -d "$db_scope_evidence"; then
               sudo chown -R --no-dereference "$db_scope_owner" "$db_scope_evidence"
             fi
@@ -100,18 +127,38 @@ jobs:
           path: |
             artifacts/logs/
             artifacts/verification.json
+            artifacts/native-tidy/*.log
+            artifacts/cmake/linux-x64-release/Testing/
+            artifacts/cmake/linux-x64-asan-ubsan/Testing/
+            artifacts/cpp-sanitizers/
+            !artifacts/cpp-sanitizers/**/certificates/*.key
+            artifacts/cpp-compatibility/result.json
+            artifacts/cpp-compatibility/commands.json
+            artifacts/cpp-compatibility/*.stdout
+            artifacts/cpp-compatibility/*.stderr
+            artifacts/cpp-interop-properties/result.json
+            artifacts/cpp-interop-properties/*.stdout
+            artifacts/cpp-interop-properties/*.stderr
+            artifacts/cpp-clean/receipt.json
+            artifacts/cpp-clean/image.json
+            artifacts/cpp-clean/native-build/
+            artifacts/cpp-clean/prepared/evidence/
+            artifacts/cpp-clean/pristine-consumer/evidence/
             artifacts/db-scope/regressions/result.json
             artifacts/db-scope/regressions/commands.json
             artifacts/db-scope/regressions/logs/
             artifacts/db-scope/regression-evidence/
             artifacts/task04/
-            !artifacts/task04/**/cargo-target/**
             artifacts/db-scope/native-build/manifest.json
+            artifacts/db-scope/native-build/logs/
+            artifacts/db-scope/native-build/compiler-provenance.txt
+            artifacts/db-scope/native-build/compile_commands.json
             artifacts/db-scope/prepared/manifest.json
             artifacts/db-scope/prepared/evidence/
             artifacts/db-scope/local-consumer/evidence/
             artifacts/db-scope/database-lifecycle/
             artifacts/db-scope/database-business/
+            artifacts/db-scope/migration-comparison/
             artifacts/db-scope/release/evidence/
             artifacts/db-scope/runtime/evidence/
             artifacts/db-scope/evidence/
@@ -125,5 +172,8 @@ jobs:
             artifacts/db-scope/prepared/candidate/feed/
             artifacts/db-scope/prepared/manifest.json
             artifacts/db-scope/prepared/candidate/release.json
+            artifacts/cpp-clean/prepared/candidate/feed/
+            artifacts/cpp-clean/prepared/manifest.json
+            artifacts/cpp-clean/prepared/candidate/release.json
           if-no-files-found: error
           retention-days: 14

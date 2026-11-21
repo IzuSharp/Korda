@@ -1,5 +1,7 @@
 # Task operations, cancellation and native retirement
 
+> **DB-CPP-01 implementation update.** The public C# examples, signatures and ownership contracts in this guide remain the compatibility inputs. The current maintained native implementation is C++20; its module mapping, direct libpq/sqlite3 execution, Clang/CMake commands and package production are documented in [C++ native implementation](cpp-native.md). Descriptions below of Rust, SQLx, SeaQuery or Tokio internals are retained as the fixed `465cd0f` behavioral reference, not current build dependencies. The named verification entry points now build the ported C++ fixtures and retain their original managed assertions.
+
 A07 supplies the internal Task bridge used by a concrete engine's typed Async
 methods. Applications await `Task<TResult>`, pass `CancellationToken` and dispose
 their independently owned results. They do not create a callback cookie, publish
@@ -156,7 +158,7 @@ Run from the repository with the fixed toolchain:
 python3 tests/Interop.Async/verify.py --offline
 ```
 
-The runner performs locked Rust tests, Clippy, an actual default-feature downstream
+The runner builds the C++ assertions through the shared CMake preset, an actual downstream
 cdylib export check, ordinary .NET execution, explicit `linux-x64` Native AOT
 publish **and execution**, the minimal/advanced sample and compiled API/XML checks.
 The native conformance fixture is explicitly enabled using `--features

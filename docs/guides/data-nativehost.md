@@ -1,9 +1,11 @@
 # Native database sources and sessions
 
+> **DB-CPP-01 implementation update.** The public C# examples, signatures and ownership contracts in this guide remain the compatibility inputs. The current maintained native implementation is C++20; its module mapping, direct libpq/sqlite3 execution, Clang/CMake commands and package production are documented in [C++ native implementation](cpp-native.md). Descriptions below of Rust, SQLx, SeaQuery or Tokio internals are retained as the fixed `465cd0f` behavioral reference, not current build dependencies. The named verification entry points now build the ported C++ fixtures and retain their original managed assertions.
+
 `NativeWeave.Database` is the typed C# application facade. Add the independently
 packaged `NativeWeave.Database.Sqlite` or `NativeWeave.Database.PostgreSql` provider
 for the Rust Host that executes it. This delivery validates Linux x64 with the
-repository's pinned .NET 11 and Rust 1.100 toolchains. Other platform acceptance is
+repository's pinned .NET 11 and LLVM 23.1.5 toolchains. Other platform acceptance is
 not implied. The maintainer builds native assets; a normal application's build,
 DTO change or Native AOT publish does not invoke Cargo.
 

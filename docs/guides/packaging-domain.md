@@ -1,5 +1,7 @@
 # Database package closure
 
+> **DB-CPP-01 implementation update.** The public C# examples, signatures and ownership contracts in this guide remain the compatibility inputs. The current maintained native implementation is C++20; its module mapping, direct libpq/sqlite3 execution, Clang/CMake commands and package production are documented in [C++ native implementation](cpp-native.md). Descriptions below of Rust, SQLx, SeaQuery or Tokio internals are retained as the fixed `465cd0f` behavioral reference, not current build dependencies. The named verification entry points now build the ported C++ fixtures and retain their original managed assertions.
+
 The current candidate contains twelve NativeWeave package IDs: Interop.Abi, Core, Data, Database.Transactions, Data.Streaming, Query.Binding, Query.Generator, Database, the SQLite/PostgreSQL provider facades, and their two independent Native leaves. No Server, gRPC, MCP, compression/proof or demo package belongs to the graph.
 
 `src/Packaging.Domain/model.py` defines exact dependency edges. `prepare.py` composes a previous/candidate pair from actual compiled assemblies and source-bound provider binaries. The seven shared packages preserve their original local bytes within the pair. Native leaves carry actual compiler-artifact dependency/license inventories and selected platform/hash metadata.

@@ -1,5 +1,7 @@
 # Cross-language ABI, ownership and race verification
 
+> **DB-CPP-01 implementation update.** The public C# examples, signatures and ownership contracts in this guide remain the compatibility inputs. The current maintained native implementation is C++20; its module mapping, direct libpq/sqlite3 execution, Clang/CMake commands and package production are documented in [C++ native implementation](cpp-native.md). Descriptions below of Rust, SQLx, SeaQuery or Tokio internals are retained as the fixed `465cd0f` behavioral reference, not current build dependencies. The named verification entry points now build the ported C++ fixtures and retain their original managed assertions.
+
 This is the A20 internal maintainer profile for Linux x64. It invokes the actual
 accepted Core C/Rust/C# ABI, memory, error, callback and async implementations.
 `NativeWeave.Verification.Interop` contributes no public application types, no
@@ -8,7 +10,7 @@ replace the real synchronous/asynchronous engine or pristine package gates.
 
 ## Build and run
 
-Use the repository's pinned SDK 11.0.100, C# 15 and Rust 1.100.0. The maintainer
+Use the repository's pinned SDK 11.0.100, C# 15 and LLVM 23.1.5. The maintainer
 profile also needs Clang with libFuzzer, AddressSanitizer and UndefinedBehaviorSanitizer.
 The command records actual compiler versions and executable hashes. Rust libraries
 remain optimized stable-toolchain builds, without sanitizer instrumentation.

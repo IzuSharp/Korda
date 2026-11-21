@@ -1,5 +1,7 @@
 # PostgreSQL database provider
 
+> **DB-CPP-01 implementation update.** The public C# examples, signatures and ownership contracts in this guide remain the compatibility inputs. The current maintained native implementation is C++20; its module mapping, direct libpq/sqlite3 execution, Clang/CMake commands and package production are documented in [C++ native implementation](cpp-native.md). Descriptions below of Rust, SQLx, SeaQuery or Tokio internals are retained as the fixed `465cd0f` behavioral reference, not current build dependencies. The named verification entry points now build the ported C++ fixtures and retain their original managed assertions.
+
 `NativeWeave.Database.PostgreSql` supplies the PostgreSQL factory and builder
 extension for the complete [Database Host](data-nativehost.md). Its candidate
 package depends on the shared database facade and the independent

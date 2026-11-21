@@ -273,8 +273,19 @@ Walk(assembly.GlobalNamespace);
 if (args.Contains("--snapshot", StringComparer.Ordinal))
 {
     expected.Clear();
+    // Delegate methods are emitted by the compiler. Their signatures can use
+    // SDK implicit global usings, which are absent from the source-shape trees
+    // above because generated obj files are deliberately excluded. Classify
+    // these methods from the imported assembly; the delegate declaration still
+    // requires its own complete XML documentation below.
     foreach (var pair in actual)
-        expected.Add(pair.Key, JsonSerializer.SerializeToElement(new { id = pair.Key, signature = Declaration(pair.Value), implicit_member = implicitIds.Contains(pair.Key) }));
+        expected.Add(pair.Key, JsonSerializer.SerializeToElement(new
+        {
+            id = pair.Key,
+            signature = Declaration(pair.Value),
+            implicit_member = implicitIds.Contains(pair.Key)
+                || pair.Value is IMethodSymbol { ContainingType.TypeKind: TypeKind.Delegate }
+        }));
 }
 var failures = new List<string>();
 foreach (var key in actual.Keys.Except(expected.Keys)) failures.Add("Unexpected public symbol: " + key);

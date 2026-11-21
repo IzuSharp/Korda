@@ -9,9 +9,12 @@ import platform
 import resource
 import shutil
 import subprocess
+import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "tests"))
+from native_build import prepare as prepare_native, FIXTURES as CPP_FIXTURES, BINARIES as CPP_BINARIES, SOURCE_INPUTS as NATIVE_INPUTS
 
 
 def sha(path):
@@ -29,7 +32,7 @@ def main():
     output.mkdir(parents=True, exist_ok=False)
     env = os.environ.copy()
     env.update(DOTNET_CLI_TELEMETRY_OPTOUT="1", DOTNET_CLI_USE_MSBUILD_SERVER="0", MSBUILDDISABLENODEREUSE="1")
-    env["LD_LIBRARY_PATH"] = str(ROOT / "target/release") + (":" + env["LD_LIBRARY_PATH"] if env.get("LD_LIBRARY_PATH") else "")
+    env["LD_LIBRARY_PATH"] = str(CPP_FIXTURES) + (":" + env["LD_LIBRARY_PATH"] if env.get("LD_LIBRARY_PATH") else "")
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
     report = {"task": "A07", "platform": "linux-x64", "passed": False, "commands": [], "artifacts": {},
               "scope": "Actual Task bridge/native state component; no mature-engine, executor OS-join, pristine-consumer or Windows acceptance.",
@@ -53,44 +56,26 @@ def main():
     try:
         report["source_commit"] = run("commit", ["git", "rev-parse", "HEAD"])[0].strip()
         report["source_dirty"] = bool(run("status", ["git", "status", "--porcelain"])[0].strip())
-        for label, command in [("dotnet", ["dotnet", "--version"]), ("rustc", ["rustc", "-vV"]),
-                               ("cargo", ["cargo", "--version"]), ("clang", ["clang", "--version"])]:
+        for label, command in [("dotnet", ["dotnet", "--version"]), ("cmake", ["cmake", "--version"]),
+                               ("ninja", ["ninja", "--version"]), ("clang", ["clang", "--version"])]:
             run(label, command)
         scopes = ["src/Interop.Async", "tests/Interop.Async", "native/interop/async", "samples/api/interop-async",
                   "docs/guides/interop-async.md", "src/NativeWeave.Core", "src/Interop.Abi", "src/Interop.Negotiation",
                   "src/Interop.Lifetime", "src/Interop.Memory", "src/Interop.Errors", "src/Interop.Callbacks",
                   "native/interop/abi", "native/interop/errors", "native/interop/memory", "tests/Interop.Errors/ApiCheck",
-                  "Directory.Build.props", "Directory.Build.targets", "global.json", "rust-toolchain.toml", "Cargo.toml", "Cargo.lock"]
+                  "Directory.Build.props", "Directory.Build.targets", "global.json", *NATIVE_INPUTS]
         paths = run("source-files", ["git", "ls-files", "--cached", "--others", "--exclude-standard", "--", *scopes])[0].splitlines()
         report["source_sha256"] = {p: sha(ROOT / p) for p in sorted(set(paths)) if (ROOT / p).is_file()}
-        run("native-format", ["cargo", "fmt", "-p", "nativeweave-interop-async", "--", "--check"])
-        run("native-tests", ["cargo", "test", "--release", "--locked", "-p", "nativeweave-interop-async"])
-        run("native-default-build", ["cargo", "build", "--release", "--locked", "-p", "nativeweave-interop-async"])
-        probe = output / "downstream.rs"
-        probe.write_text('''use nativeweave_interop_async::Operation;
-#[unsafe(no_mangle)]
-pub extern "C" fn nw_async_link_probe_v1() -> u32 {
-    let operation = Operation::<u32>::new();
-    operation.request_cancel();
-    operation.snapshot().0 as u32
-}
-''')
-        dependencies = sorted({p.parent for p in (ROOT / "target/release").rglob("*.rlib")})
-        command = ["rustc", "--edition", "2024", "--crate-type", "cdylib", probe, "--extern",
-                   "nativeweave_interop_async=" + str(ROOT / "target/release/libnativeweave_interop_async.rlib"),
-                   "-o", output / "libdownstream.so"]
-        for directory in dependencies:
-            command += ["-L", "dependency=" + str(directory)]
-        run("downstream-build", command)
-        exports = run("downstream-exports", ["nm", "-D", "--defined-only", output / "libdownstream.so"])[0]
+        report["native_compiler_provenance"] = prepare_native(run, ["nativeweave_interop_async", "nw_async_downstream"])
+        downstream = CPP_FIXTURES / "libnw_async_downstream.so"
+        exported = run("downstream-exports", ["nm", "-D", "--defined-only", downstream])
+        exports = exported[0] if isinstance(exported, tuple) else exported
         names = sorted(line.split()[-1] for line in exports.splitlines() if line.strip())
         if names != ["nw_async_link_probe_v1"]:
-            raise RuntimeError("Default reusable crate leaked an unintended native export: " + repr(names))
+            raise RuntimeError("Reusable C++ component leaked fixture/helper exports: " + repr(names))
         report["default_downstream_exports"] = names
-        report["artifacts"]["default_downstream"] = {"path": str(output / "libdownstream.so"), "sha256": sha(output / "libdownstream.so")}
-        run("native-conformance-build", ["cargo", "build", "--release", "--locked", "-p", "nativeweave-interop-async", "--features", "conformance"])
-        run("native-clippy", ["cargo", "clippy", "--locked", "-p", "nativeweave-interop-async", "--all-targets", "--all-features", "--", "-D", "warnings"])
-        native = ROOT / "target/release/libnativeweave_interop_async.so"
+        report["artifacts"]["default_downstream"] = {"path": str(downstream), "sha256": sha(downstream)}
+        native = CPP_FIXTURES / "libnativeweave_interop_async.so"
         report["artifacts"]["native"] = {"path": str(native), "sha256": sha(native)}
         common = ["-p:UseSharedCompilation=false", "-nr:false", "-m:1"]
         restore = ["--locked-mode"] + (["-p:NuGetAudit=false", "--ignore-failed-sources"] if args.offline else [])

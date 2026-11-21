@@ -5,7 +5,6 @@ import hashlib
 import json
 import os
 import platform
-import shlex
 import shutil
 import subprocess
 import sys
@@ -13,7 +12,9 @@ from pathlib import Path
 import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[2]
-OWNED = ["native/interop/abi", "src/Interop.Abi", "tests/Interop.Abi", "samples/api/interop-abi"]
+sys.path.insert(0, str(ROOT / "tests"))
+from native_build import prepare as prepare_native, FIXTURES as CPP_FIXTURES, BINARIES as CPP_BINARIES, SOURCE_INPUTS as NATIVE_INPUTS
+OWNED = ["native/interop/abi", "src/Interop.Abi", "tests/Interop.Abi", "samples/api/interop-abi", *NATIVE_INPUTS]
 
 
 def digest(path):
@@ -23,11 +24,12 @@ def digest(path):
 def source_hashes(include_outputs=True):
     source = {}
     for directory in OWNED:
-        for path in sorted((ROOT / directory).rglob("*")):
+        scope = ROOT / directory
+        for path in sorted(scope.rglob("*")) if scope.is_dir() else [scope]:
             if path.is_file() and not any(part in ("bin", "obj", "__pycache__") for part in path.relative_to(ROOT).parts):
                 if include_outputs or path.name != "api-reference.md":
                     source[str(path.relative_to(ROOT))] = digest(path)
-    for name in ["global.json", "rust-toolchain.toml", "Directory.Build.props", "Cargo.lock", "docs/guides/interop-abi.md"]:
+    for name in ["global.json", "Directory.Build.props", "docs/guides/interop-abi.md"]:
         source[name] = digest(ROOT / name)
     return source
 
@@ -107,12 +109,12 @@ def main():
     try:
         result["source_commit"] = run("source-commit", ["git", "rev-parse", "HEAD"]).strip()
         result["toolchain"] = {
-            "rustc": run("rustc-version", ["rustc", "--version", "--verbose"]),
+            "clang": run("clang-version", ["clang", "--version"]),
             "dotnet": run("dotnet-info", ["dotnet", "--info"]),
-            "cc": run("cc-version", ["cc", "--version"]),
+            "clangxx": run("clangxx-version", ["clang++", "--version"]),
             "kernel": platform.release(), "machine": platform.machine(),
-            "native_isa": "x86-64-v2", "features": [], "cargo_dependencies": []}
-        cc_path = Path(shutil.which("cc")).resolve()
+            "native_isa": "x86-64", "features": [], "preset": "linux-x64-release"}
+        cc_path = Path(shutil.which("clang")).resolve()
         linker_name = run("cc-linker-selection", [cc_path, "-print-prog-name=ld"]).strip()
         linker_path = Path(shutil.which(linker_name) or linker_name).resolve()
         result["toolchain"]["c_compiler_path"] = str(cc_path)
@@ -120,44 +122,22 @@ def main():
         result["toolchain"]["c_linker_path"] = str(linker_path)
         result["toolchain"]["c_linker_sha256"] = digest(linker_path)
         result["toolchain"]["c_linker_version"] = run("c-linker-version", [linker_path, "--version"])
-        if not result["toolchain"]["rustc"].startswith("rustc 1.100.0 "):
-            raise ValueError("Use the locked Rust 1.100.0 toolchain")
         if run("sdk-version", ["dotnet", "--version"]).strip() != "11.0.100":
             raise ValueError("Use the locked .NET SDK 11.0.100")
         run("generation", [sys.executable, "native/interop/abi/generate.py", "--check"])
         run("signature-generation-mutations", [sys.executable, "tests/Interop.Abi/test_generation.py"])
-        rustflags = ["--edition=2024", "-Dwarnings", "-C", "target-cpu=x86-64-v2"]
-        rlib = native / "libnativeweave_interop_abi.rlib"
-        run("rust-library", ["rustc", *rustflags, "--crate-name", "nativeweave_interop_abi", "--crate-type", "rlib", "-C", "opt-level=3", "native/interop/abi/src/lib.rs", "-o", rlib])
-        run("rust-tests-build", ["rustc", *rustflags, "--test", "native/interop/abi/src/lib.rs", "-o", native / "rust-tests"])
-        run("rust-tests", [native / "rust-tests", "--nocapture"])
-        external = ["--extern", f"nativeweave_interop_abi={rlib}"]
-        library = native / "libnw_abi_conformance.so"
-        link_args = shlex.split(run("test-engine-build", ["rustc", *rustflags, *external, "--crate-type", "cdylib", "-C", "opt-level=3", "tests/Interop.Abi/native/fixture.rs", "-o", library, "--print=link-args"]))
-        while link_args and "=" in link_args[0]:
-            link_args.pop(0)  # rustc prints its child-process environment before the driver.
-        rust_driver = Path(shutil.which(link_args[0]) or link_args[0]).resolve()
-        rust_search = [arg for arg in link_args[1:] if arg.startswith("-B")]
-        rust_flavor = next((arg.split("=", 1)[1] for arg in link_args if arg.startswith("-fuse-ld=")), None)
-        selected = "ld." + rust_flavor if rust_flavor else "ld"
-        rust_linker_name = run("rust-driver-linker-selection", [rust_driver, *rust_search, "-print-prog-name=" + selected]).strip()
-        rust_linker = Path(shutil.which(rust_linker_name) or rust_linker_name).resolve()
-        result["toolchain"]["rust_linker"] = {"driver_path": str(rust_driver), "driver_sha256": digest(rust_driver),
-            "search_arguments": rust_search, "flavor": rust_flavor, "linker_path": str(rust_linker),
-            "linker_sha256": digest(rust_linker), "linker_version": run("rust-linker-version", [rust_linker, "--version"]),
-            "artifact_comment": run("rust-artifact-comment", ["readelf", "-p", ".comment", library])}
+        result["toolchain"]["cmake_provenance"] = prepare_native(run, ["nw_abi_conformance", "nw_abi_layout_c", "nw_abi_layout_cpp", "nw_abi_bootstrap_c"])
+        library = CPP_FIXTURES / "libnw_abi_conformance.so"
+        result["toolchain"]["artifact_comment"] = run("native-artifact-comment", ["readelf", "-p", ".comment", library])
         exported = run("symbol-inventory", ["nm", "-D", "--defined-only", library])
         symbols = [line.split()[-1] for line in exported.splitlines() if line.strip()]
         if symbols != ["nw_abi_conformance_get_abi_v1"]:
             raise ValueError("The test-only engine has unexpected exported symbols: " + repr(symbols))
         result["native_exports"] = symbols
-        run("c-layout-build", ["cc", "-std=c11", "-Wall", "-Wextra", "-Werror", "-I", "native/interop/abi/include", "tests/Interop.Abi/native/layout.c", "-o", native / "layout-c"])
         expected = json.loads((ROOT / "tests/Interop.Abi/expected-linux-x64.json").read_text())
-        compare_layout(json.loads(run("c-layout", [native / "layout-c"])), expected)
-        run("rust-layout-build", ["rustc", *rustflags, *external, "tests/Interop.Abi/native/layout.rs", "-o", native / "layout-rust"])
-        compare_layout(json.loads(run("rust-layout", [native / "layout-rust"])), expected)
-        run("c-signatures-build", ["cc", "-std=c11", "-Wall", "-Wextra", "-Werror", "-I", "native/interop/abi/include", "tests/Interop.Abi/native/bootstrap.c", "-L", native, "-lnw_abi_conformance", "-Wl,-rpath,$ORIGIN", "-o", native / "bootstrap-c"])
-        run("c-signatures", [native / "bootstrap-c"])
+        compare_layout(json.loads(run("c-layout", [CPP_BINARIES / "nw_abi_layout_c"])), expected)
+        compare_layout(json.loads(run("cpp-layout", [CPP_BINARIES / "nw_abi_layout_cpp"])), expected)
+        run("c-signatures", [CPP_BINARIES / "nw_abi_bootstrap_c"])
         mutation_results = []
         header = (ROOT / "native/interop/abi/include/nativeweave_abi_v1.h").read_text()
         mutations = {
@@ -169,7 +149,7 @@ def main():
             location = out / f"mutation-{label}"
             location.mkdir()
             (location / "nativeweave_abi_v1.h").write_text(changed)
-            run(f"mutation-{label}-build", ["cc", "-std=c11", "-Wall", "-Wextra", "-Werror", "-I", location, "tests/Interop.Abi/native/layout.c", "-o", location / "layout"])
+            run(f"mutation-{label}-build", ["clang", "-std=c17", "-Wall", "-Wextra", "-Werror", "-I", location, "tests/Interop.Abi/native/layout.c", "-o", location / "layout"])
             actual = json.loads(run(f"mutation-{label}-layout", [location / "layout"]))
             try:
                 compare_layout(actual, expected)
@@ -200,7 +180,7 @@ def main():
         (out / "api-surface.json").write_text(json.dumps({**surface, "internal_xml_members": len(xml_members), "reference_sha256": digest(ROOT / "src/Interop.Abi/api-reference.md")}, indent=2) + "\n")
         run("sample-minimal", ["dotnet", sampledll])
         run("sample-advanced", ["dotnet", sampledll, "--advanced"])
-        artifacts = [library, rlib, assembly, xml, testdll, sampledll]
+        artifacts = [library, CPP_BINARIES / "nw_abi_layout_c", CPP_BINARIES / "nw_abi_layout_cpp", assembly, xml, testdll, sampledll]
         if not args.skip_aot:
             for name, path, executable in [("tests", project, "NativeWeave.Interop.Abi.Tests"), ("sample", sample, "NativeWeave.Interop.Abi.Sample")]:
                 destination = out / f"aot-{name}"

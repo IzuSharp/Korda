@@ -60,15 +60,41 @@ def checked_file(root, record):
     return path
 
 
+def source_profile(manifest):
+    """Read archived v1 Rust records and current v2 language-neutral provenance.
+
+    Version 1 keeps its original opaque cargo_lock and msrv fields. Version 2
+    explicitly names a native dependency lock and a structured toolchain. New
+    C++ records never label their dependency manifest as a Cargo artifact.
+    """
+    version = manifest["schema_version"]
+    require(version in (1, 2), "NWCMP001", "Unknown component manifest schema")
+    if version == 1:
+        return "cargo_lock", manifest["upstream"]["msrv"]
+    toolchain = manifest["upstream"].get("toolchain")
+    require(isinstance(toolchain, dict) and toolchain.get("language") == "c++"
+            and type(toolchain.get("standard")) is int and toolchain["standard"] >= 20
+            and toolchain.get("compiler") == "Clang" and toolchain.get("version"),
+            "NWCMP005", "C++ provenance needs its language standard and exact Clang version")
+    require(manifest.get("native_lock_format") == "nativeweave-cpp-dependencies-v1",
+            "NWCMP001", "Version 2 requires an explicit native dependency-lock format")
+    return "native_lock", toolchain
+
+
 def validate_component(manifest, root):
-    require(manifest["schema_version"] == 1, "NWCMP001", "Unknown component manifest schema")
+    lock_name, _ = source_profile(manifest)
     require(manifest["rid"] in ("linux-x64", "win-x64"), "NWCMP001", "Unknown v1 component target profile")
     require(re.fullmatch(r"[0-9a-f]{40}", manifest["source_commit"]) is not None,
             "NWCMP001", "A full source commit is required")
     require(re.fullmatch(r"[0-9a-f]{40}", manifest["upstream"]["commit"]) is not None,
             "NWCMP005", "Upstream source maps require a full exact commit, not a branch or tag")
-    for name in ("managed", "native", "api", "api_assembly", "cargo_lock", "source_inventory", "behavior_receipt"):
+    for name in ("managed", "native", "api", "api_assembly", lock_name, "source_inventory", "behavior_receipt"):
         checked_file(root, manifest["artifacts"][name])
+    if manifest["schema_version"] == 2:
+        lock = read_json(checked_file(root, manifest["artifacts"][lock_name]))
+        require(lock.get("schemaVersion") == 1 and isinstance(lock.get("dependencies"), list)
+                and isinstance(lock.get("toolchain"), dict),
+                "NWCMP002", "Native dependency lock has an unexpected format")
     api = read_json(checked_file(root, manifest["artifacts"]["api"]))
     require(api["assembly"].split(",", 1)[0] == Path(manifest["artifacts"]["api_assembly"]["path"]).stem,
             "NWCMP006", "Compiled API inventory names a different assembly")
@@ -190,10 +216,17 @@ def compare_components(previous_path, candidate_path, root, review_path, now=Non
             "Domain schema/error/cancellation/behavior version changed; a new compatibility decision is required")
     api = compare_api(read_json(checked_file(root, previous["artifacts"]["api"])),
                       read_json(checked_file(root, candidate["artifacts"]["api"])))
-    changed = [key for key in ("commit", "public_seams", "private_seams", "features", "msrv", "dependencies", "patches")
+    changed = [key for key in ("commit", "public_seams", "private_seams", "features", "dependencies", "patches")
                if previous["upstream"][key] != candidate["upstream"][key]]
-    if previous["artifacts"]["cargo_lock"]["sha256"] != candidate["artifacts"]["cargo_lock"]["sha256"]:
-        changed.append("cargo_lock")
+    previous_lock, previous_toolchain = source_profile(previous)
+    candidate_lock, candidate_toolchain = source_profile(candidate)
+    historical = previous["schema_version"] == candidate["schema_version"] == 1
+    if previous["schema_version"] != candidate["schema_version"]:
+        changed.append("source_schema")
+    if previous_toolchain != candidate_toolchain:
+        changed.append("msrv" if historical else "toolchain")
+    if previous["artifacts"][previous_lock]["sha256"] != candidate["artifacts"][candidate_lock]["sha256"]:
+        changed.append("cargo_lock" if historical else "native_lock")
     require(sorted(review["reviewed_upstream_changes"]) == sorted(changed), "NWCMP007",
             "Review does not enumerate the exact source/seam/feature/MSRV/dependency/license/patch changes")
     available = candidate.get("available_utc")

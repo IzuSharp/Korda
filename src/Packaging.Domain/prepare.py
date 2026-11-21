@@ -119,7 +119,8 @@ def compose(output, label, version_map, native_build, native, source_commit, pre
                     "nativePath": descriptor["sourcePath"], "nativeSha256": descriptor["sha256"], "abiMajor": 1,
                     "abiMinor": 0, "sourceCommit": source, "sourceDirty": False,
                     "packagingProducerCommit": source_commit, "cpuBaseline": "x86-64",
-                    "cargoLockSha256": native_build["cargoLockSha256"],
+                    "dependenciesLockSha256": native_build["dependenciesLockSha256"],
+                    "nativeImplementation": "C++20", "nativePreset": native_build["preset"],
                     "dependencyInventorySha256": sha_bytes(entries["nativeweave/dependencies.json"]),
                     "scope": "local-only; signer authentication and public release are not asserted"}
                 entries["nativeweave/manifest.json"] = json_bytes(native_manifest)
@@ -175,13 +176,13 @@ def main():
     if commands.run("source-state", ["git", "status", "--porcelain", "--untracked-files=normal"]).strip():
         raise ValueError("Final database package provenance requires a clean committed source")
     names = commands.run("source-inventory", ["git", "ls-files", "--", "src", "Directory.Build.props", "Directory.Build.targets",
-                         "Cargo.toml", "Cargo.lock", "global.json", "rust-toolchain.toml"]).splitlines()
+                         "CMakeLists.txt", "CMakePresets.json", "native/dependencies.lock.json", "global.json"]).splitlines()
     source_files = {name: sha(ROOT / name) for name in names}
     if commands.run("sdk", ["dotnet", "--version"]).strip() != "11.0.100":
         raise ValueError("Use the pinned .NET SDK 11.0.100")
     native_build, native = inventory.collect(args.native_manifest)
     save(output / "native-build-input.json", {key: value for key, value in native_build.items()
-         if key not in ("cargoHome", "CargoHome", "rustSysroot", "assets", "builds")})
+         if key not in ("assets", "commands")})
     for engine, value in native.items():
         save(output / "native" / (engine + ".json"), value["inventory"])
     # Restore the committed project graph at its existing project identities;

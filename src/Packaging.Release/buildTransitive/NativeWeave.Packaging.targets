@@ -1,6 +1,6 @@
 <Project>
   <!-- Included once by each tested facade/native package. These are validation
-       and SDK-output records only: no consumer Cargo or restore graph mutation. -->
+       and SDK-output records only: no consumer native compilation or restore graph mutation. -->
   <UsingTask TaskName="NativeWeave.Packaging.PackageClosure"
              AssemblyFile="$(MSBuildThisFileDirectory)../tools/net11.0/NativeWeave.Packaging.Tasks.dll" />
   <ItemGroup>

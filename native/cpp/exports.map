@@ -1,0 +1,8 @@
+{
+  global:
+    nw_database_get_abi_v1;
+    nw_database_sqlite_get_abi_v1;
+    nw_database_postgresql_get_abi_v1;
+    nw_db_*_v1;
+  local: *;
+};

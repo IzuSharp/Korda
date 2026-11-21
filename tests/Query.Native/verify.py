@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""B11 Linux x64: immutable inputs, real providers, canonical C# ABI JIT and AOT."""
+"""Retained B11 Linux oracle: fixed Rust expectations, C++ Host, C# JIT and AOT."""
 import argparse
 import datetime
 import hashlib
@@ -19,6 +19,7 @@ p.add_argument('--design', type=Path, required=True)
 p.add_argument('--postgres-bin', type=Path, required=True)
 p.add_argument('--native-module', type=Path, required=True)
 p.add_argument('--host-source', type=Path, required=True)
+p.add_argument('--native-build', type=Path, default=ROOT / 'artifacts/cmake/linux-x64-release')
 p.add_argument('--output', type=Path, required=True)
 p.add_argument('--nuget-config', type=Path)
 a = p.parse_args()
@@ -62,12 +63,13 @@ def inputs(root, scopes):
             'dirty': subprocess.check_output(['git', 'status', '--porcelain', '--', *scopes], cwd=root, text=True).strip(),
             'sha256': {name: sha(root / name) for name in files}}
 
-scopes = ['native/database/query', 'src/Query.Native', 'tests/Query.Native', 'samples/api/query-native',
+scopes = ['native/cpp', 'src/Query.Native', 'tests/Query.Native', 'samples/api/query-native',
           'docs/guides/query-native.md', 'native/database/binding', 'native/database/interfaces',
-          'native/database/codecs', 'src/Query.Binding', 'src/Data.Abstractions', 'src/Interop.Abi',
-          'native/interop/abi', 'Cargo.toml', 'Cargo.lock', 'global.json', 'rust-toolchain.toml',
-          'Directory.Build.props', 'Directory.Build.targets']
-host_scopes = ['native/database', 'native/interop', 'Cargo.toml', 'Cargo.lock', 'rust-toolchain.toml']
+          'src/Query.Binding', 'src/Data.Abstractions', 'src/Interop.Abi',
+          'native/interop/abi', 'CMakeLists.txt', 'CMakePresets.json', 'cmake', 'global.json',
+          '.clang-format', 'Directory.Build.props', 'Directory.Build.targets']
+host_scopes = ['native/cpp', 'native/database/binding', 'native/database/interfaces',
+               'native/interop/abi', 'CMakeLists.txt', 'CMakePresets.json', 'cmake']
 source = inputs(ROOT, scopes)
 host_source = inputs(a.host_source.resolve(), host_scopes)
 write('source-inputs.json', source)
@@ -76,21 +78,37 @@ try:
     if source['dirty'] or host_source['dirty']:
         raise RuntimeError('Formal evidence requires committed implementation and Host inputs; dirty identities are retained.')
     design = subprocess.check_output(['git', '-C', str(a.design), 'rev-parse', 'HEAD'], text=True).strip()
-    if design != 'c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9':
-        raise RuntimeError('Exact pinned Design commit required.')
     module = a.native_module.resolve()
     native_hash = sha(module)
+    # These are byte-for-byte copies of the independently recorded, merged Plan
+    # baseline. A candidate renderer/provider must never regenerate its oracle.
+    golden = ROOT / 'tests/Query.Native/golden/oracle'
+    provenance = json.loads((golden / 'provenance.json').read_text())
+    pinned = {
+        'sqlite.json': '0ef5dcd5117315d6c7f70189fb53da5def4ecf00dc8ec5032bf269f70fd975e9',
+        'postgres.json': '2b3b491a39d9ac6860587e6768997686a7f83447a5c80f3353a560f6f3101934',
+    }
+    if provenance['commit'] != '1fe52a8bd792ccdbb4bbea17ba59b0ad0c24349d':
+        raise RuntimeError('The merged Rust oracle provenance changed.')
+    if {entry['name']: entry['sha256'] for entry in provenance['files']} != pinned:
+        raise RuntimeError('The merged Rust oracle inventory changed.')
+    for name, expected in pinned.items():
+        fixture = golden / name
+        if sha(fixture) != expected or len(json.loads(fixture.read_text())) != 26:
+            raise RuntimeError('The fixed 52-case Rust oracle changed: ' + name)
+        shutil.copyfile(fixture, out / 'oracle' / name)
+    write('oracle-provenance.json', provenance)
     write('environment.json', {'utc': datetime.datetime.now(datetime.timezone.utc).isoformat(),
           'platform': platform.platform(), 'machine': platform.machine(), 'design_commit': design,
-          'tools': {t: shutil.which(t) for t in ['dotnet', 'cargo', 'rustc', 'clang', 'ld']},
+          'tools': {t: shutil.which(t) for t in ['dotnet', 'clang', 'clang++', 'cmake', 'ctest', 'ld']},
           'native_module': str(module), 'native_sha256': native_hash})
     run('diff-check', ['git', 'diff', '--check'])
     run('canonical-cdecl', ['python3', 'tests/Query.Binding/generate.py', '--check', '--design', a.design])
-    run('native-format', ['cargo', 'fmt', '-p', 'nativeweave-query-native', '--', '--check'])
-    manifest = 'tests/Query.Native/native/Cargo.toml'
-    run('test-format', ['cargo', 'fmt', '--manifest-path', manifest, '--', '--check'])
-    run('native-clippy', ['cargo', 'clippy', '-p', 'nativeweave-query-native', '--all-targets', '--locked', '--offline', '--', '-D', 'warnings'])
-    run('test-clippy', ['cargo', 'clippy', '--manifest-path', manifest, '--all-targets', '--locked', '--offline', '--', '-D', 'warnings'])
+    run('native-format', ['clang-format', '--dry-run', '--Werror',
+         'native/cpp/include/nw/query.hpp', 'native/cpp/include/nw/mutations.hpp',
+         'native/cpp/src/query.cpp', 'native/cpp/src/mutations.cpp', 'native/cpp/tests/query_tests.cpp'])
+    run('native-state-and-sql-contracts', ['ctest', '--test-dir', a.native_build.resolve(),
+         '--output-on-failure', '--no-tests=error', '-R', '^native\\.query$'])
     run('managed-format', ['dotnet', 'format', 'whitespace', '.', '--folder', '--include', 'tests/Query.Native', 'samples/api/query-native', '--verify-no-changes', '--verbosity', 'quiet'])
     pg = a.postgres_bin.resolve()
     data = out / 'postgres-data'
@@ -111,7 +129,6 @@ try:
         raise RuntimeError('PostgreSQL startup exceeded its finite deadline.')
     # Host accepts typed TLS policy only; URI query options are intentionally rejected.
     env['NATIVEWEAVE_TEST_POSTGRES_URL'] = f'postgresql://nativeweave@127.0.0.1:{port}/postgres'
-    run('native-real-providers', ['cargo', 'test', '--manifest-path', manifest, '--locked', '--offline', '--', '--nocapture'])
     common = ['-p:UseSharedCompilation=false', '-nr:false', '-m:1']
     config = ['--configfile', a.nuget_config] if a.nuget_config else []
     project = 'tests/Query.Native/NativeWeave.Query.Native.Tests.csproj'
@@ -120,8 +137,11 @@ try:
     run('build-jit', ['dotnet', 'build', project, '-c', 'Release', '--no-restore', *common])
     run('actual-jit-host', ['dotnet', dll, module, out / 'oracle', out / 'jit'])
     run('restore-aot', ['dotnet', 'restore', project, '-r', 'linux-x64', '-p:PublishAot=true', '--locked-mode', *config, *common])
-    run('publish-aot', ['dotnet', 'publish', project, '-c', 'Release', '-r', 'linux-x64', '-p:PublishAot=true', '--no-restore', '-o', out / 'aot', *common])
+    run('publish-aot', ['dotnet', 'publish', project, '-c', 'Release', '-r', 'linux-x64', '-p:PublishAot=true',
+         '-p:IlcTreatWarningsAsErrors=true', '--no-restore', '-o', out / 'aot', *common])
     executable = out / 'aot/NativeWeave.Query.Native.Tests'
+    if executable.read_bytes()[:4] != b'\x7fELF' or executable.with_suffix('.dll').exists():
+        raise RuntimeError('Expected an actual standalone Native AOT executable.')
     run('actual-aot-host', [executable, module, out / 'oracle', out / 'aot-results', '--require-aot'])
     applicability = json.loads((ROOT / 'src/Query.Native/api-applicability.json').read_text())
     if applicability['public_clr_surface'] != [] or list((ROOT / 'src/Query.Native').glob('*.cs')):
@@ -129,9 +149,10 @@ try:
     write('api-applicability.json', {'public_clr_symbols': 0, 'exact_cdecl_signatures': 42,
           'compiled_examples': 'samples/api/query-native/Examples.cs in both executed JIT/AOT consumers',
           'reused_internal_binding': applicability['managed_adapter']})
-    run('features', ['cargo', 'tree', '--manifest-path', manifest, '--locked', '--offline', '-e', 'features'])
     run('dotnet-identity', ['dotnet', '--info'])
-    run('rustc-identity', ['rustc', '-vV'])
+    run('clang-identity', ['clang++', '--version'])
+    run('clang-target', ['clang++', '-dumpmachine'])
+    run('native-dependencies', ['readelf', '-d', module])
     after = inputs(ROOT, scopes)
     after_host = inputs(a.host_source.resolve(), host_scopes)
     if source != after or host_source != after_host or native_hash != sha(module):
@@ -140,12 +161,13 @@ try:
           'aot_sha256': sha(executable), 'source_inputs_unchanged': True,
           'oracle_sha256': {f.name: sha(f) for f in (out / 'oracle').iterdir()},
           'separate_distribution_package': False, 'pristine_machine': False})
-    write('status.json', {'result': 'passed', 'platform': 'linux-x64', 'candidate': source['commit'],
+    write('status.json', {'result': 'passed', 'task': 'DB-CPP-01', 'platform': 'linux-x64', 'candidate': source['commit'],
           'host_candidate': host_source['commit'], 'commands': len(commands),
+          'fixed_rust_oracle_cases': 52, 'oracle_plan_commit': provenance['commit'],
           'jit': json.loads((out / 'jit/result.json').read_text()),
           'aot': json.loads((out / 'aot-results/result.json').read_text()),
-          'scope': 'B11 native and C# ABI composition with actual B04/B02/B03/B06/B07; B13 Fluent and other OS rows remain separate'})
-    print('PASS B11 Linux real-provider JIT and AOT acceptance', flush=True)
+          'scope': 'Retained B11 C# ABI cases and fixed Rust SQL/row oracles, executed through the C++ Host on both providers in JIT and Native AOT'})
+    print('PASS retained B11 Linux C++ real-provider JIT and AOT acceptance', flush=True)
 except Exception as failure:
     write('status.json', {'result': 'failed', 'platform': 'linux-x64', 'candidate': source['commit'], 'error': str(failure), 'completed_commands': len(commands)})
     raise

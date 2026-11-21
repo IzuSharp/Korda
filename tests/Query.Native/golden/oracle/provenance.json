@@ -1,0 +1,19 @@
+{
+  "repository": "https://github.com/IzuSharp/Plan",
+  "commit": "1fe52a8bd792ccdbb4bbea17ba59b0ad0c24349d",
+  "producer": "Locked Rust SeaQuery 1.0.2 and SQLx baseline; recorded B11 oracle",
+  "files": [
+    {
+      "name": "sqlite.json",
+      "source_path": "ledger/evidence/B11/linux-final/oracle/sqlite.json",
+      "sha256": "0ef5dcd5117315d6c7f70189fb53da5def4ecf00dc8ec5032bf269f70fd975e9",
+      "cases": 26
+    },
+    {
+      "name": "postgres.json",
+      "source_path": "ledger/evidence/B11/linux-final/oracle/postgres.json",
+      "sha256": "2b3b491a39d9ac6860587e6768997686a7f83447a5c80f3353a560f6f3101934",
+      "cases": 26
+    }
+  ]
+}

@@ -3,6 +3,7 @@
 from __future__ import annotations
 import argparse
 from copy import deepcopy
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -12,6 +13,7 @@ import subprocess
 import tempfile
 import time
 import zipfile
+import xml.etree.ElementTree as ET
 
 from test_policy import ROOT, compat, record, run as policy_cases, write
 
@@ -19,6 +21,7 @@ from test_policy import ROOT, compat, record, run as policy_cases, write
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--evidence", type=Path, required=True)
+    parser.add_argument("--native-build", type=Path, default=ROOT / "artifacts/cmake/linux-x64-release")
     parser.add_argument("--api-tool-root", type=Path, default=ROOT)
     parser.add_argument("--design-root", type=Path)
     parser.add_argument("--prepare", action="store_true")
@@ -57,35 +60,53 @@ def main():
         assert design is not None, "Use --design-root for the locked read-only Design checkout"
         design_inputs = compat.read_json(ROOT / "src/Verification.Compatibility/design-inputs.json")
         design_commit = subprocess.check_output(["git", "-C", str(design), "rev-parse", "HEAD"], text=True).strip()
-        assert design_commit == design_inputs["design_commit"]
+        subprocess.run(["git", "-C", str(design), "merge-base", "--is-ancestor", design_inputs["design_commit"], design_commit], check=True)
+        scope_commit = subprocess.check_output(["git", "-C", str(design), "rev-parse", "8298dc4^{commit}"], text=True).strip()
+        subprocess.run(["git", "-C", str(design), "merge-base", "--is-ancestor", scope_commit, design_commit], check=True)
+        removed_by_database_scope = {
+            "docs/api/server.md", "docs/api/server-coverage.json", "docs/api/server-sources.json",
+            "docs/api/server-symbol-policies.json", "docs/server/body-retirement-protocol.md"}
+        design_checks = {}
         for name, expected in design_inputs["inputs"].items():
-            assert compat.file_hash(design / name.split(":", 1)[1]) == expected, name
-        write(evidence / "design-inputs.json", {"commit": design_commit, "checked_inputs": len(design_inputs["inputs"]),
-            "manifest_sha256": compat.file_hash(ROOT / "src/Verification.Compatibility/design-inputs.json")})
+            relative = name.split(":", 1)[1]
+            historical = subprocess.check_output(["git", "-C", str(design), "show", design_inputs["design_commit"] + ":" + relative])
+            assert hashlib.sha256(historical).hexdigest() == expected, name
+            path = design / relative
+            if not path.exists():
+                assert relative in removed_by_database_scope, relative
+                # This removal must already exist in the fixed DB-Scope-01
+                # Design baseline, not be excused by a candidate checkout.
+                present = subprocess.run(["git", "-C", str(design), "cat-file", "-e", scope_commit + ":" + relative], capture_output=True)
+                assert present.returncode != 0, relative
+                design_checks[name] = {"historical_sha256": expected, "current": "removed-in-DB-Scope-01"}
+            else:
+                current = compat.file_hash(path)
+                assert current == expected or path.suffix == ".md", name
+                design_checks[name] = {"historical_sha256": expected, "current_sha256": current}
+        write(evidence / "design-inputs.json", {"commit": design_commit, "historical_commit": design_inputs["design_commit"],
+            "checked_inputs": design_checks, "manifest_sha256": compat.file_hash(ROOT / "src/Verification.Compatibility/design-inputs.json")})
         run("dotnet-version", ["dotnet", "--info"])
-        run("rust-version", ["rustc", "-Vv"])
-        cargo = run("abi-compile", ["cargo", "build", "--locked", "-p", "nativeweave-interop-abi", "--message-format=json"])
-        rlib = None
-        for line in cargo.splitlines():
-            message = json.loads(line)
-            if message.get("reason") == "compiler-artifact" and message.get("target", {}).get("name") == "nativeweave_interop_abi":
-                rlib = next(Path(x) for x in message["filenames"] if x.endswith(".rlib"))
-        assert rlib is not None
-        fixture_source = ROOT / "tests/Verification.Compatibility/native/fixture.rs"
+        run("native-toolchain", ["clang++", "--version"])
+        build = args.native_build.resolve()
+        provenance = build / "compiler-provenance.txt"
+        assert provenance.is_file() and "\nID=Clang\nVERSION=23.1.5\n" in provenance.read_text()
+        (evidence / "compiler-provenance.txt").write_bytes(provenance.read_bytes())
+        fixture_source = ROOT / "native/cpp/tests/fixtures/compatibility.cpp"
+        run("native-format", ["clang-format", "--dry-run", "--Werror", fixture_source, ROOT / "native/cpp/tests/compatibility_tests.cpp"])
         natives = {}
-        for name, cfg in [("old", None), ("new", "new_native"), ("major", "bad_major"), ("layout", "bad_layout"), ("semantics", "bad_semantics")]:
+        for name in ("old", "new", "major", "layout", "semantics"):
+            built = build / "fixtures" / ("libnw_compat_" + name + ".so")
+            assert built.is_file(), "Build every nw_compat_* CMake target before compatibility verification."
             out = evidence / "native" / name / "libnw_compat.so"
             out.parent.mkdir(parents=True, exist_ok=True)
-            flags = ["--cfg", cfg] if cfg else []
-            base = ["rustc", fixture_source, "--edition=2024", "--extern", f"nativeweave_interop_abi={rlib}", "-L", f"dependency={rlib.parent}", *flags]
-            run(f"native-{name}", [*base, "--crate-type=cdylib", "-C", "opt-level=2", "-C", "panic=abort", "-o", out])
+            shutil.copy2(built, out)
             natives[name] = out
             hashes[f"native-{name}"] = record(out, ROOT)
+            run(f"native-symbols-{name}", ["nm", "-D", "--defined-only", out])
             if name in ("old", "new", "semantics"):
-                test = out.parent / "direct-rust"
-                run(f"rust-test-build-{name}", [*base, "--test", "-o", test])
-                run(f"rust-direct-{name}", [test], expected=None if name == "semantics" else 0,
-                    contains=("FAILED",) if name == "semantics" else ("test result: ok",))
+                test = build / "tests" / ("nw_compatibility_" + name + "_tests")
+                run(f"native-direct-{name}", [test], expected=None if name == "semantics" else 0,
+                    contains=("FAILED",) if name == "semantics" else ("C++ direct oracle passed",))
 
         run("sample-restore", ["dotnet", "restore", sample, *locked, *common])
         managed = {}
@@ -191,10 +212,11 @@ def main():
         # Compile the actual product Core and its existing exact EngineLoadOptions policy.
         core_dll = managed["new"].parent / "NativeWeave.Core.dll"
         core_config = write(evidence / "core-api-config.json", {"assembly": str(core_dll),
-            "sources": [str(ROOT / "src/Interop.Negotiation"), str(ROOT / "src/Interop.Errors")], "baselines": [],
+            "sources": [str(ROOT / ("src/Interop." + name)) for name in ("Negotiation", "Errors", "Lifetime", "Memory", "Callbacks", "Async", "Execution")], "baselines": [],
             "title": "Actual Core API used by A22", "scope": "Product component API; no new A22 runtime surface",
             "output": str(evidence / "core-reference.md"), "guides": ["docs/guides/verification-compatibility.md"]})
         run("core-api-snapshot", ["dotnet", api_tool, ROOT, dotnet_root, core_config, "--snapshot"])
+        xml_cases = xml_documentation_negatives(run, evidence, core_dll, core_config, api_tool, dotnet_root)
         current = compat.read_json(evidence / "core-reference.json")
         baseline = compat.read_json(ROOT / "src/Interop.Negotiation/public-api.expected.json")
         select = lambda x: {"symbols": [s for s in x["symbols"] if "NativeWeave.Interop.EngineLoadOptions" in s["id"]
@@ -213,7 +235,7 @@ def main():
         policies = policy_cases(ROOT, evidence, managed["old"], managed["new"], natives["old"], natives["new"],
                                 evidence / "core-reference.json", evidence / "core-reference.json", {"source_commit": source_commit})
         closure_cases = local_closure(run, evidence, common)
-        for path in [ROOT / "Cargo.lock", fixture_source, sample.parent / "Program.cs", core_dll,
+        for path in [ROOT / "native/dependencies.lock.json", fixture_source, sample.parent / "Program.cs", core_dll,
                      *api_snapshots.values()]:
             hashes[str(path.relative_to(ROOT))] = {"sha256": compat.file_hash(path)}
         final_status = subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True)
@@ -221,7 +243,8 @@ def main():
         result = {"passed": True, "prepare_only": args.prepare, "source_commit": source_commit,
             "source_dirty": bool(initial_status), "source_stable": initial_status == final_status and source_commit == final_commit,
             "platform": "linux-x64", "matrix_rows": len(matrix), "policy_cases": len(policies),
-            "local_closure_cases": closure_cases, "commands": len(commands), "artifact_hashes": hashes,
+            "local_closure_cases": closure_cases, "xml_negative_cases": xml_cases,
+            "commands": len(commands), "artifact_hashes": hashes,
             "a13_tool": api_tool_inputs,
             "seconds": round(time.time()-started, 3), "scope": "Retained Core ABI/API compatibility; database package release identity and signature rejection are exercised by Packaging.Domain"}
         assert args.prepare or result["source_stable"]
@@ -230,6 +253,40 @@ def main():
     except BaseException as error:
         write(evidence / "failure.json", {"passed": False, "source_commit": source_commit, "error": repr(error), "commands": commands})
         raise
+
+
+def xml_documentation_negatives(run, evidence, core_dll, core_config, api_tool, dotnet_root):
+    """Synthesized delegate methods inherit docs; declared API remains mandatory."""
+    delegate = "T:NativeWeave.Interop.NativeBufferReader`1"
+    cases = (
+        ("delegate-summary", delegate, "summary", "Missing XML summary: " + delegate),
+        ("delegate-parameter", delegate, "param", "XML parameter names differ: " + delegate),
+        ("delegate-return", delegate, "returns", "Missing XML returns: " + delegate),
+        ("delegate-policy", delegate, "remarks", "Missing member or inherited type lifetime/cost remarks: " + delegate),
+        ("declared-member-summary", "P:NativeWeave.Interop.EngineLoadOptions.NativeAssetPath", "summary",
+         "Missing XML summary: P:NativeWeave.Interop.EngineLoadOptions.NativeAssetPath"),
+    )
+    config = compat.read_json(core_config)
+    results = []
+    for name, member_id, element_name, diagnostic in cases:
+        directory = evidence / "xml-negative" / name
+        directory.mkdir(parents=True)
+        assembly = directory / core_dll.name
+        shutil.copy2(core_dll, assembly)
+        document = ET.parse(core_dll.with_suffix(".xml"))
+        member = next(item for item in document.iter("member") if item.get("name") == member_id)
+        element = member.find(element_name)
+        assert element is not None, (name, member_id)
+        member.remove(element)
+        document.write(assembly.with_suffix(".xml"), encoding="utf-8", xml_declaration=True)
+        altered = deepcopy(config)
+        altered.update(assembly=str(assembly), output=str(directory / "reference.md"))
+        candidate = write(directory / "config.json", altered)
+        run("xml-negative-" + name, ["dotnet", api_tool, ROOT, dotnet_root, candidate, "--snapshot"],
+            expected=None, contains=(diagnostic,))
+        results.append({"case": name, "expected_rejection": diagnostic, "passed": True})
+    write(evidence / "xml-negative-cases.json", results)
+    return len(results)
 
 
 def local_closure(run, evidence, common):
@@ -292,8 +349,10 @@ def local_closure(run, evidence, common):
     with zipfile.ZipFile(facade) as archive:
         name = "NativeWeave.Compatibility.Facade.nuspec"
         raw = archive.read(name).replace(b"[1.0.0]", b"1.0.0")
-    from test_policy import rewrite_package
-    bare = rewrite_package(facade, evidence / "bare-range.nupkg", {name: raw})
+    bare = evidence / "bare-range.nupkg"
+    with zipfile.ZipFile(facade) as original, zipfile.ZipFile(bare, "w") as candidate:
+        for entry in original.infolist():
+            candidate.writestr(entry, raw if entry.filename == name else original.read(entry))
     try:
         compat.package_payload(bare, closures["1.0.0"]["packages"][1])
         raise AssertionError("Bare owned range passed")

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Execute an independently transferred directory without SDK/Rust at runtime."""
+"""Execute an independently transferred directory without SDK or native build tools at runtime."""
 import argparse
 import hashlib
 import json
@@ -21,7 +21,7 @@ def main():
     parser.add_argument("--require-tool-absence", action="store_true")
     args = parser.parse_args()
     args.directory = args.directory.resolve()
-    absent = {tool: shutil.which(tool) is None for tool in ["dotnet", "cargo", "rustc", "rustup", "clang", "gcc", "cc"]}
+    absent = {tool: shutil.which(tool) is None for tool in ["dotnet", "cargo", "rustc", "rustup", "clang", "clang++", "clang-cl", "cmake", "ninja", "gcc", "g++", "cc", "c++"]}
     if args.require_tool_absence and not all(absent.values()):
         raise ValueError("This runtime-only acceptance environment contains an SDK or native toolchain")
     manifest = json.loads((args.directory / "manifest.json").read_text())

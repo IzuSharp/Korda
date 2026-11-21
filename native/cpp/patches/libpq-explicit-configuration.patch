@@ -1,0 +1,118 @@
+--- a/src/interfaces/libpq/libpq-int.h
++++ b/src/interfaces/libpq/libpq-int.h
+@@ -19,6 +19,17 @@
+ 
+ #ifndef LIBPQ_INT_H
+ #define LIBPQ_INT_H
++
++/* NativeWeave DB-CPP-01 compatibility: its explicit typed configuration
++ * rejects the original thirteen PG overrides before libpq is called. SQLx
++ * ignored all other PG environment defaults; libpq must ignore them too.
++ * No process environment is mutated, including during concurrent connects.
++ */
++static inline char *
++nw_libpq_getenv(const char *name)
++{
++    return strncmp(name, "PG", 2) == 0 ? NULL : getenv(name);
++}
+ 
+ /* We assume libpq-fe.h has already been included. */
+ #include "libpq-events.h"
+--- a/src/interfaces/libpq/fe-connect.c
++++ b/src/interfaces/libpq/fe-connect.c
+@@ -5926,7 +5926,7 @@
+ 	 * other connection options.
+ 	 */
+ 	if (service == NULL)
+-		service = getenv("PGSERVICE");
++		service = nw_libpq_getenv("PGSERVICE");
+ 
+ 	/* If no service name given, nothing to do */
+ 	if (service == NULL)
+@@ -5936,7 +5936,7 @@
+ 	 * Try PGSERVICEFILE if specified, else try ~/.pg_service.conf (if that
+ 	 * exists).
+ 	 */
+-	if ((env = getenv("PGSERVICEFILE")) != NULL)
++	if ((env = nw_libpq_getenv("PGSERVICEFILE")) != NULL)
+ 		strlcpy(serviceFile, env, sizeof(serviceFile));
+ 	else
+ 	{
+@@ -5960,7 +5960,7 @@
+ 	 * location to find our config files.
+ 	 */
+ 	snprintf(serviceFile, MAXPGPATH, "%s/pg_service.conf",
+-			 getenv("PGSYSCONFDIR") ? getenv("PGSYSCONFDIR") : SYSCONFDIR);
++			 nw_libpq_getenv("PGSYSCONFDIR") ? nw_libpq_getenv("PGSYSCONFDIR") : SYSCONFDIR);
+ 	if (stat(serviceFile, &stat_buf) != 0)
+ 		goto last_file;
+ 
+@@ -6638,7 +6638,7 @@
+ 		 */
+ 		if (option->envvar != NULL)
+ 		{
+-			if ((tmp = getenv(option->envvar)) != NULL)
++			if ((tmp = nw_libpq_getenv(option->envvar)) != NULL)
+ 			{
+ 				option->val = strdup(tmp);
+ 				if (!option->val)
+@@ -6659,7 +6659,7 @@
+ 		 */
+ 		if (strcmp(option->keyword, "sslmode") == 0)
+ 		{
+-			const char *requiresslenv = getenv("PGREQUIRESSL");
++			const char *requiresslenv = nw_libpq_getenv("PGREQUIRESSL");
+ 
+ 			if (requiresslenv != NULL && requiresslenv[0] == '1')
+ 			{
+@@ -8142,7 +8142,7 @@
+ #ifndef WIN32
+ 	const char *home;
+ 
+-	home = getenv("HOME");
++	home = nw_libpq_getenv("HOME");
+ 	if (home && home[0])
+ 	{
+ 		strlcpy(buf, home, bufsize);
+--- a/src/interfaces/libpq/fe-protocol3.c
++++ b/src/interfaces/libpq/fe-protocol3.c
+@@ -2442,7 +2442,7 @@
+ 	/* Add any environment-driven GUC settings needed */
+ 	for (next_eo = options; next_eo->envName; next_eo++)
+ 	{
+-		if ((val = getenv(next_eo->envName)) != NULL)
++		if ((val = nw_libpq_getenv(next_eo->envName)) != NULL)
+ 		{
+ 			if (pg_strcasecmp(val, "default") != 0)
+ 				ADD_STARTUP_OPTION(next_eo->pgName, val);
+--- a/src/interfaces/libpq/fe-misc.c
++++ b/src/interfaces/libpq/fe-misc.c
+@@ -1287,7 +1287,7 @@
+ 	char	   *str;
+ 	int			encoding = PG_SQL_ASCII;
+ 
+-	str = getenv("PGCLIENTENCODING");
++	str = nw_libpq_getenv("PGCLIENTENCODING");
+ 	if (str && *str != '\0')
+ 	{
+ 		encoding = pg_char_to_encoding(str);
+@@ -1332,7 +1332,7 @@
+ 			 * No relocatable lookup here because the calling executable could
+ 			 * be anywhere
+ 			 */
+-			ldir = getenv("PGLOCALEDIR");
++			ldir = nw_libpq_getenv("PGLOCALEDIR");
+ 			if (!ldir)
+ 				ldir = LOCALEDIR;
+ 			bindtextdomain(PG_TEXTDOMAIN("libpq"), ldir);
+--- a/src/interfaces/libpq/fe-auth-oauth.c
++++ b/src/interfaces/libpq/fe-auth-oauth.c
+@@ -1391,7 +1391,7 @@
+ bool
+ oauth_unsafe_debugging_enabled(void)
+ {
+-	const char *env = getenv("PGOAUTHDEBUG");
++	const char *env = nw_libpq_getenv("PGOAUTHDEBUG");
+ 
+ 	return (env && strcmp(env, "UNSAFE") == 0);
+ }

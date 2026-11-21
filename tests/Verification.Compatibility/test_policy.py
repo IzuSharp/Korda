@@ -39,28 +39,32 @@ def run(root, evidence, old_dll, new_dll, native_old, native_new, old_api, new_a
 
     policy_dir = evidence / "policy"
     policy_dir.mkdir(parents=True, exist_ok=True)
-    source = ROOT / "tests/Verification.Compatibility/native/fixture.rs"
-    source_files = [source, ROOT / "native/interop/abi/src/lib.rs", ROOT / "native/interop/abi/src/generated.rs",
+    source = ROOT / "native/cpp/tests/fixtures/compatibility.cpp"
+    source_files = [source, ROOT / "native/cpp/include/nw/interop.hpp", ROOT / "native/cpp/src/interop.cpp",
+                    ROOT / "native/cpp/include/nw/contracts.hpp", ROOT / "native/cpp/src/contracts.cpp",
+                    ROOT / "native/interop/abi/include/nativeweave_abi_v1.h", ROOT / "native/dependencies.lock.json",
+                    ROOT / "CMakeLists.txt", ROOT / "native/cpp/tests/CMakeLists.txt",
                     ROOT / "samples/api/verification-compatibility/Program.cs",
                     ROOT / "samples/api/verification-compatibility/CompatibilitySample.csproj",
-                    *sorted((ROOT / "src/Interop.Negotiation").glob("*.cs"))]
+                    *[path for name in ("Negotiation", "Errors", "Lifetime", "Memory", "Callbacks", "Async", "Execution")
+                      for path in sorted((ROOT / ("src/Interop." + name)).glob("*.cs"))]]
     inventory = write(policy_dir / "source.json", {"commit": behavior["source_commit"], "files": [record(p, root) for p in source_files]})
     old_receipt = write(policy_dir / "old-behavior.json", {"passed": True, "native_sha256": compat.file_hash(native_old),
         "managed_sha256": compat.file_hash(old_dll), "matrix_receipt": record(evidence / "matrix.json", root)})
     new_receipt = write(policy_dir / "new-behavior.json", {"passed": True, "native_sha256": compat.file_hash(native_new),
         "managed_sha256": compat.file_hash(new_dll), "matrix_receipt": record(evidence / "matrix.json", root)})
     old = {
-        "schema_version": 1, "component": "unpublished-a02-a22-conformance", "version": "0.1.0", "rid": "linux-x64",
+        "schema_version": 2, "native_lock_format": "nativeweave-cpp-dependencies-v1", "component": "unpublished-a02-a22-conformance", "version": "0.1.0", "rid": "linux-x64",
         "source_commit": behavior["source_commit"], "available_utc": "2026-01-01T00:00:00Z",
         "artifacts": {"managed": record(old_dll, root), "native": record(native_old, root), "api": record(old_api, root),
             "api_assembly": record(old_dll.parent / "NativeWeave.Core.dll", root),
-            "cargo_lock": record(ROOT / "Cargo.lock", root), "source_inventory": record(inventory, root),
+            "native_lock": record(ROOT / "native/dependencies.lock.json", root), "source_inventory": record(inventory, root),
             "behavior_receipt": record(old_receipt, root)},
-        "abi": {"major": 1, "minor": 0, "layout_sha256": compat.file_hash(ROOT / "native/interop/abi/src/generated.rs"),
+        "abi": {"major": 1, "minor": 0, "layout_sha256": compat.file_hash(ROOT / "native/interop/abi/include/nativeweave_abi_v1.h"),
                 "capabilities": {"compat.base.v1": 0}, "required": ["compat.base.v1"]},
         "domain": {"schema": 1, "semantics": "wrapping-add-seven-v1", "errors": "a05-v1", "cancellation": "not-async"},
-        "upstream": {"commit": behavior["source_commit"], "public_seams": {"write_abi_v1": record(ROOT / "native/interop/abi/src/lib.rs", root)},
-            "private_seams": {}, "features": [], "msrv": "1.100", "dependencies": [], "patches": []}
+        "upstream": {"commit": behavior["source_commit"], "public_seams": {"write_abi": record(ROOT / "native/cpp/include/nw/interop.hpp", root)},
+            "private_seams": {}, "features": [], "toolchain": {"language": "c++", "standard": 20, "compiler": "Clang", "version": "23.1.5"}, "dependencies": [], "patches": []}
     }
     new = deepcopy(old)
     new.update(version="0.2.0")
@@ -83,6 +87,20 @@ def run(root, evidence, old_dll, new_dll, native_old, native_new, old_api, new_a
         return compat.compare_components(previous_path, candidate_path, root, review_path,
                                          datetime(2026, 11, 17, tzinfo=timezone.utc))
     check("optional-minor-addition", compare)
+    # V1 is a historical record reader only. Its lock field was an opaque
+    # artifact digest; this controlled shape probe neither emits Rust product
+    # metadata nor treats the C++ fixture as a frozen Rust binary.
+    legacy = deepcopy(old)
+    legacy["schema_version"] = 1
+    legacy.pop("native_lock_format")
+    legacy["artifacts"]["cargo_lock"] = legacy["artifacts"].pop("native_lock")
+    legacy["upstream"]["msrv"] = "1.100"
+    legacy["upstream"].pop("toolchain")
+    check("legacy-v1-record-reader", lambda: compat.validate_component(legacy, root))
+    unknown = deepcopy(new); unknown["schema_version"] = 3
+    check("unknown-source-schema", lambda: compare(unknown), "NWCMP001")
+    wrong_lock = deepcopy(new); wrong_lock["native_lock_format"] = "cargo"
+    check("v2-lock-format-confusion", lambda: compare(wrong_lock), "NWCMP001")
     failed_matrix = deepcopy(compat.read_json(evidence / "matrix.json")); failed_matrix["passed"] = False
     failed_path = write(policy_dir / "failed-regression.json", failed_matrix)
     bad_review = deepcopy(base_review); bad_review["regression_receipt"] = record(failed_path, root)
@@ -110,7 +128,7 @@ def run(root, evidence, old_dll, new_dll, native_old, native_new, old_api, new_a
         ("capability-bit", ("abi", "capabilities"), {"compat.base.v1": 2}, "NWCMP004"),
         ("required-feature", ("abi", "required"), ["compat.optional.v1"], "NWCMP004"),
         ("features", ("upstream", "features"), ["changed-default"], "NWCMP007"),
-        ("msrv", ("upstream", "msrv"), "1.101", "NWCMP007"),
+        ("native-toolchain", ("upstream", "toolchain"), {"language": "c++", "standard": 20, "compiler": "Clang", "version": "23.1.6"}, "NWCMP007"),
         ("dependencies-license", ("upstream", "dependencies"), [{"name": "controlled", "version": "2", "license": "different", "checksum": "0" * 64}], "NWCMP007"),
         ("private-seam", ("upstream", "private_seams"), {"private_layout": {**record(source, root), "visibility": "private",
              "symbol": "controlled_source_fixture", "start_line": 1, "end_line": 3, "assumptions": "Controlled record change, not an actual private dependency"}}, "NWCMP007")
@@ -133,7 +151,7 @@ def run(root, evidence, old_dll, new_dll, native_old, native_new, old_api, new_a
     bad["available_utc"] = "2026-11-16T00:00:00Z"
     check("seven-day-cooldown", lambda: compare(bad), "NWCMP008")
     lock_diff = policy_dir / "controlled-lock-diff.txt"
-    lock_diff.write_text("Controlled security-exception fixture; the actual Cargo.lock is unchanged.\n")
+    lock_diff.write_text("Controlled security-exception fixture; the actual native dependency lock is unchanged.\n")
     review = deepcopy(base_review)
     review["security_exception"] = {"advisory": "controlled-test-no-real-advisory", "rationale": "Exercise explicit review binding",
         "risk_decision": "Fixture only; does not authorize a production update", "lock_diff": record(lock_diff, root),

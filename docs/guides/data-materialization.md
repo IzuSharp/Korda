@@ -1,5 +1,7 @@
 # Static DTO materialization
 
+> **DB-CPP-01 implementation update.** The public C# examples, signatures and ownership contracts in this guide remain the compatibility inputs. The current maintained native implementation is C++20; its module mapping, direct libpq/sqlite3 execution, Clang/CMake commands and package production are documented in [C++ native implementation](cpp-native.md). Descriptions below of Rust, SQLx, SeaQuery or Tokio internals are retained as the fixed `465cd0f` behavioral reference, not current build dependencies. The named verification entry points now build the ported C++ fixtures and retain their original managed assertions.
+
 A NativeWeave database query has an explicit ordered result shape and a direct
 C# constructor. Rust validates provider types and emits the bounded typed row
 batch. C# validates the complete shape and constructs your DTO through the

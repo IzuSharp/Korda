@@ -1,5 +1,7 @@
 # Static model generation
 
+> **DB-CPP-01 implementation update.** The public C# examples, signatures and ownership contracts in this guide remain the compatibility inputs. The current maintained native implementation is C++20; its module mapping, direct libpq/sqlite3 execution, Clang/CMake commands and package production are documented in [C++ native implementation](cpp-native.md). Descriptions below of Rust, SQLx, SeaQuery or Tokio internals are retained as the fixed `465cd0f` behavioral reference, not current build dependencies. The named verification entry points now build the ported C++ fixtures and retain their original managed assertions.
+
 The database facade brings `NativeWeave.Query.Generator` transitively. An ordinary
 C# model produces immutable `Table<T>`, typed `Column<T,TValue>` fields and a direct
 row constructor/writer. SQL construction and execution remain in the same

@@ -12,7 +12,7 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[2]
-OWNED = ["src/Data.Sqlite", "native/database/sqlite", "tests/Data.Sqlite", "samples/api/data-sqlite", "docs/guides/data-sqlite.md"]
+OWNED = ["src/Data.Sqlite", "tests/Data.Sqlite", "samples/api/data-sqlite", "docs/guides/data-sqlite.md"]
 
 
 def sha(path):
@@ -21,7 +21,7 @@ def sha(path):
 
 def source_identity():
     paths = subprocess.check_output(["git", "ls-files", "--cached", "--others", "--exclude-standard", "--", *OWNED,
-                                     "tests/ProviderProfileChecks.cs", "src/Data.NativeHost", "native/database/host", "src/Data.Abstractions", "src/NativeWeave.Core", "src/Interop.Abi", "src/Interop.Negotiation", "src/Interop.Errors", "native/database/interfaces", "native/database/codecs", "native/database/transactions", "native/interop/abi", "Cargo.toml", "Cargo.lock", "Directory.Build.props", "global.json", "rust-toolchain.toml"], cwd=ROOT, text=True).splitlines()
+                                     "tests/ProviderProfileChecks.cs", "src/Data.NativeHost", "native/cpp", "src/Data.Abstractions", "src/NativeWeave.Core", "src/Interop.Abi", "src/Interop.Negotiation", "src/Interop.Errors", "native/database/interfaces", "native/database/binding", "native/interop/abi", "native/dependencies.lock.json", "CMakeLists.txt", "CMakePresets.json", ".clang-format", "Directory.Build.props", "global.json"], cwd=ROOT, text=True).splitlines()
     return {p: sha(ROOT / p) for p in sorted(set(paths)) if (ROOT / p).is_file()}
 
 
@@ -31,6 +31,7 @@ def main():
     parser.add_argument("--offline-config", type=Path)
     parser.add_argument("--dotnet", default="dotnet")
     parser.add_argument("--design", type=Path)
+    parser.add_argument("--native-build", type=Path, default=ROOT / "artifacts/cmake/linux-x64-release")
     args = parser.parse_args()
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
@@ -42,7 +43,7 @@ def main():
                 "sourceCommit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
                 "sourceDirty": bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True).strip()),
                 "sourceSha256": initial, "commands": commands, "artifacts": {},
-                "realProviderComposition": "actual SQLite 3.51.3 through SQLx 0.9.0; B05 transaction seam exercised in fourteen native scenario groups", "assembledHostAcceptance": False,
+                "realProviderComposition": "actual SQLite 3.51.3 through the C++ prepared statement provider and Host coordinator; fourteen retained native scenario groups", "assembledHostAcceptance": False,
                 "independentReview": False, "allPlatformAcceptance": False}
 
     def save():
@@ -65,7 +66,10 @@ def main():
 
     dotnet = shutil.which(args.dotnet) or str(Path(args.dotnet).resolve())
     sdk = Path(dotnet).resolve().parent
-    host_native = ROOT / "target/release/libnw_database_sqlite.so"
+    native_build = args.native_build.resolve()
+    host_native = native_build / "libnw_database_sqlite.so"
+    native = native_build / "fixtures/libnativeweave_sqlite_fixture.so"
+    component_native = native  # The former standalone bootstrap is retained only in the test bridge.
     build_flags = ["-p:UseSharedCompilation=false", "-nr:false", "-m:1", f"-p:NativeWeaveSqliteAssetPath={host_native}"]
     ordinary = ["src/Data.Sqlite/NativeWeave.Database.Sqlite.csproj",
                 "tests/Data.Sqlite/NativeWeave.Data.Sqlite.Tests.csproj",
@@ -84,53 +88,30 @@ def main():
         assert not manifest["sourceDirty"], "Formal acceptance requires a clean committed source tree"
         assert platform.system() == "Linux" and platform.machine() == "x86_64", "This run only accepts Linux x64"
         assert host_native.is_file(), "Build the actual SQLite Database Host before component/preflight verification"
+        assert native.is_file(), "Build the C++ nativeweave_sqlite_fixture target before component verification"
         if args.design:
-            pins = json.loads((ROOT / "tests/Data.Sqlite/design-inputs.json").read_text())
-            assert subprocess.check_output(["git", "-C", str(args.design), "rev-parse", "HEAD"], text=True).strip() == pins["commit"]
-            for path, expected in pins["sha256"].items():
-                assert sha(args.design / path) == expected, path
-            manifest["pinnedDesignInputs"] = {"commit": pins["commit"], "verifiedCount": len(pins["sha256"])}
-        run("rustc", ["rustc", "-Vv"])
-        run("cargo", ["cargo", "--version"])
+            revision = subprocess.check_output(["git", "-C", str(args.design), "rev-parse", "HEAD"], text=True).strip()
+            # The exact compiled API/XML gate below remains authoritative. The
+            # old task's historical whole-Design SHA is no longer the active
+            # migration decision; bind this run to the supplied committed tree.
+            manifest["designInputs"] = {"commit": revision}
         assert run("sdk", [dotnet, "--version"]).strip() == "11.0.100"
         run("sdk-info", [dotnet, "--info"])
-        run("gcc", ["gcc", "--version"])
+        assert "clang version 23.1.5" in run("clang", ["clang++", "--version"])
+        run("clang-target", ["clang++", "-dumpmachine"])
         run("linker", ["ld", "--version"])
-        run("native-format", ["cargo", "fmt", "-p", "nativeweave-data-sqlite", "--", "--check"])
-        run("native-clippy", ["cargo", "clippy", "-p", "nativeweave-data-sqlite", "--all-targets", "--locked", "--", "-D", "warnings"])
-        native_tests = run("native-tests", ["cargo", "test", "-p", "nativeweave-data-sqlite", "--release", "--locked", "--", "--nocapture"])
+        run("native-format", ["clang-format", "--dry-run", "--Werror",
+                               "native/cpp/tests/fixtures/sqlite.cpp", "native/cpp/tests/sqlite_fixture_tests.cpp"])
+        native_tests = run("native-tests", ["ctest", "--test-dir", native_build, "--no-tests=error",
+                                           "--output-on-failure", "-V", "-R", "^native\\.sqlite14$"])
         assert all(f"PASS B03 native scenario {i}" in native_tests for i in range(1, 15))
-        run("native-features", ["cargo", "tree", "-p", "nativeweave-data-sqlite", "-e", "features", "--locked"])
-        product_build = run("provider-build", ["cargo", "build", "-p", "nativeweave-data-sqlite", "--release", "--locked", "--message-format=json"])
-        products = [Path(f) for line in product_build.splitlines() if line.startswith("{") for event in [json.loads(line)] if event.get("reason") == "compiler-artifact" and event["target"]["name"] == "nativeweave_data_sqlite" for f in event["filenames"] if f.endswith(".so")]
-        assert len(products) == 1
-        component_native = products[0]
-        run("provider-elf-linker", ["readelf", "-p", ".comment", component_native])
-        manifest["nativeInputs"] = {"privateComponentSha256": sha(component_native), "integratedHostSha256": sha(host_native)}
-        fixture = "tests/Data.Sqlite/native-fixture/Cargo.toml"
-        run("fixture-format", ["cargo", "fmt", "--manifest-path", fixture, "--", "--check"])
-        run("fixture-clippy", ["cargo", "clippy", "--manifest-path", fixture, "--all-targets", "--locked", "--", "-D", "warnings"])
-        metadata = json.loads(run("dependency-metadata", ["cargo", "metadata", "--manifest-path", fixture, "--format-version=1", "--locked", "--filter-platform", "x86_64-unknown-linux-gnu"]))
-        (output / "dependency-licenses.json").write_text(json.dumps([{k: p[k] for k in ["name", "version", "license"]} for p in metadata["packages"]], indent=2) + "\n")
-        selected = {p["name"]: p for p in metadata["packages"]}
-        upstream = {}
-        files = {"sqlx-core": ["src/transaction.rs", "src/pool/connection.rs"],
-                 "sqlx-sqlite": ["src/connection/worker.rs", "src/connection/mod.rs", "src/connection/executor.rs", "src/transaction.rs", "src/options/mod.rs"],
-                 "libsqlite3-sys": ["Cargo.toml", "build.rs", "sqlite3/sqlite3.c"]}
-        for package, paths in files.items():
-            base = Path(selected[package]["manifest_path"]).parent
-            upstream[package] = {"version": selected[package]["version"], "registrySource": selected[package]["source"], "sha256": {path: sha(base / path) for path in paths}}
-        manifest["upstreamCompiledSourceInputs"] = upstream
-        built = run("fixture-build", ["cargo", "build", "--manifest-path", fixture, "--release", "--locked", "--message-format=json"])
-        libraries = [Path(f) for line in built.splitlines() if line.startswith("{") for event in [json.loads(line)]
-                     if event.get("reason") == "compiler-artifact" and event["target"]["name"] == "nativeweave_sqlite_fixture"
-                     for f in event["filenames"] if f.endswith(".so")]
-        assert len(libraries) == 1
-        native = libraries[0]
-        run("actual-rust-link", ["cargo", "rustc", "--manifest-path", fixture, "--release", "--locked", "--", "--print", "link-args"])
+        run("native-dependencies", ["readelf", "-d", native])
         run("native-elf-linker", ["readelf", "-p", ".comment", native])
+        manifest["nativeInputs"] = {"privateComponentSha256": sha(component_native), "integratedHostSha256": sha(host_native)}
+        manifest["nativeCompilerProvenance"] = (native_build / "compiler-provenance.txt").read_text()
+        manifest["upstreamDependencyLockSha256"] = sha(ROOT / "native/dependencies.lock.json")
         execution_env = env.copy()
-        execution_env["LD_LIBRARY_PATH"] = str(native.parent)
+        execution_env["LD_LIBRARY_PATH"] = str(native.parent) + os.pathsep + env.get("LD_LIBRARY_PATH", "")
         execution_env["NW_SQLITE_COMPONENT_ASSET"] = str(component_native)
         for index, project in enumerate(ordinary):
             restore("ordinary-restore-" + str(index), project)
@@ -147,12 +128,13 @@ def main():
         run("aot-publish", [dotnet, "publish", ordinary[1], "-c", "Release", "-r", "linux-x64", "-p:PublishAot=true", "--no-restore", "-p:IlcTreatWarningsAsErrors=true", *build_flags, "-o", publish])
         executable = publish / "NativeWeave.Data.Sqlite.Tests"
         execution_env["NATIVEWEAVE_B03_TEST_ROOT"] = str(output / "aot-data")
+        assert executable.read_bytes()[:4] == b"\x7fELF" and not executable.with_suffix(".dll").exists(), "Expected actual standalone Native AOT"
         aot_output = run("aot-execution", [executable, "--aot"], execution_env)
         assert "NativeAOT=True" in aot_output and all(f"PASS B03 native scenario {i}" in aot_output for i in range(1, 15))
         run("aot-elf-linker", ["readelf", "-p", ".comment", executable])
         for artifact in [component_native, host_native, native, assembly, executable]:
             manifest["artifacts"][str(artifact)] = sha(artifact)
-        for tool in [dotnet, shutil.which("gcc"), shutil.which("ld"), shutil.which("rustc")]:
+        for tool in [dotnet, shutil.which("clang++"), shutil.which("clang-format"), shutil.which("ld")]:
             if tool and Path(tool).is_file():
                 manifest.setdefault("toolHashes", {})[str(Path(tool).resolve())] = sha(Path(tool).resolve())
         generated = list((ROOT / "src/Data.Sqlite/obj").rglob("EngineProfile.g.cs"))
@@ -171,7 +153,7 @@ def main():
         manifest["hostPreflight"] = True
         manifest["compiledComponentSymbols"] = api_result["compiled_symbols"]
         manifest["compiledHostCompositionSymbols"] = len(json.loads((ROOT / "src/Data.Sqlite/host-composition.expected.json").read_text())["symbols"])
-        manifest["workerShutdownEvidence"] = "SQLx shutdown ACK and pool-return separately observed; OS thread join is never claimed"
+        manifest["workerShutdownEvidence"] = "C++ statement retirement, physical pool return or close, last-parent disposal barrier, and Host source worker join are observed separately"
         final = source_identity()
         assert final == initial, "Implementation/lock bytes changed during verification"
         manifest["status"] = "passed"

@@ -22,6 +22,8 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src/Packaging.Linux"))
 from linux_profile import host_profile, inspect, sha
 from packages import pack
+sys.path.insert(0, str(ROOT / "tests"))
+from native_build import prepare as prepare_native, FIXTURES as CPP_FIXTURES
 
 COMPONENTS = {
     "A01": ("Interop.Abi", "NativeWeave.Interop.Abi.Tests", "nw_abi_conformance"),
@@ -31,7 +33,7 @@ COMPONENTS = {
     "A06": ("Interop.Callbacks", "NativeWeave.Interop.Callbacks.Tests", "nativeweave_interop_callbacks"),
     "A07": ("Interop.Async", "NativeWeave.Interop.Async.Tests", "nativeweave_interop_async"),
 }
-SYSTEM_DEPENDENCIES = ["libc.so.6", "libgcc_s.so.1", "libm.so.6", "libdl.so.2", "libpthread.so.0", "librt.so.1", "ld-linux-x86-64.so.2"]
+SYSTEM_DEPENDENCIES = ["libc.so.6", "libgcc_s.so.1", "libm.so.6", "libdl.so.2", "libpthread.so.0", "librt.so.1", "ld-linux-x86-64.so.2", "libcrypto.so.3"]
 
 
 def write(path, value):
@@ -69,9 +71,6 @@ def main():
     environment.update(DOTNET_CLI_TELEMETRY_OPTOUT="1", DOTNET_CLI_USE_MSBUILD_SERVER="0", MSBUILDDISABLENODEREUSE="1")
     native_dir = output / "native"
     native_dir.mkdir()
-    cargo_target = output / "cargo-target"
-    environment["CARGO_TARGET_DIR"] = str(cargo_target)
-    environment["RUSTFLAGS"] = "-Ctarget-cpu=x86-64-v2"
     options = ["-p:UseSharedCompilation=false", "-nr:false", "-m:1"]
 
     def run(label, argv, *, cwd=ROOT, env=environment, expected=0):
@@ -94,23 +93,16 @@ def main():
         report["dirty"] = bool(run("dirty", ["git", "status", "--porcelain"]).strip())
         if run("sdk", ["dotnet", "--version"]).strip() != "11.0.100":
             raise ValueError("Use SDK 11.0.100")
-        if not run("rustc", ["rustc", "-vV"]).startswith("rustc 1.100.0 "):
-            raise ValueError("Use Rust 1.100.0")
         report["linker"] = run("linker", ["clang", "--version"])
-        report["source_locks"] = {name: sha(ROOT / name) for name in ["global.json", "Cargo.lock", "Cargo.toml", "rust-toolchain.toml"]}
+        report["source_locks"] = {name: sha(ROOT / name) for name in ["global.json", "CMakeLists.txt", "CMakePresets.json", ".clang-format", ".clang-tidy"]}
+        report["native_compiler_provenance"] = prepare_native(run, [COMPONENTS[task][2] for task in args.components])
+        report["native_dependencies_policy"] = {"allowed": SYSTEM_DEPENDENCIES,
+            "migration": "LLVM libc++ and libc++abi are statically linked from the pinned LLVM distribution; the selected OpenSSL 3 crypto library remains an explicit shared dependency."}
         for task in args.components:
             module, _, library = COMPONENTS[task]
             if not (ROOT / "tests" / module).is_dir():
                 raise ValueError(f"{task} is not integrated; incomplete closure cannot be accepted")
-            if task == "A01":
-                abi = native_dir / "libnativeweave_interop_abi.rlib"
-                run("abi-rlib", ["rustc", "--edition=2024", "-Ctarget-cpu=x86-64-v2", "-Copt-level=3", "--crate-name", "nativeweave_interop_abi", "--crate-type", "rlib", ROOT / "native/interop/abi/src/lib.rs", "-o", abi])
-                run("abi-native", ["rustc", "--edition=2024", "-Ctarget-cpu=x86-64-v2", "-Copt-level=3", "--extern", f"nativeweave_interop_abi={abi}", "--crate-type", "cdylib", ROOT / "tests/Interop.Abi/native/fixture.rs", "-o", native_dir / f"lib{library}.so"])
-            else:
-                crate = library.replace("_", "-")
-                run(task + "-native", ["cargo", "build", "--release", "--locked", "-p", crate,
-                    *(["--features", "conformance"] if task in {"A06", "A07"} else [])])
-                shutil.copy2(cargo_target / "release" / f"lib{library}.so", native_dir)
+            shutil.copy2(CPP_FIXTURES / f"lib{library}.so", native_dir)
             report["native"].append(inspect(native_dir / f"lib{library}.so", allowed_dependencies=SYSTEM_DEPENDENCIES))
         run("core-restore", ["dotnet", "restore", ROOT / "src/NativeWeave.Core/NativeWeave.Core.csproj", "--locked-mode", *options])
         run("core-build", ["dotnet", "build", ROOT / "src/NativeWeave.Core/NativeWeave.Core.csproj", "-c", "Release", "--no-restore", *options])

@@ -39,7 +39,7 @@ def digest(path):
 
 def export_fixture_results(external, destination):
     """Export bounded result JSON without private configuration or raw argv/logs."""
-    allowed = {"progress.json", "receipt.json", "result.json", "summary.json", "status.json", "independent-sql.json",
+    allowed = {"progress.json", "receipt.json", "result.json", "summary.json", "status.json", "comparison.json", "independent-sql.json",
                "resolved-archive-hashes.json"}
     private_keys = {"argv", "command", "config", "configuration", "database", "connectionstring",
                     "connection_string", "password", "secret", "cursorkey", "cursor_key"}
@@ -74,14 +74,10 @@ def native():
     output = OUTPUT / "native-build"
     run([sys.executable, "eng/task07_native.py", "--output", output], "database-native")
     manifest = json.loads((output / "manifest.json").read_text())
-    # Source project consumers use the same independently built provider bytes.
-    target = ROOT / "target/release"
-    target.mkdir(parents=True, exist_ok=True)
     for asset in manifest["assets"]:
         path = Path(asset["path"])
         if digest(path) != asset["sha256"]:
             raise RuntimeError("Native candidate changed before source staging")
-        shutil.copy2(path, target / path.name)
     return output / "manifest.json"
 
 
@@ -99,7 +95,30 @@ def consume(environment):
          "--consumer-environment", environment], "database-" + environment + "-consumer")
 
 
-def verify(version, design, plan):
+def migration_comparison(version):
+    external = ROOT.parent / "_consumers" / "migration-cpp"
+    reference = external / "rust-reference"
+    prepare = [sys.executable, "tests/Migration.Cpp/reference_prepare.py", "--cache",
+               ARTIFACTS / "reference-cache", "--output", reference]
+    archive = os.environ.get("NW_RUST_REFERENCE_ARCHIVE")
+    if archive:
+        prepare.extend(["--archive", Path(archive).resolve()])
+    run(prepare, "migration-rust-reference")
+    common = ["--postgres-bin", os.environ["NW_POSTGRES_BIN"], "--sdk-cache",
+              os.environ.get("NUGET_PACKAGES", str(Path.home() / ".nuget/packages")),
+              "--output", external / "comparison"]
+    try:
+        run([sys.executable, "tests/Migration.Cpp/run.py", "--phase", "baseline", "--feed",
+             reference / "candidate/feed", "--version", "0.1.0-db-scope.1.2", *common],
+            "migration-rust-business")
+        run([sys.executable, "tests/Migration.Cpp/run.py", "--phase", "candidate", "--feed",
+             OUTPUT / "prepared/candidate/feed", "--version", version + ".2", *common],
+            "migration-cpp-business")
+    finally:
+        export_fixture_results(external, OUTPUT / "migration-comparison")
+
+
+def verify(version, design, plan, compare_rust_reference=False):
     if not os.environ.get("NW_TEST_POSTGRES"):
         raise RuntimeError("Set NW_TEST_POSTGRES to a disposable real PostgreSQL 18 test server")
     os.environ["NATIVEWEAVE_TEST_POSTGRES_URL"] = os.environ["NW_TEST_POSTGRES"]
@@ -111,10 +130,10 @@ def verify(version, design, plan):
         raise RuntimeError("Pinned public API standard bytes changed; review adoption explicitly")
     run([sys.executable, "eng/verify_db_scope.py"], "database-scope")
     run([sys.executable, "-m", "unittest", "discover", "-s", "tests/Tooling", "-v"], "build-tool-tests")
-    run(["cargo", "fmt", "--all", "--", "--check"], "rust-format")
-    run(["cargo", "clippy", "--workspace", "--all-targets", "--locked", "--", "-D", "warnings"], "clippy")
-    run(["cargo", "test", "--workspace", "--release", "--locked"], "rust-tests")
+    run([sys.executable, "eng/check_native.py", "format"], "clang-format")
     manifest = native()
+    run([sys.executable, "eng/check_native.py", "tidy"], "clang-tidy")
+    run(["ctest", "--preset", "linux-x64-release"], "cpp-contract-tests")
     msbuild = ["-m:1", "-nr:false", "-p:UseSharedCompilation=false"]
     run(["dotnet", "restore", "NativeWeave.slnx", "--locked-mode", "--disable-parallel", *msbuild], "restore")
     run(["dotnet", "build", "NativeWeave.slnx", "-c", "Release", "--no-restore", *msbuild], "build")
@@ -129,6 +148,8 @@ def verify(version, design, plan):
     finally:
         export_fixture_results(OUTPUT / "regressions", OUTPUT / "regression-evidence")
     pack(version, manifest)
+    if compare_rust_reference:
+        migration_comparison(version)
     for name, driver in (("database-lifecycle", "tests/Verification.EndToEnd/api_probe.py"),
                          ("database-business", "tests/Reference.TaskService/package_probe.py")):
         external = ROOT.parent / "_consumers" / name
@@ -141,12 +162,13 @@ def verify(version, design, plan):
     run(["git", "diff", "--check"], "diff-check")
     if run(["git", "status", "--porcelain"], "final-status").strip() or source() != initial:
         raise RuntimeError("Source or dependency locks changed during verification")
-    report = {"task": "DB-Scope-01", "status": "passed", "rid": "linux-x64", "source": initial,
+    report = {"task": "DB-CPP-01", "status": "passed", "rid": "linux-x64", "source": initial,
               "versionBase": version, "nativeManifestSha256": digest(manifest),
               "candidateManifestSha256": digest(OUTPUT / "prepared/manifest.json"),
-              "checks": ["scope", "rustfmt", "clippy", "rust-workspace-tests", "locked-restore",
+              "checks": ["scope", "clang-format", "clang-tidy", "cpp-contract-tests", "locked-restore",
                          "managed-workspace-build", "dotnet-format", "compiled-api-and-xml",
-                         "postgresql-and-sqlite-regressions", "nuget-closure", "external-fluent-dto-jit-and-aot"],
+                         "postgresql-and-sqlite-regressions", "nuget-closure", "external-fluent-dto-jit-and-aot"] +
+                        (["same-source-rust-cpp-business-parity", "historical-data-handover"] if compare_rust_reference else []),
               "pristineMachine": False, "independentReview": False, "publiclyPublished": False}
     (ARTIFACTS / "verification.json").write_text(json.dumps(report, indent=2) + "\n")
     print("PASS: retained database workspaces, actual PostgreSQL/SQLite, package Fluent DTO and Native AOT consumers.")
@@ -155,10 +177,12 @@ def verify(version, design, plan):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=["native", "pack", "verify", "consume"])
-    parser.add_argument("--version", default="0.1.0-db-scope.1")
+    parser.add_argument("--version", default="0.1.0-db-cpp.1")
     parser.add_argument("--design", type=Path, default=ARTIFACTS / "frozen-design")
     parser.add_argument("--plan", type=Path, default=ARTIFACTS / "frozen-plan")
     parser.add_argument("--consumer-environment", choices=["local", "pristine"], default="pristine")
+    parser.add_argument("--compare-rust-reference", action="store_true",
+                        help="Run the one-time DB-CPP-01 old/new comparison with the hash-locked reference artifact")
     args = parser.parse_args()
     if (platform.system(), platform.machine().lower()) != ("Linux", "x86_64"):
         parser.error("This database acceptance row is Linux x64 only")
@@ -168,7 +192,7 @@ def main():
     if args.command == "native":
         native()
     elif args.command == "verify":
-        verify(args.version, args.design.resolve(), args.plan.resolve())
+        verify(args.version, args.design.resolve(), args.plan.resolve(), args.compare_rust_reference)
     elif args.command == "consume":
         consume(args.consumer_environment)
     else:

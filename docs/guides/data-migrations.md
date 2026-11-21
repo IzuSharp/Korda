@@ -1,5 +1,7 @@
 # Explicit database migrations and catalog administration
 
+> **DB-CPP-01 implementation update.** The public C# examples, signatures and ownership contracts in this guide remain the compatibility inputs. The current maintained native implementation is C++20; its module mapping, direct libpq/sqlite3 execution, Clang/CMake commands and package production are documented in [C++ native implementation](cpp-native.md). Descriptions below of Rust, SQLx, SeaQuery or Tokio internals are retained as the fixed `465cd0f` behavioral reference, not current build dependencies. The named verification entry points now build the ported C++ fixtures and retain their original managed assertions.
+
 `DataSource.Administration` is the application entry to the native SQLx migration engine. Install `NativeWeave.Database.Sqlite` or `NativeWeave.Database.PostgreSql`, import `NativeWeave.Database` and the selected provider namespace, and build the source using its normal provider factory. The administration facade is part of `NativeWeave.Database`; it introduces no separate runtime package or managed database driver.
 
 Source construction, DI activation and reading the `Administration` property perform no database I/O and never run migrations. Deployment code must call `MigrateAsync` explicitly. Ordinary application startup is not a schema synchronization service.

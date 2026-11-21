@@ -12,7 +12,10 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[2]
-OWNED = ["src/Data.Transactions", "native/database/transactions", "tests/Data.Transactions", "samples/api/data-transactions", "docs/guides/data-transactions.md"]
+sys.path.insert(0, str(ROOT / "native/cpp/tests"))
+from component_build import prepare
+
+OWNED = ["src/Data.Transactions", "native/cpp", "tests/Data.Transactions", "samples/api/data-transactions", "docs/guides/data-transactions.md"]
 
 
 def sha(path):
@@ -21,7 +24,7 @@ def sha(path):
 
 def source_identity():
     paths = subprocess.check_output(["git", "ls-files", "--cached", "--others", "--exclude-standard", "--", *OWNED,
-                                     "src/Data.Abstractions", "native/database/interfaces", "Cargo.toml", "Cargo.lock", "Directory.Build.props", "global.json", "rust-toolchain.toml"], cwd=ROOT, text=True).splitlines()
+                                     "src/Data.Abstractions", "native/database/binding", "native/interop/abi", "CMakeLists.txt", "CMakePresets.json", ".clang-format", ".clang-tidy", "Directory.Build.props", "global.json"], cwd=ROOT, text=True).splitlines()
     return {p: sha(ROOT / p) for p in sorted(set(paths)) if (ROOT / p).is_file()}
 
 
@@ -31,6 +34,7 @@ def main():
     parser.add_argument("--offline-config", type=Path)
     parser.add_argument("--dotnet", default="dotnet")
     parser.add_argument("--design", type=Path)
+    parser.add_argument("--native-build", type=Path, default=ROOT / "artifacts/cmake/linux-x64-release")
     args = parser.parse_args()
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
@@ -42,7 +46,7 @@ def main():
                 "sourceCommit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
                 "sourceDirty": bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True).strip()),
                 "sourceSha256": initial, "commands": commands, "artifacts": {},
-                "realProviderComposition": "separately required with B02/B03", "assembledHostAcceptance": False,
+                "realProviderComposition": "real SQLite Host with controlled completion; provider-specific suites remain separate", "assembledHostAcceptance": False,
                 "independentReview": False, "allPlatformAcceptance": False}
 
     def save():
@@ -87,30 +91,17 @@ def main():
             for path, expected in pins["sha256"].items():
                 assert sha(args.design / path) == expected, path
             manifest["pinnedDesignInputs"] = {"commit": pins["commit"], "verifiedCount": len(pins["sha256"])}
-        run("rustc", ["rustc", "-Vv"])
-        run("cargo", ["cargo", "--version"])
         assert run("sdk", [dotnet, "--version"]).strip() == "11.0.100"
         run("sdk-info", [dotnet, "--info"])
-        run("gcc", ["gcc", "--version"])
-        run("linker", ["ld", "--version"])
-        run("native-format", ["cargo", "fmt", "-p", "nativeweave-data-transactions", "--", "--check"])
-        run("native-clippy", ["cargo", "clippy", "-p", "nativeweave-data-transactions", "--all-targets", "--locked", "--", "-D", "warnings"])
-        run("native-tests", ["cargo", "test", "-p", "nativeweave-data-transactions", "--release", "--locked"])
-        fixture = "tests/Data.Transactions/native-fixture/Cargo.toml"
-        run("fixture-format", ["cargo", "fmt", "--manifest-path", fixture, "--", "--check"])
-        run("fixture-clippy", ["cargo", "clippy", "--manifest-path", fixture, "--all-targets", "--locked", "--", "-D", "warnings"])
-        metadata = json.loads(run("dependency-metadata", ["cargo", "metadata", "--manifest-path", fixture, "--format-version=1", "--locked", "--filter-platform", "x86_64-unknown-linux-gnu"]))
-        (output / "dependency-licenses.json").write_text(json.dumps([{k: p[k] for k in ["name", "version", "license"]} for p in metadata["packages"]], indent=2) + "\n")
-        built = run("fixture-build", ["cargo", "build", "--manifest-path", fixture, "--release", "--locked", "--message-format=json"])
-        libraries = [Path(f) for line in built.splitlines() if line.startswith("{") for event in [json.loads(line)]
-                     if event.get("reason") == "compiler-artifact" and event["target"]["name"] == "nativeweave_transactions_fixture"
-                     for f in event["filenames"] if f.endswith(".so")]
-        assert len(libraries) == 1
-        native = libraries[0]
-        run("actual-rust-link", ["cargo", "rustc", "--manifest-path", fixture, "--release", "--locked", "--", "--print", "link-args"])
+        provenance = prepare(run, args.native_build,
+                             ["nativeweave_transactions_fixture", "nw_host_review_tests", "nw_transaction_tests"],
+                             r"^native\.(host_review|transactions)$",
+                             [ROOT / "native/cpp/tests/fixtures/transactions.cpp", ROOT / "native/cpp/tests/transaction_tests.cpp"])
+        (output / "compiler-provenance.txt").write_text(provenance)
+        native = args.native_build.resolve() / "fixtures/libnativeweave_transactions_fixture.so"
         run("native-elf-linker", ["readelf", "-p", ".comment", native])
         execution_env = env.copy()
-        execution_env["LD_LIBRARY_PATH"] = str(native.parent)
+        execution_env["LD_LIBRARY_PATH"] = str(native.parent) + (":" + env["LD_LIBRARY_PATH"] if env.get("LD_LIBRARY_PATH") else "")
         for index, project in enumerate(ordinary):
             restore("ordinary-restore-" + str(index), project)
             run("ordinary-build-" + str(index), [dotnet, "build", project, "-c", "Release", "--no-restore", *build_flags])
@@ -128,7 +119,7 @@ def main():
         run("aot-elf-linker", ["readelf", "-p", ".comment", executable])
         for artifact in [native, assembly, executable]:
             manifest["artifacts"][str(artifact)] = sha(artifact)
-        for tool in [dotnet, shutil.which("gcc"), shutil.which("ld"), shutil.which("rustc")]:
+        for tool in [dotnet, shutil.which("clang++"), shutil.which("clang-format"), shutil.which("cmake")]:
             if tool and Path(tool).is_file():
                 manifest.setdefault("toolHashes", {})[str(Path(tool).resolve())] = sha(Path(tool).resolve())
         final = source_identity()
@@ -144,7 +135,7 @@ def main():
         save()
         raise
     save()
-    print("PASS: B05 component, exact API, native coordinator, JIT and actual Native AOT; provider composition remains separate.")
+    print("PASS: B05 component, exact API, C++ Host coordinator, JIT and actual Native AOT; provider-specific fault suites remain separate.")
 
 
 if __name__ == "__main__":

@@ -12,5 +12,5 @@
   "deferred": [
     "win-x64"
   ],
-  "shared_prerequisites": "A13 optional Cargo member/lock and existing Core/Abi friend grants; no consumer Cargo build target."
+  "shared_prerequisites": "Shared Clang/CMake native conformance fixtures and existing Core/Abi friend grants; no consumer native build target."
 }

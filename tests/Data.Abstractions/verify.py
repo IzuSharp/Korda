@@ -11,7 +11,6 @@ import json
 import os
 from pathlib import Path
 import platform
-import shlex
 import shutil
 import subprocess
 import tempfile
@@ -21,6 +20,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[2]
 p = argparse.ArgumentParser()
 p.add_argument('--output', type=Path, default=ROOT / 'artifacts/B01/verification')
+p.add_argument('--native-build', type=Path, default=ROOT / 'artifacts/cmake/linux-x64-release')
 p.add_argument('--dotnet', default=shutil.which('dotnet'))
 p.add_argument('--offline-packages', type=Path)
 p.add_argument('--write-reference', action='store_true')
@@ -83,9 +83,19 @@ toolchain['sdk'] = run('sdk', [DOTNET, '--version']).strip()
 if (OUT / 'sdk.log').read_text().strip() != '11.0.100':
     raise RuntimeError('The SDK must be the fixed 11.0.100 baseline.')
 toolchain['sdk_info'] = run('sdk-info', [DOTNET, '--info'])
-toolchain['rustc'] = run('rustc', ['rustc', '--version', '--verbose'])
-if not toolchain['rustc'].startswith('rustc 1.100.0 '):
-    raise RuntimeError('The Rust compiler must be the fixed 1.100.0 baseline.')
+native_build = a.native_build.resolve()
+provenance = native_build / 'compiler-provenance.txt'
+if not provenance.is_file():
+    raise RuntimeError('Configure and build the shared linux-x64-release CMake preset first.')
+toolchain['native_provenance'] = provenance.read_text()
+if '\nID=Clang\nVERSION=23.1.5\n' not in toolchain['native_provenance']:
+    raise RuntimeError('The native compiler must be the pinned LLVM Clang 23.1.5.')
+toolchain['clang'] = run('clang', ['clang++', '--version'])
+if not toolchain['clang'].startswith('clang version 23.1.5 '):
+    raise RuntimeError('PATH must select the same pinned native toolchain as CMake.')
+toolchain['clang_target'] = run('clang-target', ['clang++', '-dumpmachine']).strip()
+toolchain['cmake'] = run('cmake', ['cmake', '--version'])
+toolchain['ninja'] = run('ninja', ['ninja', '--version'])
 run('schema', ['python3', 'native/database/interfaces/generate_schema.py', '--check'])
 managed = 'tests/Data.Abstractions/NativeWeave.Data.Tests.csproj'
 api = 'tests/Data.Abstractions/ApiCheck/ApiCheck.csproj'
@@ -97,34 +107,33 @@ run('managed-run', [DOTNET, ROOT / 'tests/Data.Abstractions/bin/Release/net11.0/
 api_result = json.loads(run('api-exact-xml-reference', [DOTNET, ROOT / 'tests/Data.Abstractions/ApiCheck/bin/Release/net11.0/ApiCheck.dll', ROOT, SDK, ROOT / 'src/Data.Abstractions/bin/Release/net11.0/NativeWeave.Data.dll', *(['--write'] if a.write_reference else [])]))
 run('sample-run', [DOTNET, ROOT / 'samples/api/data-abstractions/bin/Release/net11.0/DataAbstractions.dll'])
 
-# An exact isolated copy avoids taking ownership of the root Cargo workspace.
-# The root integrator separately includes this crate in its shared workspace.
-native_source = ROOT / 'native/database/interfaces'
-native = OUT / 'native-source'
-shutil.copytree(native_source, native, ignore=shutil.ignore_patterns('target', '__pycache__'), dirs_exist_ok=True)
-with (native / 'Cargo.toml').open('a') as f:
-    f.write('\n[workspace]\n')
-run('rust-format', ['cargo', 'fmt', '--manifest-path', native / 'Cargo.toml', '--check'])
-run('rust-clippy', ['cargo', 'clippy', '--manifest-path', native / 'Cargo.toml', '--locked', '--offline', '--all-targets', '--', '-D', 'warnings'])
-rust_build = run('rust-build', ['cargo', 'rustc', '--manifest-path', native / 'Cargo.toml', '--locked', '--offline', '--release', '--bin', 'verify-fixtures', '--', '--print=link-args'])
-native_binary = native / 'target/release/verify-fixtures'
-link_lines = [line for line in rust_build.splitlines() if '-Wl,' in line]
-if len(link_lines) != 1:
-    raise RuntimeError('The actual native build must expose exactly one linker invocation.')
-link_args = shlex.split(link_lines[0])
-while link_args and '=' in link_args[0]:
-    link_args.pop(0)
-driver = Path(shutil.which(link_args[0]) or link_args[0]).resolve()
-search = [arg for arg in link_args[1:] if arg.startswith('-B')]
-flavor = next((arg.split('=', 1)[1] for arg in link_args if arg.startswith('-fuse-ld=')), None)
-selected = 'ld.' + flavor if flavor else 'ld'
-linker_name = run('rust-driver-linker-selection', [driver, *search, '-print-prog-name=' + selected]).strip()
-linker = Path(shutil.which(linker_name) or linker_name).resolve()
-toolchain['rust_linker'] = {'driver': str(driver), 'driver_sha256': sha(driver), 'driver_version': run('rust-driver-version', [driver, '--version']), 'search_arguments': search, 'flavor': flavor, 'linker': str(linker), 'linker_sha256': sha(linker), 'linker_version': run('rust-linker-version', [linker, '--version']), 'artifact_comment': run('rust-artifact-comment', ['readelf', '-p', '.comment', native_binary])}
+# The unchanged managed golden encoder is consumed by the production C++
+# contract implementation, also registered in the shared native CTest preset.
+native_binary = native_build / 'tests/nw_contracts_tests'
+if not native_binary.is_file():
+    raise RuntimeError('Build the nw_contracts_tests CMake target before B01 verification.')
+run('native-format', ['clang-format', '--dry-run', '--Werror',
+    'native/cpp/include/nw/contracts.hpp', 'native/cpp/src/contracts.cpp',
+    'native/cpp/tests/contracts_tests.cpp'])
+run('native-ctest', ['ctest', '--test-dir', native_build, '--output-on-failure',
+                    '--no-tests=error', '-R', r'^native\.contracts$'])
+toolchain['native_artifact_comment'] = run('native-artifact-comment', ['readelf', '-p', '.comment', native_binary])
+toolchain['native_dynamic_dependencies'] = run('native-dependencies', ['readelf', '-d', native_binary])
+toolchain['native_binary_sha256'] = sha(native_binary)
+toolchain['native_provenance_sha256'] = sha(provenance)
 write_json('toolchain.json', toolchain)
 native_results = json.loads(run('native-goldens', [native_binary, OUT / 'managed']))
-metadata = json.loads(run('rust-dependency-metadata', ['cargo', 'metadata', '--manifest-path', native / 'Cargo.toml', '--locked', '--offline', '--filter-platform', 'x86_64-unknown-linux-gnu', '--format-version', '1']))
-write_json('dependency-licenses.json', [{'name': x['name'], 'version': x['version'], 'license': x['license']} for x in metadata['packages']])
+dependency_lock = ROOT / 'native/dependencies.lock.json'
+locked = json.loads(dependency_lock.read_text())
+write_json('dependency-licenses.json', {
+    'lock_sha256': sha(dependency_lock),
+    'notice_sha256': sha(ROOT / 'THIRD_PARTY_NOTICES.md'),
+    'compiled_contract_dependencies': [item for item in locked['dependencies'] if item['name'] == 'nlohmann-json'],
+    'cxx_runtime': locked['runtime'],
+    'system_crypto': {'name': 'OpenSSL', 'license': 'Apache-2.0',
+                      'version': run('openssl-version', ['openssl', 'version']),
+                      'notice_sha256': sha(ROOT / 'native/cpp/licenses/openssl-LICENSE.txt')},
+    'scope': 'B01 contract executable; database-provider dependencies are recorded by the product build inventory.'})
 
 run('data-pack', [DOTNET, 'pack', 'src/Data.Abstractions/NativeWeave.Data.csproj', '-c', 'Release', '--no-build', '--no-restore', '--output', OUT / 'packages', '--disable-build-servers'])
 packages = list((OUT / 'packages').glob('*.nupkg'))
@@ -193,9 +202,15 @@ for filename in ['parent.json', 'child.json', 'unicode-model.json', 'configured-
     if (OUT / 'managed' / filename).read_bytes() != (OUT / 'managed-aot' / filename).read_bytes():
         raise RuntimeError('JIT/AOT canonical bytes differ: ' + filename)
 
-tracked = subprocess.check_output(['git', 'ls-files', 'src/Data.Abstractions', 'tests/Data.Abstractions', 'native/database/interfaces', 'samples/api/data-abstractions', 'docs/guides/data-abstractions.md'], cwd=ROOT, text=True).splitlines()
-write_json('source-identity.json', {'commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(), 'status': subprocess.check_output(['git', 'status', '--short'], cwd=ROOT, text=True), 'design_commit': 'c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9', 'platform': 'linux-x64', 'files': {f: sha(ROOT / f) for f in tracked}, 'root_build_inputs': {f: sha(ROOT / f) for f in ['global.json', 'rust-toolchain.toml', 'Directory.Build.props']}})
+tracked = subprocess.check_output(['git', 'ls-files', '--cached', '--others', '--exclude-standard',
+    'src/Data.Abstractions', 'tests/Data.Abstractions', 'native/database/interfaces',
+    'native/cpp/include/nw/contracts.hpp', 'native/cpp/include/nw/generated/schema.hpp',
+    'native/cpp/src/contracts.cpp', 'native/cpp/tests/contracts_tests.cpp',
+    'native/cpp/tests/golden/contracts', 'samples/api/data-abstractions',
+    'docs/guides/data-abstractions.md'], cwd=ROOT, text=True).splitlines()
+tracked = [name for name in tracked if (ROOT / name).is_file()]
+write_json('source-identity.json', {'commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(), 'status': subprocess.check_output(['git', 'status', '--short'], cwd=ROOT, text=True), 'design_commit': 'c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9', 'platform': 'linux-x64', 'files': {f: sha(ROOT / f) for f in tracked}, 'root_build_inputs': {f: sha(ROOT / f) for f in ['global.json', 'Directory.Build.props', 'CMakeLists.txt', 'CMakePresets.json', 'native/cpp/tests/CMakeLists.txt', 'native/dependencies.lock.json', 'THIRD_PARTY_NOTICES.md']}})
 artifacts = [packages[0], ROOT / 'src/Data.Abstractions/bin/Release/net11.0/NativeWeave.Data.dll', native_binary, OUT / 'aot-consumer/Consumer', OUT / 'aot-tests/NativeWeave.Data.Tests']
-write_json('artifact-hashes.json', {str(f.relative_to(OUT)) if f.is_relative_to(OUT) else str(f.relative_to(ROOT)): sha(f) for f in artifacts})
+write_json('artifact-hashes.json', {str(f.relative_to(OUT)) if f.is_relative_to(OUT) else str(f.relative_to(ROOT)) if f.is_relative_to(ROOT) else str(f): sha(f) for f in artifacts})
 write_json('summary.json', {'status': 'passed', 'task': 'B01', 'platform': 'linux-x64', 'compiled_api_symbols': api_result['compiled_symbols'], 'managed_case_families': len(json.loads((OUT / 'managed/managed-results.json').read_text())['cases']), 'negative_compile_cases': 4, 'native_scalar_kinds': native_results['scalar_kinds'], 'native_malformed_rejections': native_results['malformed_rejections'], 'native_cross_language_goldens': native_results['cross_language_goldens'], 'package_jit': True, 'package_native_aot_executed': True, 'managed_contracts_native_aot_executed': True, 'jit_aot_golden_identity': True, 'rust_consumer_invocations': 0, 'nuget_audit': 'unavailable_offline' if a.offline_packages else 'normal_restore', 'scope': 'B01 metadata/row/value contracts; not a live database host, generator, provider or final pristine platform acceptance', 'windows': 'deferred_by_user'})
 print('B01 Linux x64 verification passed.', flush=True)

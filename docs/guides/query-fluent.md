@@ -1,5 +1,7 @@
 # Strongly typed native queries
 
+> **DB-CPP-01 implementation update.** The public C# examples, signatures and ownership contracts in this guide remain the compatibility inputs. The current maintained native implementation is C++20; its module mapping, direct libpq/sqlite3 execution, Clang/CMake commands and package production are documented in [C++ native implementation](cpp-native.md). Descriptions below of Rust, SQLx, SeaQuery or Tokio internals are retained as the fixed `465cd0f` behavioral reference, not current build dependencies. The named verification entry points now build the ported C++ fixtures and retain their original managed assertions.
+
 `NativeWeave.Query` is the application query surface in the
 `NativeWeave.Database` package. A C# call creates or changes a real Rust
 SeaQuery owner immediately. C# retains typed columns, codecs and owner tokens;

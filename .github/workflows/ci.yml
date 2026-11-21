@@ -7,12 +7,15 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+  actions: read
 concurrency:
   group: ci-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   build:
     uses: ./.github/workflows/build.yml
+    with:
+      compare-rust-reference: ${{ github.event_name == 'pull_request' && github.head_ref == 'task/DB-CPP-01-linux' }}
   security:
     uses: ./.github/workflows/security.yml
     permissions:

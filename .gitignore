@@ -30,3 +30,12 @@ __pycache__/
 *.key
 NuGet.Config.user
 # Cargo.lock and packages.lock.json are intentionally committed.
+
+# Maintainer native build trees and personal overrides
+/build/
+/cmake-build-*/
+**/CMakeFiles/
+**/CMakeCache.txt
+**/compile_commands.json
+CMakeUserPresets.json
+/.cache/

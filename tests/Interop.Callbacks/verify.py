@@ -9,9 +9,12 @@ import platform
 import resource
 import shutil
 import subprocess
+import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "tests"))
+from native_build import prepare as prepare_native, FIXTURES as CPP_FIXTURES, BINARIES as CPP_BINARIES, SOURCE_INPUTS as NATIVE_INPUTS
 
 
 def sha(path):
@@ -29,7 +32,7 @@ def main():
     output.mkdir(parents=True, exist_ok=False)
     env = os.environ.copy()
     env.update(DOTNET_CLI_TELEMETRY_OPTOUT="1", DOTNET_CLI_USE_MSBUILD_SERVER="0", MSBUILDDISABLENODEREUSE="1")
-    env["LD_LIBRARY_PATH"] = str(ROOT / "target/release") + (":" + env["LD_LIBRARY_PATH"] if env.get("LD_LIBRARY_PATH") else "")
+    env["LD_LIBRARY_PATH"] = str(CPP_FIXTURES) + (":" + env["LD_LIBRARY_PATH"] if env.get("LD_LIBRARY_PATH") else "")
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
     report = {"task": "A06", "platform": "linux-x64", "passed": False, "commands": [], "artifacts": {},
               "scope": "Real callback component; no domain engine, pristine-consumer or Windows acceptance.",
@@ -52,20 +55,17 @@ def main():
     try:
         report["source_commit"] = run("commit", ["git", "rev-parse", "HEAD"])[0].strip()
         report["source_dirty"] = bool(run("status", ["git", "status", "--porcelain"])[0].strip())
-        for label, command in [("dotnet", ["dotnet", "--version"]), ("rustc", ["rustc", "-vV"]),
-                               ("cargo", ["cargo", "--version"]), ("clang", ["clang", "--version"])]:
+        for label, command in [("dotnet", ["dotnet", "--version"]), ("cmake", ["cmake", "--version"]),
+                               ("ninja", ["ninja", "--version"]), ("clang", ["clang", "--version"])]:
             run(label, command)
         scopes = ["src/Interop.Callbacks", "tests/Interop.Callbacks", "native/interop/callbacks", "samples/api/interop-callbacks",
                   "docs/guides/interop-callbacks.md", "src/NativeWeave.Core", "src/Interop.Abi", "src/Interop.Negotiation",
                   "src/Interop.Lifetime", "src/Interop.Memory", "src/Interop.Errors", "native/interop/abi", "native/interop/errors",
-                  "Directory.Build.props", "Directory.Build.targets", "global.json", "rust-toolchain.toml", "Cargo.toml", "Cargo.lock"]
+                  "Directory.Build.props", "Directory.Build.targets", "global.json", *NATIVE_INPUTS]
         paths = run("source-files", ["git", "ls-files", "--cached", "--others", "--exclude-standard", "--", *scopes])[0].splitlines()
         report["source_sha256"] = {p: sha(ROOT / p) for p in sorted(set(paths)) if (ROOT / p).is_file()}
-        run("native-format", ["cargo", "fmt", "-p", "nativeweave-interop-callbacks", "--", "--check"])
-        run("native-tests", ["cargo", "test", "--release", "--locked", "-p", "nativeweave-interop-callbacks"])
-        run("native-build", ["cargo", "build", "--release", "--locked", "-p", "nativeweave-interop-callbacks", "--features", "conformance"])
-        run("native-clippy", ["cargo", "clippy", "--locked", "-p", "nativeweave-interop-callbacks", "--all-targets", "--all-features", "--", "-D", "warnings"])
-        native = ROOT / "target/release/libnativeweave_interop_callbacks.so"
+        report["native_compiler_provenance"] = prepare_native(run, ["nativeweave_interop_callbacks"])
+        native = CPP_FIXTURES / "libnativeweave_interop_callbacks.so"
         report["artifacts"]["native"] = {"path": str(native), "sha256": sha(native)}
         common = ["-p:UseSharedCompilation=false", "-nr:false", "-m:1"]
         restore = ["--locked-mode"] + (["-p:NuGetAudit=false", "--ignore-failed-sources"] if args.offline else [])

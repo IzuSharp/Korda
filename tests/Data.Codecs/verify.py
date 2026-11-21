@@ -10,11 +10,15 @@ import platform
 import shutil
 import socket
 import subprocess
+import sys
 import time
 from datetime import datetime, timezone
 
 ROOT = Path(__file__).resolve().parents[2]
-OWNED = ('src/Data.Codecs', 'tests/Data.Codecs', 'native/database/codecs', 'samples/api/data-codecs')
+sys.path.insert(0, str(ROOT / "native/cpp/tests"))
+from component_build import prepare
+
+OWNED = ('src/Data.Codecs', 'tests/Data.Codecs', 'native/cpp', 'samples/api/data-codecs')
 
 def sha(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -24,6 +28,7 @@ def main() -> int:
     parser.add_argument('--output', type=Path)
     parser.add_argument('--postgres-bin', type=Path)
     parser.add_argument('--offline-config', type=Path)
+    parser.add_argument('--native-build', type=Path, default=ROOT / 'artifacts/cmake/linux-x64-release')
     args = parser.parse_args()
     if platform.system() != 'Linux' or platform.machine() not in ('x86_64', 'amd64'):
         parser.error('This evidence runner currently targets Linux x64 only.')
@@ -36,13 +41,13 @@ def main() -> int:
         for path in sorted((ROOT / scope).rglob('*')):
             if path.is_file() and not any(p in ('bin', 'obj', '__pycache__') for p in path.relative_to(ROOT).parts):
                 inputs.append({'path': str(path.relative_to(ROOT)), 'sha256': sha(path)})
-    for name in ('Cargo.toml', 'Cargo.lock', 'global.json', 'rust-toolchain.toml', 'src/Data.Abstractions/NativeWeave.Data.csproj', 'docs/guides/data-codecs.md'):
+    for name in ('CMakeLists.txt', 'CMakePresets.json', '.clang-format', '.clang-tidy', 'global.json', 'src/Data.Abstractions/NativeWeave.Data.csproj', 'docs/guides/data-codecs.md'):
         path = ROOT / name
         if path.exists(): inputs.append({'path': name, 'sha256': sha(path)})
     source = {'head': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(), 'files': inputs, 'tree_dirty': bool(subprocess.check_output(['git','status','--porcelain'],cwd=ROOT,text=True).strip())}
     (output / 'source-inputs.json').write_text(json.dumps(source, indent=2) + '\n')
 
-    def run(name: str, command: list[str], use_env=None) -> None:
+    def run(name: str, command: list[str], use_env=None) -> str:
         log = output / (name + '.log')
         started = time.monotonic()
         with log.open('w') as stream:
@@ -53,6 +58,7 @@ def main() -> int:
         if result.returncode:
             print(log.read_text()[-12000:], flush=True)
             raise RuntimeError('Gate failed: ' + name)
+        return log.read_text()
 
     common = ['-p:UseSharedCompilation=false', '-nr:false', '-m:1']
     restore = ['--locked-mode'] + (['--configfile', str(args.offline_config.resolve()), '-p:NuGetAudit=false'] if args.offline_config else [])
@@ -65,10 +71,10 @@ def main() -> int:
     status = 'failed'
     try:
         run('toolchain-dotnet', ['dotnet', '--info'])
-        run('toolchain-rust', ['rustc', '-vV'])
-        run('native-format', ['cargo', 'fmt', '-p', 'nativeweave-data-codecs', '--', '--check'])
-        run('native-clippy', ['cargo', 'clippy', '--locked', '-p', 'nativeweave-data-codecs', '--all-targets', '--', '-D', 'warnings'])
-        run('native-tests', ['cargo', 'test', '--locked', '-p', 'nativeweave-data-codecs', '--test', 'fallibility'])
+        provenance = prepare(run, args.native_build, ["nw_codec_roundtrip", "nw_scalar_tests"],
+                             r"^native\.scalar$", [ROOT / "native/cpp/src/scalar.cpp", ROOT / "native/cpp/tests/scalar_tests.cpp",
+                                                    ROOT / "native/cpp/tests/codec_roundtrip.cpp"])
+        (output / "compiler-provenance.txt").write_text(provenance)
         for label, p in [('consumer', project), ('api-check', api), ('sample', sample)]:
             run(label + '-restore', ['dotnet', 'restore', p, *restore, *common])
             run(label + '-build', ['dotnet', 'build', p, '-c', 'Release', '--no-restore', *common])
@@ -95,11 +101,10 @@ def main() -> int:
                 if server.poll() is not None: raise RuntimeError('PostgreSQL exited during startup.')
                 time.sleep(.1)
             else: raise RuntimeError('PostgreSQL startup deadline exceeded.')
-            native_env['NATIVEWEAVE_TEST_POSTGRES_URL'] = f'postgresql://nativeweave@127.0.0.1:{port}/postgres?sslmode=disable'
+            native_env['NATIVEWEAVE_TEST_POSTGRES_URL'] = f'postgresql://nativeweave@127.0.0.1:{port}/postgres'
         elif not native_env.get('NATIVEWEAVE_TEST_POSTGRES_URL'):
             raise RuntimeError('PostgreSQL binaries or explicit NATIVEWEAVE_TEST_POSTGRES_URL are required.')
-        run('native-component-build', ['cargo', 'build', '--locked', '-p', 'nativeweave-data-codecs', '--example', 'codec-roundtrip'])
-        fixture = ROOT / 'target/debug/examples/codec-roundtrip'
+        fixture = args.native_build.resolve() / 'tests/nw_codec_roundtrip'
         for label, vector_dir in [('jit', jit), ('aot', aot)]:
             run(label + '-providers', [str(fixture), str(vector_dir)], native_env)
         run('jit-returned-values', ['dotnet', str(assembly), str(jit)])
@@ -118,7 +123,7 @@ def main() -> int:
             try: server.wait(timeout=30)
             except subprocess.TimeoutExpired: server.kill(); server.wait()
         if server_log is not None: server_log.close()
-        summary = {'task': 'B07', 'platform': 'linux-x64', 'status': status, 'commands': len(records), 'source_manifest_sha256': sha(output/'source-inputs.json'), 'offline_restore': args.offline_config is not None, 'scope': 'Internal managed/native codecs; actual SQLx PG/SQLite and JIT/AOT value roundtrips; no B04 host, pristine package or other-platform acceptance.'}
+        summary = {'task': 'B07', 'platform': 'linux-x64', 'status': status, 'commands': len(records), 'source_manifest_sha256': sha(output/'source-inputs.json'), 'offline_restore': args.offline_config is not None, 'scope': 'Internal managed/native codecs; actual C++ libpq/SQLite and JIT/AOT value roundtrips; no B04 host, pristine package or other-platform acceptance.'}
         (output/'summary.json').write_text(json.dumps(summary, indent=2)+'\n')
         print(json.dumps(summary), flush=True)
     return 0 if status == 'passed' else 1

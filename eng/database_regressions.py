@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Execute retained database tests against real providers; never accept a missing service."""
+"""Run retained database C# contracts and their C++ native ports on real providers."""
 import argparse
 import json
 import os
@@ -18,6 +18,7 @@ def main():
     parser.add_argument("--design", type=Path, required=True)
     parser.add_argument("--plan", type=Path, required=True)
     parser.add_argument("--postgres-bin", type=Path)
+    parser.add_argument("--native-build", type=Path, default=ROOT / "artifacts/cmake/linux-x64-release")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
     output = args.output.resolve()
@@ -31,6 +32,9 @@ def main():
         pg = Path(found).resolve().parent
     pg = pg.resolve()
     design = args.design.resolve()
+    native_build = args.native_build.resolve()
+    if not (native_build / "CMakeCache.txt").is_file():
+        raise RuntimeError("Configure and build the shared linux-x64-release CMake preset before regression execution")
     if not os.environ.get("NW_TEST_POSTGRES"):
         raise RuntimeError("NW_TEST_POSTGRES is required")
     env = os.environ.copy()
@@ -56,6 +60,18 @@ def main():
         run(label, [sys.executable, "tests/Data.NativeHost/run.py", "--postgres-bin", pg,
                     "--output", output / "postgres" / label, "--", *command])
 
+    # These tests are the ports of the old native component assertions. Requiring
+    # the complete inventory prevents a missing target or empty regex from being
+    # reported as a successful replacement for a Cargo test gate.
+    inventory = json.loads(run("native-test-inventory", ["ctest", "--test-dir", native_build,
+                                                        "--show-only=json-v1"]))
+    expected = {"native.interop", "native.contracts", "native.query", "native.scalar",
+                "native.execution", "native.administration", "native.provider"}
+    observed = {test["name"] for test in inventory["tests"]}
+    if not expected.issubset(observed):
+        raise RuntimeError("Missing retained native CTest ports: " + ", ".join(sorted(expected - observed)))
+    run("native-component-regressions", ["ctest", "--test-dir", native_build,
+                                         "--output-on-failure", "--no-tests=error"])
     version = run("postgres-version", [pg / "psql", env["NW_TEST_POSTGRES"], "-X", "-At", "-v", "ON_ERROR_STOP=1",
                                        "-c", "SHOW server_version"])
     if not version.strip().startswith("18."):
@@ -67,23 +83,19 @@ def main():
                                        "--output", output / "api-tool"])
     run("packaging-task-api", ["dotnet", "run", "--project", "tests/Packaging.Release/ApiCheck", "-c", "Release",
                                "--no-build", "--", output / "packaging-task-reference.md"])
-    component("Data.Abstractions")
-    component("Data.Sqlite", "--design", design)
+    component("Data.Abstractions", "--native-build", native_build)
+    component("Data.Sqlite", "--design", design, "--native-build", native_build)
     # Existing provider tests include real TLS policy and actual connection failures.
-    run("postgres-fixture-fetch", ["cargo", "fetch", "--locked", "--manifest-path", "tests/Data.Postgres/native/Cargo.toml"])
-    component("Data.Postgres", "--postgres-bin", pg, "--design-root", design)
-    component("Data.Transactions", "--design", design)
-    component("Data.Streaming", "--design-root", design)
-    component("Data.Codecs")
-    run("binding-fixture-fetch", ["cargo", "fetch", "--locked", "--manifest-path", "tests/Query.Binding/native/Cargo.toml"])
-    component("Query.Binding", "--design", design)
+    component("Data.Postgres", "--postgres-bin", pg, "--design-root", design, "--native-build", native_build)
+    component("Data.Transactions", "--design", design, "--native-build", native_build)
+    component("Data.Streaming", "--design-root", design, "--native-build", native_build)
+    component("Data.Codecs", "--native-build", native_build)
+    component("Query.Binding", "--design", design, "--native-build", native_build)
 
     # The internal cross-provider query oracle uses a maintainer-only combined Host.
     # Its binary is never added to either provider package.
-    run("query-fixture-fetch", ["cargo", "fetch", "--locked", "--manifest-path", "tests/Query.Native/native/Cargo.toml"])
-    run("combined-host", ["cargo", "build", "--locked", "--release", "-p", "nativeweave-database-host"])
     component("Query.Native", "--design", design, "--postgres-bin", pg, "--host-source", ROOT,
-              "--native-module", ROOT / "target/release/libnativeweave_database_host.so")
+              "--native-build", native_build, "--native-module", native_build / "libnativeweave_database_host.so")
 
     # These are the unchanged full executable suites, not smoke-test substitutes.
     # Each ordinary managed build resolves the independently staged provider assets.
@@ -133,9 +145,12 @@ def main():
                                ROOT, design, os.environ["DOTNET_ROOT"]])
     if build.source() != initial:
         raise RuntimeError("Source identity changed during regression execution")
-    (output / "result.json").write_text(json.dumps({"task": "DB-Scope-01", "status": "passed",
+    (output / "result.json").write_text(json.dumps({"task": "DB-CPP-01", "status": "passed",
         "source": initial, "platform": "linux-x64", "postgresVersion": version.strip(),
         "providers": ["sqlite", "postgresql"], "modes": ["jit", "aot"], "commands": records,
+        "nativeBuild": str(native_build), "nativeTests": sorted(observed),
+        "queryOracle": {"cases": 52, "planCommit": "1fe52a8bd792ccdbb4bbea17ba59b0ad0c24349d",
+                         "realManagedJitAndAot": True},
         "performanceWork": False}, indent=2) + "\n")
 
 

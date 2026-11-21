@@ -47,7 +47,8 @@ def main():
     output.mkdir(parents=True, exist_ok=False)
     if os.environ.get("B24_RUNTIME_IMAGE") != RUNTIME_IMAGE:
         raise ValueError("Runtime execution requires the existing pinned runtime-only image")
-    absence = {tool: shutil.which(tool) is None for tool in ("dotnet", "cargo", "rustc", "rustup", "clang", "cc")}
+    absence = {tool: shutil.which(tool) is None for tool in
+               ("dotnet", "cargo", "rustc", "rustup", "clang", "clang++", "clang-cl", "cmake", "ninja", "gcc", "g++", "cc", "c++")}
     if not all(absence.values()):
         raise ValueError("Runtime-only image contains a managed/native build tool")
     manifest = json.loads((bundle / "manifest.json").read_text())

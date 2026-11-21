@@ -18,7 +18,7 @@ class SignatureGenerationTests(unittest.TestCase):
         changed["callbacks"][1]["parameters"][-1][1] = "u32"
         outputs = generator.generated(changed)
         self.assertIn("const void * payload, uint32_t payload_bytes", outputs["native/interop/abi/include/nativeweave_abi_v1.h"])
-        self.assertIn("payload_bytes: u32", outputs["native/interop/abi/src/generated.rs"])
+        self.assertIn("nw_status (NW_CDECL *)(uintptr_t, uint32_t, const void *, uint32_t)", outputs["tests/Interop.Abi/native/layout.cpp"])
         self.assertIn("delegate* unmanaged[Cdecl]<nuint, uint, void*, uint, uint>", outputs["src/Interop.Abi/WireRecords.g.cs"])
 
     def test_callback_return_width_changes_all_declarations(self):
@@ -26,7 +26,7 @@ class SignatureGenerationTests(unittest.TestCase):
         changed["callbacks"][0]["return"] = "u64"
         outputs = generator.generated(changed)
         self.assertIn("typedef uint64_t (NW_CDECL *nw_on_terminal_fn)", outputs["native/interop/abi/include/nativeweave_abi_v1.h"])
-        self.assertIn("borrowed_error: *const NwErrorInfoV1) -> u64", outputs["native/interop/abi/src/generated.rs"])
+        self.assertIn("uint64_t (NW_CDECL *)(uintptr_t, uint32_t, const nw_error_info_v1 *)", outputs["tests/Interop.Abi/native/layout.cpp"])
         self.assertIn("delegate* unmanaged[Cdecl]<nuint, uint, NwErrorInfoV1*, ulong>", outputs["src/Interop.Abi/WireRecords.g.cs"])
 
     def test_bootstrap_typedef_uses_description_parameters_and_return(self):

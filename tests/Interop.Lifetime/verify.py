@@ -8,9 +8,12 @@ from pathlib import Path
 import platform
 import shutil
 import subprocess
+import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "tests"))
+from native_build import prepare as prepare_native, FIXTURES as CPP_FIXTURES, BINARIES as CPP_BINARIES, SOURCE_INPUTS as NATIVE_INPUTS
 
 def sha(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
@@ -25,7 +28,7 @@ def main():
     output = output.resolve(); output.mkdir(parents=True, exist_ok=False)
     env = os.environ.copy()
     env.update(DOTNET_CLI_TELEMETRY_OPTOUT="1", DOTNET_CLI_USE_MSBUILD_SERVER="0", MSBUILDDISABLENODEREUSE="1")
-    env["LD_LIBRARY_PATH"] = str(ROOT / "target/release") + (":" + env["LD_LIBRARY_PATH"] if env.get("LD_LIBRARY_PATH") else "")
+    env["LD_LIBRARY_PATH"] = str(CPP_FIXTURES) + (":" + env["LD_LIBRARY_PATH"] if env.get("LD_LIBRARY_PATH") else "")
     report = {"task":"A03", "platform":"linux-x64", "passed":False, "commands":[], "artifacts":{},
               "scope":"actual synchronous component; no assembled engine or Windows acceptance",
               "controlled_bounds":{"threads":3,"calls":2,"forced_phase_switches":8,"exhaustive":False}}
@@ -40,17 +43,14 @@ def main():
     try:
         report["commit"] = run("commit",["git","rev-parse","HEAD"]).strip()
         report["dirty"] = bool(run("status",["git","status","--porcelain"]).strip())
-        for label,cmd in [("dotnet",["dotnet","--version"]),("rustc",["rustc","-vV"]),("cargo",["cargo","--version"]),("clang",["clang","--version"])]: run(label,cmd)
+        for label,cmd in [("dotnet",["dotnet","--version"]),("cmake",["cmake","--version"]),("ninja",["ninja","--version"]),("clang",["clang","--version"])]: run(label,cmd)
         paths = run("source-files",["git","ls-files","--cached","--others","--exclude-standard","--",
                     "src/Interop.Lifetime","tests/Interop.Lifetime","native/interop/lifetime","samples/api/interop-lifetime",
                     "docs/guides/interop-lifetime.md","src/NativeWeave.Core","src/Interop.Abi","native/interop/abi","native/interop/errors",
-                    "Directory.Build.props","global.json","rust-toolchain.toml","Cargo.toml","Cargo.lock"]).splitlines()
+                    "Directory.Build.props","global.json",*NATIVE_INPUTS]).splitlines()
         report["source_sha256"] = {p:sha(ROOT/p) for p in sorted(set(paths)) if (ROOT/p).is_file()}
-        run("native-format",["cargo","fmt","-p","nativeweave-interop-lifetime","--","--check"])
-        run("native-tests",["cargo","test","--release","--locked","-p","nativeweave-interop-lifetime"])
-        run("native-build",["cargo","build","--release","--locked","-p","nativeweave-interop-lifetime"])
-        run("native-clippy",["cargo","clippy","--locked","-p","nativeweave-interop-lifetime","--all-targets","--","-D","warnings"])
-        native = ROOT / "target/release/libnativeweave_interop_lifetime.so"
+        report["native_compiler_provenance"] = prepare_native(run, ["nativeweave_interop_lifetime"])
+        native = CPP_FIXTURES / "libnativeweave_interop_lifetime.so"
         report["artifacts"]["native"] = {"path":str(native),"sha256":sha(native)}
         common = ["-p:UseSharedCompilation=false","-nr:false","-m:1"]
         for label,project,assembly in [("tests","tests/Interop.Lifetime/Interop.Lifetime.Tests.csproj","NativeWeave.Interop.Lifetime.Tests"),
