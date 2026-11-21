@@ -115,8 +115,9 @@ def verify(version, design, plan):
     run(["cargo", "clippy", "--workspace", "--all-targets", "--locked", "--", "-D", "warnings"], "clippy")
     run(["cargo", "test", "--workspace", "--release", "--locked"], "rust-tests")
     manifest = native()
-    run(["dotnet", "restore", "NativeWeave.slnx", "--locked-mode"], "restore")
-    run(["dotnet", "build", "NativeWeave.slnx", "-c", "Release", "--no-restore", "-m:1"], "build")
+    msbuild = ["-m:1", "-nr:false", "-p:UseSharedCompilation=false"]
+    run(["dotnet", "restore", "NativeWeave.slnx", "--locked-mode", "--disable-parallel", *msbuild], "restore")
+    run(["dotnet", "build", "NativeWeave.slnx", "-c", "Release", "--no-restore", *msbuild], "build")
     run(["dotnet", "format", "NativeWeave.slnx", "--verify-no-changes", "--no-restore"], "dotnet-format")
     for component in ("core",):
         run([sys.executable, "src/Build.Integration/compose_docs.py", "--config",

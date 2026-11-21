@@ -174,6 +174,9 @@ def main():
     source = commands.run("source-commit", ["git", "rev-parse", "HEAD"]).strip()
     if commands.run("source-state", ["git", "status", "--porcelain", "--untracked-files=normal"]).strip():
         raise ValueError("Final database package provenance requires a clean committed source")
+    names = commands.run("source-inventory", ["git", "ls-files", "--", "src", "Directory.Build.props", "Directory.Build.targets",
+                         "Cargo.toml", "Cargo.lock", "global.json", "rust-toolchain.toml"]).splitlines()
+    source_files = {name: sha(ROOT / name) for name in names}
     if commands.run("sdk", ["dotnet", "--version"]).strip() != "11.0.100":
         raise ValueError("Use the pinned .NET SDK 11.0.100")
     native_build, native = inventory.collect(args.native_manifest)
@@ -194,11 +197,11 @@ def main():
     if any(sha(Path(path)) != expected for path, expected in common_files.items()):
         raise ValueError("Candidate build unexpectedly rebuilt retained common bytes")
     candidate = compose(output, "candidate", candidate_versions, native_build, native, source, previous)
-    names = commands.run("source-inventory", ["git", "ls-files", "--", "src", "Directory.Build.props", "Directory.Build.targets",
-                         "Cargo.toml", "Cargo.lock", "global.json", "rust-toolchain.toml"]).splitlines()
-    save(output / "source-inventory.json", {"sourceCommit": source, "files": {name: sha(ROOT / name) for name in names}})
-    if commands.run("final-source-state", ["git", "status", "--porcelain", "--untracked-files=normal"]).strip():
+    final_source = commands.run("final-source-commit", ["git", "rev-parse", "HEAD"]).strip()
+    if (commands.run("final-source-state", ["git", "status", "--porcelain", "--untracked-files=normal"]).strip()
+            or final_source != source or {name: sha(ROOT / name) for name in names} != source_files):
         raise ValueError("Source changed while constructing database packages")
+    save(output / "source-inventory.json", {"sourceCommit": source, "files": source_files})
     manifest = {"schemaVersion": 1, "task": TASK, "scope": "local-only", "rid": RID, "sourceCommit": source, "sourceDirty": False,
                 "nativeSourceCommit": native_build["sourceCommit"], "nativeInputManifestSha256": sha(args.native_manifest),
                 "sourceInventory": "source-inventory.json", "previous": previous, "candidate": candidate,
