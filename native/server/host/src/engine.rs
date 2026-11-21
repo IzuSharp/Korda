@@ -293,13 +293,10 @@ impl Host {
         // not turn this into a full-budget join.
         loop {
             self.reap();
-            if lock(&self.requests)
-                .values()
-                .all(|request| {
-                    request.retired.load(Ordering::Acquire)
-                        && request.live_ops.load(Ordering::Acquire) == 0
-                })
-            {
+            if lock(&self.requests).values().all(|request| {
+                request.retired.load(Ordering::Acquire)
+                    && request.live_ops.load(Ordering::Acquire) == 0
+            }) {
                 break;
             }
             tokio::time::sleep(Duration::from_millis(1)).await;
