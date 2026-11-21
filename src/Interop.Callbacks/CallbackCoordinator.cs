@@ -56,6 +56,8 @@ internal sealed class CallbackCoordinator : IDisposable
 
     private void Retry()
     {
+        if (Count == 0) return;
+
         // Read one slot at a time: no per-tick array/list allocation and no calls
         // into the context while holding the coordinator's reservation gate.
         for (int i = 0; i < _slots.Length; i++)
