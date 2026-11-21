@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""B03 component verification: exact options/Engine API, actual SQLite provider/B05 composition and JIT/AOT."""
+"""B03 component verification: exact integrated provider API, SQLite/B05 composition and JIT/AOT."""
 import argparse
 import hashlib
 import json
@@ -134,7 +134,7 @@ def main():
         run("managed-whitespace", [dotnet, "format", "whitespace", ".", "--folder", "--verify-no-changes", "--include",
                                     "src/Data.Sqlite/SqliteOptions.cs", "src/Data.Sqlite/SqliteConfiguration.cs", "src/Data.Sqlite/SqliteDataSource.cs", "tests/Data.Sqlite/Program.cs", "tests/Data.Sqlite/ApiCheck/Program.cs", "samples/api/data-sqlite/SqliteExamples.cs", "--verbosity", "quiet"])
         assembly = ROOT / "src/Data.Sqlite/bin/Release/net11.0/NativeWeave.Database.Sqlite.dll"
-        run("compiled-api-xml-reference", [dotnet, "tests/Data.Sqlite/ApiCheck/bin/Release/net11.0/NativeWeave.Sqlite.ApiCheck.dll", ROOT, sdk, assembly])
+        api_result = json.loads(run("compiled-api-xml-reference", [dotnet, "tests/Data.Sqlite/ApiCheck/bin/Release/net11.0/NativeWeave.Sqlite.ApiCheck.dll", ROOT, sdk, assembly]))
         execution_env["NATIVEWEAVE_B03_TEST_ROOT"] = str(output / "jit-data")
         jit_output = run("jit", [dotnet, "tests/Data.Sqlite/bin/Release/net11.0/NativeWeave.Data.Sqlite.Tests.dll"], execution_env)
         assert "NativeAOT=False" in jit_output and all(f"PASS B03 native scenario {i}" in jit_output for i in range(1, 15))
@@ -162,8 +162,8 @@ def main():
             assert sha(location / record["outputPath"]) == sha(product_native)
             manifest["artifacts"][str(record_path)] = sha(record_path)
         manifest["nativeScenarioGroups"] = 14
-        manifest["compiledComponentSymbols"] = 29
-        manifest["downstreamB04Symbols"] = 3
+        manifest["compiledComponentSymbols"] = api_result["compiled_symbols"]
+        manifest["compiledHostCompositionSymbols"] = len(json.loads((ROOT / "src/Data.Sqlite/host-composition.expected.json").read_text())["symbols"])
         manifest["workerShutdownEvidence"] = "SQLx shutdown ACK and pool-return separately observed; OS thread join is never claimed"
         final = source_identity()
         assert final == initial, "Implementation/lock bytes changed during verification"

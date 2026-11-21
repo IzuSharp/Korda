@@ -51,8 +51,11 @@ def main():
             if sha(design/item['path'])!=item['sha256']:raise RuntimeError('Pinned Design input mismatch: '+item['path'])
         canonical=json.loads((design/'docs/api/public-api.json').read_text())['symbols']
         expected=[item for item in canonical if 'NativeWeave.Database.PostgreSql.' in item['id']]
-        local=json.loads((ROOT/'src/Data.Postgres/public-api.expected.json').read_text())['symbols']+json.loads((ROOT/'src/Data.Postgres/downstream-composition.json').read_text())['symbols']
-        if {x['id']:x for x in expected}!={x['id']:x for x in local}:raise RuntimeError('Current and explicit downstream API slices differ from pinned Design.')
+        local=json.loads((ROOT/'src/Data.Postgres/public-api.expected.json').read_text())['symbols']
+        local_by_id={x['id']:x for x in local}
+        if len(local)!=len(expected) or {x['id']:x for x in expected}!=local_by_id:raise RuntimeError('The complete integrated provider API differs from pinned Design.')
+        historical=json.loads((ROOT/'src/Data.Postgres/downstream-composition.json').read_text())['symbols']
+        if any(item!=local_by_id.get(item['id']) for item in historical):raise RuntimeError('The historical B04 ownership slice differs from the integrated provider API.')
         prefixes=['src/Data.Postgres/','tests/Data.Postgres/','samples/api/data-postgres/','native/database/postgres/','native/database/codecs/','native/database/interfaces/','native/database/transactions/','native/interop/abi/','src/Interop.Abi/','src/Interop.Negotiation/','src/Interop.Errors/','src/NativeWeave.Core/','src/Data.Abstractions/']
         shared={'Cargo.toml','Cargo.lock','Directory.Build.props','global.json','rust-toolchain.toml','docs/guides/data-postgres.md'}
         paths=subprocess.check_output(['git','ls-files','-z'],cwd=ROOT).decode().split('\0')
