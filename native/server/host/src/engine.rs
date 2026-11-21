@@ -79,6 +79,13 @@ pub struct Host {
     pub worker_exited: AtomicBool,
     pub native_joined: AtomicBool,
     pub changed: Notify,
+    #[cfg(test)]
+    pub shutdown_tail_gate: Mutex<Option<ShutdownTailGate>>,
+}
+#[cfg(test)]
+pub struct ShutdownTailGate {
+    pub ready: std::sync::mpsc::SyncSender<()>,
+    pub release: std::sync::mpsc::Receiver<()>,
 }
 impl Host {
     pub fn new(config: Config, dispatch: NwServerDispatchV1) -> Result<Arc<Self>> {
@@ -118,6 +125,8 @@ impl Host {
             worker_exited: AtomicBool::new(false),
             native_joined: AtomicBool::new(false),
             changed: Notify::new(),
+            #[cfg(test)]
+            shutdown_tail_gate: Mutex::new(None),
         }))
     }
     pub fn reap(&self) {
@@ -285,6 +294,18 @@ impl Host {
         self.stop.cancel();
         while let Some(result) = acceptors.join_next().await {
             self.acceptor_finished(result);
+        }
+        #[cfg(test)]
+        {
+            // A test can queue a final request operation after actual network
+            // retirement and before this current-thread runtime can exit.
+            let gate = lock(&self.shutdown_tail_gate).take();
+            if let Some(gate) = gate {
+                gate.ready.send(()).expect("shutdown test observer");
+                gate.release
+                    .recv_timeout(Duration::from_secs(5))
+                    .expect("finite shutdown test release");
+            }
         }
         // A complete Content-Length body can leave Hyper before its managed
         // producer submits Finish. Keep servicing admitted request operations
