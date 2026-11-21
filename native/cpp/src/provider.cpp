@@ -548,6 +548,22 @@ std::shared_ptr<ProviderConnection> ProviderConnection::open(const ProviderOptio
 std::unique_ptr<ProviderStatement>
 ProviderConnection::query(std::string_view sql, const std::vector<Scalar>& parameters, const CallContext& context)
 {
+    return prepare(sql, parameters, context, true);
+}
+std::vector<ProviderColumn> ProviderConnection::describe_sqlite(std::string_view sql, const CallContext& context)
+{
+    if (profile() != Profile::Sqlite)
+        throw Error::unsupported();
+    auto statement = prepare(sql, {}, context, false);
+    auto columns = statement->columns();
+    statement->close();
+    return columns;
+}
+std::unique_ptr<ProviderStatement> ProviderConnection::prepare(std::string_view sql,
+                                                               const std::vector<Scalar>& parameters,
+                                                               const CallContext& context,
+                                                               [[maybe_unused]] bool bind_parameters)
+{
     context.check();
     if (!healthy())
         throw Error::closed();
@@ -580,9 +596,10 @@ ProviderConnection::query(std::string_view sql, const std::vector<Scalar>& param
             throw sqlite_error(impl_->sqlite, status);
         if (!result->impl_->sqlite)
             throw Error::invalid("empty SQL command");
-        if (sqlite3_bind_parameter_count(result->impl_->sqlite) != static_cast<int>(parameters.size()))
+        if (bind_parameters &&
+            sqlite3_bind_parameter_count(result->impl_->sqlite) != static_cast<int>(parameters.size()))
             throw Error::invalid("SQL parameter count differs");
-        for (std::size_t index = 0; index < parameters.size(); ++index)
+        for (std::size_t index = 0; bind_parameters && index < parameters.size(); ++index)
         {
             const auto& value = parameters[index];
             const int parameter = static_cast<int>(index + 1);
@@ -1159,18 +1176,76 @@ void* ProviderConnection::test_sqlite_handle() const noexcept
 std::vector<Scalar> decode_parameters(ByteView bytes, const Expectation& expected, std::size_t maximum_parameters,
                                       std::size_t maximum_bytes, std::size_t maximum_field_bytes)
 {
+    if (maximum_parameters == 0 || maximum_parameters > MAX_NODES || maximum_bytes == 0 || maximum_bytes > MAX_BYTES ||
+        maximum_field_bytes == 0 || maximum_field_bytes > maximum_bytes)
+        throw Error::capacity();
+    if ((expected.kind != 1 && expected.kind != 3 && expected.kind != 4) ||
+        (expected.exact_rows && *expected.exact_rows != 1))
+        throw Error(NW_DOMAIN_ERROR, 4, "parameters require one admitted value or key row");
     if (bytes.size() > maximum_bytes || expected.descriptors.size() > maximum_parameters)
         throw Error::capacity();
-    const auto batch = Batch::parse(bytes, expected);
+    auto one_row = expected;
+    one_row.exact_rows = 1;
+    for (const auto& descriptor : expected.descriptors)
+    {
+        descriptor.codec.validate(expected.profile);
+        if (expected.profile == Profile::PostgreSql && descriptor.codec.id == 14)
+            throw Error::unsupported();
+    }
+    const auto batch = Batch::parse(bytes, std::move(one_row));
     std::vector<Scalar> parameters;
     parameters.reserve(expected.descriptors.size());
+    std::size_t provider_bytes = 0;
     for (std::size_t index = 0; index < expected.descriptors.size(); ++index)
     {
         const auto value = batch.cell(0, index);
-        if (value && value->size() > maximum_field_bytes)
+        const auto& codec = expected.descriptors[index].codec;
+        auto encoded_bytes = value ? value->size() : 0;
+        if (value && expected.profile == Profile::Sqlite)
+        {
+            switch (codec.id)
+            {
+                case 1:
+                case 2:
+                case 3:
+                case 4:
+                case 10:
+                case 11:
+                case 12:
+                case 15:
+                case 17:
+                    encoded_bytes = 8;
+                    break;
+                case 8:
+                    encoded_bytes = 10;
+                    break;
+                case 9:
+                    encoded_bytes = 15;
+                    break;
+                case 14:
+                    encoded_bytes = std::get<std::string>(sqlite_encode(codec, *value)).size();
+                    break;
+                default:
+                    break;
+            }
+        }
+        else if (value)
+        {
+            if (codec.id == 5 && std::find(value->begin(), value->end(), 0) != value->end())
+                throw Error(NW_DOMAIN_ERROR, 3, "PostgreSQL text cannot contain NUL");
+            if (codec.id == 13)
+                encoded_bytes = 24;
+            else if (codec.id == 16)
+                ++encoded_bytes;
+        }
+        if ((value && value->size() > maximum_field_bytes) || encoded_bytes > maximum_field_bytes)
             throw Error::capacity();
-        parameters.push_back({expected.descriptors[index].codec,
-                              value ? std::optional(Bytes(value->begin(), value->end())) : std::nullopt});
+        // Preserve B07's provider-byte budget, including the four-byte framing
+        // of every argument (also typed NULL), before publishing any arguments.
+        if (maximum_bytes - provider_bytes < 4 || encoded_bytes > maximum_bytes - provider_bytes - 4)
+            throw Error::capacity();
+        provider_bytes += encoded_bytes + 4;
+        parameters.push_back({codec, value ? std::optional(Bytes(value->begin(), value->end())) : std::nullopt});
     }
     return parameters;
 }

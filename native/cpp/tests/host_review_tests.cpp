@@ -3,11 +3,15 @@
 // the common native sources; this test does not need the public ABI entry points.
 #include "nw/host.hpp"
 
+#include <algorithm>
+#include <cstdlib>
 #include <filesystem>
 #include <future>
 #include <iostream>
+#include <nlohmann/json.hpp>
 #include <sqlite3.h>
 #include <stdexcept>
+#include <tuple>
 
 namespace nw
 {
@@ -225,6 +229,264 @@ void terminal(const std::shared_ptr<DbOperation>& operation, nw_status status, s
     eventually([&] { return operation->core->try_retire() == NW_OK; }, "actual operation source did not retire");
     if (code)
         check(operation->error && operation->error->code == code, "actual operation error code differs");
+}
+
+Value run_command(const std::shared_ptr<Session>& session, const std::shared_ptr<SqlPlan>& plan, nw_status status,
+                  std::uint32_t code = 0)
+{
+    auto gate = session->admit(false);
+    auto operation =
+        DbOperation::create(session->source, plan->result_kind ? 2 : 100, false,
+                            [session, plan, gate](auto cancel) { return session->execute(plan, cancel, gate); });
+    check(session->source->pending.load() == 1, "input refusal occurred before native operation admission");
+    start(operation);
+    terminal(operation, status, code);
+    Value result = std::int64_t{0};
+    if (status == NW_OK)
+    {
+        auto [taken, value] = operation->core->take_result();
+        check(taken == NW_OK && value.has_value(), "actual command result was unavailable");
+        result = std::move(*value);
+    }
+    operation.reset();
+    eventually([&] { return session->source->pending.load() == 0; }, "input operation did not retire its owner");
+    return result;
+}
+
+std::shared_ptr<SqlPlan> input_plan(const std::shared_ptr<Source>& source, std::string sql, Codec codec,
+                                    std::optional<Bytes> value)
+{
+    auto plan = std::make_shared<SqlPlan>();
+    plan->source = source;
+    plan->sql = std::move(sql);
+    plan->expectation = {1, source->config.provider.profile, {}, 0, 0, {{1, codec, codec.id}}, 1};
+    plan->parameters = Batch::encode(plan->expectation, 1, {value});
+    plan->kind = 1;
+    plan->timeout_ns = 5'000'000'000;
+    return plan;
+}
+
+void sqlite_physical_input()
+{
+    using Json = nlohmann::ordered_json;
+    const auto path = std::filesystem::temp_directory_path() /
+                      ("nativeweave-input-budget-" + std::to_string(Clock::now().time_since_epoch().count()) + ".db");
+    auto config = configuration(path.string());
+    config.limits.connections = 2;
+    config.limits.parameter_bytes = 8192;
+    auto source = Source::create(config);
+    auto session = open_session(source);
+    auto observer = ProviderConnection::open(config.provider, {});
+    observer->execute_script("CREATE TABLE b14_budget_rows(\"Id\" BIGINT PRIMARY KEY,\"Text\" TEXT NULL,"
+                             "\"Bytes\" BLOB NULL,\"Json\" TEXT NULL)",
+                             {});
+    const auto count = [&]
+    {
+        const auto rows = observer->query_text("SELECT count(*) FROM b14_budget_rows", {}, 1);
+        check(rows.size() == 1 && rows[0].size() == 1 && rows[0][0], "independent row count failed");
+        return std::stoll(*rows[0][0]);
+    };
+    const std::string logical = "NativeWeave.Orm.Relations.Tests:BudgetRow";
+    const std::string table = "b14_budget_rows";
+    const auto table_id = stable_id({"NWDB-TABLE-ID-v1", logical, {}, table});
+    const std::array<std::string, 4> names{"Id", "Text", "Bytes", "Json"};
+    const std::array<std::uint32_t, 4> codecs{3, 5, 6, 16};
+    std::vector<std::uint32_t> ids;
+    std::vector<Json> columns;
+    for (std::size_t index = 0; index < names.size(); ++index)
+    {
+        const auto id = stable_id({"NWDB-COLUMN-ID-v1", logical, {}, table, names[index]});
+        ids.push_back(id);
+        columns.push_back(Json{{"id", id},
+                               {"name", names[index]},
+                               {"codec", codecs[index]},
+                               {"codec_config", nullptr},
+                               {"nullable", index != 0},
+                               {"key_ordinal", index == 0 ? Json(0) : Json(nullptr)},
+                               {"generated", false},
+                               {"concurrency", false},
+                               {"collation", nullptr},
+                               {"max_length", nullptr}});
+    }
+    std::sort(columns.begin(), columns.end(), [](const auto& left, const auto& right)
+              { return left.at("id").template get<std::uint32_t>() < right.at("id").template get<std::uint32_t>(); });
+    const Json definition{
+        {"version", 1},   {"logical_id", logical}, {"table_id", table_id}, {"schema", nullptr},
+        {"table", table}, {"columns", columns},    {"projection", ids},    {"relations", Json::array()}};
+    const auto canonical = bytes(definition.dump());
+    const auto model_hash = sha256(canonical);
+    auto model = source->register_model(
+        encode_control(2, {{1, 5, canonical}, {2, 5, Bytes(model_hash.begin(), model_hash.end())}}));
+    const auto mutation_plan = [&](std::uint64_t key, std::size_t text_length)
+    {
+        Expectation row{4, Profile::Sqlite, model.model->hash(), table_id, 0, {}, 1};
+        for (const auto id : ids)
+        {
+            const auto& column = model.model->column(id);
+            row.descriptors.push_back({id, column.codec, model.codecs->bound(column.codec)});
+        }
+        auto wire = Batch::encode(row, 1,
+                                  {u64_bytes(key), std::nullopt, std::nullopt,
+                                   bytes("{\"Text\":\"" + std::string(text_length, 'x') + "\"}")});
+        auto payload = encode_control(4, {number(1, table_id), {2, 5, wire}});
+        auto mutation = compile_mutation(model, 0, payload, {}, source->config.limits.binding(), 5'000'000'000);
+        auto plan = SqlPlan::rendered(source, std::move(mutation.command));
+        plan->kind = 1;
+        return plan;
+    };
+    auto oversized = mutation_plan(98, 7000);
+    check(oversized->parameters.size() < 8192 && oversized->sql.size() + 2 * oversized->parameters.size() > 8192,
+          "negative control must fit logical wire but exceed physical input");
+    (void)run_command(session, oversized, NW_DOMAIN_ERROR, 6);
+    check(count() == 0 && !session->active.load(), "physical input refusal dispatched SQL or retained admission");
+    auto valid = mutation_plan(99, 3000);
+    check(valid->sql.size() + 2 * valid->parameters.size() <= 8192, "valid control exceeds physical input budget");
+    check(std::get<std::int64_t>(run_command(session, valid, NW_OK)) == 1 && count() == 1,
+          "3000-byte JSON must commit through the same physical session");
+
+    auto exact = input_plan(source, "INSERT INTO b14_budget_rows(\"Id\") VALUES(77)", {3, {}, false}, u64_bytes(0));
+    exact->expectation.descriptors.clear();
+    exact->parameters = Batch::encode(exact->expectation, 1, {});
+    check(exact->parameters.size() == 96, "zero parameters still retain the complete B01 envelope");
+    exact->sql.resize(8192 - 2 * exact->parameters.size(), ' ');
+    check(std::get<std::int64_t>(run_command(session, exact, NW_OK)) == 1 && count() == 2,
+          "exact SQL plus two-wire boundary must remain admissible");
+    exact->sql += ' ';
+    (void)run_command(session, exact, NW_DOMAIN_ERROR, 6);
+    check(count() == 2, "one byte above the physical boundary reached SQLite");
+
+    auto projection = std::make_shared<Projection>(
+        Projection::parse(bytes("{\"version\":1,\"fields\":[{\"ordinal\":0,\"name\":\"v\",\"codec\":16,"
+                                "\"codec_config\":null,\"nullable\":false}]}"),
+                          Profile::Sqlite));
+    auto binding = source->resolve_projection({source->identity, 1, projection, source->codecs()});
+    const auto query = [&](std::size_t size, bool missing_table = false)
+    {
+        auto plan =
+            input_plan(source, missing_table ? "SELECT ?1 AS \"v\" FROM absent_input_table" : "SELECT ?1 AS \"v\"",
+                       {16, {}, false}, bytes("{\"Text\":\"" + std::string(size, 'x') + "\"}"));
+        plan->kind = 0;
+        plan->result_kind = 3;
+        plan->projection = binding;
+        return plan;
+    };
+    (void)run_command(session, query(7000), NW_DOMAIN_ERROR, 6);
+    // The original SQLite query path describes SQL with no parameter input
+    // before its full grant. An invalid table therefore remains a SQL failure.
+    (void)run_command(session, query(7000, true), NW_DOMAIN_ERROR, 1);
+    auto second = open_session(source);
+    auto first_owner = std::get<std::shared_ptr<Owner>>(run_command(session, query(3000), NW_OK));
+    auto second_owner = std::get<std::shared_ptr<Owner>>(run_command(second, query(3000), NW_OK));
+    check(session->active.load() && second->active.load(), "physical input was incorrectly made source-global");
+    for (const auto& owner : {first_owner, second_owner})
+    {
+        const auto cursor = std::get<std::shared_ptr<Cursor>>(owner->data);
+        cursor->request_close();
+        cursor->join();
+    }
+    first_owner.reset();
+    second_owner.reset();
+    close_session(second);
+    close_session(session);
+    auto narrow_config = config;
+    narrow_config.limits.batch_bytes = 135; // One descriptor and one cell require 136 bytes.
+    auto narrow_source = Source::create(narrow_config);
+    auto narrow_session = open_session(narrow_source);
+    auto narrow_projection =
+        narrow_source->resolve_projection({narrow_source->identity, 1, projection, narrow_source->codecs()});
+    for (const auto& [size, missing, code] :
+         {std::tuple{7000U, false, 6U}, std::tuple{7000U, true, 1U}, std::tuple{3000U, false, 14U}})
+    {
+        auto plan =
+            input_plan(narrow_source, missing ? "SELECT ?1 AS \"v\" FROM absent_input_table" : "SELECT ?1 AS \"v\"",
+                       {16, {}, false}, bytes("{\"Text\":\"" + std::string(size, 'x') + "\"}"));
+        plan->kind = 0;
+        plan->result_kind = 3;
+        plan->projection = narrow_projection;
+        (void)run_command(narrow_session, plan, NW_DOMAIN_ERROR, code);
+        check(!narrow_session->active.load(), "combined input/shape refusal retained the command gate");
+    }
+    close_session(narrow_session);
+    narrow_source->join();
+    observer->close();
+    source->join();
+    std::filesystem::remove(path);
+}
+
+void provider_input_widths()
+{
+    const auto check_field = [](Profile profile, Codec codec, const Bytes& value, std::size_t original_width)
+    {
+        Expectation expectation{1, profile, {}, 0, 0, {{1, codec, codec.configuration ? 1024U : codec.id}}, 1};
+        const auto wire = Batch::encode(expectation, 1, {value});
+        bool refused = false;
+        try
+        {
+            (void)decode_parameters(wire, expectation, MAX_NODES, MAX_BYTES, original_width - 1);
+        }
+        catch (const Error& error)
+        {
+            refused = error.status == NW_DOMAIN_ERROR && error.code == 6;
+        }
+        check(refused, "canonical parameter bytes bypassed the provider storage-width limit");
+        check(decode_parameters(wire, expectation, MAX_NODES, MAX_BYTES, original_width).size() == 1,
+              "exact provider parameter width was rejected");
+    };
+    check_field(Profile::Sqlite, {1, {}, false}, Bytes{1, 0}, 8);
+    check_field(Profile::Sqlite, {4, {}, false}, Bytes{1}, 8);
+    check_field(Profile::Sqlite, {8, {}, false}, u32_bytes(0), 10);
+    check_field(Profile::Sqlite, {9, {}, false}, u64_bytes(0), 15);
+    check_field(Profile::PostgreSql, {16, {}, false}, bytes("{\"Text\":\"\"}"), 12);
+    check_field(Profile::PostgreSql, {13, std::string("{\"precision\":29,\"scale\":0}"), false}, Bytes(16), 24);
+}
+
+void postgres_input_width(const std::string& uri)
+{
+    auto config = configuration(uri);
+    config.provider.profile = Profile::PostgreSql;
+    config.provider.verify_tls = false;
+    config.limits.parameter_bytes = 8192;
+    const auto table = "nw_input_width_" + std::to_string(Clock::now().time_since_epoch().count());
+    auto observer = ProviderConnection::open(config.provider, {});
+    observer->execute_script("CREATE TABLE " + table + " (v JSONB)", {});
+    for (const auto limit : {11U, 12U})
+    {
+        config.limits.field_bytes = limit;
+        auto source = Source::create(config);
+        auto session = open_session(source);
+        auto plan =
+            input_plan(source, "INSERT INTO " + table + " VALUES ($1)", {16, {}, false}, bytes("{\"Text\":\"\"}"));
+        (void)run_command(session, plan, limit == 11 ? NW_DOMAIN_ERROR : NW_OK, limit == 11 ? 3 : 0);
+        const auto rows = observer->query_text("SELECT count(*) FROM " + table, {}, 1);
+        check(rows.size() == 1 && rows[0].size() == 1 && rows[0][0] == (limit == 11 ? "0" : "1"),
+              "PostgreSQL encoded-field refusal failed independent persistence check");
+        close_session(session);
+        source->join();
+    }
+    config.limits.field_bytes = 65536;
+    config.limits.batch_bytes = 135;
+    auto source = Source::create(config);
+    auto session = open_session(source);
+    auto projection = std::make_shared<Projection>(
+        Projection::parse(bytes("{\"version\":1,\"fields\":[{\"ordinal\":0,\"name\":\"v\",\"codec\":16,"
+                                "\"codec_config\":null,\"nullable\":false}]}"),
+                          Profile::PostgreSql));
+    auto binding = source->resolve_projection({source->identity, 1, projection, source->codecs()});
+    for (const auto missing : {true, false})
+    {
+        auto plan =
+            input_plan(source, missing ? "SELECT $1::jsonb AS v FROM absent_input_table" : "SELECT $1::jsonb AS v",
+                       {16, {}, false}, bytes("{\"Text\":\"\"}"));
+        plan->kind = 0;
+        plan->result_kind = 3;
+        plan->projection = binding;
+        (void)run_command(session, plan, NW_DOMAIN_ERROR, missing ? 1U : 14U);
+        check(!session->active.load(), "PostgreSQL describe/shape refusal retained the command gate");
+    }
+    close_session(session);
+    source->join();
+    observer->execute_script("DROP TABLE " + table, {});
+    observer->close();
 }
 std::shared_ptr<DbOperation> administration(const std::shared_ptr<Source>& source,
                                             std::function<Value(std::shared_ptr<Cancel>)> work)
@@ -485,6 +747,16 @@ int main(int argc, char** argv)
         const std::string mode = argc > 1 ? argv[1] : "all";
         if (mode == "all" || mode == "parameter")
             parameter_name();
+        if (mode == "all" || mode == "input")
+        {
+            provider_input_widths();
+            sqlite_physical_input();
+        }
+        if (mode == "input-postgresql")
+        {
+            check(argc == 3, "input-postgresql requires an isolated PostgreSQL URI");
+            postgres_input_width(argv[2]);
+        }
         if (mode == "all" || mode == "savepoint")
             retired_savepoint_dispose();
         if (mode == "all" || mode == "cursor")

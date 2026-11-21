@@ -172,6 +172,37 @@ uncertain owner still retained, matching the original bounded isolation claim.
 It is not counted as a positive resource-release or leak-sanitizer case. All
 ordinary parent-process paths require zero source/session/cursor/buffer counters.
 
+## Physical input admission and provider encoding widths
+
+`host_review_tests.cpp::sqlite_physical_input` follows the fixed B03
+`sqlite/src/session.rs::prepare` and Host `config.rs::Limits::sqlite` path. It
+uses a registered runtime model, `compile_mutation`, an admitted `DbOperation`
+and an independent SQLite connection. With `MaxParameterBytes=8192`, the
+original 7000-character JSON mutation must reject with Host capacity code 6
+before SQL, while the 3000-character value commits. The charge is SQL bytes
+plus two complete canonical parameter wires, including the 96-byte envelope
+when the parameter count is zero. Exact and one-byte-over boundaries are
+checked. Two simultaneous cursors on different sessions prove that this grant
+remains per physical session rather than becoming a source-wide byte limit.
+
+The same group preserves the original SQLite SQL-only describe before full
+parameter admission, and both providers' preparation before B06 row-buffer
+admission. Missing-table, oversized-input and undersized-row-batch combinations
+keep their original SQL, capacity and large-value error precedence. Statements
+remain lazy: preparation does not step a row or execute a mutation.
+
+`provider_input_widths` ports B07 `scalar.rs::provider_size`, including SQLite
+integer/Boolean, date and time expansion, PostgreSQL JSON's version byte and
+the conservative 24-byte numeric width. The shared decoder also charges the
+original four-byte framing per argument, including NULL, and keeps the same
+capacity and single-row validation order. Direct codec capacity failures retain
+code 6; the Host maps codec failures to its existing conversion code 3, distinct
+from SQLite's physical-input capacity refusal. `input-postgresql` exercises
+real Host operations with an 11-byte JSON value: field limit 11 rejects without
+writing, limit 12 succeeds. It also checks PostgreSQL describe-versus-batch
+error precedence. The ordinary CTest keeps the SQLite cases; the existing
+isolated PostgreSQL runner executes this mode in Release and ASan/UBSan CI.
+
 ## B07 fallibility assertion families
 
 `codec_roundtrip.cpp` retains the representable assertions from all seven

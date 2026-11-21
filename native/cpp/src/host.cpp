@@ -32,6 +32,49 @@ void rethrow_transaction_error(const Error& source)
     error.correlation = source.correlation;
     throw error;
 }
+std::size_t sqlite_input_remaining(const Session& session, const SqlPlan& plan)
+{
+    const auto maximum = session.source->config.limits.parameter_bytes;
+    if (plan.sql.empty() || plan.sql.size() > std::min(maximum, std::size_t{1024 * 1024}) ||
+        plan.sql.find('\0') != std::string::npos)
+        throw Error(NW_DOMAIN_ERROR, 8, "invalid SQLite SQL byte length");
+    return maximum - plan.sql.size();
+}
+std::vector<Scalar> decode_command_parameters(const Session& session, const SqlPlan& plan)
+{
+    const auto& limits = session.source->config.limits;
+    if (session.source->config.provider.profile != Profile::Sqlite)
+    {
+        try
+        {
+            return decode_parameters(plan.parameters, plan.expectation, limits.parameters, limits.parameter_bytes,
+                                     std::min(limits.field_bytes, limits.parameter_bytes));
+        }
+        catch (const Error&)
+        {
+            throw Error(NW_DOMAIN_ERROR, 3, "database scalar conversion failed");
+        }
+    }
+
+    // Fixed Rust B03 Session::prepare reserves SQL plus two complete wire-sized
+    // input copies before decoding or dispatch. Host creates that grant per
+    // physical session, not per Source. Our existing exclusive CommandGate
+    // retains this single admitted input until command/cursor retirement.
+    const auto remaining = sqlite_input_remaining(session, plan);
+    if (plan.parameters.size() > remaining / 2)
+        throw Error::capacity();
+    const auto available = std::min(remaining, std::max(plan.parameters.size(), std::size_t{1}));
+    try
+    {
+        return decode_parameters(plan.parameters, plan.expectation, MAX_NODES, available, available);
+    }
+    catch (const Error&)
+    {
+        // B03 maps B07 decode failures to its provider codec category. Physical
+        // grant refusal above remains the distinct ResourceLimit category.
+        throw Error(NW_DOMAIN_ERROR, 3, "SQLite parameter conversion failed");
+    }
+}
 } // namespace
 
 Bytes u32_bytes(std::uint32_t value)
@@ -1143,9 +1186,7 @@ Value Session::execute(std::shared_ptr<SqlPlan> plan, std::shared_ptr<Cancel> ca
         const auto& limits = source->config.limits;
         if (plan->result_kind == 0)
         {
-            auto parameters =
-                decode_parameters(plan->parameters, plan->expectation, limits.parameters, limits.parameter_bytes,
-                                  std::min(limits.field_bytes, limits.parameter_bytes));
+            auto parameters = decode_command_parameters(*this, *plan);
             const bool observe = source->config.provider.profile == Profile::Sqlite;
             const auto count = connection->execute(plan->sql, parameters, {cancel, deadline, observe});
             gate->finish();
@@ -1308,6 +1349,19 @@ std::shared_ptr<Cursor> Cursor::open(std::shared_ptr<Session> session, std::shar
             {static_cast<std::uint32_t>(i), field.codec, projection.codecs->bound(field.codec)});
     }
     const auto& limits = session->source->config.limits;
+    if (session->source->config.provider.profile == Profile::Sqlite)
+    {
+        // Rust Host describes SQLite SQL with a SQL-only grant before the
+        // stream's SQL + two-wire input grant. Preserve missing-table/syntax
+        // failure precedence without executing or copying parameter values.
+        (void)sqlite_input_remaining(*session, *plan);
+        (void)session->connection->describe_sqlite(plan->sql, {cancel, deadline});
+    }
+    auto parameters = decode_command_parameters(*session, *plan);
+    cursor->statement = session->connection->query(plan->sql, parameters, {cancel, deadline});
+    // The original Host prepares provider inputs before B06 admits its row
+    // buffers. Keep that error precedence, while still reserving all row bytes
+    // before this implementation can execute the prepared statement.
     if (!limits.batch_rows || limits.batch_rows > MAX_NODES || !limits.batch_bytes || limits.batch_bytes > MAX_BYTES)
         throw Error::capacity();
     if (96 + 16 * cursor->codecs.size() + 24 * cursor->codecs.size() > limits.batch_bytes)
@@ -1318,9 +1372,6 @@ std::shared_ptr<Cursor> Cursor::open(std::shared_ptr<Session> session, std::shar
                           3 * projection.projection->bytes().size() +
                           cursor->codecs.size() * (sizeof(Descriptor) + sizeof(ProviderColumn));
     cursor->reservation = session->source->reserve_stream(reserved);
-    auto parameters = decode_parameters(plan->parameters, plan->expectation, limits.parameters, limits.parameter_bytes,
-                                        std::min(limits.field_bytes, limits.parameter_bytes));
-    cursor->statement = session->connection->query(plan->sql, parameters, {cancel, deadline});
     const auto& columns = cursor->statement->columns();
     if (columns.size() != cursor->codecs.size())
         throw Error(NW_DOMAIN_ERROR, 4, "complete result column count differs");

@@ -103,6 +103,9 @@ class ProviderConnection : public std::enable_shared_from_this<ProviderConnectio
     ~ProviderConnection();
     [[nodiscard]] std::unique_ptr<ProviderStatement> query(std::string_view sql, const std::vector<Scalar>& parameters,
                                                            const CallContext& context);
+    // SQLite's retained query path describes SQL before parameter admission.
+    // This prepares/finalizes metadata without binding values or stepping SQL.
+    [[nodiscard]] std::vector<ProviderColumn> describe_sqlite(std::string_view sql, const CallContext& context);
     [[nodiscard]] std::int64_t execute(std::string_view sql, const std::vector<Scalar>& parameters,
                                        const CallContext& context);
     void execute_script(std::string_view sql, const CallContext& context);
@@ -123,6 +126,9 @@ class ProviderConnection : public std::enable_shared_from_this<ProviderConnectio
     friend class ProviderStatement;
     struct Impl;
     explicit ProviderConnection(std::unique_ptr<Impl> impl);
+    [[nodiscard]] std::unique_ptr<ProviderStatement> prepare(std::string_view sql,
+                                                             const std::vector<Scalar>& parameters,
+                                                             const CallContext& context, bool bind_parameters);
     std::unique_ptr<Impl> impl_;
 };
 

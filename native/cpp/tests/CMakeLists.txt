@@ -37,8 +37,10 @@ target_sources(nw_host_review_tests PRIVATE "${PROJECT_SOURCE_DIR}/native/cpp/sr
   "${PROJECT_SOURCE_DIR}/native/cpp/src/mutations.cpp" "${PROJECT_SOURCE_DIR}/native/cpp/src/scalar.cpp"
   "${PROJECT_SOURCE_DIR}/native/cpp/src/provider.cpp" "${PROJECT_SOURCE_DIR}/native/cpp/src/host.cpp"
   "${PROJECT_SOURCE_DIR}/native/cpp/src/administration.cpp")
-target_compile_definitions(nw_host_review_tests PRIVATE NW_ENABLE_SQLITE=1 NW_ENABLE_POSTGRES=0 NW_HOST_TEST_HOOKS=1)
-target_link_libraries(nw_host_review_tests PRIVATE nw_sqlite_engine)
+target_compile_definitions(nw_host_review_tests PRIVATE NW_ENABLE_SQLITE=1 NW_ENABLE_POSTGRES=1 NW_HOST_TEST_HOOKS=1)
+target_include_directories(nw_host_review_tests SYSTEM PRIVATE ${PostgreSQL_INCLUDE_DIRS})
+target_link_libraries(nw_host_review_tests PRIVATE nw_sqlite_engine "${NW_LIBPQ_STATIC}"
+  "${NW_PGCOMMON_SHARED_STATIC}" "${NW_PGPORT_SHARED_STATIC}" OpenSSL::SSL ZLIB::ZLIB ${CMAKE_DL_LIBS})
 
 add_test(NAME native.interop COMMAND nw_interop_tests)
 add_test(NAME native.contracts COMMAND nw_contracts_tests "${CMAKE_CURRENT_SOURCE_DIR}/golden/contracts")

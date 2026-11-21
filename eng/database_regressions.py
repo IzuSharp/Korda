@@ -77,6 +77,10 @@ def main():
     run_isolated("native-administration-postgresql", [sys.executable, "-c",
         'import os,sys; os.execv(sys.argv[1], [sys.argv[1], os.environ["NW_TEST_POSTGRES"]])',
         native_build / "tests/nw_administration_tests"])
+    # Exercise physical PostgreSQL input admission in its own real database.
+    run_isolated("native-input-postgresql", [sys.executable, "-c",
+        'import os,sys; os.execv(sys.argv[1], [sys.argv[1], "input-postgresql", os.environ["NW_TEST_POSTGRES"]])',
+        native_build / "tests/nw_host_review_tests"])
     version = run("postgres-version", [pg / "psql", env["NW_TEST_POSTGRES"], "-X", "-At", "-v", "ON_ERROR_STOP=1",
                                        "-c", "SHOW server_version"])
     if not version.strip().startswith("18."):
