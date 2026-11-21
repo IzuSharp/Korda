@@ -50,7 +50,7 @@ internal sealed partial class NativeHost : ServerHost
         Configuration = configuration;
         Capabilities = NativePackage.Inspect(); Native = NativePackage.Calls.Value;
         int active = configuration.Options.Budget.MaxActiveRequests;
-        _tickets = new(active); _coordinator = new(checked(active * 10 + 33));
+        _tickets = new(active); _coordinator = new(checked(active * 10 + 33), TimeSpan.FromMilliseconds(1));
         _control = new(this); _controlSlot = _coordinator.Reserve(_control);
         _root = GCHandle.Alloc(this, GCHandleType.Normal);
         nint pointer = 0;
