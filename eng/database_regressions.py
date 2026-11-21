@@ -50,6 +50,12 @@ def main():
     def component(name, *extra):
         run(name.lower(), [sys.executable, f"tests/{name}/verify.py", "--output", output / name, *extra])
 
+    def run_isolated(label, command):
+        # These full suites own fixed tables and migration ledgers. Preserve their
+        # fresh-database precondition independently for each runtime/process cell.
+        run(label, [sys.executable, "tests/Data.NativeHost/run.py", "--postgres-bin", pg,
+                    "--output", output / "postgres" / label, "--", *command])
+
     version = run("postgres-version", [pg / "psql", env["NW_TEST_POSTGRES"], "-X", "-At", "-v", "ON_ERROR_STOP=1",
                                        "-c", "SHOW server_version"])
     if not version.strip().startswith("18."):
@@ -93,7 +99,7 @@ def main():
         run(name + "-restore", ["dotnet", "restore", project, "--locked-mode", *FLAGS])
         run(name + "-build", ["dotnet", "build", project, "-c", "Release", "--no-restore", *FLAGS])
         jit_args = [output / name / "jit"] if parameters else []
-        run(name + "-jit", ["dotnet", project.parent / "bin/Release/net11.0" / (assembly + ".dll"), *jit_args])
+        run_isolated(name + "-jit", ["dotnet", project.parent / "bin/Release/net11.0" / (assembly + ".dll"), *jit_args])
         publish = output / name / "aot"
         run(name + "-aot-restore", ["dotnet", "restore", project, "--locked-mode", "-r", "linux-x64", "-p:PublishAot=true", *FLAGS])
         run(name + "-aot-publish", ["dotnet", "publish", project, "-c", "Release", "-r", "linux-x64",
@@ -103,13 +109,13 @@ def main():
             raise RuntimeError("Expected an actual standalone Native AOT executable")
         aot_args = [output / name / "aot-results", "--require-aot"] if parameters else (
             ["--require-aot"] if name == "Orm.Relations" else [])
-        run(name + "-aot", [executable, *aot_args])
+        run_isolated(name + "-aot", [executable, *aot_args])
         if name == "Data.Migrations":
             for mode, command in [
                 ("jit", ["dotnet", project.parent / "bin/Release/net11.0" / (assembly + ".dll")]),
                 ("aot", [executable]),
             ]:
-                run(name + "-process-" + mode, [sys.executable, "tests/Data.Migrations/cross_process.py",
+                run_isolated(name + "-process-" + mode, [sys.executable, "tests/Data.Migrations/cross_process.py",
                      "--postgres-bin", pg, "--output", output / name / ("process-" + mode), "--", *command])
 
     tool = ROOT / "src/Build.Integration/ApiReference/bin/Release/net11.0/NativeWeave.ApiReference.dll"
