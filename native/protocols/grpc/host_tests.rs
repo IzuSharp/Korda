@@ -565,3 +565,92 @@ async fn grpc_dropped_undispatched_response_retires_its_ticket() {
     drop(request);
     assert_eq!(host.budget.snapshot(), (0, 0));
 }
+
+#[tokio::test]
+async fn grpc_reaper_finishes_metadata_cleanup_after_both_completion_flags() {
+    let (host, request, pointer) = fixture();
+    let call = request.grpc.as_ref().unwrap().clone();
+    call.headers(ResponseMetadata::empty(&request.budget).unwrap())
+        .unwrap();
+    call.finish(
+        Status::ok(""),
+        ResponseMetadata::empty(&request.budget).unwrap(),
+        &request.cancel,
+    )
+    .await
+    .unwrap();
+    assert!(request.mark_dispatch_done());
+    assert_eq!(request.try_retire(), NW_OK);
+    // Construct the quiescent postcondition of a missed completion notification.
+    // This deterministic state test does not claim to reproduce its scheduling.
+    request.body_done.store(true, Ordering::Release);
+    host.reap();
+    let initial_cleared = call.initial_credit().is_none();
+    let terminal_cleared = call.terminal_credit().is_none();
+    let removed = lock(&host.requests).is_empty();
+    // Observe the required postcondition before explicit test-only teardown, so
+    // an unmodified implementation fails without leaving the raw fixture owner.
+    call.release_metadata();
+    // SAFETY: the real retirement gate succeeded and no native operation exists.
+    unsafe { nw_server_request_release(pointer) };
+    host.reap();
+    drop(call);
+    drop(request);
+    assert_eq!(host.budget.snapshot(), (0, 0));
+    assert_eq!(host.retiring.load(Ordering::Acquire), 0);
+    assert!(initial_cleared, "reaper retained initial metadata");
+    assert!(terminal_cleared, "reaper retained terminal metadata");
+    assert!(removed, "reaper retained the completed request");
+}
+
+#[tokio::test]
+async fn grpc_reaper_waits_for_input_cleanup_before_releasing_metadata() {
+    let (host, request, pointer) = fixture();
+    let call = request.grpc.as_ref().unwrap().clone();
+    call.headers(ResponseMetadata::empty(&request.budget).unwrap())
+        .unwrap();
+    call.finish(
+        Status::ok(""),
+        ResponseMetadata::empty(&request.budget).unwrap(),
+        &request.cancel,
+    )
+    .await
+    .unwrap();
+    assert!(request.mark_dispatch_done());
+    assert_eq!(request.try_retire(), NW_OK);
+    // A late response/body drop can own this existing input-cleanup guard after
+    // request retirement. Keep that real guard live while constructing the same
+    // missed-notification postcondition; metadata must not be cleared yet.
+    request.live_ops.fetch_add(1, Ordering::AcqRel);
+    let input_cleanup = InputDiscard(request.clone());
+    request.body_done.store(true, Ordering::Release);
+    host.reap();
+    let preserved_while_live = call.initial_credit().is_some()
+        && call.terminal_credit().is_some()
+        && lock(&host.requests).len() == 1;
+    drop(input_cleanup);
+    let initial_cleared = call.initial_credit().is_none();
+    let terminal_cleared = call.terminal_credit().is_none();
+    let removed = lock(&host.requests).is_empty();
+    call.release_metadata();
+    // SAFETY: the retired request's last input-cleanup guard has been dropped.
+    unsafe { nw_server_request_release(pointer) };
+    host.reap();
+    drop(call);
+    drop(request);
+    assert_eq!(host.budget.snapshot(), (0, 0));
+    assert_eq!(host.retiring.load(Ordering::Acquire), 0);
+    assert!(
+        preserved_while_live,
+        "reaper cleared live-operation metadata"
+    );
+    assert!(
+        initial_cleared,
+        "last input cleanup retained initial metadata"
+    );
+    assert!(
+        terminal_cleared,
+        "last input cleanup retained terminal metadata"
+    );
+    assert!(removed, "last input cleanup retained the completed request");
+}

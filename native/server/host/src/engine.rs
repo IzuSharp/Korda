@@ -902,11 +902,17 @@ impl RequestState {
         NW_OK
     }
     fn fully_retired(&self) -> bool {
-        self.retired.load(Ordering::Acquire)
-            && self.body_done.load(Ordering::Acquire)
-            && self.live_ops.load(Ordering::Acquire) == 0
-            && self.budget.snapshot() == (grpc::remaining_anchor(self), 0)
-            && grpc::metadata_released(self)
+        if !self.retired.load(Ordering::Acquire)
+            || !self.body_done.load(Ordering::Acquire)
+            || self.live_ops.load(Ordering::Acquire) != 0
+        {
+            return false;
+        }
+        // The completion paths publish separate flags. Retry after publishers
+        // retire in case both one-shot checks missed the other flag. Escaped
+        // header/frame owners still gate removal through the unchanged checks.
+        grpc::release_metadata_if_done(self);
+        self.budget.snapshot() == (grpc::remaining_anchor(self), 0) && grpc::metadata_released(self)
     }
     pub fn host(&self) -> Result<Arc<Host>> {
         self.host
