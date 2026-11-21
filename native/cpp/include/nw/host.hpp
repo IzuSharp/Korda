@@ -336,6 +336,7 @@ struct Transaction : std::enable_shared_from_this<Transaction>
     std::shared_ptr<Savepoint> create_savepoint(std::shared_ptr<Cancel> cancel, std::shared_ptr<CommandGate> gate);
     Bytes savepoint_action(std::uint64_t token, std::uint32_t action, std::shared_ptr<Cancel> cancel,
                            std::shared_ptr<CommandGate> gate, bool disposal = false);
+    Bytes dispose_savepoint(std::uint64_t token);
 
   private:
     void finish_worker(bool commit, std::shared_ptr<CommandGate> gate);

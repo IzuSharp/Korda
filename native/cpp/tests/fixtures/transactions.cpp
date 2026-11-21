@@ -245,17 +245,11 @@ extern "C"
                                      [sequence](const auto& point) { return point->token == sequence; }))
                         throw Error::state("unknown savepoint token");
                 }
-                try
-                {
+                if (action > 1)
+                    (void)fixture.transaction->dispose_savepoint(sequence);
+                else
                     (void)fixture.transaction->savepoint_action(sequence, action, token(canceled),
-                                                                fixture.session->admit(true), action > 1);
-                }
-                catch (...)
-                {
-                    if (action > 1)
-                        fixture.transaction->request_close();
-                    throw;
-                }
+                                                                fixture.session->admit(true));
             });
     }
     void nw_tx_fixture_release(void* owner)

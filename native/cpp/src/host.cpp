@@ -1942,13 +1942,13 @@ Bytes Transaction::savepoint_action(std::uint64_t token, std::uint32_t action, s
     bool already_disposed = false;
     {
         std::lock_guard lock(mutex);
-        already_disposed =
-            disposal && (retired || std::find(savepoints.begin(), savepoints.end(), token) == savepoints.end());
+        already_disposed = disposal && (state == 4 || retired ||
+                                        std::find(savepoints.begin(), savepoints.end(), token) == savepoints.end());
         if (!already_disposed &&
             (closing || retired || (state != 0 && state != 1) || (state == 1 && action == 1 && !disposal) ||
              savepoints.empty() || savepoints.back() != token))
         {
-            if (disposal)
+            if (disposal && !savepoints.empty() && savepoints.back() != token)
             {
                 cleanup = 4;
                 cleanup_failure = 4;
@@ -1992,24 +1992,79 @@ Bytes Transaction::savepoint_action(std::uint64_t token, std::uint32_t action, s
     gate->finish();
     return snapshot_record(0, 0, false, 2, 0, true, false, 0);
 }
+Bytes Transaction::dispose_savepoint(std::uint64_t token)
+{
+    bool invalid_order = false;
+    {
+        std::lock_guard lock(mutex);
+        // Match the original coordinator before touching the session gate. A
+        // released token, or a logically closed transaction still retiring its
+        // provider, must not compete with a later command or transaction.
+        if (state == 4 || retired || std::find(savepoints.begin(), savepoints.end(), token) == savepoints.end())
+            return snapshot_record(0, 0, false, 2, 0, true, false, 0);
+        invalid_order = savepoints.back() != token;
+        if (invalid_order)
+        {
+            cleanup = 4;
+            cleanup_failure = 4;
+            provider = "savepoint-order";
+            closing = true;
+        }
+        else
+        {
+            if (closing || finishing || (state != 0 && state != 1))
+                throw Error::state("transaction admission rejected");
+            // This check and the token lookup share the mutex used by RELEASE
+            // to remove its token. A busy gate belongs to its admitted caller.
+            if (session->active.exchange(true))
+                throw Error::state("transaction admission rejected");
+        }
+    }
+    if (invalid_order)
+    {
+        request_close();
+        throw Error::state("transaction admission rejected");
+    }
+    std::shared_ptr<CommandGate> gate;
+    try
+    {
+        gate = std::make_shared<CommandGate>(session);
+    }
+    catch (...)
+    {
+        session->active.store(false);
+        session->changed.notify_all();
+        schedule_cleanup();
+        if (session->closing.load())
+            session->schedule_cleanup();
+        throw;
+    }
+    return savepoint_action(token, 0, std::make_shared<Cancel>(), std::move(gate), true);
+}
 void Savepoint::request_close()
 {
     if (cleanup_requested.exchange(true))
         return;
+    {
+        std::lock_guard lock(transaction->mutex);
+        if (transaction->state == 4 || transaction->retired ||
+            std::find(transaction->savepoints.begin(), transaction->savepoints.end(), token) ==
+                transaction->savepoints.end())
+            return;
+    }
     auto self = shared_from_this();
     transaction->session->source->workers.post(
         [self]
         {
             try
             {
-                auto session = self->transaction->session;
-                if (session->active.exchange(true))
-                {
-                    self->transaction->request_close();
-                    return;
-                }
-                auto gate = std::make_shared<CommandGate>(session);
-                (void)self->transaction->savepoint_action(self->token, 0, std::make_shared<Cancel>(), gate, true);
+                (void)self->transaction->dispose_savepoint(self->token);
+            }
+            catch (const Error&)
+            {
+                // Owner Drop ignored the original coordinator's result. A
+                // non-top token has already requested outer cleanup above;
+                // ordinary busy admission must not close another caller's work.
             }
             catch (...)
             {

@@ -21,6 +21,9 @@ def execute(args, root, logs, label, env):
     (logs / (label + ".stdout")).write_bytes(result.stdout)
     (logs / (label + ".stderr")).write_bytes(result.stderr)
     if result.returncode:
+        for stream in (result.stdout, result.stderr):
+            if stream:
+                print(stream.decode(errors="replace")[-16000:], file=sys.stderr)
         raise RuntimeError(label + " failed: inspect retained documentation logs")
     return result.stdout.decode()
 
@@ -80,13 +83,24 @@ def main():
     (inputs / "index.md").write_text("# " + config["title"] + "\n\n" + config["scope"] +
                                     "\n\n[Exact compiled API and XML](reference.md)\n", encoding="utf-8")
     toc = "- name: Component snapshot\n  href: index.md\n- name: Exact API\n  href: reference.md\n- name: API metadata\n  href: api/\n"
+    guide_hashes = {}
     for index, guide in enumerate(config.get("guides", [])):
         source = (root / guide).resolve()
         if not source.is_relative_to(root) or not source.is_file():
             raise ValueError("A guide must be an existing source file inside the repository")
         name = "guide-" + str(index) + ".md"
         shutil.copy2(source, inputs / name)
+        guide_hashes[source.relative_to(root).as_posix()] = hashlib.sha256((inputs / name).read_bytes()).hexdigest()
         toc += "- name: Guide " + str(index + 1) + "\n  href: " + name + "\n"
+    if guide_hashes:
+        # The retained database/Core guides share the migration annotation's
+        # local link. Include that explicit dependency in every standalone
+        # composition while retaining the existing guide-N.md layout.
+        implementation = root / "docs/guides/cpp-native.md"
+        shutil.copy2(implementation, inputs / "cpp-native.md")
+        guide_hashes[implementation.relative_to(root).as_posix()] = hashlib.sha256(
+            (inputs / "cpp-native.md").read_bytes()).hexdigest()
+        toc += "- name: Native implementation\n  href: cpp-native.md\n"
     (inputs / "toc.yml").write_text(toc)
     docfx_config = {
         "metadata": [{"src": [{"src": str(inputs), "files": [assembly.name]}],
@@ -108,6 +122,7 @@ def main():
                "snapshot_requires_review": args.snapshot, "compiled_api": json.loads(result.strip().splitlines()[-1]),
                "assembly_sha256": hashlib.sha256(assembly.read_bytes()).hexdigest(),
                "xml_sha256": hashlib.sha256(xml.read_bytes()).hexdigest(),
+               "guide_sha256": guide_hashes,
                "reference_sha256": {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(inputs.glob("*.dll"))},
                "site_sha256": files}
     (output / "result.json").write_text(json.dumps(receipt, indent=2) + "\n")

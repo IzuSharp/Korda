@@ -130,11 +130,11 @@ global update runtime or application initialization API. It reuses the exact
 properties) is checked against the accepted A02 inventory; runtime rows check
 that a new options object has a null path and an empty required-capability list.
 The generated reference remains owned by
-[Interop negotiation](../../src/Interop.Negotiation/api-reference.md). The A13
+[Interop negotiation](https://github.com/IzuSharp/NativeWeave/blob/main/src/Interop.Negotiation/api-reference.md). The A13
 tool also checks actual compiled Core XML while producing the evidence reference.
 
 The minimal and advanced executable consumer is
-[Program.cs](../../samples/api/verification-compatibility/Program.cs). It imports
+[Program.cs](https://github.com/IzuSharp/NativeWeave/blob/main/samples/api/verification-compatibility/Program.cs). It imports
 `NativeWeave.Interop` and `NativeWeave.Interop.Extensibility`, creates an explicit
 maintainer fixture descriptor and calls `Inspect` with the expected native digest.
 The explicit path is a fixture/advanced override; normal package consumers use
@@ -181,7 +181,7 @@ verification of the downloaded package; it does not ignore arbitrary zip changes
 The initial tested trust route is a repository-primary signature from
 `https://api.nuget.org/v3/index.json`, signed owner `dekueon`, the exact repository
 certificate subject and the SHA-256 fingerprint in
-[signature-policy.json](../../tests/Verification.Compatibility/signature-policy.json).
+[signature-policy.json](https://github.com/IzuSharp/NativeWeave/blob/main/tests/Verification.Compatibility/signature-policy.json).
 These facts are read from successful SDK `dotnet nuget verify --all` output and
 the repository-signatures endpoint. The nuspec authors string is not the signed
 owner identity. Wrong owner, wrong repository, wrong leaf certificate, unsigned

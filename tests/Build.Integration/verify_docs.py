@@ -31,11 +31,12 @@ def main():
         records.append({'label':label, 'command':[str(x) for x in command], 'exit_code':result.returncode,
                         'expected':'nonzero with '+contains if contains else 'zero',
                         'stdout_sha256':digest(stdout), 'stderr_sha256':digest(stderr)})
-        if contains:
-            if result.returncode == 0 or contains.encode() not in result.stdout+result.stderr:
-                raise AssertionError(label+' did not reject the intended malformed contract')
-        elif result.returncode != 0:
-            raise AssertionError(label+' failed')
+        unexpected = (result.returncode == 0 or contains.encode() not in result.stdout+result.stderr) if contains else result.returncode != 0
+        if unexpected:
+            for stream in (result.stdout, result.stderr):
+                if stream:
+                    print(stream.decode(errors='replace')[-16000:], file=sys.stderr)
+            raise AssertionError(label+(' did not reject the intended malformed contract' if contains else ' failed'))
         return result.stdout.decode()
     try:
         receipt['source_commit'] = run('source', ['git','rev-parse','HEAD']).strip()
@@ -90,6 +91,9 @@ def main():
         receipt['checks'].extend(['exact compiled defaults/nullability/generics fail closed','missing XML summary/parameter/returns fail closed'])
         run('docfx',['python3','src/Build.Integration/compose_docs.py','--config','tests/Build.Integration/api-fixture.json','--output',out/'html'])
         receipt['documentation'] = json.loads((out/'html/result.json').read_text())
+        if (receipt['documentation']['guide_sha256']['docs/guides/cpp-native.md'] != digest(ROOT/'docs/guides/cpp-native.md')
+                or not (out/'html/site/cpp-native.html').is_file()):
+            raise AssertionError('Standalone guide composition omitted the linked native implementation guide')
         receipt['checks'].append('actual pinned DocFX assembly/XML/guide composition, warnings as errors')
         receipt['status']='passed'
     except BaseException as error:

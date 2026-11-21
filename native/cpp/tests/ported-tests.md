@@ -31,7 +31,7 @@ runner. Release fixtures use the same static LLVM C++ runtime as the products.
 | `nw_host_review_tests` administrative cases | `migrations/host.rs::execute`, source close and the independent one-slot semaphore | Actual `DbOperation::start` fills four administrative waiters while all three provider workers are occupied; the next start completes with Capacity immediately; queued cancellation/deadline/close require no free worker. A real SQLite collation destructor blocks physical close and proves the permit remains held until close returns; retaining a terminal result handle does not retain that permit. |
 | `nw_sqlite_fixture_tests`, `tests/Data.Sqlite/verify.py` | `sqlite/tests/support/scenarios.rs`, unchanged B03 managed consumer | All 14 original native families pass: 140,219 checks; unchanged managed JIT/AOT consumers each pass 44 assertions |
 | `nw_postgres_fixture_tests`, `tests/Data.Postgres/verify.py` | `tests/Data.Postgres/native/src/oracles.rs`, unchanged B02 managed consumer | All 11 original real-service families execute in native, JIT and AOT; results retain the original per-case fields instead of inventing an assertion total |
-| `nw_transaction_tests`, `tests/Data.Transactions/verify.py` | `transactions/tests/lifecycle.rs`, unchanged B05 consumer | All 13 native lifecycle families, 50 checks; unchanged JIT/AOT consumer each passes 29 assertions |
+| `nw_transaction_tests`, `tests/Data.Transactions/verify.py` | `transactions/tests/lifecycle.rs`, unchanged B05 consumer | All 13 native lifecycle families plus released-savepoint disposal scheduling regressions; unchanged JIT/AOT consumer each passes 29 assertions |
 | `nw_streaming_tests`, `tests/Data.Streaming/verify.py` | `streaming/tests/bounded.rs`, unchanged B06 consumer | All six native ownership/budget families plus complete-row-preflight/aggregate-budget regressions; unchanged dual-provider JIT/AOT consumers each pass 598 assertions across 58 cases |
 | `nw_provider_tests`, `provider_verify.py` | Additional focused probes of accepted provider behavior | Independent TLS endpoints, ambient configuration rejection, exact BUSY timeout, real cancel/drain/discard, same-backend reuse and connection replacement; these supplement the original B02/B03 gates |
 | `native.abi_status`, `tests/Migration.Cpp/abi_probe.py` | Direct calls to the fixed Rust provider and the C++ candidate, with the same 24 invalid-input cases | Exact status/domain/code equality for binding versus Host errors, projection sequence bounds, malformed plan parameters and owner-before-codec-validation precedence; both runs return all observed native owner counts to zero. `abi-status.expected.json` retains the fixed reference oracle. |
@@ -119,6 +119,26 @@ retains the exact old component C ABI for the unchanged managed consumer.
 The separate physical last-parent barrier is also exercised by the real B03
 close-destructor gate and B02 parent-retirement oracle. Positive paths wait for
 all Host source/session counters to return to zero.
+
+The same-source SQLite AOT historical-data continuation exposed an additional
+savepoint-owner race: after explicit RELEASE, deferred owner disposal acquired
+the next COMMIT's session gate before recognizing that its token was gone.
+`released_savepoint_disposal` reserves that real next-command gate and destroys
+the actual `Owner` wrapper, both after RELEASE and while all provider workers
+are held until RELEASE completes. A weak-owner barrier proves the cleanup task
+has retired before checking that the transaction and gate are unchanged. The
+admitted COMMIT then succeeds, and an independent file-backed SQLite connection
+observes the outer write without the savepoint's rolled-back write.
+`closed_savepoint_disposal` holds actual retirement after the transaction becomes
+Closed but before its provider gate returns, covering the other original
+idempotent branch. The owner-drop and explicit owner-close ABI paths share
+`Transaction::dispose_savepoint`; they check Closed/missing-token under the same
+mutex as RELEASE before attempting session admission. Original top-entry
+rollback/release and non-top cleanup-failure assertions use this same path.
+`parent_close_during_savepoint_disposal` closes the actual parent after session
+admission but before the action's second state check: the top token rejects
+without inventing a savepoint-order failure, then ordinary outer rollback
+reports completed cleanup.
 
 ## B06 bounded-stream ownership mapping
 

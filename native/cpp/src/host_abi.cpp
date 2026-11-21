@@ -943,10 +943,7 @@ NW_DATABASE_API nw_status NW_CDECL nw_db_close_create_v1(nw_db_ref raw, nw_db_re
                         {
                             action = [point = *point, source](auto) -> Value
                             {
-                                auto session = point->transaction->session;
-                                auto gate = session->admit(true);
-                                auto bytes = point->transaction->savepoint_action(
-                                    point->token, 0, std::make_shared<Cancel>(), gate, true);
+                                auto bytes = point->transaction->dispose_savepoint(point->token);
                                 point->cleanup_requested.store(true);
                                 return std::make_shared<Buffer>(source, std::move(bytes));
                             };

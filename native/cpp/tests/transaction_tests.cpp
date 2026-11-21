@@ -3,6 +3,7 @@
 #include "nw/host.hpp"
 
 #include <atomic>
+#include <filesystem>
 #include <future>
 #include <iostream>
 #include <semaphore>
@@ -60,12 +61,14 @@ struct Scope
     std::shared_ptr<Session> session;
     std::shared_ptr<Transaction> tx;
     std::shared_ptr<Probe> probe = std::make_shared<Probe>();
-    explicit Scope(std::uint64_t commit_ns = 30'000'000'000, std::uint64_t cleanup_ns = 5'000'000'000)
+    explicit Scope(std::uint64_t commit_ns = 30'000'000'000, std::uint64_t cleanup_ns = 5'000'000'000,
+                   std::string database = ":memory:")
     {
         HostConfig config{};
-        config.provider.connection = ":memory:";
-        config.provider.sqlite_mode = 3;
-        config.provider.sqlite_journal = 2;
+        config.provider.connection = std::move(database);
+        const bool memory = config.provider.connection == ":memory:";
+        config.provider.sqlite_mode = memory ? 3 : 0;
+        config.provider.sqlite_journal = memory ? 2 : 0;
         config.name = "transaction-lifecycle";
         config.limits = {1,    16,        64, 65536,     64, 65536,         65536,         4096,
                          4096, MAX_BYTES, 64, MAX_BYTES, 64, 5'000'000'000, 30'000'000'000};
@@ -128,8 +131,18 @@ struct Scope
     }
     void action(const std::shared_ptr<Savepoint>& point, std::uint32_t action, bool dispose = false)
     {
-        (void)point->transaction->savepoint_action(point->token, action, std::make_shared<Cancel>(),
-                                                   point->transaction->session->admit(true), dispose);
+        if (dispose)
+            (void)point->transaction->dispose_savepoint(point->token);
+        else
+            (void)point->transaction->savepoint_action(point->token, action, std::make_shared<Cancel>(),
+                                                       point->transaction->session->admit(true));
+    }
+    void execute(std::string_view sql)
+    {
+        auto gate = session->admit(false);
+        gate->dispatched = true;
+        (void)session->connection->execute(sql, {}, {});
+        gate->finish();
     }
     void fail_command()
     {
@@ -256,6 +269,121 @@ void non_top_disposal()
     check(scope.tx->cleanup == 4 && scope.probe->rollbacks == 1,
           "non-top disposal failure survives automatic rollback");
 }
+void released_savepoint_disposal()
+{
+    for (const bool queued_before_release : {false, true})
+    {
+        struct DatabaseFile
+        {
+            std::filesystem::path path = std::filesystem::temp_directory_path() /
+                                         ("nativeweave-released-savepoint-" +
+                                          std::to_string(Clock::now().time_since_epoch().count()) + ".sqlite");
+            ~DatabaseFile()
+            {
+                std::error_code ignored;
+                std::filesystem::remove(path, ignored);
+                std::filesystem::remove(path.string() + "-wal", ignored);
+                std::filesystem::remove(path.string() + "-shm", ignored);
+            }
+        } file;
+        Scope scope(30'000'000'000, 5'000'000'000, file.path.string());
+        scope.execute("CREATE TABLE released_savepoint_probe(id INTEGER)");
+        scope.execute("INSERT INTO released_savepoint_probe VALUES (10)");
+        auto point = scope.savepoint();
+        auto owner = std::make_shared<Owner>(scope.source, point);
+        const auto token = point->token;
+        std::weak_ptr<Savepoint> weak = point;
+        scope.execute("INSERT INTO released_savepoint_probe VALUES (90)");
+        scope.action(point, 0);
+        if (queued_before_release)
+        {
+            // Queue a real Owner destructor while its token still exists, then
+            // finish RELEASE before that worker can inspect the token again.
+            auto entered = std::make_shared<std::atomic<unsigned>>(0);
+            for (unsigned index = 0; index != 3; ++index)
+                scope.source->workers.post(
+                    [entered, probe = scope.probe]
+                    {
+                        ++*entered;
+                        probe->proceed.acquire();
+                    });
+            await([&] { return entered->load() == 3; });
+            owner.reset();
+        }
+        scope.action(point, 1);
+        auto commit_gate = scope.session->admit(true);
+        // The explicit owner-close ABI calls this same production entry point.
+        // Even with a later real command admitted, released disposal is a no-op.
+        (void)scope.tx->dispose_savepoint(token);
+        point.reset();
+        owner.reset();
+        if (queued_before_release)
+            scope.probe->proceed.release(3);
+        await([&] { return weak.expired(); });
+        {
+            std::lock_guard lock(scope.tx->mutex);
+            check(!scope.tx->closing && scope.tx->state == 0 && scope.tx->cleanup == 0,
+                  "released savepoint disposal closed the next transaction command");
+        }
+        check(scope.session->active.load() && !commit_gate->completed,
+              "released savepoint disposal changed another caller's command gate");
+        (void)scope.tx->finish(true, std::make_shared<Cancel>(), commit_gate);
+        scope.tx->join();
+        check(scope.tx->outcome == 1 && scope.probe->commits == 1 && scope.probe->rollbacks == 0,
+              "released savepoint disposal prevented the admitted commit");
+        auto independent = ProviderConnection::open(scope.source->config.provider, {});
+        const auto rows = independent->query_text("SELECT id FROM released_savepoint_probe ORDER BY id", {});
+        check(rows.size() == 1 && rows[0].size() == 1 && rows[0][0] == "10",
+              "independent connection did not observe the outer commit and savepoint rollback");
+        independent->close();
+    }
+}
+void closed_savepoint_disposal()
+{
+    Scope scope;
+    auto point = scope.savepoint();
+    auto owner = std::make_shared<Owner>(scope.source, point);
+    const auto token = point->token;
+    std::weak_ptr<Savepoint> weak = point;
+    scope.probe->block_retire = true;
+    scope.finish(true);
+    await([&] { return scope.probe->retires == 1; });
+    {
+        std::lock_guard lock(scope.tx->mutex);
+        check(scope.tx->state == 4 && !scope.tx->retired && !scope.tx->savepoints.empty(),
+              "closed savepoint test did not hold the real retirement boundary");
+    }
+    (void)scope.tx->dispose_savepoint(token);
+    point.reset();
+    owner.reset();
+    await([&] { return weak.expired(); });
+    check(scope.session->active.load() && scope.probe->rollbacks == 0,
+          "closed savepoint disposal competed with the retiring transaction owner");
+    scope.probe->proceed.release();
+    scope.tx->join();
+    check(scope.tx->outcome == 1 && scope.tx->retired, "closed savepoint disposal changed the committed outcome");
+}
+void parent_close_during_savepoint_disposal()
+{
+    Scope scope;
+    auto point = scope.savepoint();
+    auto gate = scope.session->admit(true);
+    // Reproduce parent close after disposal acquired its real session gate but
+    // before the provider action's second transaction-state validation.
+    scope.tx->request_close();
+    check(reject([&] { (void)scope.tx->savepoint_action(point->token, 0, std::make_shared<Cancel>(), gate, true); })
+                  .status == NW_INVALID_STATE,
+          "parent close did not reject the pending savepoint action");
+    {
+        std::lock_guard lock(scope.tx->mutex);
+        check(scope.tx->cleanup_failure == 0 && !scope.tx->provider,
+              "parent close misclassified a top savepoint as an ordering failure");
+    }
+    gate->finish();
+    scope.tx->join();
+    check(scope.tx->outcome == 2 && scope.tx->cleanup == 2 && scope.probe->rollbacks == 1,
+          "parent close did not preserve normal automatic rollback cleanup");
+}
 void bounded_close()
 {
     Scope scope(30'000'000'000, 5'000'000);
@@ -338,6 +466,9 @@ int main()
         unconfirmed_rollback();
         savepoint_lifo();
         non_top_disposal();
+        released_savepoint_disposal();
+        closed_savepoint_disposal();
+        parent_close_during_savepoint_disposal();
         bounded_close();
         stale_owner();
         capability_preflight();

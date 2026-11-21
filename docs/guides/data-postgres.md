@@ -42,9 +42,9 @@ The bootstrap reports **24** capabilities: every name defined in
 [`DatabaseEngineProfile`](../../src/Data.NativeHost/DatabaseOptions.cs) except
 `db.decimal.text.v1`. This includes `db.query.v1`, transactions/savepoints,
 streaming, migrations, schema reading, relations, `db.row-lock.v1` and
-`db.decimal.numeric.v1`. The actual advertised mask is composed by the
-[native query profile](../../native/database/host/src/query.rs) and
-[Host bootstrap](../../native/database/host/src/abi.rs). The private B02 component's
+`db.decimal.numeric.v1`. In the fixed Rust reference, this advertised mask is composed by the
+[native query profile](https://github.com/IzuSharp/NativeWeave/blob/465cd0f90e6af05ec50eb581156240377cf0825b/native/database/host/src/query.rs) and
+[Host bootstrap](https://github.com/IzuSharp/NativeWeave/blob/465cd0f90e6af05ec50eb581156240377cf0825b/native/database/host/src/abi.rs). The private B02 component's
 `postgres.component.v1` bootstrap remains a component-test input; it is not the
 public provider descriptor or the packaged Database Host.
 
