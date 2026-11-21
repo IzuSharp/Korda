@@ -21,11 +21,27 @@ def run_owned_overrides(c, root, record):
     # C# SDK props explicitly adds NU1605 to WarningsAsErrors, independently of
     # TreatWarningsAsErrors. Clear that property only in these negative fixtures
     # so the unchanged shipped closure task, including NoWarn, must reject them.
-    previous_version = next(item["version"] for item in c.manifest["previous"]["packages"] if item["id"] == "NativeWeave.Database")
+    previous = next(item for item in c.manifest["previous"]["packages"] if item["id"] == "NativeWeave.Database")
+    # Only these override fixtures need the previous facade. Ordinary consumers
+    # and the missing-leaf test keep the unchanged candidate-only source.
+    override_feed = root / "override-feed"
+    override_feed.mkdir()
+    archives = {path: c.items[identity]["sha256"] for identity, path in c.packages.items()}
+    archives[relative_file(c.manifest_path.parent, previous["path"])] = previous["sha256"]
+    for source, expected in archives.items():
+        if sha(source) != expected:
+            raise ValueError("Override fixture input differs from the frozen manifest")
+        copied = override_feed / source.name
+        shutil.copyfile(source, copied)
+        if sha(copied) != expected:
+            raise ValueError("Override fixture copy differs from the frozen manifest")
+    c.result["overrideNegativeFeed"] = {path.name: sha(path) for path in sorted(override_feed.glob("*.nupkg"))}
+    from consumer_cases import config
     for suppressed in (False, True):
         name = "override-suppressed" if suppressed else "override-visible"
         negative = root / name
-        c.template("combined", negative, override=("NativeWeave.Database", previous_version))
+        c.template("combined", negative, override=("NativeWeave.Database", previous["version"]))
+        config(negative / "NuGet.Config", override_feed)
         neg_env = c.environment_for(negative)
         flags = [*FLAGS, "-p:TreatWarningsAsErrors=false", "-p:WarningsAsErrors=",
                  *(["-p:NoWarn=NU1608%3BNU1605"] if suppressed else [])]
