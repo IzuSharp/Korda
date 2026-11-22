@@ -59,3 +59,12 @@ class ImpactTests(unittest.TestCase):
         packaging = plan(["src/Packaging.Release/BuildTasks/PackageClosure.cs"], hashes, previous)
         self.assertEqual((packaging["scope"], packaging["checks"], packaging["packages"]),
                          ("pack", ["pack-api", "pack-metadata"], ["postgresql", "sqlite"]))
+
+    def test_two_provider_regression_edits_run_two_independent_jobs(self):
+        hashes = dict.fromkeys(PROVIDERS, "same")
+        published = {p: {"inputs": "same"} for p in PROVIDERS}
+        paths = ["tests/Data.Postgres/Program.cs", "tests/Data.Sqlite/Program.cs", "tests/Query.Generator/Program.cs"]
+        result = plan(paths, hashes, published, recover=False)
+        self.assertEqual((list(PROVIDERS), ["generator"], [], False),
+                         (result["build_scopes"], result["checks"], result["packages"], result["consume"]))
+        self.assertEqual(["full"], plan(paths + ["src/Data.NativeHost/Session.cs"], hashes, published)["build_scopes"])

@@ -51,9 +51,14 @@ jobs:
   build:
     needs: plan
     if: needs.plan.outputs.scope != 'light' && !needs.plan.outputs.reuse && (github.event_name != 'push' || (needs.plan.outputs.merged == 'true' && needs.plan.outputs.pending == 'true'))
+    strategy:
+      fail-fast: false
+      matrix:
+        scope: ${{ fromJSON(needs.plan.outputs.plan).build_scopes }}
     uses: ./.github/workflows/build.yml
     with:
       version: 0.1.0-preview.${{ github.run_number }}
+      scope: ${{ matrix.scope }}
       plan: ${{ needs.plan.outputs.plan }}
       artifact: ${{ needs.plan.outputs.artifact }}
   focused:

@@ -73,10 +73,12 @@ def plan(paths, fingerprints, published, deep=False, *, recover=True):
     if not recover and not changed:
         pending.clear()
     bootstrap = any(not published[p].get("inputs") for p in PROVIDERS)
-    if deep or (pending and bootstrap) or pending - changed or "full" in lanes or set(PROVIDERS) <= lanes:
+    if deep or (pending and bootstrap) or pending - changed or "full" in lanes:
         scope = "full"
     elif "pack" in lanes and lanes.intersection(PROVIDERS):
         scope = "full"
+    elif set(PROVIDERS) <= lanes:
+        scope = "full" if changed or pending else "provider-tests"
     elif lanes.intersection(PROVIDERS):
         scope = next(iter(lanes.intersection(PROVIDERS)))
     elif "pack" in lanes:
@@ -91,7 +93,8 @@ def plan(paths, fingerprints, published, deep=False, *, recover=True):
         if any(p.startswith("src/Packaging.Release/BuildTasks/") for p in paths):
             checks.add("pack-api")
     rebuild_task = any(p.startswith("src/Packaging.Release/BuildTasks/") for p in paths)
-    return {"consume": bool(pending) or deep or scope == "pack", "rebuild_task": rebuild_task,
+    build_scopes = list(PROVIDERS) if scope == "provider-tests" else [scope]
+    return {"build_scopes": build_scopes, "consume": bool(pending) or deep or scope == "pack", "rebuild_task": rebuild_task,
             "checks": sorted(checks), "scope": scope, "packages": sorted(pending), "inputs": fingerprints,
             "published": published, "reasons": reasons, "deep": deep}
 
