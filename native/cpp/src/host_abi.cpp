@@ -153,6 +153,12 @@ template <class F> auto with_query(nw_db_ref raw, F&& action)
         throw Error(NW_NATIVE_PANIC, 8, "native query exception contained");
     }
 }
+std::uint64_t remaining_command_time(std::uint64_t timeout_ns, Clock::time_point admitted)
+{
+    const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now() - admitted);
+    return elapsed >= std::chrono::nanoseconds(timeout_ns) ? 0
+                                                           : timeout_ns - static_cast<std::uint64_t>(elapsed.count());
+}
 std::shared_ptr<Buffer> snapshot_buffer(const std::shared_ptr<Owner>& value)
 {
     Bytes bytes;
@@ -701,13 +707,32 @@ NW_DATABASE_API nw_status NW_CDECL nw_db_relation_load_create_v1(nw_db_ref raw, 
             auto source = session->source;
             if (relation->source != source->identity)
                 throw Error(NW_INVALID_STATE, 13, "mixed relation load source");
-            auto rendered = compile_relation(*relation, source->identity, borrow(key), source->projection(projection),
-                                             source->config.limits.binding(), source->config.limits.command_ns);
+            const auto limits = source->config.limits.binding();
+            const auto timeout = source->config.limits.command_ns;
+            const auto admitted = Clock::now();
+            if (!timeout)
+                throw Error(NW_TIMEOUT, 8, "relation deadline expired");
+            const auto bytes = borrow(key);
+            const auto arity = relation->parent.model->keys().size();
+            // The B14 Host applies these capacity checks before projection
+            // lookup and the binding compiler's own argument validation.
+            if (bytes.size() > limits.bytes || arity > limits.parameters || arity > limits.nodes / 3 ||
+                limits.depth < 2)
+                throw Error::capacity();
+            auto rendered =
+                compile_relation(*relation, source->identity, bytes, source->projection(projection), limits, timeout);
             auto plan = SqlPlan::rendered(source, std::move(rendered));
             plan->relation = relation;
             auto gate = session->admit(false);
-            output_operation(output, DbOperation::create(source, 2, false, [session, plan, gate](auto cancel)
-                                                         { return session->execute(plan, cancel, gate); }));
+            output_operation(output, DbOperation::create(source, 2, false,
+                                                         [session, plan, gate, timeout, admitted](auto cancel)
+                                                         {
+                                                             // Preserve B14's create-time total deadline, including
+                                                             // copied input, delayed Start and worker queue time.
+                                                             plan->timeout_ns =
+                                                                 remaining_command_time(timeout, admitted);
+                                                             return session->execute(plan, cancel, gate);
+                                                         }));
         });
 }
 NW_DATABASE_API nw_status NW_CDECL nw_db_mutation_create_v1(nw_db_ref raw, nw_db_ref input, std::uint32_t kind,
@@ -732,42 +757,44 @@ NW_DATABASE_API nw_status NW_CDECL nw_db_mutation_create_v1(nw_db_ref raw, nw_db
                 auto fields = Fields::parse(bytes, 4, {{1, 1, true}, {2, 5, true}, {7, 1, true}});
                 projection = source->projection(fields.u32(7));
             }
-            auto mutation = compile_mutation(model, kind, bytes, projection, source->config.limits.binding(),
-                                             source->config.limits.command_ns);
+            const auto timeout = source->config.limits.command_ns;
+            const auto admitted = Clock::now();
+            auto mutation = compile_mutation(model, kind, bytes, projection, source->config.limits.binding(), timeout);
             if (mutation.input_rows > source->config.limits.batch_rows)
                 throw Error::capacity();
             auto plan = SqlPlan::rendered(source, std::move(mutation.command));
             plan->kind = 1;
             auto gate = session->admit(false);
-            output_operation(output, DbOperation::create(source, kind == 1 ? 2 : 100, false,
-                                                         [session, plan, gate, mutation, kind](auto cancel) -> Value
+            output_operation(output, DbOperation::create(
+                                         source, kind == 1 ? 2 : 100, false,
+                                         [session, plan, gate, mutation, kind, timeout, admitted](auto cancel) -> Value
+                                         {
+                                             try
+                                             {
+                                                 plan->timeout_ns = remaining_command_time(timeout, admitted);
+                                                 auto value = session->execute(plan, cancel, gate);
+                                                 if (auto count = std::get_if<std::int64_t>(&value))
+                                                     mutation.validate_affected(*count);
+                                                 return value;
+                                             }
+                                             catch (Error& error)
+                                             {
+                                                 if (kind == 0)
+                                                 {
+                                                     std::uint32_t outcome = 0;
+                                                     {
+                                                         std::lock_guard lock(session->mutex);
+                                                         if (auto tx = session->transaction.lock())
                                                          {
-                                                             try
-                                                             {
-                                                                 auto value = session->execute(plan, cancel, gate);
-                                                                 if (auto count = std::get_if<std::int64_t>(&value))
-                                                                     mutation.validate_affected(*count);
-                                                                 return value;
-                                                             }
-                                                             catch (Error& error)
-                                                             {
-                                                                 if (kind == 0)
-                                                                 {
-                                                                     std::uint32_t outcome = 0;
-                                                                     {
-                                                                         std::lock_guard lock(session->mutex);
-                                                                         if (auto tx = session->transaction.lock())
-                                                                         {
-                                                                             std::lock_guard state(tx->mutex);
-                                                                             outcome = tx->outcome;
-                                                                         }
-                                                                     }
-                                                                     error.bulk =
-                                                                         NativeBulkProgress{0, 0, false, outcome};
-                                                                 }
-                                                                 throw;
-                                                             }
-                                                         }));
+                                                             std::lock_guard state(tx->mutex);
+                                                             outcome = tx->outcome;
+                                                         }
+                                                     }
+                                                     error.bulk = NativeBulkProgress{0, 0, false, outcome};
+                                                 }
+                                                 throw;
+                                             }
+                                         }));
         });
 }
 

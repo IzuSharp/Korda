@@ -86,7 +86,11 @@ class ProviderStatement
                                           std::size_t row_payload_bytes = std::numeric_limits<std::size_t>::max());
     [[nodiscard]] std::optional<TextRow> next_text(const CallContext& context);
     [[nodiscard]] std::int64_t affected() const noexcept;
-    void close();
+    // The Host's PostgreSQL description and stream-retirement boundaries each
+    // require their own protocol confirmation. Ordinary low-level statements do
+    // not implicitly add confirmations to transaction/admin commands.
+    void confirm_description();
+    void close(bool confirm_protocol = false);
 
   private:
     friend class ProviderConnection;
@@ -98,8 +102,8 @@ class ProviderStatement
 class ProviderConnection : public std::enable_shared_from_this<ProviderConnection>
 {
   public:
-    [[nodiscard]] static std::shared_ptr<ProviderConnection> open(const ProviderOptions& options,
-                                                                  const CallContext& context);
+    [[nodiscard]] static std::shared_ptr<ProviderConnection>
+    open(const ProviderOptions& options, const CallContext& context, bool defer_session_initialization = false);
     ~ProviderConnection();
     [[nodiscard]] std::unique_ptr<ProviderStatement> query(std::string_view sql, const std::vector<Scalar>& parameters,
                                                            const CallContext& context);
@@ -111,6 +115,19 @@ class ProviderConnection : public std::enable_shared_from_this<ProviderConnectio
     void execute_script(std::string_view sql, const CallContext& context);
     [[nodiscard]] std::vector<TextRow> query_text(std::string_view sql, const CallContext& context,
                                                   std::size_t maximum_rows = MAX_NODES);
+    // Called only by the exclusive physical owner after its statement retires.
+    // Uses one provider cleanup deadline and ignores business cancellation.
+    // A failed confirmation physically closes this connection before throwing.
+    void synchronize_protocol();
+    // The retained pool's test-before-acquire uses the acquisition's absolute
+    // deadline and cancellation, not the independent cleanup budget.
+    void verify_idle(const CallContext& acquisition);
+    // The retained Host initializes its leased PostgreSQL Session after pool
+    // acquisition, outside that deadline and its cancellation selection.
+    void initialize_session();
+    // SQLx return_to_pool performs another, unbounded protocol ping. Its failure
+    // discards the physical connection but is swallowed by that pool layer.
+    [[nodiscard]] bool confirm_pool_return() noexcept;
     void close() noexcept;
     [[nodiscard]] bool healthy() const noexcept;
     [[nodiscard]] bool in_transaction() const noexcept;

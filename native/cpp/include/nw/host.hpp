@@ -222,6 +222,8 @@ struct Session : std::enable_shared_from_this<Session>
     std::shared_ptr<Source> source;
     std::shared_ptr<ProviderConnection> connection;
     std::atomic<bool> closing{false}, retired{false}, active{false}, discard{false}, cleanup_scheduled{false};
+    std::atomic<bool> physical_retired{false};
+    std::atomic<bool> provider_cleanup_failed{false};
     mutable std::mutex mutex;
     std::condition_variable changed;
     std::weak_ptr<Transaction> transaction;
@@ -236,6 +238,7 @@ struct Session : std::enable_shared_from_this<Session>
     void request_close();
     void schedule_cleanup();
     void retire_now();
+    void retire_failed_provider();
     void join();
     Bytes snapshot() const;
 };
@@ -264,6 +267,7 @@ struct Cursor : std::enable_shared_from_this<Cursor>
     std::optional<Row> pending_row;
     bool ended = false, failed = false, end_sent = false;
     std::atomic<bool> close_started{false}, cleanup_unconfirmed{false};
+    std::atomic<bool> protocol_quarantined{false};
 #ifdef NW_HOST_TEST_HOOKS
     std::function<void()> test_retire_gate;
     std::function<void()> test_after_cleanup_gate;
@@ -289,6 +293,7 @@ struct Cursor : std::enable_shared_from_this<Cursor>
         void publish();
     };
     std::shared_ptr<Completion> completion_ = std::make_shared<Completion>();
+    void retire_provider();
     void close_resources();
 };
 

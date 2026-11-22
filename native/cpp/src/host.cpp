@@ -1098,6 +1098,20 @@ std::shared_ptr<Session> Session::open_reserved(std::shared_ptr<Source> source, 
         source->admit();
         if (cancel->requested())
             throw Error::canceled();
+        const bool postgres = source->config.provider.profile == Profile::PostgreSql;
+        // Host admission already owns its separate slot. The lower PostgreSQL
+        // pool acquire has one further budget for idle testing and replacement.
+        const auto acquire_ns =
+            postgres ? std::min(source->config.limits.admission_ns, source->config.provider.connect_timeout_ns)
+                     : source->config.limits.admission_ns;
+        const CallContext acquisition{cancel, Clock::now() + std::chrono::nanoseconds(acquire_ns)};
+        const auto check_acquisition = [&]
+        {
+            if (cancel->requested())
+                throw Error::canceled();
+            if (Clock::now() >= acquisition.deadline)
+                throw Error(NW_DOMAIN_ERROR, 1, "PostgreSQL pool acquisition timed out");
+        };
         {
             std::lock_guard lock(source->mutex);
             if (!source->idle.empty())
@@ -1106,10 +1120,41 @@ std::shared_ptr<Session> Session::open_reserved(std::shared_ptr<Source> source, 
                 source->idle.pop_back();
             }
         }
+        if (connection && postgres)
+        {
+            try
+            {
+                connection->verify_idle(acquisition);
+            }
+            catch (...)
+            {
+                connection->close();
+                connection.reset();
+                check_acquisition();
+            }
+        }
         if (!connection)
-            connection = ProviderConnection::open(
-                source->config.provider,
-                {cancel, Clock::now() + std::chrono::nanoseconds(source->config.limits.admission_ns)});
+        {
+            try
+            {
+                connection = ProviderConnection::open(source->config.provider, acquisition, postgres);
+            }
+            catch (const Error& error)
+            {
+                if (postgres)
+                {
+                    check_acquisition();
+                    if (error.status == NW_TIMEOUT)
+                        throw Error(NW_DOMAIN_ERROR, 1, "PostgreSQL pool acquisition timed out");
+                }
+                throw;
+            }
+        }
+        if (postgres)
+        {
+            check_acquisition();
+            connection->initialize_session();
+        }
         auto session = std::make_shared<Session>();
         session->source = source;
         session->connection = connection;
@@ -1188,7 +1233,34 @@ Value Session::execute(std::shared_ptr<SqlPlan> plan, std::shared_ptr<Cancel> ca
         {
             auto parameters = decode_command_parameters(*this, *plan);
             const bool observe = source->config.provider.profile == Profile::Sqlite;
-            const auto count = connection->execute(plan->sql, parameters, {cancel, deadline, observe});
+            std::int64_t count;
+            try
+            {
+                count = connection->execute(plan->sql, parameters, {cancel, deadline, observe});
+            }
+            catch (...)
+            {
+                // The original PostgreSQL worker always drains after execution,
+                // while result.and_then keeps an existing business error first.
+                try
+                {
+                    connection->synchronize_protocol();
+                }
+                catch (...)
+                {
+                }
+                retire_failed_provider();
+                throw;
+            }
+            try
+            {
+                connection->synchronize_protocol();
+            }
+            catch (...)
+            {
+                retire_failed_provider();
+                throw;
+            }
             gate->finish();
             if (plan->kind == 2)
             {
@@ -1286,30 +1358,83 @@ void Session::schedule_cleanup()
 }
 void Session::retire_now()
 {
-    bool invalid = discard.load() || !connection->healthy();
+    const bool postgres = source->config.provider.profile == Profile::PostgreSql;
+    bool invalid = discard.load() || !connection->healthy() || physical_retired.load();
     std::optional<std::string> code;
     if (!invalid && connection->in_transaction())
     {
-        try
+        if (postgres)
         {
-            (void)connection->execute("ROLLBACK", {}, {{}, Clock::now() + std::chrono::seconds(5), false});
-        }
-        catch (const Error& error)
-        {
+            // PostgreSQL Session::request_close never returns an active explicit
+            // transaction to the pool, even if a later rollback could succeed.
             invalid = true;
-            code = error.provider;
+        }
+        else
+        {
+            try
+            {
+                (void)connection->execute("ROLLBACK", {}, {{}, Clock::now() + std::chrono::seconds(5), false});
+            }
+            catch (const Error& error)
+            {
+                invalid = true;
+                code = error.provider;
+            }
         }
     }
-    const bool reusable = !invalid && !source->closing.load();
-    source->return_connection(std::move(connection), !reusable);
+    if (!invalid && postgres)
+    {
+        try
+        {
+            connection->synchronize_protocol();
+        }
+        catch (...)
+        {
+            invalid = true;
+        }
+    }
+    // The old PostgreSQL Session records returned_to_pool once it invokes and
+    // awaits that pool operation. The pool can then close on shutdown or after
+    // its own failed ping; that hidden discard does not change this receipt.
+    const bool returned_to_pool = !invalid && (postgres || !source->closing.load());
+    bool reusable = !invalid && !source->closing.load();
+    if (reusable && postgres)
+        reusable = connection->confirm_pool_return();
+    if (!physical_retired.load())
+    {
+        source->return_connection(std::move(connection), !reusable);
+        physical_retired.store(true);
+    }
+    else
+    {
+        // The provider already destroyed its physical transport, but the Host
+        // Session admission permit remains owned until this logical close.
+        source->return_connection({}, true);
+        connection.reset();
+    }
     {
         std::lock_guard lock(mutex);
-        cleanup = 2;
-        disposition = reusable ? 0 : 3;
+        cleanup = provider_cleanup_failed.load() ? 4 : 2;
+        disposition = returned_to_pool ? 0 : 3;
         cleanup_provider = code;
         retired.store(true);
     }
     changed.notify_all();
+}
+void Session::retire_failed_provider()
+{
+    if (source->config.provider.profile != Profile::PostgreSql || connection->healthy())
+        return;
+    discard.store(true);
+    // The lower PostgreSQL Session retires its physical lease independently of
+    // the public Host owner. Its separate Host MaxConnections permit remains
+    // charged until retire_now. Keep the inert provider for the closed error.
+    // This path still owns the Session gate; publish after actual destruction.
+    if (!physical_retired.load())
+    {
+        connection->close();
+        physical_retired.store(true);
+    }
 }
 void Session::join()
 {
@@ -1358,7 +1483,28 @@ std::shared_ptr<Cursor> Cursor::open(std::shared_ptr<Session> session, std::shar
         (void)session->connection->describe_sqlite(plan->sql, {cancel, deadline});
     }
     auto parameters = decode_command_parameters(*session, *plan);
-    cursor->statement = session->connection->query(plan->sql, parameters, {cancel, deadline});
+    try
+    {
+        cursor->statement = session->connection->query(plan->sql, parameters, {cancel, deadline});
+        cursor->statement->confirm_description();
+    }
+    catch (...)
+    {
+        if (!cursor->statement)
+        {
+            // Description failures still consume their independent confirmation,
+            // but never replace the original SQL/shape/provider error.
+            try
+            {
+                session->connection->synchronize_protocol();
+            }
+            catch (...)
+            {
+            }
+        }
+        session->retire_failed_provider();
+        throw;
+    }
     // The original Host prepares provider inputs before B06 admits its row
     // buffers. Keep that error precedence, while still reserving all row bytes
     // before this implementation can execute the prepared statement.
@@ -1448,7 +1594,7 @@ std::shared_ptr<Buffer> Cursor::fetch(std::shared_ptr<Cancel> cancel, std::size_
             if (!row)
             {
                 ended = true;
-                statement->close();
+                retire_provider();
                 break;
             }
             std::size_t row_bytes = per_row;
@@ -1527,11 +1673,7 @@ void Cursor::close_resources()
         if (test_retire_gate)
             test_retire_gate();
 #endif
-        if (statement)
-        {
-            statement->close();
-            statement.reset();
-        }
+        retire_provider();
         pending_row.reset();
         if (gate)
         {
@@ -1555,6 +1697,21 @@ void Cursor::close_resources()
             session->source->quarantined_cursors.push_back(shared_from_this());
         }
         cleanup_unconfirmed.store(true);
+    }
+}
+void Cursor::retire_provider()
+{
+    if (statement)
+    {
+        // Exactly one original stream-retirement confirmation, at EOF or stop.
+        // A cleanup failure changes the receipt, not already delivered rows.
+        statement->close(true);
+        statement.reset();
+    }
+    if (session->source->config.provider.profile == Profile::PostgreSql && !session->connection->healthy())
+    {
+        protocol_quarantined.store(true);
+        session->retire_failed_provider();
     }
 }
 void Cursor::Completion::publish()
@@ -1589,7 +1746,7 @@ Bytes Cursor::snapshot() const
                            : done                     ? 2
                            : closing.load()           ? 1
                                                       : 0,
-                           cleanup_unconfirmed.load() ? 2 : 0, done, false, 0);
+                           cleanup_unconfirmed.load() || protocol_quarantined.load() ? 2 : 0, done, false, 0);
 }
 
 TransactionOptions TransactionOptions::parse(ByteView bytes)
@@ -1773,6 +1930,7 @@ void Transaction::finish_worker(bool commit, std::shared_ptr<CommandGate> gate)
                     if (error.provider != std::optional<std::string>("25P02"))
                         throw;
                     (void)session->connection->execute("ROLLBACK", {}, {{}, deadline, false});
+                    session->connection->synchronize_protocol();
                     failure = error;
                     known_rollback = true;
                 }
@@ -1784,6 +1942,9 @@ void Transaction::finish_worker(bool commit, std::shared_ptr<CommandGate> gate)
                 if (commit && !session->connection->in_transaction())
                     throw Error(NW_DOMAIN_ERROR, 1, "transaction no longer active");
                 (void)session->connection->execute(commit ? "COMMIT" : "ROLLBACK", {}, {{}, deadline, false});
+                // Driver confirmation precedes publication of Committed. Loss
+                // of this first post-COMMIT Sync must still report Unknown.
+                session->connection->synchronize_protocol();
                 committed = commit;
             }
         }
@@ -1841,6 +2002,37 @@ void Transaction::finish_worker(bool commit, std::shared_ptr<CommandGate> gate)
     }
     changed.notify_all();
     bool clean = session->connection->healthy();
+    if (commit && failure && !known_rollback)
+    {
+        try
+        {
+            // The old coordinator attempts cleanup_rollback after every failed
+            // commit driver call, including an untrusted first Sync. A failed
+            // cleanup remains Failed even if later recover says Untrusted.
+            if (clean && session->connection->in_transaction())
+                (void)session->connection->execute(
+                    "ROLLBACK", {}, {{}, Clock::now() + std::chrono::nanoseconds(options.cleanup_timeout_ns), false});
+            session->connection->synchronize_protocol();
+        }
+        catch (const Error& error)
+        {
+            clean = false;
+            if (session->source->config.provider.profile == Profile::PostgreSql)
+                session->provider_cleanup_failed.store(true);
+            std::lock_guard lock(mutex);
+            provider = error.provider;
+            correlation = error.correlation;
+            cleanup_failure = 4;
+        }
+    }
+    {
+        // The original coordinator gives cleanup_rollback and recover separate
+        // bounded waiters. Neither deadline abandons the native accessor.
+        std::lock_guard lock(mutex);
+        deadline_phase = 3;
+        phase_deadline = Clock::now() + std::chrono::nanoseconds(options.cleanup_timeout_ns);
+    }
+    changed.notify_all();
     try
     {
         // Recovery observes protocol safety only. In particular a successful
@@ -1848,6 +2040,8 @@ void Transaction::finish_worker(bool commit, std::shared_ptr<CommandGate> gate)
         if (clean && session->connection->in_transaction())
             (void)session->connection->execute(
                 "ROLLBACK", {}, {{}, Clock::now() + std::chrono::nanoseconds(options.cleanup_timeout_ns), false});
+        if (clean)
+            session->connection->synchronize_protocol();
         if (clean && options.read_only && session->source->config.provider.profile == Profile::Sqlite)
             (void)session->connection->execute(
                 "PRAGMA query_only=OFF", {},
@@ -1876,6 +2070,7 @@ void Transaction::finish_worker(bool commit, std::shared_ptr<CommandGate> gate)
     {
         session->discard.store(true);
         session->connection->close();
+        session->retire_failed_provider();
     }
     gate->finish();
     // A closing parent still owns the physical lease. Its observed return/close
@@ -1970,6 +2165,7 @@ std::shared_ptr<Savepoint> Transaction::create_savepoint(std::shared_ptr<Cancel>
         (void)session->connection->execute(
             "SAVEPOINT _sqlx_savepoint_" + std::to_string(savepoints.size() + 1), {},
             {{}, Clock::now() + std::chrono::nanoseconds(session->source->config.limits.command_ns), false});
+        session->connection->synchronize_protocol();
     }
     catch (const Error& error)
     {
@@ -2024,9 +2220,15 @@ Bytes Transaction::savepoint_action(std::uint64_t token, std::uint32_t action, s
     try
     {
         if (action == 0 || disposal)
+        {
             (void)session->connection->execute("ROLLBACK TO SAVEPOINT " + name, {}, context);
+            session->connection->synchronize_protocol();
+        }
         if (action == 1 || disposal)
+        {
             (void)session->connection->execute("RELEASE SAVEPOINT " + name, {}, context);
+            session->connection->synchronize_protocol();
+        }
     }
     catch (const Error& error)
     {

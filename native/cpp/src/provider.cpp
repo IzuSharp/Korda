@@ -155,6 +155,48 @@ PGresult* receive(PGconn* connection, const CallContext& context)
         wait_socket(PQsocket(connection), false, context);
     }
 }
+void protocol_sync(PGconn* connection, const CallContext& cleanup)
+{
+    cleanup.check();
+    if (!connection || PQstatus(connection) != CONNECTION_OK || !PQisnonblocking(connection) ||
+        PQpipelineStatus(connection) != PQ_PIPELINE_OFF)
+        throw postgres_error();
+    // SQLx ping first sends Sync, then consumes all outstanding responses. The
+    // public libpq pipeline API requires protocol idle before entry, so finish
+    // the preceding operation within the same cleanup deadline first.
+    while (auto* result = receive(connection, cleanup))
+    {
+        const auto status = PQresultStatus(result);
+        PQclear(result);
+        if (status != PGRES_SINGLE_TUPLE && status != PGRES_TUPLES_OK && status != PGRES_COMMAND_OK)
+            throw postgres_error();
+    }
+    if (PQstatus(connection) != CONNECTION_OK || !PQenterPipelineMode(connection) || !PQpipelineSync(connection))
+        throw postgres_error();
+    // This otherwise empty temporary pipeline contains exactly one Sync. A
+    // successful queue/flush is not confirmation: require its ReadyForQuery.
+    auto* result = receive(connection, cleanup);
+    if (!result)
+        throw postgres_error();
+    const auto status = PQresultStatus(result);
+    PQclear(result);
+    if (status != PGRES_PIPELINE_SYNC)
+        throw postgres_error();
+    result = receive(connection, cleanup);
+    if (result)
+    {
+        PQclear(result);
+        throw postgres_error();
+    }
+    if (PQstatus(connection) != CONNECTION_OK || !PQexitPipelineMode(connection) ||
+        PQpipelineStatus(connection) != PQ_PIPELINE_OFF)
+        throw postgres_error();
+    const auto transaction = PQtransactionStatus(connection);
+    // An explicit failed transaction is still protocol idle. Sync must not
+    // execute SQL, roll it back, or replace its unnamed statement/portal.
+    if (transaction != PQTRANS_IDLE && transaction != PQTRANS_INTRANS && transaction != PQTRANS_INERROR)
+        throw postgres_error();
+}
 std::uint64_t big_unsigned(ByteView bytes)
 {
     std::uint64_t value = 0;
@@ -220,6 +262,7 @@ struct ProviderConnection::Impl
     std::atomic<bool> transaction{false};
     std::atomic<bool> interrupted{false};
     bool statement_live = false;
+    std::optional<Clock::time_point> pending_cleanup_deadline;
     std::mutex lifetime;
     CallContext current;
     Clock::time_point busy_started;
@@ -230,6 +273,42 @@ struct ProviderConnection::Impl
     PGconn* postgres = nullptr;
     std::map<Oid, std::string> extension_types;
 #endif
+    CallContext cleanup_context() const
+    {
+        return {{}, Clock::now() + std::chrono::nanoseconds(options.cleanup_timeout_ns), false};
+    }
+    void synchronize_protocol(const CallContext& cleanup)
+    {
+#if NW_ENABLE_POSTGRES
+        if (options.profile == Profile::PostgreSql)
+        {
+            // The statement/Session gate supplies exclusive protocol access;
+            // the lifetime lock also excludes physical destruction until this
+            // confirmation or its deterministic discard has completed.
+            std::lock_guard lock(lifetime);
+            try
+            {
+                if (!usable.load())
+                    throw postgres_error();
+                protocol_sync(postgres, cleanup);
+                const auto state = PQtransactionStatus(postgres);
+                transaction.store(state == PQTRANS_INTRANS || state == PQTRANS_INERROR);
+            }
+            catch (...)
+            {
+                usable.store(false);
+                if (postgres)
+                {
+                    PQfinish(postgres);
+                    postgres = nullptr;
+                }
+                throw Error(NW_DOMAIN_ERROR, 1, "PostgreSQL protocol drain failed");
+            }
+        }
+#else
+        (void)cleanup;
+#endif
+    }
 };
 
 struct ProviderStatement::Impl
@@ -386,7 +465,8 @@ ProviderStatement::~ProviderStatement()
     }
 }
 
-std::shared_ptr<ProviderConnection> ProviderConnection::open(const ProviderOptions& options, const CallContext& context)
+std::shared_ptr<ProviderConnection> ProviderConnection::open(const ProviderOptions& options, const CallContext& context,
+                                                             [[maybe_unused]] bool defer_session_initialization)
 {
     context.check();
     if (options.connection.empty() || options.connection.size() > 8192 ||
@@ -526,9 +606,10 @@ std::shared_ptr<ProviderConnection> ProviderConnection::open(const ProviderOptio
         if (PQsetnonblocking(state.postgres, 1) != 0)
             throw postgres_error();
         (void)connection->execute("SET timezone TO 'UTC'", {}, context);
-        (void)connection->execute("SET statement_timeout TO " + std::to_string(std::max<std::uint64_t>(
-                                                                    1, options.statement_timeout_ns / 1'000'000)),
-                                  {}, context);
+        if (!defer_session_initialization)
+            (void)connection->execute("SET statement_timeout TO " + std::to_string(std::max<std::uint64_t>(
+                                                                        1, options.statement_timeout_ns / 1'000'000)),
+                                      {}, context);
         const auto extensions = connection->query_text(
             "SELECT oid::bigint, typname::text FROM pg_catalog.pg_type WHERE typname='citext'", context);
         for (const auto& row : extensions)
@@ -566,13 +647,17 @@ std::unique_ptr<ProviderStatement> ProviderConnection::prepare(std::string_view 
 {
     context.check();
     if (!healthy())
-        throw Error::closed();
+        throw impl_->options.profile == Profile::PostgreSql ? Error(NW_DOMAIN_ERROR, 8, "PostgreSQL session closed")
+                                                            : Error::closed();
     if (impl_->statement_live)
         throw Error(NW_DOMAIN_ERROR, 7, "physical session already has a command");
     if (sql.empty() || sql.size() > MAX_BYTES || sql.find('\0') != std::string_view::npos ||
         parameters.size() > MAX_NODES)
         throw Error::invalid("invalid SQL command");
     auto statement = std::make_unique<ProviderStatement::Impl>();
+    // A new independent command starts a new boundary. If its predecessor
+    // threw, the immediate Host drain consumes the saved deadline instead.
+    impl_->pending_cleanup_deadline.reset();
     statement->connection = shared_from_this();
     statement->context = context;
     impl_->current = context;
@@ -899,7 +984,18 @@ std::optional<TextRow> ProviderStatement::next_text(const CallContext& context)
     impl_->consume_row();
     return row;
 }
-void ProviderStatement::close()
+void ProviderStatement::confirm_description()
+{
+    auto& provider = *impl_->connection->impl_;
+    if (provider.options.profile != Profile::PostgreSql)
+        return;
+#if NW_ENABLE_POSTGRES
+    if (impl_->closed || impl_->postgres_started || impl_->postgres_pending)
+        throw Error::state("description confirmation requires an idle prepared statement");
+    provider.synchronize_protocol(provider.cleanup_context());
+#endif
+}
+void ProviderStatement::close([[maybe_unused]] bool confirm_protocol)
 {
     if (impl_->closed)
         return;
@@ -915,27 +1011,35 @@ void ProviderStatement::close()
     }
 #endif
 #if NW_ENABLE_POSTGRES
-    if (provider.postgres && impl_->postgres_pending)
+    if (provider.postgres && (impl_->postgres_pending || confirm_protocol))
     {
         if (impl_->postgres)
         {
             PQclear(impl_->postgres);
             impl_->postgres = nullptr;
         }
-        const CallContext cleanup{
-            {}, Clock::now() + std::chrono::nanoseconds(provider.options.cleanup_timeout_ns), false};
+        const auto cleanup = provider.cleanup_context();
+        if (!confirm_protocol)
+            provider.pending_cleanup_deadline = cleanup.deadline;
         try
         {
             // Preserve the original SQLx stop contract: abandon the reader and
             // drain ReadyForQuery within a bounded cleanup budget. A cancel-key
             // request here would abort a surrounding transaction that the old
             // implementation left usable. A failed drain discards the lease.
-            while (auto* result = receive(provider.postgres, cleanup))
+            if (confirm_protocol)
             {
-                const auto status = PQresultStatus(result);
-                PQclear(result);
-                if (status != PGRES_SINGLE_TUPLE && status != PGRES_TUPLES_OK && status != PGRES_COMMAND_OK)
-                    throw postgres_error();
+                provider.synchronize_protocol(cleanup);
+            }
+            else
+            {
+                while (auto* result = receive(provider.postgres, cleanup))
+                {
+                    const auto status = PQresultStatus(result);
+                    PQclear(result);
+                    if (status != PGRES_SINGLE_TUPLE && status != PGRES_TUPLES_OK && status != PGRES_COMMAND_OK)
+                        throw postgres_error();
+                }
             }
         }
         catch (...)
@@ -949,6 +1053,59 @@ void ProviderStatement::close()
     impl_->update_transaction();
     provider.statement_live = false;
     provider.current = {};
+}
+void ProviderConnection::synchronize_protocol()
+{
+    if (impl_->options.profile != Profile::PostgreSql)
+        return;
+    if (impl_->statement_live)
+        throw Error(NW_DOMAIN_ERROR, 7, "physical session already has a command");
+    auto cleanup = impl_->cleanup_context();
+    if (impl_->pending_cleanup_deadline)
+    {
+        cleanup.deadline = *impl_->pending_cleanup_deadline;
+        impl_->pending_cleanup_deadline.reset();
+    }
+    impl_->synchronize_protocol(cleanup);
+}
+void ProviderConnection::verify_idle(const CallContext& acquisition)
+{
+    if (impl_->options.profile != Profile::PostgreSql)
+        return;
+    if (impl_->statement_live)
+        throw Error(NW_DOMAIN_ERROR, 7, "physical session already has a command");
+    impl_->pending_cleanup_deadline.reset();
+    impl_->synchronize_protocol(acquisition);
+}
+void ProviderConnection::initialize_session()
+{
+    if (impl_->options.profile != Profile::PostgreSql)
+        return;
+    const CallContext initialization{{}, Clock::time_point::max(), false};
+    (void)execute("SET statement_timeout TO " +
+                      std::to_string(std::max<std::uint64_t>(1, impl_->options.statement_timeout_ns / 1'000'000)),
+                  {}, initialization);
+    // This is the retained from_lease initialization, not a replacement for the
+    // pool's preceding protocol-only test-before-acquire.
+    (void)query_text("SELECT pg_backend_pid()", initialization, 1);
+}
+bool ProviderConnection::confirm_pool_return() noexcept
+{
+    if (impl_->options.profile != Profile::PostgreSql)
+        return healthy();
+    try
+    {
+        if (impl_->statement_live)
+            throw Error(NW_DOMAIN_ERROR, 7, "physical session already has a command");
+        impl_->pending_cleanup_deadline.reset();
+        impl_->synchronize_protocol({{}, Clock::time_point::max(), false});
+        return true;
+    }
+    catch (...)
+    {
+        close();
+        return false;
+    }
 }
 std::int64_t ProviderConnection::execute(std::string_view sql, const std::vector<Scalar>& parameters,
                                          const CallContext& context)
@@ -1089,9 +1246,12 @@ void ProviderConnection::interrupt() noexcept
 {
     impl_->interrupted.store(true);
 #if NW_ENABLE_SQLITE
-    std::lock_guard lock(impl_->lifetime);
-    if (impl_->sqlite)
-        sqlite3_interrupt(impl_->sqlite);
+    if (impl_->options.profile == Profile::Sqlite)
+    {
+        std::lock_guard lock(impl_->lifetime);
+        if (impl_->sqlite)
+            sqlite3_interrupt(impl_->sqlite);
+    }
 #endif
 }
 bool type_matches(Profile profile, std::uint32_t codec, std::optional<std::string_view> type)

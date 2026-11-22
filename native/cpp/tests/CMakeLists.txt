@@ -129,6 +129,9 @@ set_tests_properties(native.transactions native.streaming PROPERTIES TIMEOUT 120
 add_executable(nw_codec_roundtrip codec_roundtrip.cpp)
 target_link_libraries(nw_codec_roundtrip PRIVATE nw_host_test_support)
 set_target_properties(nw_codec_roundtrip PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${NW_TEST_OUTPUT}")
+add_executable(nw_postgres_sync_tests postgres_sync_tests.cpp)
+target_link_libraries(nw_postgres_sync_tests PRIVATE nw_host_test_support)
+set_target_properties(nw_postgres_sync_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${NW_TEST_OUTPUT}")
 add_executable(nw_postgres_fixture_tests postgres_fixture_tests.cpp)
 target_link_libraries(nw_postgres_fixture_tests PRIVATE nw_project_options nativeweave_postgres_fixture)
 set_target_properties(nw_postgres_fixture_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${NW_TEST_OUTPUT}")
@@ -207,6 +210,10 @@ add_test(NAME native.abi.bootstrap COMMAND nw_abi_bootstrap_c)
 set_tests_properties(native.abi.bootstrap PROPERTIES TIMEOUT 10 LABELS "native;contract")
 add_test(NAME native.database.abi COMMAND nw_database_abi_c)
 set_tests_properties(native.database.abi PROPERTIES TIMEOUT 10 LABELS "native;contract;abi")
+nw_native_test(relations_abi relations_abi_tests.cpp)
+target_link_libraries(nw_relations_abi_tests PRIVATE nw_database_sqlite nw_sqlite_engine)
+add_test(NAME native.relations.abi COMMAND nw_relations_abi_tests)
+set_tests_properties(native.relations.abi PROPERTIES TIMEOUT 60 LABELS "native;contract;abi")
 # The ordinary Python interpreter cannot load an ASan-instrumented shared
 # library without the sanitizer runtime. Instrumented C++ query/ABI tests remain
 # enabled in that preset; this process-level status comparison is Release-only.

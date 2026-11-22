@@ -203,6 +203,37 @@ writing, limit 12 succeeds. It also checks PostgreSQL describe-versus-batch
 error precedence. The ordinary CTest keeps the SQLite cases; the existing
 isolated PostgreSQL runner executes this mode in Release and ASan/UBSan CI.
 
+## B14 Host admission and total command deadlines
+
+The final source review also compares every entry in the fixed
+`native/database/relations/host.rs` with the C++ ABI adapter. Its existing
+registration, combined registry capacity, immutable argument copies, projection
+validation, affected-row policy and bulk error payload remain covered by the
+unchanged `Orm.Relations` consumer and the native query/mutation tests.
+
+`relations_abi_tests.cpp`, run as `native.relations.abi` in both Release and
+ASan/UBSan CTest, adds direct regressions for two adapter omissions found during
+that review. It links the real SQLite product leaf and calls the public C ABI;
+it does not instantiate private Host objects or a separate operation state
+machine. Each fixture uses a real file and an independent SQLite connection,
+then requires all six product diagnostic owner counters to return to zero.
+
+| Fixed Rust behavior | Actual C ABI regression |
+| --- | --- |
+| Relation and mutation creation capture their own admission instant; their worker closures subtract elapsed time from the original command duration. | Retain a Created relation load or insert beyond the configured duration, then start it. Both must return timeout code 8 before SQL. An immediate insert and real relation fetch on the same session still succeed. The timed-out insert retains its exact zero-row/zero-batch bulk progress. |
+| The relation Host checks canonical key bytes, key arity, three nodes per key component and minimum depth before projection lookup or the private binding compiler. | All four exceeded limits return Host capacity code 6 with zero operation output, including combinations with an unknown projection. Exact supported key-byte, parameter, node and depth boundaries remain admitted. The separate physical stream-input budget remains in force. |
+| B14's create-time deadline does not change the earlier raw SQL execution-time deadline. | An ordinary explicit SQL operation held in Created beyond its own duration still executes successfully when started; independent SQL confirms its write. |
+| Rejected or expired work releases the actual session gate and retained owners. | Successful following operations, actual cursor fetch/close and explicit source/session retirement complete through the same C ABI, with all six counters zero. |
+
+The additional cases derive from the accepted Rust Host implementation, rather
+than claiming that the old managed suite already tested delayed operation
+start. Separate-process SQLite and PostgreSQL ABI comparisons retain the actual
+old and candidate results with identical probe/input hashes in the Plan batch.
+Development negative controls independently remove the elapsed-time subtraction
+or Host capacity preflight from a copied source file, link that product leaf,
+and require the corresponding real C ABI assertion to fail. They do not modify
+the product tree, C# assertions, public headers or configured limits.
+
 ## B07 fallibility assertion families
 
 `codec_roundtrip.cpp` retains the representable assertions from all seven

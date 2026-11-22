@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import contextlib
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -16,6 +17,28 @@ COMMON = ('outbox-after-publication-before-ack', 'upload-before-durable-content'
 POSTGRES = ('begin-transport-loss', 'write-transport-loss', 'commit-held-before-upstream-send',
             'commit-acknowledgement-discarded', 'provider-drain-failure', 'postgres-restart')
 SQLITE = ('sqlite-busy', 'sqlite-write-enospc')
+
+
+def build_filesystem_shim(shim: Path, output: Path):
+    source = HERE.parents[1] / 'src/Verification.EndToEnd/FilesystemFaults/fs_fault.c'
+    lock_path = HERE.parents[1] / 'native/dependencies.lock.json'
+    llvm = json.loads(lock_path.read_text())['toolchain']['llvm']
+    selected = shutil.which(os.environ.get('CC', 'clang'))
+    require(selected is not None, 'The isolated filesystem fault shim needs the pinned Clang compiler')
+    compiler = Path(selected).resolve(strict=True)
+    identity = {'path': str(compiler), 'sha256': sha(compiler), 'dependenciesLockSha256': sha(lock_path)}
+    require(identity['sha256'] == llvm['executables']['clang'], 'Filesystem fault compiler differs from the locked Clang')
+    identity['version'] = subprocess.check_output([str(compiler), '--version'], text=True, timeout=30).strip()
+    identity['target'] = subprocess.check_output([str(compiler), '-dumpmachine'], text=True, timeout=30).strip()
+    require('clang version ' + llvm['version'] in identity['version']
+        and identity['target'] == 'x86_64-unknown-linux-gnu', 'Filesystem fault shim requires the locked Linux x64 Clang')
+    argv = [str(compiler), '-std=c17', '-shared', '-fPIC', '-O2', '-Wall', '-Wextra', '-Werror',
+        '-pthread', str(source), '-ldl', '-o', str(shim)]
+    with (output / 'shim-build.log').open('wb') as log:
+        build = subprocess.run(argv, stdout=log, stderr=subprocess.STDOUT, timeout=60)
+    require(build.returncode == 0, 'Filesystem fault shim compilation failed')
+    return {'sourceSha256': sha(source), 'sha256': sha(shim), 'command': argv, 'compiler': identity,
+        'scope': 'disposable verification child only; packaged database libraries unchanged'}
 
 
 def main():
@@ -47,14 +70,7 @@ def main():
     try:
         shim = args.filesystem_shim.resolve() if args.filesystem_shim else evidence.output / 'libdatabase_filesystem_fault.so'
         if args.filesystem_shim is None:
-            source = HERE.parents[1] / 'src/Verification.EndToEnd/FilesystemFaults/fs_fault.c'
-            compiler = shutil.which('cc'); require(compiler is not None, 'The isolated filesystem fault shim needs a C compiler')
-            argv = [compiler, '-std=c11', '-shared', '-fPIC', '-O2', '-Wall', '-Wextra', '-Werror', '-pthread', str(source), '-ldl', '-o', str(shim)]
-            with (evidence.output / 'shim-build.log').open('wb') as log:
-                build = subprocess.run(argv, stdout=log, stderr=subprocess.STDOUT, timeout=60)
-            require(build.returncode == 0, 'Filesystem fault shim compilation failed')
-            evidence.record['filesystemShim'] = {'sourceSha256': sha(source), 'sha256': sha(shim), 'command': argv,
-                'scope': 'disposable verification child only; packaged database libraries unchanged'}
+            evidence.record['filesystemShim'] = build_filesystem_shim(shim, evidence.output)
         cluster_scope = PostgresCluster(args.postgres_bin, evidence.output / 'postgres') if args.provider == 'postgresql' else contextlib.nullcontext(None)
         with cluster_scope as cluster:
             faults = Faults(command, args.provider, evidence, cluster=cluster, shim=shim)
