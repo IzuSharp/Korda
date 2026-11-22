@@ -1,21 +1,9 @@
-# Database candidate and release boundaries
+# Database preview releases
 
-DB-Scope-01 creates and tests local database NuGet candidates. The old HelloWorld automatic public publisher and its workflow have been removed. A merge does not publish a new database package to nuget.org.
+A pull request runs the Linux package, database, Native AOT and security checks. After it merges, the main CI run builds once and calls `release.yml` after Verify succeeds. The publishing job uses the `nuget` environment and the existing NuGet trusted publisher. Direct pushes, PR builds and manual CI runs do not publish.
 
-## Candidate production
+CI publishes the twelve IDs in the verified database dependency graph from that run's candidate feed. Package versions use `0.1.0-preview.<CI run number>` followed by the producer's existing suffix: `.1` for the seven shared packages and `.2` for the database facade, two providers and two native leaves. Applications install the provider; NuGet resolves its exact dependencies. Historical HelloWorld versions remain on nuget.org.
 
-`eng/build.py verify` requires a clean committed source, builds the independent SQLite/PostgreSQL native profiles, and calls `src/Packaging.Domain/prepare.py`. Preparation derives the twelve-package graph from the retained implementation and records source, lockfile, tool, package, native and license identities.
+The job checks each uploaded package against the candidate and verifies its NuGet repository signature. It polls for indexing every two minutes and runs the SQLite and PostgreSQL examples from nuget.org in JIT and Native AOT. If publication stops after some packages are pushed, rerun the failed job of the same CI run to reuse its original candidate. An existing version must match the verified payload.
 
-The previous/candidate pair uses immutable local versions. Shared packages keep the same bytes; the database facade, provider facades and native leaves advance together. Candidate feeds and evidence are under `artifacts/db-scope/prepared/`. Ordinary external consumers execute typed Fluent queries and DTO mappings against actual databases in JIT and Native AOT.
-
-## Required verification
-
-The default CI retains source/workspace/API/format/lock/security gates, real database regressions and mixed database failure oracles. It then runs shared Core closure/minimum CPU checks, database package negative cases, interrupted publication/resume, complete-closure rollback, real unsigned-signature rejection, a no-Rust SDK container and a runtime-only AOT transfer.
-
-The local release coordinator in `src/Packaging.Release/release.py` writes an immutable local test feed and advertises it only after complete destination consumption. It does not silently turn a failed upload or incomplete consumer into success. Its public-registry signature adapter remains available for a future separately authorized release; this batch does not invent a new signer.
-
-## Public publication
-
-A future public database release needs an explicit reviewed identity, package set, authorization and registry signature/consumption evidence. No NuGet credentials are obtained by the current candidate workflow. Existing public historical demo versions are historical artifacts; this task neither changes nor republishes them.
-
-Final current batch PRs, source commits and observed CI runs are recorded in the Plan handoff.
+For a local candidate, run `python3 eng/build.py verify` with the [native build prerequisites](guides/cpp-native.md). The package feed is written to `artifacts/db-scope/prepared/candidate/feed`.

@@ -9,12 +9,13 @@ permissions:
   contents: read
   actions: read
 concurrency:
-  group: ci-${{ github.event_name }}-${{ github.ref }}
+  group: ci-${{ github.event_name }}-${{ github.ref == 'refs/heads/main' && github.run_id || github.ref }}
   cancel-in-progress: true
 jobs:
   build:
     uses: ./.github/workflows/build.yml
     with:
+      version: 0.1.0-preview.${{ github.run_number }}
       compare-rust-reference: ${{ github.event_name == 'pull_request' && github.head_ref == 'task/DB-CPP-01-linux' }}
   security:
     uses: ./.github/workflows/security.yml
@@ -28,6 +29,11 @@ jobs:
     needs: [build, security]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      merged: ${{ steps.merge.outputs.merged }}
     steps:
       - name: Require every gate
         env:
@@ -36,3 +42,22 @@ jobs:
         run: |
           test "$BUILD_RESULT" = success
           test "$SECURITY_RESULT" = success
+      - name: Identify the merged main PR
+        id: merge
+        shell: bash
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls?per_page=100" |
+            jq -r --arg sha "$GITHUB_SHA" '"merged=" + (any(.[][]; .merged_at != null and .base.ref == "main" and .merge_commit_sha == $sha) | tostring)' >> "$GITHUB_OUTPUT"
+  publish:
+    needs: [build, verify]
+    if: github.repository == 'IzuSharp/NativeWeave' && needs.verify.outputs.merged == 'true' && vars.NUGET_PUBLISH_ENABLED == 'true'
+    uses: ./.github/workflows/release.yml
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    with:
+      artifact: ${{ needs.build.outputs.artifact }}

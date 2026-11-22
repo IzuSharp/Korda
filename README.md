@@ -4,23 +4,28 @@
 
 NativeWeave lets ordinary C# applications use data sources, connection pools, sessions, transactions, migrations, parameter binding, typed Fluent queries, static model/DTO mappings, relations and CRUD, and streaming results. The C++ Database Host executes database operations and owns their native resources. Core and the required interop bindings connect the two languages with explicit cancellation, errors and disposal.
 
-The current validation target is **Linux x64, .NET11/C#15, LLVM23.1.5/C++20 and Native AOT**. Candidate packages contain precompiled provider libraries. Application builds use normal PackageReference, restore, build and publish operations; ordinary entity/DTO changes require no native compilation.
+The current validation target is **Linux x64, .NET11/C#15, LLVM23.1.5/C++20 and Native AOT**. The NuGet packages contain precompiled provider libraries. Application builds use normal PackageReference, restore, build and publish operations; ordinary entity/DTO changes require no native compilation.
 
 ## Application hosting
 
 A database business method is ordinary C#. A standard ASP.NET Core HTTP endpoint or a standard C# gRPC method can call that same method. The application chooses and installs its host independently.
 
-The database product does not include NativeWeave HTTP/gRPC servers, routing or protocol packages, MCP, independent compression engines or the former HelloWorld demo package. Database Host remains part of the database execution layer.
+## Install a database provider
 
-## Database packages
+Choose the provider for your database. From a .NET 11 application on Linux x64, run one of:
+
+```sh
+dotnet add package NativeWeave.Database.Sqlite --prerelease
+dotnet add package NativeWeave.Database.PostgreSql --prerelease
+```
 
 | Selection | Public provider package | Independent native leaf |
 | --- | --- | --- |
-| SQLite | NativeWeave.Database.Sqlite | NativeWeave.Database.Sqlite.Native |
-| PostgreSQL | NativeWeave.Database.PostgreSql | NativeWeave.Database.PostgreSql.Native |
+| SQLite | [NativeWeave.Database.Sqlite](https://www.nuget.org/packages/NativeWeave.Database.Sqlite) | NativeWeave.Database.Sqlite.Native |
+| PostgreSQL | [NativeWeave.Database.PostgreSql](https://www.nuget.org/packages/NativeWeave.Database.PostgreSql) | NativeWeave.Database.PostgreSql.Native |
 | Both | Both provider packages | Exactly the two database native leaves |
 
-The complete candidate graph has twelve NativeWeave package IDs, including shared Core, ABI, Data, transaction/streaming and query components. A provider-only application does not restore the other provider's native package. The existing optional database dependency-injection source project is retained separately; this batch does not introduce a new package feature.
+The database package graph has twelve NativeWeave package IDs, including shared Core, ABI, Data, transaction/streaming and query components. A provider-only application does not restore the other provider's native package. The existing optional database dependency-injection source project is retained separately; this batch does not introduce a new package feature.
 
 See [getting started](docs/getting-started.md), the [package guide](docs/guides/packaging-domain.md), and the [API index](docs/api-reference.md).
 
@@ -48,7 +53,7 @@ Linux CI also runs the retained Core packaging/minimum-CPU checks, ASan/UBSan wi
 
 ## Status and history
 
-The database packages produced by this workflow are local candidates, not a new public NuGet release. [Release boundaries](docs/releasing.md) describe this distinction. Performance optimization is deferred; no performance advantage is claimed by this implementation migration.
+After a pull request merges into `main`, [CI](https://github.com/IzuSharp/NativeWeave/actions/workflows/ci.yml) tests the Linux x64 packages and publishes a database preview to nuget.org. The final job installs both providers from the public feed and runs each in JIT and Native AOT. See [release and retry details](docs/releasing.md).
 
 - [Background](docs/background.md) and [verification](docs/verification.md)
 - [Contributing](CONTRIBUTING.md) and [security policy](SECURITY.md)
