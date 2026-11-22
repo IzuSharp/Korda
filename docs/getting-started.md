@@ -1,28 +1,14 @@
-# Use the database candidate from ordinary C#
+# Use NativeWeave from C#
 
-The current candidate targets Linux x64 and .NET11, with JIT and Native AOT. Choose `NativeWeave.Database.Sqlite`, `NativeWeave.Database.PostgreSql`, or both. No NativeWeave server or protocol package is required.
+In your .NET 11 application, install the Linux x64 provider for your database:
 
-## Restore outside the source tree
-
-A maintainer first runs the verified candidate workflow described in the root README. It creates the exact local feed at `artifacts/db-scope/prepared/candidate/feed`; the manifest records facade/native and shared package versions. With the default version base, the provider version is `0.1.0-db-cpp.1.2` and shared dependencies are pinned by the package.
-
-Create an ordinary executable project outside the NativeWeave checkout:
-
-```xml
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>net11.0</TargetFramework>
-    <ImplicitUsings>enable</ImplicitUsings>
-    <Nullable>enable</Nullable>
-  </PropertyGroup>
-  <ItemGroup>
-    <PackageReference Include="NativeWeave.Database.Sqlite" Version="[0.1.0-db-cpp.1.2]" />
-  </ItemGroup>
-</Project>
+```sh
+dotnet add package NativeWeave.Database.Sqlite --prerelease
+# For PostgreSQL:
+dotnet add package NativeWeave.Database.PostgreSql --prerelease
 ```
 
-Point a local NuGet.Config at the candidate feed and nuget.org; map `NativeWeave.*` to that exact feed. Add the PostgreSQL provider PackageReference when needed. Use the candidate manifest's version when the producer selected a different version base.
+Each provider brings its managed dependencies and precompiled native library. PostgreSQL applications need a reachable database server. For an unpublished development build, the candidate feed is `artifacts/db-scope/prepared/candidate/feed` and its manifest records the exact versions.
 
 ## Typed queries and DTOs
 
