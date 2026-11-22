@@ -5,6 +5,11 @@ on:
   pull_request:
   merge_group:
   workflow_dispatch:
+    inputs:
+      check_paths:
+        description: "Optional: replay test or documentation paths, one per line. Empty runs the full suite."
+        type: string
+        required: false
   schedule:
     - cron: "13 4 * * 1"
 permissions:

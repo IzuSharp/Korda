@@ -101,8 +101,9 @@ jobs:
         uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25
         with:
           path: ~/.cache/sccache
-          key: sccache-linux-x64-v017-${{ hashFiles('native/dependencies.lock.json', 'CMakePresets.json') }}-${{ github.sha }}
+          key: sccache-linux-x64-v017-${{ hashFiles('native/dependencies.lock.json', 'CMakePresets.json') }}-${{ fromJSON(inputs.plan).scope }}-${{ hashFiles('native/**', 'CMakeLists.txt', 'eng/task07_native.py') }}
           restore-keys: |
+            sccache-linux-x64-v017-${{ hashFiles('native/dependencies.lock.json', 'CMakePresets.json') }}-${{ fromJSON(inputs.plan).scope }}-
             sccache-linux-x64-v017-${{ hashFiles('native/dependencies.lock.json', 'CMakePresets.json') }}-
       - id: pg
         if: contains(fromJSON('["full","postgresql"]'), fromJSON(inputs.plan).scope)

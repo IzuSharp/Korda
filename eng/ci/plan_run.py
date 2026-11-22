@@ -17,7 +17,15 @@ def main():
             event.get("before") or "HEAD^")
     diff = subprocess.check_output(["git", "diff", "--no-renames", "--name-only", "-z", base, "HEAD"])
     paths = [p.decode() for p in diff.split(b"\0") if p]
-    full = kind in ("schedule", "workflow_dispatch")
+    replay = event.get("inputs", {}).get("check_paths", "").splitlines() if kind == "workflow_dispatch" else []
+    replay = [p.strip() for p in replay if p.strip()]
+    if replay:
+        for path in replay:
+            if rule(path)[1] or not Path(path).is_file():
+                raise ValueError("Replay accepts existing test or documentation paths only: " + path)
+            subprocess.run(["git", "ls-files", "--error-unmatch", "--", path], check=True, stdout=subprocess.DEVNULL)
+        paths = replay
+    full = kind == "schedule" or (kind == "workflow_dispatch" and not replay)
     # PRs testing this build system exercise every historical gate before switching main over.
     deep = full or any(p.startswith(("native/", "CMake", ".github/workflows/build.yml", "eng/task07_native",
                                      "eng/ci/", "src/Packaging.", "eng/verify", "tests/Verification.",

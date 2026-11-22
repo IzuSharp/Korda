@@ -10,4 +10,4 @@ Each candidate uses `0.1.0-preview.<CI run number>.2`. The PR validates the Git 
 
 GitHub Actions can restore caches from the base branch. PR caches remain scoped to their merge ref. The weekly or manual full run on main also warms the default-branch caches for subsequent PRs.
 
-Use `workflow_dispatch` for full Linux validation. Weekly CI runs the full compatibility, sanitizer, clean-image and recovery gates. The internal twelve-package feed remains available for historical compatibility work.
+Manual CI with empty inputs runs full Linux validation. Set `check_paths` to tracked test or documentation files (one per line) to time the same check selection on a hosted runner; these replays are ineligible for promotion. Weekly CI runs the full compatibility, sanitizer, clean-image and recovery gates. The internal twelve-package feed remains available for historical compatibility work.
