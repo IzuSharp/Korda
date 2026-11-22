@@ -7,6 +7,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+import xml.etree.ElementTree as ET
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -57,7 +58,11 @@ class ProfileTests(unittest.TestCase):
             second = packages.pack(root / "two", "NativeWeave.Test", "1.0.0", {"LICENSE": b"MIT"}, {"NativeWeave.Core": "1.0.0"})
             self.assertEqual(first.read_bytes(), second.read_bytes())
             with zipfile.ZipFile(first) as archive:
-                self.assertIn('version="[1.0.0]"', archive.read("NativeWeave.Test.nuspec").decode())
+                metadata = ET.fromstring(archive.read("NativeWeave.Test.nuspec")).find("{*}metadata")
+                self.assertEqual(metadata.find(".//{*}dependency").get("version"), "[1.0.0]")
+                license_node = metadata.find("{*}license")
+                self.assertEqual((license_node.get("type"), license_node.text), ("expression", "MIT"))
+                self.assertEqual(metadata.findtext("{*}licenseUrl"), "https://licenses.nuget.org/MIT")
             with self.assertRaisesRegex(ValueError, "immutable"):
                 packages.pack(root / "one", "NativeWeave.Test", "1.0.0", {"LICENSE": b"different"})
             with self.assertRaisesRegex(ValueError, "Noncanonical"):
