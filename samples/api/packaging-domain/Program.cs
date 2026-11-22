@@ -29,6 +29,8 @@ internal static class Program
     {
         try
         {
+            if (args.Contains("--require-jit"))
+                Check("actual-jit", RuntimeFeature.IsDynamicCodeSupported);
             if (args.Contains("--require-aot"))
                 Check("actual-native-aot", !RuntimeFeature.IsDynamicCodeSupported);
             if (args.Contains("--reject-abi"))
@@ -39,6 +41,9 @@ internal static class Program
             }
             string provider = Environment.GetEnvironmentVariable("B24_PROVIDER")
                 ?? throw new InvalidOperationException("Explicit database provider required.");
+#if PUBLIC_PROVIDER_BUNDLE
+            Check("generated-table-descriptor", BundleItems.Table.MetadataHash.Length > 0);
+#endif
             await using var database = await DatabaseFixture.Create(provider);
             Check("typed-native-database-roundtrip", await database.Count() == 5);
             // This business query method can be called unchanged by console,
@@ -201,3 +206,8 @@ internal sealed class DatabaseFixture : IAsyncDisposable
         }
     }
 }
+
+#if PUBLIC_PROVIDER_BUNDLE
+[WeaveTable("bundle_items", DescriptorName = "BundleItems")]
+internal sealed partial record BundleItem([property: WeaveKey] long Id);
+#endif

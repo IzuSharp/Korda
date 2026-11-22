@@ -5,6 +5,15 @@ on:
       artifact:
         required: true
         type: string
+      run:
+        required: true
+        type: string
+      version:
+        required: true
+        type: string
+      plan:
+        required: true
+        type: string
 jobs:
   publish:
     if: github.repository == 'IzuSharp/NativeWeave' && github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -26,7 +35,8 @@ jobs:
           - "127.0.0.1:5432:5432"
         options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 12
     env:
-      CANDIDATE: artifacts/publication/db-scope/prepared/candidate
+      CANDIDATE: artifacts/publication
+      NW_TEST_POSTGRES: postgresql://nativeweave@127.0.0.1:5432/postgres
       NUGET_SOURCE: https://api.nuget.org/v3/index.json
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -39,31 +49,15 @@ jobs:
         with:
           name: ${{ inputs.artifact }}
           path: artifacts/publication
-      - name: Select the verified database packages in dependency order
+          run-id: ${{ inputs.run }}
+          github-token: ${{ github.token }}
+      - name: Verify the tested tree, package allowlist and bytes
+        env:
+          VERSION: ${{ inputs.version }}
+          PLAN: ${{ inputs.plan }}
         run: |
-          PYTHONPATH=src/Packaging.Domain:src/Packaging.Release python3 - <<'PY'
-          import os
-          from pathlib import Path
-          from model import IDS, sha, versions
-          from release import compat, order
-          candidate = Path(os.environ["CANDIDATE"])
-          record = compat.read_json(candidate / "release.json")
-          base = "0.1.0-preview." + os.environ["GITHUB_RUN_NUMBER"]
-          expected = versions(base + ".1", base + ".2")
-          if record["source_commit"] != os.environ["GITHUB_SHA"] or record["source_dirty"]:
-              raise ValueError("Candidate does not match the merged commit")
-          packages = {row["id"]: row["version"] for row in record["packages"]}
-          if packages != expected:
-              raise ValueError("Unexpected database package IDs or versions")
-          paths = {name: candidate / "feed" / f"{name}.{packages[name]}.nupkg" for name in IDS}
-          compat.validate_closure(record, paths)
-          with open("artifacts/publication/packages.txt", "w") as selection:
-              for item in order(record):
-                  path = paths[item["id"]]
-                  if sha(path) != item["upload_archive_sha256"]:
-                      raise ValueError(f"Candidate hash mismatch: {path.name}")
-                  print(path, file=selection)
-          PY
+          echo "$PLAN" > artifacts/plan.json
+          python3 eng/ci/validate_public.py "$CANDIDATE" artifacts/plan.json "$VERSION" > artifacts/packages.txt
       - id: login
         uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1
         with:
@@ -74,7 +68,7 @@ jobs:
         run: |
           while IFS= read -r package; do
             dotnet nuget push "$package" --source "$NUGET_SOURCE" --api-key "$NUGET_API_KEY" --skip-duplicate
-          done < artifacts/publication/packages.txt
+          done < artifacts/packages.txt
       - name: Wait for indexing and verify signed registry packages
         run: |
           PYTHONPATH=src/Packaging.Release python3 - <<'PY'
@@ -110,28 +104,5 @@ jobs:
                   print("Waiting two minutes for NuGet indexing", flush=True)
                   time.sleep(120)
           PY
-      - name: Run public SQLite and PostgreSQL packages in JIT and Native AOT
-        env:
-          NUGET_PACKAGES: ${{ runner.temp }}/public-nuget-cache
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends clang zlib1g-dev
-          for provider in sqlite postgresql; do
-            case "$provider" in
-              sqlite) id=NativeWeave.Database.Sqlite; symbol=SQLITE; export B24_DATABASE="$RUNNER_TEMP/smoke.sqlite" ;;
-              postgresql) id=NativeWeave.Database.PostgreSql; symbol=POSTGRES; export B24_DATABASE=postgresql://nativeweave@127.0.0.1:5432/postgres ;;
-            esac
-            export B24_PROVIDER="$provider"
-            app="$RUNNER_TEMP/consumer-$provider"
-            mkdir "$app"
-            cp samples/api/packaging-domain/Program.cs global.json NuGet.Config "$app/"
-            PYTHONPATH=tests/Packaging.Domain python3 - "$app" "$id" "$symbol" "0.1.0-preview.$GITHUB_RUN_NUMBER.2" <<'PY'
-          from pathlib import Path
-          import sys
-          from consumer_cases import project
-          app, package, symbol, version = sys.argv[1:]
-          project(Path(app) / "Consumer.csproj", [package], {package: version}, [symbol])
-          PY
-            (cd "$app" && dotnet run -c Release && dotnet publish -c Release -r linux-x64 -p:PublishAot=true -o publish && ./publish/B24Consumer --require-aot)
-          done
-          echo "Published and consumed **0.1.0-preview.$GITHUB_RUN_NUMBER.2** for SQLite and PostgreSQL (JIT and Native AOT)." >> "$GITHUB_STEP_SUMMARY"
+      - name: Consume the public packages in JIT and Native AOT
+        run: python3 eng/ci/consume.py "$CANDIDATE/release.json" artifacts/plan.json --public

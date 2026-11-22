@@ -133,7 +133,6 @@ def verify(version, design, plan, compare_rust_reference=False):
     run([sys.executable, "eng/check_native.py", "format"], "clang-format")
     manifest = native()
     run([sys.executable, "eng/check_native.py", "tidy"], "clang-tidy")
-    run(["ctest", "--preset", "linux-x64-release"], "cpp-contract-tests")
     msbuild = ["-m:1", "-nr:false", "-p:UseSharedCompilation=false"]
     run(["dotnet", "restore", "NativeWeave.slnx", "--locked-mode", "--disable-parallel", *msbuild], "restore")
     run(["dotnet", "build", "NativeWeave.slnx", "-c", "Release", "--no-restore", *msbuild], "build")

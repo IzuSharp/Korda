@@ -305,7 +305,7 @@ def package_payload(path, expected):
             require(manifest["packageId"] == identity and manifest["packageVersion"] == version
                     and manifest["nativePath"] == native["path"] and manifest["nativeSha256"] == native["sha256"]
                     and manifest["rid"] == native["rid"] and manifest["abiMajor"] == native["abi_major"]
-                    and manifest["sourceCommit"] == expected["source_commit"] and manifest["sourceDirty"] is False,
+                    and manifest["sourceCommit"] == native.get("source_commit", expected["source_commit"]) and manifest["sourceDirty"] is False,
                     "NWPKG014", "Internal native/source manifest is not the accepted payload identity")
             repository = metadata.find("{*}repository")
             require(repository is not None and repository.get("url") == expected["repository"]

@@ -1,63 +1,149 @@
 name: CI
 on:
   push:
-    branches: [main, "codex/**"]
+    branches: [main]
   pull_request:
   merge_group:
   workflow_dispatch:
+    inputs:
+      check_paths:
+        description: "Optional: replay test or documentation paths, one per line. Empty runs the full suite."
+        type: string
+        required: false
+  schedule:
+    - cron: "13 4 * * 1"
 permissions:
   contents: read
   actions: read
 concurrency:
-  group: ci-${{ github.event_name }}-${{ github.ref == 'refs/heads/main' && github.run_id || github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
+  plan:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+      pull-requests: read
+    outputs:
+      scope: ${{ steps.plan.outputs.scope }}
+      plan: ${{ steps.plan.outputs.plan }}
+      pending: ${{ steps.plan.outputs.pending }}
+      deep: ${{ steps.plan.outputs.deep }}
+      artifact: ${{ steps.plan.outputs.artifact }}
+      merged: ${{ steps.promote.outputs.merged }}
+      reuse: ${{ steps.promote.outputs.run }}
+      from-artifact: ${{ steps.promote.outputs.artifact }}
+      number: ${{ steps.promote.outputs.number }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - run: python3 -m unittest discover -s tests/Tooling -v && git diff --check
+      - id: plan
+        run: python3 eng/ci/plan_run.py
+      - id: promote
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 eng/ci/promote.py
   build:
+    needs: plan
+    if: needs.plan.outputs.scope != 'light' && !needs.plan.outputs.reuse && (github.event_name != 'push' || (needs.plan.outputs.merged == 'true' && needs.plan.outputs.pending == 'true'))
+    strategy:
+      fail-fast: false
+      matrix:
+        scope: ${{ fromJSON(needs.plan.outputs.plan).build_scopes }}
     uses: ./.github/workflows/build.yml
     with:
       version: 0.1.0-preview.${{ github.run_number }}
-      compare-rust-reference: ${{ github.event_name == 'pull_request' && github.head_ref == 'task/DB-CPP-01-linux' }}
+      scope: ${{ matrix.scope }}
+      plan: ${{ needs.plan.outputs.plan }}
+      artifact: ${{ needs.plan.outputs.artifact }}
+  focused:
+    needs: plan
+    if: fromJSON(needs.plan.outputs.plan).checks[0] != null && github.event_name != 'push'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        if: contains(fromJSON(needs.plan.outputs.plan).checks, 'generator') || contains(fromJSON(needs.plan.outputs.plan).checks, 'pack-api')
+        with:
+          global-json-file: global.json
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        if: contains(fromJSON(needs.plan.outputs.plan).checks, 'generator')
+        with:
+          repository: IzuSharp/NativeWeave-Design
+          ref: c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9
+          path: artifacts/frozen-design
+          persist-credentials: false
+      - name: Test generated C# and its public API
+        if: contains(fromJSON(needs.plan.outputs.plan).checks, 'generator')
+        run: |
+          dotnet run --project tests/Query.Generator/Query.Generator.Tests.csproj -c Release -p:RestoreLockedMode=true
+          dotnet run --project tests/Query.Generator/ApiCheck -c Release -p:RestoreLockedMode=true -- "$PWD" "$PWD/artifacts/frozen-design" "$DOTNET_ROOT"
+      - name: Test the MSBuild packaging task API
+        if: contains(fromJSON(needs.plan.outputs.plan).checks, 'pack-api')
+        run: dotnet run --project tests/Packaging.Release/ApiCheck -c Release -p:RestoreLockedMode=true -- "$RUNNER_TEMP/packaging-api.md"
+      - name: Test archive metadata and immutability
+        if: contains(fromJSON(needs.plan.outputs.plan).checks, 'pack-metadata') && !contains(fromJSON(needs.plan.outputs.plan).checks, 'elf-profile')
+        working-directory: tests/Packaging.Linux
+        run: python3 -m unittest test_profile.ProfileTests.test_pack_exact_edges_identity_and_immutability -v
+      - uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25
+        if: contains(fromJSON(needs.plan.outputs.plan).checks, 'elf-profile')
+        with:
+          key: linux-x64-tools-${{ hashFiles('native/dependencies.lock.json') }}
+          path: |
+            artifacts/toolchain/downloads
+            artifacts/dependencies/downloads
+      - name: Provision pinned compiler for ELF checks
+        if: contains(fromJSON(needs.plan.outputs.plan).checks, 'elf-profile')
+        run: python3 eng/cpp_toolchain.py
+      - name: Test ELF and package profiles
+        if: contains(fromJSON(needs.plan.outputs.plan).checks, 'elf-profile')
+        run: python3 -m unittest discover -s tests/Packaging.Linux -p test_profile.py -v
   security:
+    needs: plan
+    if: github.event_name != 'push'
     uses: ./.github/workflows/security.yml
+    with:
+      languages: ${{ toJSON(fromJSON(needs.plan.outputs.plan).languages) }}
     permissions:
       contents: read
       pull-requests: read
       security-events: write
   verify:
     name: Verify
+    needs: [plan, build, focused, security]
     if: always()
-    needs: [build, security]
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    permissions:
-      contents: read
-      pull-requests: read
-    outputs:
-      merged: ${{ steps.merge.outputs.merged }}
     steps:
-      - name: Require every gate
+      - name: Require the selected checks
         env:
-          BUILD_RESULT: ${{ needs.build.result }}
-          SECURITY_RESULT: ${{ needs.security.result }}
+          PLAN: ${{ needs.plan.result }}
+          BUILD: ${{ needs.build.result }}
+          FOCUSED: ${{ needs.focused.result }}
+          NEED_FOCUSED: ${{ github.event_name != 'push' && fromJSON(needs.plan.outputs.plan || '{}').checks[0] != null }}
+          SECURITY: ${{ needs.security.result }}
+          REQUIRED: ${{ needs.plan.outputs.scope != 'light' && !needs.plan.outputs.reuse && (github.event_name != 'push' || (needs.plan.outputs.merged == 'true' && needs.plan.outputs.pending == 'true')) }}
         run: |
-          test "$BUILD_RESULT" = success
-          test "$SECURITY_RESULT" = success
-      - name: Identify the merged main PR
-        id: merge
-        shell: bash
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls?per_page=100" |
-            jq -r --arg sha "$GITHUB_SHA" '"merged=" + (any(.[][]; .merged_at != null and .base.ref == "main" and .merge_commit_sha == $sha) | tostring)' >> "$GITHUB_OUTPUT"
+          test "$PLAN" = success
+          if [ "$REQUIRED" = true ]; then test "$BUILD" = success; else test "$BUILD" = skipped; fi
+          if [ "$NEED_FOCUSED" = true ]; then test "$FOCUSED" = success; else test "$FOCUSED" = skipped; fi
+          if [ "$GITHUB_EVENT_NAME" = push ]; then test "$SECURITY" = skipped; else test "$SECURITY" = success; fi
   publish:
-    needs: [build, verify]
-    if: github.repository == 'IzuSharp/NativeWeave' && needs.verify.outputs.merged == 'true' && vars.NUGET_PUBLISH_ENABLED == 'true'
+    needs: [plan, verify]
+    if: github.repository == 'IzuSharp/NativeWeave' && needs.plan.outputs.merged == 'true' && needs.plan.outputs.pending == 'true' && vars.NUGET_PUBLISH_ENABLED == 'true'
     uses: ./.github/workflows/release.yml
     permissions:
       contents: read
       actions: read
       id-token: write
     with:
-      artifact: ${{ needs.build.outputs.artifact }}
+      artifact: ${{ needs.plan.outputs.from-artifact || needs.plan.outputs.artifact }}
+      run: ${{ needs.plan.outputs.reuse || github.run_id }}
+      version: 0.1.0-preview.${{ needs.plan.outputs.number || github.run_number }}.2
+      plan: ${{ needs.plan.outputs.plan }}

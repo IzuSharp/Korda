@@ -26,6 +26,18 @@
       }
     },
     {
+      "name": "linux-x64-sqlite",
+      "inherits": "linux-x64-release",
+      "binaryDir": "${sourceDir}/artifacts/cmake/linux-x64-sqlite",
+      "cacheVariables": { "NW_BUILD_POSTGRESQL": false, "CMAKE_INSTALL_PREFIX": "${sourceDir}/artifacts/native-install/linux-x64-sqlite" }
+    },
+    {
+      "name": "linux-x64-postgresql",
+      "inherits": "linux-x64-release",
+      "binaryDir": "${sourceDir}/artifacts/cmake/linux-x64-postgresql",
+      "cacheVariables": { "NW_BUILD_SQLITE": false, "CMAKE_INSTALL_PREFIX": "${sourceDir}/artifacts/native-install/linux-x64-postgresql" }
+    },
+    {
       "name": "linux-x64-asan-ubsan",
       "inherits": "linux-x64-release",
       "binaryDir": "${sourceDir}/artifacts/cmake/linux-x64-asan-ubsan",
@@ -47,12 +59,16 @@
     }
   ],
   "buildPresets": [
+    { "name": "linux-x64-postgresql", "configurePreset": "linux-x64-postgresql" },
+    { "name": "linux-x64-sqlite", "configurePreset": "linux-x64-sqlite" },
     { "name": "linux-x64-release", "configurePreset": "linux-x64-release" },
     { "name": "linux-x64-asan-ubsan", "configurePreset": "linux-x64-asan-ubsan" },
     { "name": "windows-x64-release", "configurePreset": "windows-x64-release" },
     { "name": "macos-release", "configurePreset": "macos-release" }
   ],
   "testPresets": [
+    { "name": "linux-x64-postgresql", "configurePreset": "linux-x64-postgresql", "output": { "outputOnFailure": true }, "execution": { "noTestsAction": "error" } },
+    { "name": "linux-x64-sqlite", "configurePreset": "linux-x64-sqlite", "output": { "outputOnFailure": true }, "execution": { "noTestsAction": "error" } },
     { "name": "linux-x64-release", "configurePreset": "linux-x64-release", "output": { "outputOnFailure": true }, "execution": { "noTestsAction": "error" } },
     { "name": "linux-x64-asan-ubsan", "configurePreset": "linux-x64-asan-ubsan", "output": { "outputOnFailure": true }, "execution": { "noTestsAction": "error" }, "environment": { "ASAN_OPTIONS": "detect_leaks=1:strict_string_checks=1", "UBSAN_OPTIONS": "halt_on_error=1:print_stacktrace=1" } }
   ]

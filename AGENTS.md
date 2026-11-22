@@ -17,3 +17,12 @@ Read README.md, docs/background.md, docs/guides/cpp-native.md and the current Pl
 - Record incomplete tests and known baseline defects explicitly. A missing provider, unavailable sanitizer, or failed consumer is not a passed acceptance row.
 
 Applications independently choose standard ASP.NET Core/HTTP/gRPC hosts. NativeWeave server/protocol/MCP/proof products remain retired. English is the repository documentation language. Worktrees belong under the parent project's `.worktree/`. Current handoff: Plan/ledger/evidence/batches/DB-CPP-01/handoff-linux.md. The fixed Rust behavioral source remains in Git history at 465cd0f90e6af05ec50eb581156240377cf0825b.
+
+
+## Linux CI and public packages
+
+- Public distribution has exactly two package IDs, `NativeWeave.Database.Sqlite` and `NativeWeave.Database.PostgreSql`. Bundle shared assemblies, generator, build task, notices and the selected native library. Preserve the internal projects and twelve-component compatibility fixtures.
+- Run `python3 eng/ci/impact.py BASE` to preview affected tests and packages. Update its ownership rules and unit tests when introducing a module or moving linked sources. Shared inputs require both providers. Tests and ordinary documentation do not independently create a release. Keep generator, packaging API and ELF profile checks independently selectable. Check selection is additive when a PR touches multiple areas.
+- PR CI tests the integration tree. The selected consumers restore from an external directory and execute real database queries in JIT and Native AOT. An independent provider release also runs with the currently public peer. On merge, use the successful same-repository candidate for the matching tree and version. If that candidate is unavailable, validate a fresh candidate before pushing. Only the trusted main release job receives NuGet credentials.
+- Linux Release enables both providers and tests. Use the sqlite/postgresql presets for focused work. Preserve verified tool downloads, libpq and sccache across builds. Change the relevant inputs or bump the documented cache revision for an intentional refresh.
+- Weekly and manual CI run the full suite. Never report a skipped test as a pass. A failed publish can be retried with the original verified bytes. See [release guide](docs/releasing.md).

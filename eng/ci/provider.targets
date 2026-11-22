@@ -1,0 +1,19 @@
+<Project>
+  <ItemGroup>
+    <NativeWeaveProviderBundle Include="@PROVIDER@" Shared="@SHARED@" />
+  </ItemGroup>
+  <PropertyGroup>
+    <NativeWeaveSharedAssemblySet Condition="'$(NativeWeaveSharedAssemblySet)' == ''">@SHARED@</NativeWeaveSharedAssemblySet>
+  </PropertyGroup>
+  <Import Project="../tools/NativeWeave.Packaging.targets" />
+  <Import Project="../tools/NativeWeave.Query.Generator.targets" Condition="'$(NativeWeaveProviderGeneratorImported)' != 'true'" />
+  <PropertyGroup>
+    <NativeWeaveProviderGeneratorImported>true</NativeWeaveProviderGeneratorImported>
+  </PropertyGroup>
+  <Target Name="NativeWeaveCheckProviderPair" BeforeTargets="NativeWeaveValidatePackageClosure">
+    <Error Condition="'%(NativeWeaveProviderBundle.Shared)' != '$(NativeWeaveSharedAssemblySet)'"
+           Text="These NativeWeave providers contain different shared assemblies. Restore a compatible provider pair." />
+    <Error Condition="'@(NativeWeaveProviderBundle->Count())' != '@(NativeWeaveClosure->Count())'"
+           Text="Update both NativeWeave providers to the standalone package format and remove direct references to historical component packages." />
+  </Target>
+</Project>
