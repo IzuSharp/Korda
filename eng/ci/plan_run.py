@@ -29,7 +29,7 @@ def main():
     # PRs testing this build system exercise every historical gate before switching main over.
     deep = full or any(p.startswith(("native/", "CMake", ".github/workflows/build.yml", "eng/task07_native",
                                      "eng/ci/", "src/Packaging.", "eng/verify", "tests/Verification.",
-                                     "tests/Packaging.", "tests/Migration.Cpp/", "tests/Interop.")) for p in paths)
+                                     "tests/Packaging.", "tests/Migration.Cpp/", "tests/Interop.", "src/Verification.")) for p in paths)
     # Lightweight PRs need no registry traffic. Recovery on main consults both live heads.
     consult_registry = full or kind == "push" or any(rule(p)[1] for p in paths)
     published = public_heads() if consult_registry else {p: {} for p in PROVIDERS}

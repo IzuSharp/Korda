@@ -14,6 +14,8 @@ class ImpactTests(unittest.TestCase):
             "src/Query.Fluent/Select.cs": PROVIDERS, "native/cpp/src/provider.cpp": PROVIDERS,
             "src/Query.Generator/Runtime/Row.cs": PROVIDERS, "LICENSE": PROVIDERS,
             "README.md": (), "tests/Data.Sqlite/Program.cs": (), ".github/workflows/ci.yml": (),
+            "src/Reference.TaskService/Program.cs": (), "src/Verification.Models/verify.py": (),
+            "src/Packaging.Release/release.py": (), "src/Build.Integration/ApiReference/Program.cs": (),
         }.items():
             with self.subTest(path=path):
                 self.assertEqual(packages, rule(path)[1])
@@ -52,6 +54,7 @@ class ImpactTests(unittest.TestCase):
         actual = plan(["src/Data.Sqlite/Provider.cs", "tests/Query.Generator/Program.cs"], hashes, previous)
         self.assertEqual((actual["scope"], actual["checks"], actual["packages"]),
                          ("sqlite", ["generator"], ["sqlite"]))
+        self.assertEqual("full", rule("eng/ci/bundles.py")[0])
         previous["postgresql"]["inputs"] = "old"
         packaging = plan(["src/Packaging.Release/BuildTasks/PackageClosure.cs"], hashes, previous)
         self.assertEqual((packaging["scope"], packaging["checks"], packaging["packages"]),

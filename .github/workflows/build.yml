@@ -230,6 +230,9 @@ jobs:
           esac
           python3 eng/ci/bundles.py --plan artifacts/plan.json --version "$PACKAGE_VERSION.2" "${args[@]}"
           python3 eng/ci/consume.py artifacts/public/release.json artifacts/plan.json
+      - name: Verify the publication manifest against the tested integration tree
+        if: fromJSON(inputs.plan).packages[0] != null
+        run: python3 eng/ci/validate_public.py artifacts/public artifacts/plan.json "$PACKAGE_VERSION.2"
       - name: Compiler cache statistics
         if: always() && fromJSON(inputs.plan).scope != 'pack'
         run: bash eng/ci/sccache.sh stats

@@ -9,7 +9,7 @@ PROVIDERS = ("sqlite", "postgresql")
 IDS = dict(sqlite="NativeWeave.Database.Sqlite", postgresql="NativeWeave.Database.PostgreSql")
 DOCS = {"README.md", "AGENTS.md", "CONTRIBUTING.md", "SECURITY.md"}
 PACKAGE_INPUTS = ("src/Packaging.Linux/packages.py", "src/Packaging.Release/buildTransitive/",
-                  "src/Packaging.Release/BuildTasks/", "eng/ci/bundles.py", "eng/ci/provider.targets")
+                  "src/Packaging.Release/BuildTasks/", "eng/ci/provider.targets")
 NATIVE_INPUTS = ("native/", "CMake", "eng/task07_native", "eng/postgres-", "eng/cpp_toolchain")
 PROVIDER_PATHS = {
     "sqlite": ("src/Data.Sqlite/", "src/Data.NativeHost/Providers/Sqlite/", "tests/Data.Sqlite/",
@@ -23,6 +23,11 @@ def rule(path):
     """Return a validation lane and the distributions this file can change."""
     if path in DOCS or path.startswith(("docs/", ".github/ISSUE_TEMPLATE/")):
         return "docs", ()
+    if path == "eng/ci/bundles.py":
+        return "full", PROVIDERS  # Changes to composition must start from the original component feed.
+    if path.startswith(("src/Verification.", "src/Reference.TaskService/", "src/Build.Integration/")) or path in (
+            "src/Packaging.Release/release.py", ".clang-format", ".clang-tidy", ".gitignore"):
+        return "full", ()
     if path.startswith(PACKAGE_INPUTS) or path in ("LICENSE", "THIRD_PARTY_NOTICES.md"):
         return "pack", PROVIDERS
     for provider, prefixes in PROVIDER_PATHS.items():

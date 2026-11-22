@@ -89,7 +89,8 @@ def selected_files(provider, plan, version, manifest):
 
 def compose(provider, version, entries, native, commit, fingerprint):
     identity = IDS[provider]
-    entries["LICENSE"] = (ROOT / "LICENSE").read_bytes()
+    for notice in ("LICENSE", "THIRD_PARTY_NOTICES.md"):
+        entries[notice] = (ROOT / notice).read_bytes()
     entries["tools/NativeWeave.Packaging.targets"] = (ROOT / "src/Packaging.Release/buildTransitive/NativeWeave.Packaging.targets").read_bytes()
     entries["tools/" + GENERATOR + ".targets"] = (ROOT / f"src/Query.Generator/buildTransitive/{GENERATOR}.targets").read_bytes()
     entries["nativeweave/public.json"] = json_bytes({"inputs": fingerprint})
