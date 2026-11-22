@@ -5,7 +5,7 @@ using NativeWeave.Query;
 
 namespace NativeWeave.Reference.TaskService;
 
-/// <summary>Application transaction orchestration over the existing Rust DB/ORM engine.</summary>
+/// <summary>Application transaction orchestration over the precompiled C++ DB/ORM engine.</summary>
 internal sealed partial class TaskService(DataSource source, CursorCodec cursors, BlobStore blobs)
 {
     internal static readonly TimeSpan CleanupWait = TimeSpan.FromMilliseconds(100);
@@ -58,7 +58,7 @@ internal sealed partial class TaskService(DataSource source, CursorCodec cursors
     private static async Task<Replay?> ClaimAsync(DataSession session, OperationResult candidate, CancellationToken token)
     {
         // UpsertAsync intentionally requires DO UPDATE and is not a DO NOTHING claim.
-        // Both providers accept this fixed trusted recipe. Rust owns placeholder binding and dispatch.
+        // Both providers accept this fixed trusted recipe. The native engine owns placeholder binding and dispatch.
         var parameters = new SqlParameters().Add("scope", candidate.Scope, Codecs.String).Add("key", candidate.RequestKey, Codecs.String)
             .Add("hash", candidate.RequestHash, Codecs.String).Add("operation", candidate.OperationId, Codecs.String)
             .Add("tenant", candidate.Tenant, Codecs.String).Add("principal", candidate.Principal, Codecs.String)

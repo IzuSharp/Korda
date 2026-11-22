@@ -5,7 +5,7 @@ using static NativeWeave.Query.QueryContext;
 
 namespace NativeWeave.Query;
 
-/// <summary>One mutable, source-bound native SeaQuery arena with a strongly typed application facade.</summary>
+/// <summary>One mutable, source-bound native query arena with a strongly typed application facade.</summary>
 /// <typeparam name="TEntity">The explicitly described root entity class.</typeparam>
 /// <remarks>Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query;
 /// use Clone before a second execution. Keep this owner alive across streaming and dispose after use.</remarks>

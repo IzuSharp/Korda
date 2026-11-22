@@ -10,7 +10,7 @@ internal sealed record WireExpectation(PayloadKind Kind, uint Profile, byte[] Me
     internal uint? ExactRows { get; init; }
 }
 
-// One field serialization contract, not a CLR/Rust struct ABI. Only owned bytes escape parsing.
+// One field serialization contract, not a CLR/native struct ABI. Only owned bytes escape parsing.
 internal sealed class DbWire
 {
     internal const int MaxEncodedBytes = 4 * 1024 * 1024;

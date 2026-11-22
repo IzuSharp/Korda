@@ -46,7 +46,7 @@ public enum SqlCommandKind
 }
 
 /// <summary>An immutable, shareable trusted SQL template and owned typed parameter snapshot.</summary>
-/// <remarks>This type does not parse SQL, choose dialects, prove safety or contact a provider. Rust transports
+/// <remarks>This type does not parse SQL, choose dialects, prove safety or contact a provider. The native engine transports
 /// placeholders and validates actual capability/effect policy before dispatch. Interpolated convenience has boxing costs.</remarks>
 public sealed class SqlCommand
 {
@@ -66,7 +66,7 @@ public sealed class SqlCommand
     /// <param name="sql">A composite format with unformatted, unaligned typed non-null scalar arguments.</param>
     /// <param name="kind">The explicit effect classification.</param>
     /// <param name="timeout">A nonnegative finite timeout, or the source's configured default; zero expires before dispatch.</param>
-    /// <returns>An immutable template whose value holes will be bound by Rust.</returns>
+    /// <returns>An immutable template whose value holes will be bound by the native engine.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="sql"/> is null.</exception>
     /// <exception cref="ArgumentException">An argument is untyped null, requires an explicit codec, is unused, or a format/alignment is supplied.</exception>
     /// <exception cref="ArgumentOutOfRangeException">The kind or timeout is invalid.</exception>

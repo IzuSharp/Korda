@@ -28,7 +28,7 @@ public enum NullOrder
     Last,
 }
 /// <summary>Native SQL set operation with exact compatible projection types.</summary>
-/// <remarks>Operands must have the same source, field order, aliases, codecs and nullability. Rust snapshots the right operand; SQL duplicate and NULL semantics apply.</remarks>
+/// <remarks>Operands must have the same source, field order, aliases, codecs and nullability. The native engine snapshots the right operand; SQL duplicate and NULL semantics apply.</remarks>
 public enum SetOperation
 {
     /// <summary>Uses the native Union policy.</summary>
@@ -381,7 +381,7 @@ public static class SqlNullabilityExtensions
     { var owner = expression.Owner; if (expression.Codec.Descriptor.Nullable) throw new ArgumentException("The expression is already nullable.", nameof(expression)); return new(owner, owner.Unary(4, expression.Reference), Codecs.NullableReference(expression.Codec)); }
 }
 /// <summary>Statically numeric native SQL arithmetic; overflow, precision and division remain provider semantics.</summary>
-/// <remarks>Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. Rust owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.</remarks>
+/// <remarks>Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.</remarks>
 public static class SqlArithmeticExtensions
 {
     /// <summary>Performs native numeric add with explicit SQL NULL propagation.</summary>

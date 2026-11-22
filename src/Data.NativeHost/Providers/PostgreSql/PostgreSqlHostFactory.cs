@@ -4,7 +4,7 @@ namespace NativeWeave.Database.PostgreSql;
 public static partial class PostgreSqlDataSource
 {
     internal static EngineDescriptor HostEngine { get; } = DatabaseEngineProfile.Create("database.postgresql", "NativeWeave.Database.PostgreSql", PostgreSqlAssetIdentity.RuntimeIdentifier, PostgreSqlAssetIdentity.RelativePath, PostgreSqlAssetIdentity.Sha256, typeof(PostgreSqlDataSource).Assembly);
-    /// <summary>Creates one independently owned lazy SQLx PostgreSQL data source.</summary>
+    /// <summary>Creates one independently owned lazy libpq PostgreSQL data source.</summary>
     /// <param name="connectionString">An explicit TCP PostgreSQL URI; ambient connection policy is rejected.</param>
     /// <param name="configure">An optional synchronous options callback, snapshotted before native admission.</param>
     /// <returns>A data source to dispose after its sessions finish.</returns>
@@ -13,7 +13,7 @@ public static partial class PostgreSqlDataSource
     /// <exception cref="EngineLoadException">The exact packaged module fails negotiation.</exception>
     public static DataSource Create(string connectionString, Action<PostgreSqlOptions>? configure = null) => new DataSourceBuilder().UsePostgreSql(connectionString, configure).Build();
 }
-/// <summary>Configures the independently packaged SQLx PostgreSQL engine.</summary>
+/// <summary>Configures the independently packaged libpq PostgreSQL engine.</summary>
 /// <remarks>The builder remains single-writer. Configuration snapshots managed values without I/O; Build negotiates the separately packaged native engine and creates the source owner.</remarks>
 public static class PostgreSqlDataSourceBuilderExtensions
 {

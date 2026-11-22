@@ -8,7 +8,7 @@ using Microsoft.Build.Utilities;
 namespace NativeWeave.Packaging;
 
 /// <summary>Validates a restored owned-package closure and produces SDK-selected native output records.</summary>
-/// <remarks>This is an MSBuild host task, never an application runtime dependency. Each invocation is independent. It reads bounded package metadata, hashes native files and performs no network, restore, Rust compilation or native loading.</remarks>
+/// <remarks>This is an MSBuild host task, never an application runtime dependency. Each invocation is independent. It reads bounded package metadata, hashes native files and performs no network, restore, native compilation or native loading.</remarks>
 public sealed class PackageClosure : Microsoft.Build.Utilities.Task
 {
     /// <summary>Creates an unconfigured, single-invocation compiler-host task.</summary>

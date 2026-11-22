@@ -5,12 +5,12 @@ using NativeWeave.Interop.Extensibility;
 
 namespace NativeWeave.Database;
 
-/// <summary>The selected independently packaged Rust database provider.</summary>
+/// <summary>The selected independently packaged C++ database provider.</summary>
 public enum DatabaseProvider
 {
-    /// <summary>The SQLx PostgreSQL provider.</summary>
+    /// <summary>The libpq PostgreSQL provider.</summary>
     PostgreSql,
-    /// <summary>The serialized SQLx SQLite provider.</summary>
+    /// <summary>The serialized sqlite3 provider.</summary>
     Sqlite
 }
 

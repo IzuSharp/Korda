@@ -9,7 +9,7 @@ internal sealed record Envelope<T>(T Value);
 internal sealed record OwnedRow(long Id, string Name, byte[] Bytes, long? Optional, Envelope<Settings> Settings);
 
 // This is ordinary application source. No runtime type discovery, reflection setter,
-// expression compilation, generator dependency or Rust rebuild is involved.
+// expression compilation, generator dependency or native rebuild is involved.
 internal static class MaterializationExamples
 {
     internal static ValueCodec<Envelope<Settings>> SettingsCodec { get; } = Codecs.Json(SampleJson.Default.EnvelopeSettings);

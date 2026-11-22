@@ -1,6 +1,6 @@
 using NativeWeave.Interop;
 
-// The fixture supplies real Rust-owned bytes; an application receives the same
+// The fixture supplies real C++-owned bytes; an application receives the same
 // NativeBuffer from its typed engine. It does not construct raw ownership itself.
 using NativeBuffer result = Fixture.New([72, 101, 108, 108, 111]);
 int count = result.Read(static bytes => bytes.Length);

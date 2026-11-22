@@ -7,7 +7,7 @@ using NativeWeave.Query.Internal;
 
 namespace NativeWeave.Database;
 
-/// <summary>Owns one lazy Rust pool, bounded runtime and source-generation metadata registry.</summary>
+/// <summary>Owns one lazy C++ connection pool, bounded runtime and source-generation metadata registry.</summary>
 /// <remarks>Sources support concurrent independent session opens. Closing rejects new work and retains every
 /// admitted native operation until real retirement. Dispose requests cleanup; DisposeAsync joins local safety.</remarks>
 public sealed partial class DataSource : IDisposable, IAsyncDisposable

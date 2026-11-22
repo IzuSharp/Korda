@@ -6,7 +6,7 @@ namespace NativeWeave.Database;
 
 public sealed partial class DataSession
 {
-    /// <summary>Creates one mutable native SeaQuery arena bound to this session and exact static table.</summary>
+    /// <summary>Creates one mutable native query arena bound to this session and exact static table.</summary>
     /// <typeparam name="TEntity">The statically described entity class.</typeparam>
     /// <param name="table">The immutable manual or generated table descriptor.</param>
     /// <returns>A query to dispose after its terminal or enumeration completes.</returns>

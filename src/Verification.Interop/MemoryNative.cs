@@ -15,7 +15,7 @@ internal static unsafe partial class MemoryNative
 {
     private const string Library = "nativeweave_interop_memory";
     // Component metadata fixture only: A02's independently accepted real loader is
-    // not reimplemented or re-accepted by these buffer tests. The Rust buffer
+    // not reimplemented or re-accepted by these buffer tests. The C++ buffer
     // allocation, views, capacity charges and creator releases below are actual.
     internal static readonly EngineInfo Engine = new(new EnginePackageManifest("interop.memory.fixture", "NativeWeave.Core", "0.1.0",
         new AbiVersion(1, 0), "nw_memory_fixture_bootstrap_v1", EngineThreadingModel.Synchronous,
