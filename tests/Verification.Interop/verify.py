@@ -196,14 +196,14 @@ def main():
         original = output / "oracle-original.bin"; shutil.copy2(corpus / "end-wrap", original)
         minimized = output / "oracle-minimized.bin"
         run("oracle-negative-original", [negative, original], environment=sanitized, expected=(77,), timeout=30,
-            contains=("Assertion", "status==(expected?NW_OK:NW_INVALID_ARGUMENT)"))
+            contains=("Assertion", "status == (expected ? NW_OK : NW_INVALID_ARGUMENT)"))
         # libFuzzer minimizes only the deliberate numeric-oracle defect. Product Core is unmodified.
         run("oracle-minimize", [negative, *budget, "-minimize_crash=1", "-runs=1000", "-exact_artifact_path=" + str(minimized), original],
             environment=sanitized, timeout=90)
         if not minimized.is_file():
             raise RuntimeError("No retained minimized oracle counterexample.")
         run("oracle-negative-minimized", [negative, minimized], environment=sanitized, expected=(77,), timeout=30,
-            contains=("Assertion", "status==(expected?NW_OK:NW_INVALID_ARGUMENT)"))
+            contains=("Assertion", "status == (expected ? NW_OK : NW_INVALID_ARGUMENT)"))
         run("oracle-corrected-replay", [fuzz, original, minimized], environment=sanitized, timeout=30)
         artifact("oracle-original", original); artifact("oracle-minimized", minimized)
         run("fatal-invalid-pointer", [fatal, "invalid-pointer"], environment=sanitized, expected=(1,), timeout=30,
