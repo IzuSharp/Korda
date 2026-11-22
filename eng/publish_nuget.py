@@ -2,8 +2,8 @@
 """Promote the accepted DB-CPP-01 archives to the owner's NuGet.org account.
 
 This is a registry adapter, not a package builder. The original local-only
-candidate records remain unchanged. Public publication and HelloWorld unlisting
-have separate, incremental receipts; neither is inferred from an HTTP push alone.
+candidate records remain unchanged. Only the twelve accepted database packages
+can be published. The incremental public receipt requires signed registry readback.
 
 Protocol: https://learn.microsoft.com/nuget/api/package-publish-resource
 Signing: https://learn.microsoft.com/nuget/api/repository-signatures-resource
@@ -35,7 +35,7 @@ INDEX = "https://api.nuget.org/v3/index.json"
 PUBLISH = "https://www.nuget.org/api/v2/package"
 GITHUB = "https://api.github.com/repos/IzuSharp/NativeWeave"
 OWNER = "dekueon"
-RETIRED = "NativeWeave.HelloWorld"
+EXCLUDED = ("NativeWeave.HelloWorld",)
 PINNED = {
     "repository": "IzuSharp/NativeWeave",
     "sourceCommit": "3badc05be503991b5591732629dd7e5b0dbad111",
@@ -46,7 +46,7 @@ PINNED = {
     "artifactSize": 6169499,
     "candidatePath": "db-scope/prepared/candidate",
     "packageOwner": OWNER,
-    "retiredPackageId": RETIRED,
+    "excludedPackageIds": list(EXCLUDED),
 }
 MAX_JSON = 16 * 1024 * 1024
 MAX_PACKAGE = 32 * 1024 * 1024
@@ -64,6 +64,7 @@ def module(name, relative):
 compat = module("nuget_publication_compat", "src/Verification.Compatibility/compatibility.py")
 domain = module("nuget_publication_domain", "src/Packaging.Domain/model.py")
 release = module("nuget_publication_release", "src/Packaging.Release/release.py")
+PACKAGE_VERSIONS = domain.versions("0.1.0-db-cpp.1.1", "0.1.0-db-cpp.1.2")
 
 
 class PublicationError(ValueError):
@@ -111,7 +112,7 @@ class Http:
         self.opener = opener or build_opener(NoRedirect())
 
     def request(self, method, url, *, credential=None, data=None, content_type=None,
-                maximum=MAX_JSON):
+                maximum=MAX_JSON, package_identity=None):
         parsed = https_url(url)
         headers = {"User-Agent": "NativeWeave-DB-CPP-01-Publication/1.0",
                    "Accept": "application/json", "Accept-Encoding": "identity",
@@ -124,15 +125,18 @@ class Http:
             headers.update(Authorization="Bearer " + token,
                            **{"Accept": "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28"})
         elif credential == "nuget":
-            require(url == PUBLISH and method == "PUT" or
-                    url.startswith(PUBLISH + "/" + RETIRED + "/") and method == "DELETE",
+            require(url == PUBLISH and method == "PUT",
                     "NuGet credential destination or operation rejected")
+            require(isinstance(package_identity, tuple) and len(package_identity) == 2
+                    and package_identity[0] in PACKAGE_VERSIONS
+                    and PACKAGE_VERSIONS[package_identity[0]] == package_identity[1],
+                    "NuGet credentials are limited to the twelve accepted database package identities")
             https_url(url, "www.nuget.org")
             token = os.environ.get("NUGET_API_KEY")
             require(token and "\n" not in token and "\r" not in token, "NUGET_API_KEY is required")
             headers.update({"X-NuGet-ApiKey": token, "X-NuGet-Protocol-Version": "4.1.0"})
         else:
-            require(credential is None, "Unknown credential kind")
+            require(credential is None and method == "GET", "Unauthenticated transport only permits reads")
         if content_type:
             headers["Content-Type"] = content_type
         request = Request(url, data=data, headers=headers, method=method)
@@ -171,14 +175,14 @@ class Http:
 def load_manifest(path):
     value = json.loads(Path(path).read_text())
     require(value.get("schemaVersion") == 1, "Unknown publication manifest schema")
+    require("retiredPackageId" not in value, "Retired-package mutation instructions are not supported")
     for key, expected in PINNED.items():
         require(value.get(key) == expected, "Publication manifest differs from accepted " + key)
     if "sourceTree" in value:
         require(value["sourceTree"] == "3264de79b73c8a89f1cac1eff57d0c0ff2c841c2", "Unexpected accepted source tree")
-    expected_versions = domain.versions("0.1.0-db-cpp.1.1", "0.1.0-db-cpp.1.2")
-    require(value.get("packageVersions") == expected_versions, "Publication package IDs or versions differ")
+    require(value.get("packageVersions") == PACKAGE_VERSIONS, "Publication package IDs or versions differ")
     hashes = value.get("packageArchiveSha256", {})
-    require(set(hashes) == set(expected_versions)
+    require(set(hashes) == set(PACKAGE_VERSIONS)
             and all(isinstance(item, str) and re.fullmatch(r"[0-9a-f]{64}", item) for item in hashes.values()),
             "Every original package archive needs its reviewed SHA-256")
     return value
@@ -391,8 +395,7 @@ def verify_readback(original, downloaded, expected, policies, logs):
 
 
 def package_url(resources, identity, version):
-    require(identity in domain.IDS or identity == RETIRED, "Unpermitted package identity")
-    require(re.fullmatch(r"[0-9A-Za-z.-]+", version), "Unpermitted package version")
+    require(identity in PACKAGE_VERSIONS and PACKAGE_VERSIONS[identity] == version, "Unpermitted package identity or version")
     base = resources["PackageBaseAddress/3.0.0"].rstrip("/")
     return base + "/" + identity.lower() + "/" + version.lower() + "/" + identity.lower() + "." + version.lower() + ".nupkg"
 
@@ -410,7 +413,7 @@ def download_package(http, url, path):
 
 
 def registration(http, resources, identity):
-    require(identity in domain.IDS or identity == RETIRED, "Unpermitted registration identity")
+    require(identity in PACKAGE_VERSIONS, "Unpermitted registration identity")
     url = resources["RegistrationsBaseUrl/3.6.0"].rstrip("/") + "/" + identity.lower() + "/index.json"
     document = http.json(url, optional=True)
     if document is None:
@@ -433,12 +436,19 @@ def registration(http, resources, identity):
     return result, url
 
 
-def upload(http, path):
+def upload(http, path, expected):
+    identity, version = expected.get("id"), expected.get("version")
+    require(identity in PACKAGE_VERSIONS and PACKAGE_VERSIONS[identity] == version,
+            "Only the twelve accepted database packages can be uploaded")
+    payload = path.read_bytes()
+    require(hashlib.sha256(payload).hexdigest() == expected["upload_archive_sha256"], "Upload bytes differ from the accepted package")
+    compat.package_payload(path, expected)
+    domain.validate_database_payload(path, expected)
     boundary = "nativeweave-" + secrets.token_hex(24)
     body = ("--" + boundary + '\r\nContent-Disposition: form-data; name="package"; filename="package.nupkg"\r\n'
-            + "Content-Type: application/octet-stream\r\n\r\n").encode() + path.read_bytes() + ("\r\n--" + boundary + "--\r\n").encode()
+            + "Content-Type: application/octet-stream\r\n\r\n").encode() + payload + ("\r\n--" + boundary + "--\r\n").encode()
     status, _, _ = http.request("PUT", PUBLISH, credential="nuget", data=body,
-                                content_type="multipart/form-data; boundary=" + boundary)
+                                content_type="multipart/form-data; boundary=" + boundary, package_identity=(identity, version))
     if status not in (201, 202, 409):
         raise PublicationError("NuGet upload failed with HTTP " + str(status), status=status)
     return status
@@ -478,7 +488,7 @@ def publish(manifest, manifest_path, work, http, archive_path=None):
             require(sha(packages[item["id"]]) == item["upload_archive_sha256"], "Upload archive changed after preflight")
             row["status"] = "upload-started-outcome-unconfirmed"
             save(journal_path, journal)
-            status = upload(http, packages[item["id"]])
+            status = upload(http, packages[item["id"]], item)
             row.update(uploadHttpStatus=status, status="accepted-awaiting-readback" if status != 409 else "conflict-awaiting-readback")
             save(journal_path, journal)
             print("NuGet upload accepted for readback: " + item["id"] + " " + item["version"], flush=True)
@@ -520,84 +530,9 @@ def publish(manifest, manifest_path, work, http, archive_path=None):
         raise
 
 
-def retired_versions(http, resources):
-    url = resources["PackageBaseAddress/3.0.0"].rstrip("/") + "/" + RETIRED.lower() + "/index.json"
-    value = http.json(url, optional=True)
-    versions = [] if value is None else value.get("versions", [])
-    require(isinstance(versions, list) and len(versions) <= 4096
-            and len(set(versions)) == len(versions)
-            and all(isinstance(version, str) and re.fullmatch(r"[0-9a-z.-]+", version) for version in versions),
-            "Invalid retired package version inventory")
-    return versions, url
-
-
-def unlist_helloworld(manifest, manifest_path, work, http):
-    require(manifest["retiredPackageId"] == RETIRED and manifest["packageOwner"] == OWNER,
-            "Retired package or owner differs from authorization")
-    resources = service_resources(http)
-    versions, inventory_url = retired_versions(http, resources)
-    listing, registration_url = registration(http, resources, RETIRED)
-    receipt_path = work / "helloworld-unlist.json"
-    receipt = {"schemaVersion": 1, "status": "incomplete", "allVersionsUnlisted": False, "startedAt": now(),
-               "packageId": RETIRED, "owner": OWNER, "manifestSha256": sha(manifest_path),
-               "inventoryUrl": inventory_url, "registrationUrl": registration_url,
-               "hardDeletionClaimed": False, "publicDatabasePublicationUnaffected": True, "versions": []}
-    save(receipt_path, receipt)
-    try:
-        require(set(listing) == set(versions), "Retired package content and registration inventories disagree")
-        for version in versions:
-            row = {"version": version, "listedBefore": listing.get(version), "status": "pending"}
-            receipt["versions"].append(row)
-            save(receipt_path, receipt)
-            if listing.get(version) is False:
-                row["status"] = "already-unlisted"
-            else:
-                row["status"] = "unlist-started-outcome-unconfirmed"
-                save(receipt_path, receipt)
-                status, _, _ = http.request("DELETE", PUBLISH + "/" + RETIRED + "/" + version, credential="nuget")
-                row["httpStatus"] = status
-                if status == 204:
-                    row["status"] = "accepted-awaiting-registration"
-                elif status in (401, 403):
-                    row.update(status="authorization-rejected", reason="NuGet rejected unlisting authorization; publishing and unlisting scopes can differ")
-                else:
-                    row["status"] = "unlist-not-confirmed"
-            save(receipt_path, receipt)
-        deadline = time.monotonic() + WAIT_SECONDS
-        while True:
-            current_versions, _ = retired_versions(http, resources)
-            listing, _ = registration(http, resources, RETIRED)
-            pending = []
-            for row in receipt["versions"]:
-                row["listedAfter"] = listing.get(row["version"])
-                if row["listedAfter"] is False:
-                    row["status"] = "registration-confirms-unlisted"
-                elif row["status"] == "accepted-awaiting-registration":
-                    pending.append(row)
-            receipt["finalObservedVersions"] = current_versions
-            receipt["finalRegistrationVersions"] = sorted(listing)
-            receipt["unattemptedVersions"] = sorted(set(current_versions) - set(versions))
-            complete = not receipt["unattemptedVersions"] and set(current_versions) == set(versions) == set(listing) and all(
-                row.get("listedAfter") is False for row in receipt["versions"])
-            receipt.update(allVersionsUnlisted=complete, status="complete" if complete else "incomplete", observedAt=now())
-            save(receipt_path, receipt)
-            if complete or not pending or time.monotonic() >= deadline:
-                break
-            print("Waiting for HelloWorld unlisting in the public registration catalog", flush=True)
-            time.sleep(POLL_SECONDS)
-        require(receipt["allVersionsUnlisted"], "HelloWorld unlisting remains incomplete; see the separate receipt for authorization and listed flags")
-        return receipt
-    except Exception as error:
-        receipt.update(status="incomplete", failedAt=now(), failureType=type(error).__name__)
-        if isinstance(error, PublicationError):
-            receipt.update(failure=str(error), httpStatus=error.status)
-        save(receipt_path, receipt)
-        raise
-
-
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=("preflight", "publish", "unlist-helloworld"))
+    parser.add_argument("command", choices=("preflight", "publish"))
     parser.add_argument("--manifest", required=True, type=Path)
     parser.add_argument("--work-dir", required=True, type=Path)
     parser.add_argument("--archive", type=Path, help="Reuse the exact original ZIP; GitHub identity is still checked live")
@@ -608,11 +543,8 @@ def main():
         http = Http()
         if args.command == "preflight":
             preflight(manifest, args.manifest, args.work_dir, http, args.archive)
-        elif args.command == "publish":
-            publish(manifest, args.manifest, args.work_dir, http, args.archive)
         else:
-            require(args.archive is None, "Unlisting does not use a candidate archive")
-            unlist_helloworld(manifest, args.manifest, args.work_dir, http)
+            publish(manifest, args.manifest, args.work_dir, http, args.archive)
     except PublicationError as error:
         print("Publication incomplete: " + str(error), file=sys.stderr)
         return 1

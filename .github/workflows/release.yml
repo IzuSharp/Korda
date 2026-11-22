@@ -104,22 +104,7 @@ jobs:
           python3 eng/publish_nuget.py preflight
           --manifest packaging/releases/DB-CPP-01-nuget.json
           --work-dir artifacts/nuget-publication
-      - name: Obtain the existing NuGet trusted publisher credential
-        id: nuget-login
-        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
-        with:
-          user: dekueon
-      - name: Unlist every retired HelloWorld version
-        id: retire
-        continue-on-error: true
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
-        run: >-
-          python3 eng/publish_nuget.py unlist-helloworld
-          --manifest packaging/releases/DB-CPP-01-nuget.json
-          --work-dir artifacts/nuget-publication
-      - name: Refresh the existing publisher credential before package upload
+      - name: Obtain the existing publisher credential before package upload
         id: package-login
         uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
         with:
@@ -141,14 +126,12 @@ jobs:
           --signature-policy artifacts/nuget-publication/signature-policy.json
           --expected-source 3badc05be503991b5591732629dd7e5b0dbad111
           --output artifacts/nuget-publication/consumer
-      - name: Require publication, public consumption and retirement
+      - name: Require publication and public consumption
         if: always()
         env:
-          RETIRE_RESULT: ${{ steps.retire.outcome }}
           PACKAGE_RESULT: ${{ steps.packages.outcome }}
           CONSUMER_RESULT: ${{ steps.consumers.outcome }}
         run: |
-          test "$RETIRE_RESULT" = success
           test "$PACKAGE_RESULT" = success
           test "$CONSUMER_RESULT" = success
       - name: Retain the actual public registry and consumer receipts

@@ -48,7 +48,7 @@ Linux CI also runs the retained Core packaging/minimum-CPU checks, ASan/UBSan wi
 
 ## Status and history
 
-Build CI produces local candidates. The separately authorized [NuGet publication](docs/releasing.md) promotes the exact accepted main-build packages to the existing `dekueon` account, verifies registry signatures and public-source JIT/AOT consumption, and unlists the retired HelloWorld versions. Its fixed provider version is `0.1.0-db-cpp.1.2`; common dependencies remain at their accepted exact versions. A build artifact alone is never treated as a public release. Performance optimization is deferred; no performance advantage is claimed by this implementation migration.
+Build CI produces local candidates. The separately authorized [NuGet publication](docs/releasing.md) promotes the exact accepted main-build database packages to the existing `dekueon` account and verifies registry signatures and public-source JIT/AOT consumption. HelloWorld is excluded from publication; its historical NuGet versions remain unchanged. The fixed provider version is `0.1.0-db-cpp.1.2`; common dependencies remain at their accepted exact versions. A build artifact alone is never treated as a public release. Performance optimization is deferred; no performance advantage is claimed by this implementation migration.
 
 - [Background](docs/background.md) and [verification](docs/verification.md)
 - [Contributing](CONTRIBUTING.md) and [security policy](SECURITY.md)

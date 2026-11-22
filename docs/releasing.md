@@ -1,6 +1,6 @@
 # Database candidate production and NuGet publication
 
-DB-Scope-01 removed the old HelloWorld publisher. DB-CPP-01 then completed the C++ database migration and verified local candidates. The owner subsequently authorized public delivery of that accepted database product to the existing NuGet account `dekueon`, and withdrawal of every listed `NativeWeave.HelloWorld` version. These are separate acceptance events; the historical migration report does not claim that candidate production was public publication.
+DB-Scope-01 removed the old HelloWorld publisher. DB-CPP-01 then completed the C++ database migration and verified local candidates. The owner subsequently authorized public delivery of that accepted database product to the existing NuGet account `dekueon`, and clarified that HelloWorld must be excluded from CI publication. Historical HelloWorld versions remain unchanged; no unlisting or deletion is performed. Migration and public delivery are separate acceptance events; the historical migration report does not claim that candidate production was public publication.
 
 ## Candidate production
 
@@ -24,7 +24,7 @@ The publisher checks the original successful run and artifact, uploads packages 
 
 The independent public consumer uses the existing versioned C# business sample, fresh projects and empty caches outside the source tree, and only NuGet.org as a package source. It runs SQLite/PostgreSQL in JIT and Native AOT and checks restored package identities plus the actual loaded native library hashes. It never compiles the product native library. The accepted local-feed verifier remains unchanged.
 
-HelloWorld retirement is recorded independently. NuGet.org's delete endpoint unlists a version; it preserves exact-version restore for existing applications. All versions are enumerated and their final `listed` state is checked. If the existing credential lacks unlist permission, that exact refusal remains an incomplete cleanup result, even when database uploads succeeded. No publisher scope or account permission is silently expanded.
+The reviewed manifest and publisher allow only the twelve existing database package IDs and their exact versions. `NativeWeave.HelloWorld` is explicitly excluded. The publisher has no DELETE/unlist operation and cannot create another HelloWorld version. Existing NuGet history is unaffected, as the owner requested. No publisher scope or account permission is changed.
 
 Run the same reviewed entry points locally for read-only preparation or with an already authorized temporary credential in the trusted publisher job:
 
@@ -32,11 +32,10 @@ Run the same reviewed entry points locally for read-only preparation or with an 
 python3 tests/Packaging.Domain/test_nuget_publication.py
 python3 tests/Packaging.Domain/test_nuget_public_consumer.py
 python3 eng/publish_nuget.py preflight --manifest packaging/releases/DB-CPP-01-nuget.json --work-dir artifacts/nuget-publication
-python3 eng/publish_nuget.py unlist-helloworld --manifest packaging/releases/DB-CPP-01-nuget.json --work-dir artifacts/nuget-publication
 python3 eng/publish_nuget.py publish --manifest packaging/releases/DB-CPP-01-nuget.json --work-dir artifacts/nuget-publication
 python3 eng/verify_nuget_public.py --release-record artifacts/nuget-publication/source/db-scope/prepared/candidate/release.json --signature-policy artifacts/nuget-publication/signature-policy.json --expected-source 3badc05be503991b5591732629dd7e5b0dbad111 --output artifacts/nuget-publication/consumer
 ```
 
-`preflight` needs read access to the original GitHub artifact. Only the two registry mutation commands consume `NUGET_API_KEY`; it is neither printed nor retained. Public consumption needs .NET11, ordinary Linux Native AOT linker prerequisites and an isolated PostgreSQL18 server selected by `NW_TEST_POSTGRES`. A successful publication requires all package readbacks, all four consumer cells and HelloWorld retirement; partial results remain explicit. Actual receipts and observed PR/run links are recorded in the Plan publication follow-up.
+`preflight` needs read access to the original GitHub artifact. Only `publish` consumes `NUGET_API_KEY`; it is neither printed nor retained. Public consumption needs .NET11, ordinary Linux Native AOT linker prerequisites and an isolated PostgreSQL18 server selected by `NW_TEST_POSTGRES`. A successful publication requires all database package readbacks and all four consumer cells; partial results remain explicit. Actual receipts and observed PR/run links are recorded in the Plan publication follow-up.
 
 Final current batch PRs, source commits and observed CI runs are recorded in the Plan handoff.

@@ -83,7 +83,7 @@ class PublicPublicationTests(unittest.TestCase):
 
     def test_manifest_cannot_redirect_publication_or_change_closure(self):
         for field, value in {"repository": "elsewhere/project", "packageOwner": "someone",
-                             "retiredPackageId": "NativeWeave.Database", "candidatePath": "cpp-clean/prepared/candidate",
+                             "excludedPackageIds": [], "candidatePath": "cpp-clean/prepared/candidate",
                              "sourceCommit": "0" * 40, "packageVersions": {}}.items():
             path = self.work / "manifest.json"
             path.write_text(json.dumps(dict(self.manifest, **{field: value})))
@@ -119,7 +119,8 @@ class PublicPublicationTests(unittest.TestCase):
         opener.open.return_value = Response(status=302, headers={"Location": "https://untrusted.example/upload"})
         with patch.dict(os.environ, {"NUGET_API_KEY": "test-only-secret"}):
             with self.assertRaisesRegex(publication.PublicationError, "Refused a redirect"):
-                publication.Http(opener).request("PUT", publication.PUBLISH, credential="nuget", data=b"package")
+                publication.Http(opener).request("PUT", publication.PUBLISH, credential="nuget", data=b"package",
+                                                 package_identity=("NativeWeave.Data", "0.1.0-db-cpp.1.1"))
         self.assertEqual(opener.open.call_count, 1)
         request = opener.open.call_args.args[0]
         self.assertEqual(request.full_url, publication.PUBLISH)
@@ -132,6 +133,42 @@ class PublicPublicationTests(unittest.TestCase):
             with self.subTest(url=url), self.assertRaises(publication.PublicationError):
                 publication.Http(opener).request("PUT", url, credential="nuget", data=b"package")
         opener.open.assert_not_called()
+
+    def test_only_package_put_can_use_nuget_credentials(self):
+        opener = Mock()
+        for method in ("DELETE", "POST", "GET"):
+            with self.subTest(method=method), self.assertRaises(publication.PublicationError):
+                publication.Http(opener).request(method, publication.PUBLISH, credential="nuget",
+                                                 package_identity=("NativeWeave.Data", "0.1.0-db-cpp.1.1"))
+        opener.open.assert_not_called()
+
+    def test_helloworld_and_unknown_packages_are_rejected_before_upload(self):
+        opener, http = Mock(), Mock()
+        for identity in ("NativeWeave.HelloWorld", "NativeWeave.Unknown"):
+            with self.subTest(identity=identity):
+                with self.assertRaises(publication.PublicationError):
+                    publication.Http(opener).request("PUT", publication.PUBLISH, credential="nuget", data=b"package",
+                                                     package_identity=(identity, "0.1.0-db-cpp.1.1"))
+                with self.assertRaises(publication.PublicationError):
+                    publication.upload(http, self.work / "never-read.nupkg", {"id": identity, "version": "0.1.0-db-cpp.1.1"})
+                changed = copy.deepcopy(self.manifest)
+                changed["packageVersions"][identity] = "0.1.0-db-cpp.1.1"
+                path = self.work / "unpermitted-manifest.json"
+                path.write_text(json.dumps(changed))
+                with self.assertRaises(publication.PublicationError):
+                    publication.load_manifest(path)
+        opener.open.assert_not_called()
+        http.request.assert_not_called()
+
+    def test_upload_requires_frozen_version_and_accepted_payload_bytes(self):
+        http = Mock()
+        path = self.work / "changed.nupkg"
+        path.write_bytes(b"changed package")
+        for expected in ({"id": "NativeWeave.Data", "version": "0.1.0-preview.1"},
+                         {"id": "NativeWeave.Data", "version": "0.1.0-db-cpp.1.1", "upload_archive_sha256": "0" * 64}):
+            with self.subTest(expected=expected), self.assertRaises(publication.PublicationError):
+                publication.upload(http, path, expected)
+        http.request.assert_not_called()
 
     def test_github_blob_redirect_discards_authorization(self):
         payload = b"archive bytes"
@@ -242,49 +279,6 @@ class PublicPublicationTests(unittest.TestCase):
         self.assertEqual(events, ["readback", "readback", "upload", "upload", "readback", "readback"])
         self.assertTrue(receipt["publicPublicationComplete"])
         self.assertTrue(all(row["uploadHttpStatus"] == 409 and row["status"] == "public-readback-verified" for row in receipt["packages"]))
-
-    def test_unlist_403_is_incomplete_without_overwriting_database_publication(self):
-        public_path = self.work / "publication.json"
-        public_path.write_text('{"publicPublicationComplete": true}\n')
-        original = public_path.read_bytes()
-        http = Mock()
-        http.request.return_value = (403, {}, b"Forbidden")
-        with patch.object(publication, "service_resources", return_value=self.resources), \
-             patch.object(publication, "retired_versions", return_value=(["0.1.0-preview.1"], "https://api.nuget.org/versions")), \
-             patch.object(publication, "registration", return_value=({"0.1.0-preview.1": True}, "https://api.nuget.org/registration")):
-            with self.assertRaises(publication.PublicationError):
-                publication.unlist_helloworld(self.manifest, self.manifest_path, self.work, http)
-        receipt = json.loads((self.work / "helloworld-unlist.json").read_text())
-        self.assertFalse(receipt["allVersionsUnlisted"])
-        self.assertEqual(receipt["versions"][0]["httpStatus"], 403)
-        self.assertEqual(receipt["versions"][0]["status"], "authorization-rejected")
-        self.assertTrue(receipt["versions"][0]["listedAfter"])
-        self.assertEqual(public_path.read_bytes(), original)
-
-    def test_unlist_enumerates_all_versions_then_verifies_actual_flags(self):
-        versions = ["0.1.0-preview.1", "0.1.0-preview.2.1", "0.1.0-preview.11.1"]
-        http = Mock()
-        http.request.return_value = (204, {}, b"")
-        with patch.object(publication, "service_resources", return_value=self.resources), \
-             patch.object(publication, "retired_versions", return_value=(versions, "https://api.nuget.org/versions")), \
-             patch.object(publication, "registration", side_effect=[({v: True for v in versions}, "https://api.nuget.org/registration"),
-                                                                    ({v: False for v in versions}, "https://api.nuget.org/registration")]):
-            receipt = publication.unlist_helloworld(self.manifest, self.manifest_path, self.work, http)
-        self.assertEqual(http.request.call_count, len(versions))
-        self.assertEqual({call.args[1].rsplit("/", 1)[1] for call in http.request.call_args_list}, set(versions))
-        self.assertTrue(receipt["allVersionsUnlisted"])
-        self.assertTrue(all(row["listedAfter"] is False for row in receipt["versions"]))
-
-    def test_missing_content_inventory_cannot_hide_listed_registration_versions(self):
-        http = Mock()
-        with patch.object(publication, "service_resources", return_value=self.resources), \
-             patch.object(publication, "retired_versions", return_value=([], "https://api.nuget.org/versions")), \
-             patch.object(publication, "registration", return_value=({"0.1.0-preview.1": True}, "https://api.nuget.org/registration")):
-            with self.assertRaisesRegex(publication.PublicationError, "inventories disagree"):
-                publication.unlist_helloworld(self.manifest, self.manifest_path, self.work, http)
-        http.request.assert_not_called()
-        receipt = json.loads((self.work / "helloworld-unlist.json").read_text())
-        self.assertFalse(receipt["allVersionsUnlisted"])
 
     def test_credentials_are_removed_from_signature_subprocess_scope(self):
         credentials = {"NUGET_API_KEY": "private-nuget", "GITHUB_TOKEN": "private-github", "GH_TOKEN": "private-gh",

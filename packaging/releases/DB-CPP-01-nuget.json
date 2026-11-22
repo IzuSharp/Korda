@@ -10,7 +10,6 @@
   "artifactSha256": "bb63f9fe71ea4c2f68dd63b748af3820c8bc0174199ce6fa7e2a92197f31e8b9",
   "candidatePath": "db-scope/prepared/candidate",
   "packageOwner": "dekueon",
-  "retiredPackageId": "NativeWeave.HelloWorld",
   "packageVersions": {
     "NativeWeave.Core": "0.1.0-db-cpp.1.1",
     "NativeWeave.Data": "0.1.0-db-cpp.1.1",
@@ -38,5 +37,8 @@
     "NativeWeave.Interop.Abi": "d322f4a17de695b668896b4e8eb662a645b698acf774b92be8fd08fdb2af69cc",
     "NativeWeave.Query.Binding": "a957f90a91ff392224d623faad9f708a368918dfbebccdaf1add6ee0998bc83f",
     "NativeWeave.Query.Generator": "6789de0b8bfbfeaf66e450f574653d2a470160c98e021e6bada740f03c15f3f2"
-  }
+  },
+  "excludedPackageIds": [
+    "NativeWeave.HelloWorld"
+  ]
 }
