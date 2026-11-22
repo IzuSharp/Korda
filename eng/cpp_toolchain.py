@@ -8,6 +8,7 @@ from pathlib import Path
 import shlex
 import shutil
 import subprocess
+import tempfile
 import tarfile
 import zipfile
 
@@ -71,37 +72,49 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, default=ROOT / 'artifacts/toolchain')
     output = parser.parse_args().output.resolve()
-    paths = []
-    for item in json.loads(LOCK.read_text())['toolchain'].values():
+    import fcntl  # This bootstrap installs the locked Linux x64 distribution.
+    output.mkdir(parents=True, exist_ok=True)
+    with (output / 'install.lock').open('a') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        provision(output)
+
+
+def provision(output):
+    directories = {}
+    for tool, item in json.loads(LOCK.read_text())['toolchain'].items():
         archive = download(item['url'], item['sha256'], output / 'downloads' / item['filename'])
         destination = output / item['directory']
         if not destination.exists():
-            destination.mkdir(parents=True)
-            if zipfile.is_zipfile(archive):
-                with zipfile.ZipFile(archive) as stream:
-                    stream.extractall(destination)
-                (destination / 'ninja').chmod(0o755)
-            else:
-                command = ['tar', '-xf', str(archive), '-C', str(destination),
-                           '--strip-components=' + str(item['stripComponents'])]
-                if archive.name.endswith('.zst'):
-                    command += ['--use-compress-program=zstd -d --long=30']
-                subprocess.run(command, check=True)
+            with tempfile.TemporaryDirectory(dir=output, prefix='.install-') as temporary:
+                staging = Path(temporary) / 'tool'
+                staging.mkdir()
+                if zipfile.is_zipfile(archive):
+                    with zipfile.ZipFile(archive) as stream:
+                        stream.extractall(staging)
+                    (staging / 'ninja').chmod(0o755)
+                else:
+                    command = ['tar', '-xf', str(archive), '-C', str(staging),
+                               '--strip-components=' + str(item['stripComponents'])]
+                    if archive.name.endswith('.zst'):
+                        command += ['--use-compress-program=zstd -d --long=30']
+                    subprocess.run(command, check=True)
+                staging.rename(destination)
         binary = destination / 'bin' if (destination / 'bin').is_dir() else destination
         for name, expected in item['executables'].items():
             if sha((binary / name).resolve()) != expected:
                 raise RuntimeError('Pinned tool executable mismatch: ' + name)
-        paths.append(str(binary))
+        directories[tool] = str(binary)
+    paths = list(directories.values())
     env = output / 'environment.sh'
     env.write_text('export PATH=' + shlex.quote(':'.join(paths)) + ':"$PATH"\n'
-                   + 'export CC=' + shlex.quote(paths[0] + '/clang') + '\n'
-                   + 'export CXX=' + shlex.quote(paths[0] + '/clang++') + '\n')
+                   + 'export CC=' + shlex.quote(directories['llvm'] + '/clang') + '\n'
+                   + 'export CXX=' + shlex.quote(directories['llvm'] + '/clang++') + '\n')
     if os.environ.get('GITHUB_PATH'):
         with Path(os.environ['GITHUB_PATH']).open('a') as stream:
             stream.write('\n'.join(paths) + '\n')
         with Path(os.environ['GITHUB_ENV']).open('a') as stream:
-            stream.write('CC=' + paths[0] + '/clang\nCXX=' + paths[0] + '/clang++\n')
-    print(json.dumps({'environment': str(env), 'lockSha256': sha(LOCK), 'verifiedToolDirectories': paths}))
+            stream.write('CC=' + directories['llvm'] + '/clang\nCXX=' + directories['llvm'] + '/clang++\n')
+    print(json.dumps({'environment': str(env), 'lockSha256': sha(LOCK), 'verifiedToolDirectories': paths, 'bin': directories}))
 
 
 if __name__ == '__main__':

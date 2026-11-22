@@ -1,4 +1,35 @@
 cmake_minimum_required(VERSION 4.3.3)
+# IDEs can open the Linux checkout with just a supported CMake and the system prerequisites.
+# Explicit compiler and cross-toolchain settings retain their normal CMake semantics.
+if(CMAKE_HOST_SYSTEM_NAME STREQUAL "Linux" AND NOT CMAKE_TOOLCHAIN_FILE AND
+   (NOT CMAKE_C_COMPILER OR CMAKE_C_COMPILER STREQUAL "clang") AND
+   (NOT CMAKE_CXX_COMPILER OR CMAKE_CXX_COMPILER STREQUAL "clang++"))
+  cmake_host_system_information(RESULT nw_cpu QUERY OS_PLATFORM)
+  if(nw_cpu STREQUAL "x86_64" AND (CMAKE_C_COMPILER OR ("$ENV{CC}" STREQUAL "" AND "$ENV{CXX}" STREQUAL "")))
+    find_program(nw_clang NAMES clang NO_CACHE)
+    find_program(nw_clangxx NAMES clang++ NO_CACHE)
+    if(nw_clang)
+      execute_process(COMMAND "${nw_clang}" -dumpversion OUTPUT_VARIABLE nw_clang_version OUTPUT_STRIP_TRAILING_WHITESPACE)
+    endif()
+    file(READ "${CMAKE_CURRENT_SOURCE_DIR}/native/dependencies.lock.json" nw_lock)
+    string(JSON nw_llvm_version GET "${nw_lock}" toolchain llvm version)
+    if(NOT nw_clangxx OR NOT nw_clang_version VERSION_EQUAL nw_llvm_version)
+      find_program(nw_python NAMES python3 REQUIRED)
+      message(STATUS "Preparing the locked NativeWeave Linux toolchain in artifacts/toolchain")
+      execute_process(COMMAND "${nw_python}" eng/cpp_toolchain.py WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+                      OUTPUT_VARIABLE nw_tools COMMAND_ERROR_IS_FATAL ANY)
+      string(JSON nw_bin GET "${nw_tools}" bin llvm)
+      string(JSON nw_ninja_dir GET "${nw_tools}" bin ninja)
+      set(nw_clang "${nw_bin}/clang")
+      set(nw_clangxx "${nw_bin}/clang++")
+      if(CMAKE_GENERATOR STREQUAL "Ninja" AND NOT CMAKE_MAKE_PROGRAM)
+        set(CMAKE_MAKE_PROGRAM "${nw_ninja_dir}/ninja" CACHE FILEPATH "NativeWeave Ninja")
+      endif()
+    endif()
+    set(CMAKE_C_COMPILER "${nw_clang}" CACHE FILEPATH "NativeWeave C compiler" FORCE)
+    set(CMAKE_CXX_COMPILER "${nw_clangxx}" CACHE FILEPATH "NativeWeave C++ compiler" FORCE)
+  endif()
+endif()
 project(NativeWeaveNative VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_C_STANDARD 17)

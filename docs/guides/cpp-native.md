@@ -4,7 +4,7 @@ DB-CPP-01 replaces the fixed Rust product at `465cd0f90e6af05ec50eb581156240377c
 
 ## Linux developer build
 
-Install Python 3.11+, curl, tar/zstd, native build prerequisites and OpenSSL/zlib development headers. PostgreSQL also needs Make, pkg-config, Bison and Flex. Run `python3 eng/cpp_toolchain.py` once to install or verify the locked Clang, CMake and Ninja under the checkout; source `artifacts/toolchain/environment.sh` or select that CMake executable in the IDE. With sccache on PATH, the project enables its C/C++ launchers automatically.
+Install Python 3.11+, curl, tar/zstd, native build prerequisites and OpenSSL/zlib development headers. PostgreSQL also needs Make, pkg-config, Bison and Flex. Opening the Linux x64 preset with CMake 4.3.3 or newer prepares the pinned Clang under the checkout if it is missing from PATH or too old. On a machine that also lacks a suitable CMake, run `python3 eng/cpp_toolchain.py` once, then source `artifacts/toolchain/environment.sh` or select the installed CMake in the IDE. With sccache on PATH, the project enables its C/C++ launchers automatically.
 
 Choose `linux-x64-release` for both databases and tests (the defaults), `linux-x64-sqlite` or `linux-x64-postgresql` for one, or `linux-x64-asan-ubsan` for instrumentation. Configure, build and test using the same preset:
 
