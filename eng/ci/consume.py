@@ -42,7 +42,7 @@ def main():
             app = work / graph
             app.mkdir()
             shutil.copy(ROOT / "samples/api/packaging-domain/Program.cs", app)
-            project(app / "Consumer.csproj", refs, versions, symbols)
+            project(app / "Consumer.csproj", refs, versions, [*symbols, "PUBLIC_PROVIDER_BUNDLE"])
             def run(*argv, extra=None):
                 subprocess.run(argv, cwd=app, env=env | (extra or {}), check=True)
             run("dotnet", "build", "-c", "Release", "-r", "linux-x64", "--no-self-contained")
@@ -50,15 +50,17 @@ def main():
             actual = {key for key in assets["libraries"] if key.lower().startswith("nativeweave.")}
             if actual != {name + "/" + versions[name] for name in refs}:
                 raise ValueError("Unexpected NativeWeave dependencies: " + str(actual))
+            def execute(*command):
+                for provider in providers:
+                    database = str(app / "smoke.db") if provider == "sqlite" else os.environ["NW_TEST_POSTGRES"]
+                    run(*command, extra={"B24_PROVIDER": provider, "B24_DATABASE": database})
+
+            if not args.check_build_only:
+                execute("dotnet", "bin/Release/net11.0/linux-x64/B24Consumer.dll", "--require-jit")
             options = ["--no-self-contained"] if args.check_build_only else ["-p:PublishAot=true"]
             run("dotnet", "publish", "-c", "Release", "-r", "linux-x64", *options, "-o", "out")
-            if args.check_build_only:
-                continue
-            for provider in providers:
-                database = str(app / "smoke.db") if provider == "sqlite" else os.environ["NW_TEST_POSTGRES"]
-                context = {"B24_PROVIDER": provider, "B24_DATABASE": database}
-                run("dotnet", "bin/Release/net11.0/linux-x64/B24Consumer.dll", extra=context)
-                run("./out/B24Consumer", "--require-aot", extra=context)
+            if not args.check_build_only:
+                execute("./out/B24Consumer", "--require-aot")
 
 
 if __name__ == "__main__":

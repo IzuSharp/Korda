@@ -25,7 +25,10 @@ def validate(folder, plan, version):
         path = folder / "feed" / f"{name}.{version}.nupkg"
         if compat.file_hash(path) != item["upload_archive_sha256"]:
             raise ValueError("Candidate changed after consumption")
+        provider = next(p for p, identity in IDS.items() if identity == name)
         with zipfile.ZipFile(path) as archive:
+            if json.loads(archive.read("nativeweave/public.json"))["inputs"] != record["inputs"][provider]:
+                raise ValueError("Packaged provider fingerprint differs from the tested inputs")
             if ET.fromstring(archive.read(name + ".nuspec")).find(".//{*}dependency") is not None:
                 raise ValueError("Public provider requires another package")
         paths[name] = path

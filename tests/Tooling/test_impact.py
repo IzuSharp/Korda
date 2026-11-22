@@ -26,3 +26,33 @@ class ImpactTests(unittest.TestCase):
         published["postgresql"]["inputs"] = "previous"
         result = plan(["README.md"], hashes, published)
         self.assertEqual((result["scope"], result["packages"]), ("full", ["postgresql"]))
+
+    def test_test_only_pr_does_not_recover_a_pending_release(self):
+        hashes = dict.fromkeys(PROVIDERS, "current")
+        old = {p: {"inputs": "previous"} for p in PROVIDERS}
+        cases = {
+            "README.md": ("light", []),
+            "tests/Data.Sqlite/Program.cs": ("sqlite", []),
+            "tests/Data.Postgres/Program.cs": ("postgresql", []),
+            "tests/Packaging.Release/ApiCheck/Program.cs": ("light", ["pack-api"]),
+            "tests/Packaging.Linux/test_profile.py": ("light", ["elf-profile"]),
+            "tests/Query.Generator/ApiCheck/Program.cs": ("light", ["generator"]),
+        }
+        for path, (scope, checks) in cases.items():
+            with self.subTest(path=path):
+                actual = plan([path], hashes, old, recover=False)
+                self.assertEqual((scope, checks, []), (actual["scope"], actual["checks"], actual["packages"]))
+        actual = plan(list(cases)[3:], hashes, old, recover=False)
+        self.assertEqual((actual["scope"], actual["checks"]), ("light", ["elf-profile", "generator", "pack-api"]))
+
+    def test_public_candidates_and_internal_checks_have_independent_inputs(self):
+        hashes = dict.fromkeys(PROVIDERS, "current")
+        previous = {p: {"inputs": "current"} for p in PROVIDERS}
+        previous["sqlite"]["inputs"] = "old"
+        actual = plan(["src/Data.Sqlite/Provider.cs", "tests/Query.Generator/Program.cs"], hashes, previous)
+        self.assertEqual((actual["scope"], actual["checks"], actual["packages"]),
+                         ("sqlite", ["generator"], ["sqlite"]))
+        previous["postgresql"]["inputs"] = "old"
+        packaging = plan(["src/Packaging.Release/BuildTasks/PackageClosure.cs"], hashes, previous)
+        self.assertEqual((packaging["scope"], packaging["checks"], packaging["packages"]),
+                         ("pack", ["pack-api", "pack-metadata"], ["postgresql", "sqlite"]))

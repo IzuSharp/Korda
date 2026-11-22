@@ -47,17 +47,14 @@ for name,value in zip(('clang','clang++'),sys.argv[1:]):
     with Path(value).resolve().open('rb') as stream:
         assert hashlib.file_digest(stream,'sha256').hexdigest()==lock[name], 'Use pinned Clang 23.1.5'
 PY
-if [ ! -f "$db_scope_pg_root/postgresql-18.0.tar.bz2" ]; then
-curl --fail --location --retry 3 \
-  https://ftp.postgresql.org/pub/source/v18.0/postgresql-18.0.tar.bz2 \
-  -o "$source_dir/download"
-mv "$source_dir/download" "$db_scope_pg_root/postgresql-18.0.tar.bz2"
+archive="$db_scope_pg_root/postgresql-18.0.tar.bz2"
+archive_sha="0d5b903b1e5fe361bca7aa9507519933773eb34266b1357c4e7780fdee6d6078"
+if ! echo "$archive_sha  $archive" | sha256sum --check --status 2>/dev/null; then
+  curl --fail --location --retry 3 \
+    https://ftp.postgresql.org/pub/source/v18.0/postgresql-18.0.tar.bz2 -o "$source_dir/download"
+  echo "$archive_sha  $source_dir/download" | sha256sum --check
+  mv "$source_dir/download" "$archive"
 fi
-python3 - "$db_scope_pg_root/postgresql-18.0.tar.bz2" <<'PY'
-import hashlib,sys
-from pathlib import Path
-assert hashlib.sha256(Path(sys.argv[1]).read_bytes()).hexdigest() == "0d5b903b1e5fe361bca7aa9507519933773eb34266b1357c4e7780fdee6d6078"
-PY
 tar -xf "$db_scope_pg_root/postgresql-18.0.tar.bz2" -C "$source_dir"
 cd "$source_dir/postgresql-18.0"
 patch -p1 < "$db_cpp_product_root/native/cpp/patches/libpq-explicit-configuration.patch"
@@ -82,13 +79,16 @@ from pathlib import Path
 root=Path(sys.argv[1]);compiler=Path(sys.argv[2]).resolve()
 def sha(p):
     with p.open('rb') as stream:return hashlib.file_digest(stream,'sha256').hexdigest()
+metadata=root/'install/nativeweave-postgresql-build.json'
 files=[root/'postgresql-18.0.tar.bz2',root/'configure.log',root/'build.log',root/'install.log',
-       *sorted(p for p in (root/'install').rglob('*') if p.is_file())]
+       *sorted(p for p in (root/'install').rglob('*') if p.is_file() and p != metadata)]
 record={'cacheKey':sys.argv[4],'version':'18.0','archiveSha256':sha(files[0]),'compiler':str(compiler),'compilerSha256':sha(compiler),
         'compilerVersion':subprocess.check_output([str(compiler),'--version'],text=True),
         'files':{str(p.relative_to(root)):sha(p) for p in files}}
 record['patchSha256']=sha(Path(sys.argv[3])/'native/cpp/patches/libpq-explicit-configuration.patch')
-(root/'install/nativeweave-postgresql-build.json').write_text(json.dumps(record,indent=2)+'\n')
+temporary=metadata.with_suffix('.tmp')
+temporary.write_text(json.dumps(record,indent=2)+'\n')
+temporary.replace(metadata)
 PY
 "$db_scope_pg_root/install/bin/pg_config" --version
 export_paths

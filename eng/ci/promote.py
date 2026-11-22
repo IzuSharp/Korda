@@ -16,7 +16,8 @@ def main():
     root = "repos/" + repo
     tree = subprocess.check_output(["git", "rev-parse", "HEAD^{tree}"], text=True).strip()
     with open("artifacts/plan.json") as stream:
-        wanted = json.load(stream)["packages"]
+        plan = json.load(stream)
+    wanted = plan["packages"]
     prs = api(f"{root}/commits/{sha}/pulls")
     pr = next((p for p in prs if p["merged_at"] and p["base"]["ref"] == "main" and p["merge_commit_sha"] == sha), None)
     result = {"merged": "true" if pr else "false", "run": "", "artifact": "", "number": ""}
@@ -26,6 +27,10 @@ def main():
             if run["conclusion"] != "success" or run["head_repository"]["full_name"] != repo:
                 continue
             if not any(p["number"] == pr["number"] for p in run["pull_requests"]):
+                continue
+            # A long-lived PR can have an older CI sequence than a later public release.
+            version = (run["run_number"], 2)
+            if any(version <= tuple(map(int, plan["published"][p]["version"].split(".")[-2:])) for p in wanted):
                 continue
             expected = candidate_name(tree, wanted, run["id"], run["run_attempt"])
             artifacts = api(f"{root}/actions/runs/{run['id']}/artifacts")["artifacts"]

@@ -123,6 +123,8 @@ def main():
     commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
     tree = subprocess.check_output(["git", "rev-parse", "HEAD^{tree}"], text=True).strip()
     records = []
+    if plan["rebuild_task"] and not args.components and not args.native:
+        compile_project(TASK_PROJECT, args.version)
     for provider in names:
         if args.components:
             entries, native = component_files(args.components, provider)
@@ -137,10 +139,10 @@ def main():
             info = json.loads(entries["nativeweave/manifest.json"])
             native = dict(path=info["nativePath"], sha256=info["nativeSha256"], rid=RID, abi_major=1)
             # Packaging-only changes can update the host task without rebuilding the native library.
-            compile_project(TASK_PROJECT, args.version)
-            for suffix in (".dll", ".xml"):
-                name = BUILD_TASK + suffix
-                entries["tools/net11.0/" + name] = (TASK_PROJECT.parent / "bin/Release/net11.0" / name).read_bytes()
+            if plan["rebuild_task"]:
+                for suffix in (".dll", ".xml"):
+                    name = BUILD_TASK + suffix
+                    entries["tools/net11.0/" + name] = (TASK_PROJECT.parent / "bin/Release/net11.0" / name).read_bytes()
         records.append(compose(provider, args.version, entries, native, commit, plan["inputs"][provider]))
     record = dict(schema_version=1, source_commit=commit, source_tree=tree, rid=RID, source_dirty=False,
                   packages=records, publish=plan["packages"], inputs=plan["inputs"])

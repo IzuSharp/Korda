@@ -2,8 +2,12 @@
 
 Pull requests run the checks selected by `python3 eng/ci/impact.py BASE`. The file ownership map and tests live in `eng/ci/impact.py` and `tests/Tooling/test_impact.py`. The planner compares version-independent input hashes with nuget.org so that an unpublished change remains pending across subsequent merges. Check the CI summary for the reason a lane was selected.
 
+For a documentation-only PR the planner, dependency review and secret scan run without a database runner. A single-provider regression selects its own native build and tests. Pure generator, MSBuild task API and ELF profile test changes select their own checks independently. Packaging metadata changes can reuse the signed native assets and still test the resulting archives in real applications. A change to the shared runtime or to unclassified product code exercises both providers. CodeQL selects the affected supported languages; weekly validation scans both.
+
 The public package allowlist contains **NativeWeave.Database.Sqlite** and **NativeWeave.Database.PostgreSql**. Each package includes the shared managed assemblies, build integration, generator, third-party notices and its selected provider library. Internal component packages and HelloWorld receive no new public versions.
 
 Each candidate uses `0.1.0-preview.<CI run number>.2`. The PR validates the Git integration tree and retains the exact tested files. On merge, CI looks up the successful same-repository PR run. A matching tree, package selection and artifact allow promotion; a stale, missing or external candidate requires a fresh main build. Direct pushes, manual runs and scheduled checks cannot publish. The trusted `release.yml` job checks the allowlist and hashes before authentication, polls nuget.org every two minutes, verifies signed payloads and runs consumers against the registry. Rerun a failed release job to reuse its immutable candidate.
+
+GitHub Actions can restore caches from the base branch. PR caches remain scoped to their merge ref. The weekly or manual full run on main also warms the default-branch caches for subsequent PRs.
 
 Use `workflow_dispatch` for full Linux validation. Weekly CI runs the full compatibility, sanitizer, clean-image and recovery gates. The internal twelve-package feed remains available for historical compatibility work.

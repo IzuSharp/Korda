@@ -33,6 +33,8 @@ jobs:
           --health-interval 5s --health-timeout 5s --health-retries 12
     env:
       CI: "true"
+      NUGET_PACKAGES: ${{ github.workspace }}/artifacts/nuget-packages
+      SCCACHE_IDLE_TIMEOUT: "0"
       DOTNET_NOLOGO: "true"
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
       PACKAGE_VERSION: ${{ inputs.version }}
@@ -125,14 +127,12 @@ jobs:
           PROVIDER: ${{ fromJSON(inputs.plan).scope }}
         run: |
           python3 eng/task07_native.py --output artifacts/provider-native --provider "$PROVIDER"
+          ctest --preset "linux-x64-$PROVIDER" -R '^native\.selected\.abi$'
           if [ "$PROVIDER" = sqlite ]; then
             python3 tests/Data.Sqlite/verify.py --output artifacts/provider-tests --design artifacts/frozen-design --native-build artifacts/cmake/linux-x64-sqlite
           else
             python3 tests/Data.Postgres/verify.py --output artifacts/provider-tests --design-root artifacts/frozen-design --postgres-bin "$NW_POSTGRES_BIN" --native-build artifacts/cmake/linux-x64-postgresql
           fi
-      - name: Run packaging regression checks
-        if: fromJSON(inputs.plan).scope == 'pack'
-        run: python3 -m unittest discover -s tests/Packaging.Linux -p test_profile.py -v
       - name: Reject generated source or dependency drift
         run: git diff --exit-code
       - name: Verify shared ASan and UBSan preset with leak detection enabled
@@ -218,7 +218,7 @@ jobs:
           if-no-files-found: error
           retention-days: 14
       - name: Compose and consume the public providers
-        if: fromJSON(inputs.plan).packages[0] != null || fromJSON(inputs.plan).scope == 'pack'
+        if: fromJSON(inputs.plan).consume
         env:
           SCOPE: ${{ fromJSON(inputs.plan).scope }}
         run: |

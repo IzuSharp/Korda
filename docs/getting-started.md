@@ -8,7 +8,7 @@ dotnet add package NativeWeave.Database.Sqlite --prerelease
 dotnet add package NativeWeave.Database.PostgreSql --prerelease
 ```
 
-Each provider contains the shared managed assemblies, generator, build integration and its precompiled native library in one package. PostgreSQL applications need a reachable database server. For an unpublished development build, the candidate feed is `artifacts/db-scope/prepared/candidate/feed` and its manifest records the exact versions.
+Each provider contains the shared managed assemblies, generator, build integration and its precompiled native library in one package. PostgreSQL applications need a reachable database server. For an unpublished development build, the candidate feed is `artifacts/public/feed` and its manifest records the exact versions.
 
 ## Typed queries and DTOs
 

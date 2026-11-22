@@ -28,8 +28,12 @@ def rule(path):
     for provider, prefixes in PROVIDER_PATHS.items():
         if path.startswith(prefixes):
             return provider, () if path.startswith(("tests/", "samples/", "native/cpp/tests/")) else (provider,)
-    if path.startswith(("tests/Packaging.Linux/", "tests/Packaging.Release/")):
-        return "pack-test", ()
+    if path == "tests/Packaging.Linux/test_profile.py":
+        return "elf-profile", ()
+    if path.startswith("tests/Packaging.Release/ApiCheck/"):
+        return "pack-api", ()
+    if path.startswith("tests/Query.Generator/") and not path.endswith("/verify.py"):
+        return "generator", ()
     if path.startswith("tests/Tooling/"):
         return "tooling", ()
     if path.startswith(("tests/", "samples/", "native/cpp/tests/", ".github/", "eng/ci/")):
@@ -51,7 +55,7 @@ def inputs(tree):
     return {p: digest.hexdigest() for p, digest in result.items()}
 
 
-def plan(paths, fingerprints, published, deep=False):
+def plan(paths, fingerprints, published, deep=False, *, recover=True):
     lanes, changed = set(), set()
     reasons = {}
     for path in paths:
@@ -60,17 +64,30 @@ def plan(paths, fingerprints, published, deep=False):
         changed.update(packages)
         reasons.setdefault(lane, []).append(path)
     pending = {p for p in PROVIDERS if published[p].get("inputs") != fingerprints[p]}
-    if deep or pending - changed or "full" in lanes or set(PROVIDERS) <= lanes:
+    # Test-only PRs never build somebody else's unpublished release. Main can recover it.
+    if not recover and not changed:
+        pending.clear()
+    bootstrap = any(not published[p].get("inputs") for p in PROVIDERS)
+    if deep or (pending and bootstrap) or pending - changed or "full" in lanes or set(PROVIDERS) <= lanes:
         scope = "full"
-    elif lanes & {"pack", "pack-test"} and lanes.intersection(PROVIDERS):
+    elif "pack" in lanes and lanes.intersection(PROVIDERS):
         scope = "full"
     elif lanes.intersection(PROVIDERS):
         scope = next(iter(lanes.intersection(PROVIDERS)))
-    elif lanes & {"pack", "pack-test"}:
+    elif "pack" in lanes:
         scope = "pack"
     else:
         scope = "light"
-    return {"scope": scope, "packages": sorted(pending), "inputs": fingerprints,
+    checks = lanes.intersection({"generator", "pack-api", "elf-profile"})
+    if scope == "full":
+        checks.difference_update({"generator", "pack-api"})  # The existing regression suite runs both.
+    if scope == "pack":
+        checks.add("pack-metadata")
+        if any(p.startswith("src/Packaging.Release/BuildTasks/") for p in paths):
+            checks.add("pack-api")
+    rebuild_task = any(p.startswith("src/Packaging.Release/BuildTasks/") for p in paths)
+    return {"consume": bool(pending) or deep or scope == "pack", "rebuild_task": rebuild_task,
+            "checks": sorted(checks), "scope": scope, "packages": sorted(pending), "inputs": fingerprints,
             "published": published, "reasons": reasons, "deep": deep}
 
 
@@ -84,7 +101,7 @@ def main():
     from registry import public_heads
     diff = subprocess.check_output(["git", "diff", "--no-renames", "--name-only", "-z", args.base, args.tree])
     paths = [p.decode() for p in diff.split(b"\0") if p]
-    result = plan(paths, inputs(args.tree), public_heads(), args.full)
+    result = plan(paths, inputs(args.tree), public_heads(), args.full, recover=False)
     data = json.dumps(result, indent=2, sort_keys=True)
     print(data)
     if args.output:
