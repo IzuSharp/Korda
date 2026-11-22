@@ -1,5 +1,7 @@
 """Reject wrong artifacts with real ELF files and actual archive inspection."""
 import importlib.util
+import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -27,7 +29,10 @@ class ProfileTests(unittest.TestCase):
             source = root / "probe.c"
             source.write_text('#include <stdio.h>\nvoid nativeweave_probe(void) { puts("nativeweave"); }\n')
             native = root / "libprobe.so"
-            subprocess.run(["cc", "-shared", "-fPIC", "-march=x86-64-v2", source, "-o", native], check=True)
+            compiler = Path(shutil.which(os.environ.get("CC", "clang"))).resolve()
+            llvm = json.loads((ROOT / "native/dependencies.lock.json").read_text())["toolchain"]["llvm"]
+            self.assertEqual(profile.sha(compiler), llvm["executables"]["clang"])
+            subprocess.run([compiler, "-std=c17", "-shared", "-fPIC", "-march=x86-64-v2", source, "-o", native], check=True)
             result = profile.inspect(native, allowed_dependencies=["libc.so.6"], expected_exports=["nativeweave_probe"])
             self.assertEqual(result["needed"], ["libc.so.6"])
             for change, code in [(dict(allowed_dependencies=[]), "NWPKG003"),

@@ -1,5 +1,7 @@
 # Internal ABI descriptions, layout and bootstrap
 
+> **DB-CPP-01 implementation update.** The public C# examples, signatures and ownership contracts in this guide remain the compatibility inputs. The current maintained native implementation is C++20; its module mapping, direct libpq/sqlite3 execution, Clang/CMake commands and package production are documented in [C++ native implementation](cpp-native.md). Descriptions below of Rust, SQLx, SeaQuery or Tokio internals are retained as the fixed `465cd0f` behavioral reference, not current build dependencies. The named verification entry points now build the ported C++ fixtures and retain their original managed assertions.
+
 Task **A01**, Linux x64 implementation. Design input:
 `c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9`, C-ABI-001/C-ERROR-001/C-PLATFORM-001
 revision 0.4.0. The native wire version remains **1.0**; document versions and
@@ -103,7 +105,7 @@ exports `nw_abi_conformance_get_abi_v1`, calls the actual product writer, and
 advertises two artificial conformance bits. It never claims Database or Server
 capabilities and is never packaged as a product engine.
 
-With the repository's .NET 11.0.100 / C# 15.0 / Rust 1.100.0 toolchains and native
+With the repository's .NET 11.0.100 / C# 15.0 / LLVM 23.1.5 toolchains and native
 linker prerequisites installed, execute the task's checks:
 
 ```sh

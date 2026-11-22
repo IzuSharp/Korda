@@ -1,19 +1,19 @@
 # NativeWeave implementation guidance
 
-## Current authorized product — DB-Scope-01
+## Current authorized product — DB-CPP-01
 
-The current product is a strongly typed C# Fluent ORM for PostgreSQL and SQLite, backed by Rust SeaQuery and SQLx, with Native AOT and precompiled NuGet native assets. Database Host is the database execution layer and must remain. The current task is Linux x64 scope pruning and regression verification; Perf-01 is terminated and performance work is deferred.
+NativeWeave is a strongly typed C# Fluent ORM for PostgreSQL and SQLite. The current native implementation is C++20: a runtime query arena, libpq and SQLite, behind the existing C ABI and independent precompiled NuGet provider assets. DB-CPP-01 migrates the previously accepted Rust implementation; DB-API-01 and DB-Perf-01 are independent and must not be started here.
 
-Read README.md, docs/background.md and the current Plan batch before editing. Preserve database sources, pools, sessions, transactions, migrations, parameter binding, static models/DTOs, relations/CRUD, streams and required cancellation, error, disposal and C#–Rust binding behavior. Applications choose their own standard ASP.NET Core or C# gRPC host and call ordinary business query methods. No NativeWeave server or protocol wrapper belongs in the database dependency graph.
+Read README.md, docs/background.md, docs/guides/cpp-native.md and the current Plan batch before editing. Preserve the exact API signatures, namespaces, defaults, nullability, mapping, errors, ownership, bounds and concurrency contracts. Business models and DTOs are runtime metadata; adding an ordinary C# model never requires rebuilding the C++ library.
 
 ## Implementation and verification
 
-- Keep exact API signatures, defaults, nullability, ownership, bounds, errors and concurrency contracts. Do not add ORM features during pruning.
-- Maintain compiled API/XML checks, actual database regressions, independent provider package closures and real package-based JIT/Native AOT execution.
-- Run `python3 eng/build.py verify --design /path/to/frozen-design` from a committed clean tree with disposable PostgreSQL18 and its server tools available. Use the immutable Design c62cdb8 snapshot for unchanged historical signature checks; current Design scope is separate.
-- Preserve locked toolchains/dependencies, formatting, analyzer, security, provenance, license and review gates. A missing provider or failed check must fail acceptance.
-- Ordinary consumer builds never invoke Cargo. Maintain only native bindings, package tooling and shared components used by the database or its meaningful regression checks.
-- Keep credentials and generated binaries out of Git. Preserve LICENSE, repository protections and normal review rules. Record independent technical review honestly.
-- This batch creates candidates only. The old demo auto-publisher is retired; merging does not authorize public database publication.
+- Project C/C++ uses LLVM 23.1.5 and C++20/C17. Linux explicitly selects clang/clang++; Windows uses clang-cl with MSVC ABI/runtime and SDK; formal macOS uses the same LLVM with Apple SDK (local Apple Clang must record its actual version/build). Only Linux x64 is accepted in this batch.
+- Use shared CMake Release and ASan/UBSan presets, pinned clang-format/tidy and native dependency lock. Never fall back to GCC for project sources or weaken an existing resource/correctness assertion.
+- Keep exact frozen C# and C ABI declarations. Generated C and C# files are verified by their generators; the private C++ declaration view changes only the C parameter name `template`.
+- Run `python3 eng/build.py verify` from a committed clean tree with disposable PostgreSQL18 and its tools. Historical API declaration checks retain immutable Design c62cdb8 and Plan 8afa0311 inputs. New behavior evidence must bind the candidate's actual source and binaries.
+- Ordinary consumers use PackageReference and precompiled native assets. Neither packages nor generators invoke a native compiler. .NET Native AOT retains its normal platform compiler/linker prerequisites.
+- Keep credentials and generated binaries out of Git; preserve LICENSE, branch protections, independent technical review and security gates. Candidate production does not authorize public NuGet publication.
+- Record incomplete tests and known baseline defects explicitly. A missing provider, unavailable sanitizer, or failed consumer is not a passed acceptance row.
 
-English is the repository documentation language. Worktrees belong in the parent project's `.worktree/` directory. Progress and acceptance are recorded in Plan/ledger/evidence/batches/DB-Scope-01/handoff-linux.md. History remains available at its original commits and in the Plan ledger.
+Applications independently choose standard ASP.NET Core/HTTP/gRPC hosts. NativeWeave server/protocol/MCP/proof products remain retired. English is the repository documentation language. Worktrees belong under the parent project's `.worktree/`. Current handoff: Plan/ledger/evidence/batches/DB-CPP-01/handoff-linux.md. The fixed Rust behavioral source remains in Git history at 465cd0f90e6af05ec50eb581156240377cf0825b.

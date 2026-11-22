@@ -1,5 +1,5 @@
 // The maintainer build hashes an explicit precompiled asset into obj.
-// No machine-specific native digest is committed and no consumer invokes Cargo.
+// No machine-specific native digest is committed and no consumer compiles the native provider.
 using NativeWeave.Interop;
 using NativeWeave.Interop.Extensibility;
 namespace NativeWeave.Database.PostgreSql;

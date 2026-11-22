@@ -100,4 +100,4 @@ public sealed class NativeWeave.Packaging.PackageClosure : Microsoft.Build.Utili
 
 **summary:** Validates a restored owned-package closure and produces SDK-selected native output records.
 
-**remarks:** This is an MSBuild host task, never an application runtime dependency. Each invocation is independent. It reads bounded package metadata, hashes native files and performs no network, restore, Rust compilation or native loading.
+**remarks:** This is an MSBuild host task, never an application runtime dependency. Each invocation is independent. It reads bounded package metadata, hashes native files and performs no network, restore, native compilation or native loading.

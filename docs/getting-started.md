@@ -4,7 +4,7 @@ The current candidate targets Linux x64 and .NET11, with JIT and Native AOT. Cho
 
 ## Restore outside the source tree
 
-A maintainer first runs the verified candidate workflow described in the root README. It creates the exact local feed at `artifacts/db-scope/prepared/candidate/feed`; the manifest records facade/native and shared package versions. With the default version base, the provider version is `0.1.0-db-scope.1.2` and shared dependencies are pinned by the package.
+A maintainer first runs the verified candidate workflow described in the root README. It creates the exact local feed at `artifacts/db-scope/prepared/candidate/feed`; the manifest records facade/native and shared package versions. With the default version base, the provider version is `0.1.0-db-cpp.1.2` and shared dependencies are pinned by the package.
 
 Create an ordinary executable project outside the NativeWeave checkout:
 
@@ -17,7 +17,7 @@ Create an ordinary executable project outside the NativeWeave checkout:
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="NativeWeave.Database.Sqlite" Version="[0.1.0-db-scope.1.2]" />
+    <PackageReference Include="NativeWeave.Database.Sqlite" Version="[0.1.0-db-cpp.1.2]" />
   </ItemGroup>
 </Project>
 ```

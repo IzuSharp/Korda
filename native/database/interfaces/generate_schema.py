@@ -11,16 +11,18 @@ values = {k: v for k, v in schema.items() if isinstance(v, int)}
 def pascal(s):
     return ''.join(p.title() for p in s.split('_'))
 cs = '// Generated from native/database/interfaces/schema-v1.json; do not edit.\nnamespace NativeWeave.Data;\ninternal static class WireSchema\n{\n'
-rs = '// Generated from schema-v1.json; do not edit.\n'
+cpp = '// Generated from native/database/interfaces/schema-v1.json; do not edit.\n#pragma once\n\n#include <array>\n#include <cstddef>\n#include <string_view>\n\nnamespace nw::schema\n{\n'
 for key, value in values.items():
     cs += f'    internal const int {pascal(key)} = {value};\n'
-    rs += f'pub const {key.upper()}: usize = {value};\n'
+    cpp += f'inline constexpr std::size_t {key.upper()} = {value};\n'
 for key in ('model_keys', 'column_keys', 'projection_keys', 'projection_field_keys', 'relation_keys'):
     items = ', '.join(json.dumps(s) for s in schema[key])
     cs += f'    internal static readonly string[] {pascal(key)} = [{items}];\n'
-    rs += f'#[rustfmt::skip]\npub const {key.upper()}: &[&str] = &[{items}];\n'
+    cpp += f'inline constexpr std::array<std::string_view, {len(schema[key])}> {key.upper()}{{{items}}};\n'
 cs += '}\n'
-outputs = {root / 'src/Data.Abstractions/WireSchema.g.cs': cs, base / 'src/schema.rs': rs}
+cpp += '} // namespace nw::schema\n'
+outputs = {root / 'src/Data.Abstractions/WireSchema.g.cs': cs,
+           root / 'native/cpp/include/nw/generated/schema.hpp': cpp}
 check = argparse.ArgumentParser()
 check.add_argument('--check', action='store_true')
 args = check.parse_args()
@@ -29,5 +31,6 @@ for path, text in outputs.items():
         if not path.exists() or path.read_text() != text:
             raise SystemExit(f'Schema output differs: {path}')
     else:
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text)
 print('Shared schema outputs agree.')

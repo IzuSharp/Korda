@@ -1,0 +1,12 @@
+{
+  "common": [
+    "migration.initial", "migration.repeat", "migration.history", "catalog", "capabilities",
+    "entity.columns", "entity.rows", "dto.rows", "sql.named-reordered-repeat", "sql.interpolated",
+    "prepared.snapshot", "prepared.rebound", "paging.offset", "paging.seek", "relation.load",
+    "relation.join", "group", "window.snapshot", "cte.snapshot", "set.union-all",
+    "stream.early", "stream.reuse-count", "error.pre-cancel", "error.timeout", "provider.lock"
+  ],
+  "seed": ["seed.bulk"],
+  "observe": [],
+  "continue": ["mutation.stale", "transaction.commit", "transaction.rollback", "mutation.bulk", "mutation.affected"]
+}

@@ -1,5 +1,7 @@
 # Compiled database API documentation
 
+> **DB-CPP-01 implementation update.** The public C# examples, signatures and ownership contracts in this guide remain the compatibility inputs. The current maintained native implementation is C++20; its module mapping, direct libpq/sqlite3 execution, Clang/CMake commands and package production are documented in [C++ native implementation](cpp-native.md). Descriptions below of Rust, SQLx, SeaQuery or Tokio internals are retained as the fixed `465cd0f` behavioral reference, not current build dependencies. The named verification entry points now build the ported C++ fixtures and retain their original managed assertions.
+
 The retained maintainer tools check actual database/Core assemblies and XML documentation. They do not enter application packages or runtime dependencies.
 
 Use `src/Build.Integration/ApiReference` to compare the compiled public surface with its exact reviewed baseline. `compose_docs.py` runs that gate and pinned DocFX over copied inputs under artifacts; it does not publish or modify source documentation.

@@ -24,7 +24,7 @@ NativeWeave.Database.PostgreSql.PostgreSqlTlsMode.VerifyFull = 0
 public static NativeWeave.Database.DataSource NativeWeave.Database.PostgreSql.PostgreSqlDataSource.Create(string connectionString, System.Action<NativeWeave.Database.PostgreSql.PostgreSqlOptions>? configure = null)
 ```
 
-**summary:** Creates one independently owned lazy SQLx PostgreSQL data source.
+**summary:** Creates one independently owned lazy libpq PostgreSQL data source.
 
 **param connectionString:** An explicit TCP PostgreSQL URI; ambient connection policy is rejected.
 
@@ -130,7 +130,7 @@ public NativeWeave.Database.PostgreSql.PostgreSqlTlsMode NativeWeave.Database.Po
 public static class NativeWeave.Database.PostgreSql.PostgreSqlDataSource
 ```
 
-**summary:** Creates PostgreSQL datasources backed by the maintainer-built Rust Database Host.
+**summary:** Creates PostgreSQL datasources backed by the maintainer-built C++ Database Host.
 
 **remarks:** Reading Engine is pure metadata. Inspect verifies the asset and starts no runtime or connection. Create snapshots typed options before native admission.
 
@@ -140,7 +140,7 @@ public static class NativeWeave.Database.PostgreSql.PostgreSqlDataSource
 public static class NativeWeave.Database.PostgreSql.PostgreSqlDataSourceBuilderExtensions
 ```
 
-**summary:** Configures the independently packaged SQLx PostgreSQL engine.
+**summary:** Configures the independently packaged libpq PostgreSQL engine.
 
 **remarks:** The builder remains single-writer. Configuration snapshots managed values without I/O; Build negotiates the separately packaged native engine and creates the source owner.
 
@@ -150,7 +150,7 @@ public static class NativeWeave.Database.PostgreSql.PostgreSqlDataSourceBuilderE
 public sealed class NativeWeave.Database.PostgreSql.PostgreSqlOptions
 ```
 
-**summary:** Configures the SQLx PostgreSQL provider before a datasource is opened.
+**summary:** Configures the libpq PostgreSQL provider before a datasource is opened.
 
 **remarks:** Mutable configuration is snapshotted by the owning B04 factory before native admission. Do not mutate it during configuration. It starts no runtime and opens no connection. Invalid values fail before opening. Connection strings use a PostgreSQL TCP URI with explicit user and database; query-string options and ambient PG* policy variables are rejected, so they cannot weaken this typed TLS policy. The component has no managed database fallback.
 

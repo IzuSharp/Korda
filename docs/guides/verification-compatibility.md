@@ -1,9 +1,11 @@
 # Compatibility and immutable updates
 
+> **DB-CPP-01 implementation update.** The public C# examples, signatures and ownership contracts in this guide remain the compatibility inputs. The current maintained native implementation is C++20; its module mapping, direct libpq/sqlite3 execution, Clang/CMake commands and package production are documented in [C++ native implementation](cpp-native.md). Descriptions below of Rust, SQLx, SeaQuery or Tokio internals are retained as the fixed `465cd0f` behavioral reference, not current build dependencies. The named verification entry points now build the ported C++ fixtures and retain their original managed assertions.
+
 The A22 maintainer tool checks an explicitly selected update and its immutable
 evidence. It does not discover updates, change dependencies, publish packages,
 or run in an application. Run it from an isolated maintainer checkout with the
-repository's fixed Python/.NET/Rust toolchain. Its CLI is
+repository's fixed Python/.NET/Clang toolchain. Its CLI is
 `src/Verification.Compatibility/compatibility.py`.
 
 This retained verifier covers Linux x64 Core ABI/API compatibility. Controlled native fixtures exercise old/new contracts and rejection paths. Current package identity, provenance, signature rejection and complete-closure rollback are tested against the actual database candidate by Packaging.Domain. Historical signed demo observations remain in the original Plan evidence and do not substitute for current database consumption.
@@ -128,11 +130,11 @@ global update runtime or application initialization API. It reuses the exact
 properties) is checked against the accepted A02 inventory; runtime rows check
 that a new options object has a null path and an empty required-capability list.
 The generated reference remains owned by
-[Interop negotiation](../../src/Interop.Negotiation/api-reference.md). The A13
+[Interop negotiation](https://github.com/IzuSharp/NativeWeave/blob/main/src/Interop.Negotiation/api-reference.md). The A13
 tool also checks actual compiled Core XML while producing the evidence reference.
 
 The minimal and advanced executable consumer is
-[Program.cs](../../samples/api/verification-compatibility/Program.cs). It imports
+[Program.cs](https://github.com/IzuSharp/NativeWeave/blob/main/samples/api/verification-compatibility/Program.cs). It imports
 `NativeWeave.Interop` and `NativeWeave.Interop.Extensibility`, creates an explicit
 maintainer fixture descriptor and calls `Inspect` with the expected native digest.
 The explicit path is a fixture/advanced override; normal package consumers use
@@ -179,7 +181,7 @@ verification of the downloaded package; it does not ignore arbitrary zip changes
 The initial tested trust route is a repository-primary signature from
 `https://api.nuget.org/v3/index.json`, signed owner `dekueon`, the exact repository
 certificate subject and the SHA-256 fingerprint in
-[signature-policy.json](../../tests/Verification.Compatibility/signature-policy.json).
+[signature-policy.json](https://github.com/IzuSharp/NativeWeave/blob/main/tests/Verification.Compatibility/signature-policy.json).
 These facts are read from successful SDK `dotnet nuget verify --all` output and
 the repository-signatures endpoint. The nuspec authors string is not the signed
 owner identity. Wrong owner, wrong repository, wrong leaf certificate, unsigned

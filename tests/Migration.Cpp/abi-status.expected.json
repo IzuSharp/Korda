@@ -1,0 +1,154 @@
+{
+  "cases": {
+    "borrow-null-clause": {
+      "code": 0,
+      "domain": 17474,
+      "output": 0,
+      "status": 3
+    },
+    "borrow-null-value": {
+      "code": 0,
+      "domain": 17474,
+      "output": 0,
+      "status": 3
+    },
+    "borrow-oversize-value": {
+      "code": 6,
+      "domain": 17474,
+      "output": 0,
+      "status": 13
+    },
+    "codec-invalid-logical": {
+      "code": 0,
+      "domain": 17474,
+      "output": 0,
+      "status": 3
+    },
+    "codec-wrong-owner-and-null-borrow": {
+      "code": 8,
+      "domain": 17474,
+      "output": 0,
+      "status": 4
+    },
+    "codec-wrong-owner-and-utf8": {
+      "code": 8,
+      "domain": 17474,
+      "output": 0,
+      "status": 4
+    },
+    "empty-clause": {
+      "code": 11,
+      "domain": 17474,
+      "output": 0,
+      "status": 3
+    },
+    "empty-value": {
+      "code": 11,
+      "domain": 17474,
+      "output": 0,
+      "status": 3
+    },
+    "malformed-clause": {
+      "code": 11,
+      "domain": 17474,
+      "output": 0,
+      "status": 3
+    },
+    "malformed-value-wire": {
+      "code": 11,
+      "domain": 17474,
+      "output": 0,
+      "status": 3
+    },
+    "null-query-owner": {
+      "code": 8,
+      "domain": 17474,
+      "output": 0,
+      "status": 4
+    },
+    "parameter-invalid-name": {
+      "code": 11,
+      "domain": 17474,
+      "output": 0,
+      "status": 3
+    },
+    "parameter-invalid-nullable": {
+      "code": 0,
+      "domain": 17474,
+      "output": 0,
+      "status": 3
+    },
+    "parameter-invalid-utf8": {
+      "code": 0,
+      "domain": 17474,
+      "output": 0,
+      "status": 3
+    },
+    "parameter-unknown-codec": {
+      "code": 11,
+      "domain": 17474,
+      "output": 0,
+      "status": 3
+    },
+    "plan-malformed-parameters": {
+      "code": 11,
+      "domain": 17474,
+      "output": 0,
+      "status": 3
+    },
+    "plan-null-borrow": {
+      "code": 0,
+      "domain": 17474,
+      "output": 0,
+      "status": 3
+    },
+    "projection-empty-sequence": {
+      "code": 11,
+      "domain": 17474,
+      "output": 0,
+      "status": 3
+    },
+    "projection-malformed": {
+      "code": 11,
+      "domain": 17474,
+      "output": 0,
+      "status": 3
+    },
+    "projection-null-borrow": {
+      "code": 0,
+      "domain": 17474,
+      "output": 0,
+      "status": 3
+    },
+    "projection-oversize-sequence": {
+      "code": 11,
+      "domain": 17474,
+      "output": 0,
+      "status": 3
+    },
+    "unknown-column": {
+      "code": 11,
+      "domain": 17474,
+      "output": 0,
+      "status": 3
+    },
+    "wrong-import-kind": {
+      "code": 8,
+      "domain": 17474,
+      "output": 0,
+      "status": 4
+    },
+    "wrong-query-owner": {
+      "code": 8,
+      "domain": 17474,
+      "output": 0,
+      "status": 4
+    }
+  },
+  "reference": {
+    "archive_sha256": "7a7982ccda96d3a5d7f3f4b00713a8668ae5548ec189419e3c22af5493248a11",
+    "native_sha256": "a003326ce24eff467af1b88f40b03dcacf665fc71710db0ca85b29595471f0e9",
+    "origin": "Actual public-ABI calls in an isolated process against the fixed SQLite provider; no Rust source build required.",
+    "source_commit": "465cd0f90e6af05ec50eb581156240377cf0825b"
+  }
+}

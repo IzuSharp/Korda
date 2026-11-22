@@ -1,7 +1,7 @@
 """The database-only package graph and portable local handoff contract.
 
 Internal maintainer orchestration only. Application builds use the existing
-packaging task; this module neither runs Cargo nor publishes to a registry.
+packaging task; this module neither compiles native code nor publishes to a registry.
 """
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[2]
 REPOSITORY = "https://github.com/IzuSharp/NativeWeave"
 RID = "linux-x64"
-TASK = "DB-Scope-01"
+TASK = "DB-CPP-01"
 COMMON = (
     "NativeWeave.Interop.Abi", "NativeWeave.Core", "NativeWeave.Data",
     "NativeWeave.Database.Transactions", "NativeWeave.Data.Streaming",
@@ -43,8 +43,8 @@ DATABASE_CAPABILITIES = [
     "db.scalar-codecs.v1", "db.sql.expert.v1",
 ]
 ENGINES = {
-    "database.sqlite": ("NativeWeave.Database.Sqlite", "libnw_database_sqlite.so", "nativeweave-database-host", DATABASE_CAPABILITIES),
-    "database.postgresql": ("NativeWeave.Database.PostgreSql", "libnw_database_postgresql.so", "nativeweave-database-host", DATABASE_CAPABILITIES),
+    "database.sqlite": ("NativeWeave.Database.Sqlite", "libnw_database_sqlite.so", "nw_database_sqlite", DATABASE_CAPABILITIES),
+    "database.postgresql": ("NativeWeave.Database.PostgreSql", "libnw_database_postgresql.so", "nw_database_postgresql", DATABASE_CAPABILITIES),
 }
 LEAVES = {value[0] + ".Native": engine for engine, value in ENGINES.items()}
 IDS = tuple(sorted(set(MANAGED) | set(LEAVES)))

@@ -4,7 +4,7 @@ using NativeWeave.Data;
 
 namespace NativeWeave.Database;
 
-/// <summary>Selects SQLx transactional execution or explicitly resumable PostgreSQL execution.</summary>
+/// <summary>Selects native transactional execution or explicitly resumable PostgreSQL execution.</summary>
 public enum MigrationTransactionMode
 {
     /// <summary>Commits the script and its ledger atomically; SQLite also wraps the entire selected batch.</summary>
@@ -23,7 +23,7 @@ public sealed record Migration(long Version, string Description, string Sql, Mig
 /// <summary>Snapshots a strictly ordered, provider-bound set of explicit SQL scripts.</summary>
 /// <remarks>Construction performs no native load or database I/O. Its SHA-256 identity covers the canonical
 /// kind12 provider and entry sequence before the hash field is added. Each entry separately contains SQL SHA-256;
-/// the native SQLx ledger retains SQLx's own SHA-384 checksum. Scripts must be trusted deployment artifacts.</remarks>
+/// the native ledger preserves the existing SQLx-compatible SHA-384 checksum. Scripts must be trusted deployment artifacts.</remarks>
 public sealed class MigrationBundle
 {
     internal DatabaseProvider Provider { get; }
@@ -96,8 +96,8 @@ public sealed record MigrationOptions
 /// <remarks>This detached managed record owns its immutable strings. Native result buffers are released before the task returns; the source bounds aggregate record and UTF-8 byte costs.</remarks>
 /// <param name="Version">The positive migration version.</param>
 /// <param name="Description">The immutable bundle description.</param>
-/// <param name="Checksum">The lowercase hexadecimal SQLx SHA-384 checksum, distinct from the bundle hash.</param>
-/// <param name="Applied">True only when the successful SQLx ledger contains this exact migration.</param>
+/// <param name="Checksum">The lowercase hexadecimal SQLx-compatible SHA-384 checksum, distinct from the bundle hash.</param>
+/// <param name="Applied">True only when the successful retained migration ledger contains this exact migration.</param>
 public sealed record MigrationStatus(long Version, string Description, string Checksum, bool Applied);
 /// <summary>Reports a successfully completed explicit migration call.</summary>
 /// <remarks>This detached managed value owns no native resource. The administrative connection has retired before task completion; earlier confirmed entries remain committed independently on PostgreSQL.</remarks>

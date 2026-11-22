@@ -1,5 +1,7 @@
 # Direct query binding contracts
 
+> **DB-CPP-01 implementation update.** The public C# examples, signatures and ownership contracts in this guide remain the compatibility inputs. The current maintained native implementation is C++20; its module mapping, direct libpq/sqlite3 execution, Clang/CMake commands and package production are documented in [C++ native implementation](cpp-native.md). Descriptions below of Rust, SQLx, SeaQuery or Tokio internals are retained as the fixed `465cd0f` behavioral reference, not current build dependencies. The named verification entry points now build the ported C++ fixtures and retain their original managed assertions.
+
 B09 supplies the internal C# calls and native validation metadata between the
 strongly typed application facade and the Rust query engine. It uses the exact
 Design commit recorded in `native/database/binding/signatures-v1.json`. B01 remains

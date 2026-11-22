@@ -164,7 +164,7 @@ for mode, path in [('jit', consumer_dll.parent), ('aot', consumer / 'publish')]:
         value = json.loads((path / ('NativeWeave.' + engine + '.assets.json')).read_text())
         assert value['sha256'] == sha(native) == sha(path / value['outputPath'])
         records[mode + '-' + engine] = value
-(out / 'summary.json').write_text(json.dumps({'source_commit': source_commit, 'cargo_lock_sha256': sha(ROOT / 'Cargo.lock'), 'packages': packages,
+(out / 'summary.json').write_text(json.dumps({'source_commit': source_commit, 'native_dependency_lock_sha256': sha(ROOT / 'native/dependencies.lock.json'), 'packages': packages,
     'independent_provider_closures': True, 'transitive_generator_compiled_and_executed': True, 'no_consumer_rust': True,
     'jit_and_aot_actual_providers': ['SQLite', 'PostgreSQL18'], 'dto_edit_native_hashes_unchanged': True,
     'sdk_output_records': records, 'aot_executable_sha256': sha(consumer / 'publish/HostConsumer')}, indent=2) + '\n')

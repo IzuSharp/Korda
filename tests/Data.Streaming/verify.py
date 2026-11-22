@@ -16,18 +16,20 @@ import platform
 import shutil
 import socket
 import subprocess
+import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "native/cpp/tests"))
+from component_build import prepare
+
 OWNED = (
-    "native/database/streaming", "src/Data.Streaming", "tests/Data.Streaming",
+    "native/cpp", "src/Data.Streaming", "tests/Data.Streaming",
     "samples/api/data-streaming", "docs/guides/data-streaming.md",
 )
 DEPENDENCIES = (
-    "native/database/interfaces", "native/database/codecs", "native/database/transactions",
-    "native/database/postgres", "native/database/sqlite", "native/interop/abi",
-    "src/Data.Abstractions", "Cargo.toml", "Cargo.lock", "global.json",
-    "rust-toolchain.toml", "Directory.Build.props", "Directory.Build.targets",
+    "native/database/binding", "native/interop/abi", "CMakeLists.txt", "CMakePresets.json", ".clang-format", ".clang-tidy",
+    "src/Data.Abstractions", "global.json", "Directory.Build.props", "Directory.Build.targets",
 )
 EXCLUDED = {"bin", "obj", "target", "artifacts", "__pycache__"}
 
@@ -54,6 +56,7 @@ def main() -> int:
     parser.add_argument("--postgres-bin", type=Path)
     parser.add_argument("--offline-config", type=Path)
     parser.add_argument("--design-root", type=Path)
+    parser.add_argument("--native-build", type=Path, default=ROOT / "artifacts/cmake/linux-x64-release")
     args = parser.parse_args()
     if platform.system() != "Linux" or platform.machine() not in ("x86_64", "amd64"):
         parser.error("This evidence runner targets Linux x64 only.")
@@ -69,7 +72,7 @@ def main() -> int:
     }
     (output / "source-inputs.json").write_text(json.dumps(source, indent=2) + "\n")
 
-    def run(name: str, command: list[str], use_env=None) -> None:
+    def run(name: str, command: list[str], use_env=None) -> str:
         log = output / (name + ".log")
         started = time.monotonic()
         with log.open("w") as stream:
@@ -81,6 +84,7 @@ def main() -> int:
         if result.returncode:
             print(log.read_text()[-12000:], flush=True)
             raise RuntimeError("Gate failed: " + name)
+        return log.read_text()
 
     common = ["-p:UseSharedCompilation=false", "-nr:false", "-m:1"]
     local_restore = (["--configfile", str(args.offline_config.resolve()), "-p:NuGetAudit=false"]
@@ -88,8 +92,7 @@ def main() -> int:
     project = "tests/Data.Streaming/NativeWeave.Data.Streaming.Tests.csproj"
     api = "tests/Data.Streaming/ApiCheck/ApiCheck.csproj"
     sample = "samples/api/data-streaming/DataStreaming.csproj"
-    fixture_manifest = "tests/Data.Streaming/native/Cargo.toml"
-    fixture_dir = ROOT / "tests/Data.Streaming/native/target/debug"
+    fixture_dir = args.native_build.resolve() / "fixtures"
     fixture = fixture_dir / "libnativeweave_streaming_fixture.so"
     assembly = ROOT / "tests/Data.Streaming/bin/Release/net11.0/NativeWeave.Data.Streaming.Tests.dll"
     streaming_assembly = ROOT / "src/Data.Streaming/bin/Release/net11.0/NativeWeave.Data.Streaming.dll"
@@ -101,8 +104,7 @@ def main() -> int:
     status = "failed"
     try:
         run("toolchain-dotnet", ["dotnet", "--info"])
-        run("toolchain-rust", ["rustc", "-vV"])
-        tool_paths = [Path(shutil.which(tool)).resolve() for tool in ("dotnet", "cargo", "rustc")]
+        tool_paths = [Path(shutil.which(tool)).resolve() for tool in ("dotnet", "clang++", "clang-format", "cmake")]
         (output / "tool-binaries.json").write_text(json.dumps([
             {"path": str(path), "sha256": sha(path), "size": path.stat().st_size} for path in tool_paths
         ], indent=2) + "\n")
@@ -122,13 +124,10 @@ def main() -> int:
                 checked[relative] = actual
             (output / "design-check.json").write_text(json.dumps({"revision": revision, "files": checked}, indent=2) + "\n")
 
-        run("native-format", ["cargo", "fmt", "-p", "nativeweave-data-streaming", "--", "--check"])
-        run("native-clippy", ["cargo", "clippy", "--locked", "-p", "nativeweave-data-streaming", "--all-targets", "--", "-D", "warnings"])
-        run("native-tests", ["cargo", "test", "--locked", "-p", "nativeweave-data-streaming", "--test", "bounded", "--", "--nocapture"])
-        run("fixture-format", ["cargo", "fmt", "--manifest-path", fixture_manifest, "--", "--check"])
-        run("fixture-clippy", ["cargo", "clippy", "--locked", "--manifest-path", fixture_manifest, "--all-targets", "--", "-D", "warnings"])
-        run("fixture-build", ["cargo", "build", "--locked", "--manifest-path", fixture_manifest])
-        run("fixture-features", ["cargo", "tree", "--locked", "--manifest-path", fixture_manifest, "-e", "features"])
+        provenance = prepare(run, args.native_build,
+                             ["nativeweave_streaming_fixture", "nw_streaming_tests"], r"^native\.streaming$",
+                             [ROOT / "native/cpp/tests/fixtures/streaming.cpp", ROOT / "native/cpp/tests/streaming_tests.cpp"])
+        (output / "compiler-provenance.txt").write_text(provenance)
 
         for label, path in [("consumer", project), ("api-check", api), ("sample", sample)]:
             run(label + "-restore", ["dotnet", "restore", path, "--locked-mode", *local_restore, *common])
@@ -202,7 +201,7 @@ def main() -> int:
             "task": "B06", "platform": "linux-x64", "status": status, "commands": len(records),
             "source_manifest_sha256": sha(output / "source-inputs.json"),
             "offline_restore": args.offline_config is not None,
-            "scope": "Internal native/managed bounded stream composition with actual B02/B03 providers, Linux JIT/NativeAOT, compiled API/XML and sample. No B04 host, pristine package, other-platform acceptance, or hard process RSS bound.",
+            "scope": "Retained native/managed bounded stream composition with actual C++ Host/libpq/SQLite providers, Linux JIT/NativeAOT, compiled API/XML and sample. No pristine package, other-platform acceptance, or hard process RSS bound.",
         }
         (output / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
         print(json.dumps(summary), flush=True)

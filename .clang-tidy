@@ -1,0 +1,6 @@
+Checks: '-*,clang-analyzer-*,bugprone-*,concurrency-*,performance-*,portability-*,modernize-use-nullptr,modernize-use-override'
+WarningsAsErrors: 'clang-analyzer-*,concurrency-*'
+HeaderFilterRegex: '(^|/)native/cpp/(include|src)/'
+FormatStyle: file
+CheckOptions:
+  bugprone-easily-swappable-parameters.MinimumLength: '3'

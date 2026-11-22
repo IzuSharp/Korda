@@ -1,5 +1,7 @@
 # SQLite database provider
 
+> **DB-CPP-01 implementation update.** The public C# examples, signatures and ownership contracts in this guide remain the compatibility inputs. The current maintained native implementation is C++20; its module mapping, direct libpq/sqlite3 execution, Clang/CMake commands and package production are documented in [C++ native implementation](cpp-native.md). Descriptions below of Rust, SQLx, SeaQuery or Tokio internals are retained as the fixed `465cd0f` behavioral reference, not current build dependencies. The named verification entry points now build the ported C++ fixtures and retain their original managed assertions.
+
 `NativeWeave.Database.Sqlite` supplies the SQLite factory and builder extension for
 the complete [Database Host](data-nativehost.md). Its candidate package depends on
 the shared database facade and the independent `NativeWeave.Database.Sqlite.Native`
@@ -61,9 +63,9 @@ The bootstrap reports **23** capabilities: every name defined in
 [`DatabaseEngineProfile`](../../src/Data.NativeHost/DatabaseOptions.cs) except
 `db.row-lock.v1` and `db.decimal.numeric.v1`. This includes `db.query.v1`,
 transactions/savepoints, streaming, migrations, schema reading, relations and
-`db.decimal.text.v1`. The actual advertised mask is composed by the
-[native query profile](../../native/database/host/src/query.rs) and
-[Host bootstrap](../../native/database/host/src/abi.rs). The private B03 component's
+`db.decimal.text.v1`. In the fixed Rust reference, this advertised mask is composed by the
+[native query profile](https://github.com/IzuSharp/NativeWeave/blob/465cd0f90e6af05ec50eb581156240377cf0825b/native/database/host/src/query.rs) and
+[Host bootstrap](https://github.com/IzuSharp/NativeWeave/blob/465cd0f90e6af05ec50eb581156240377cf0825b/native/database/host/src/abi.rs). The private B03 component's
 `db.sqlite.profile.v1` bootstrap remains a component-test input; it is not the public
 provider descriptor or the packaged Database Host.
 

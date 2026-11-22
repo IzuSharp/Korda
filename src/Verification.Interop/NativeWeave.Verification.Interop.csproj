@@ -14,6 +14,6 @@
     <None Include="../../artifacts/a20-native/linux-x64/*.so" Link="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
   <Target Name="RequireA20Native" BeforeTargets="PrepareForBuild">
-    <Error Condition="!Exists('../../artifacts/a20-native/linux-x64/libnativeweave_verification_interop.so')" Text="Run the maintainer A20 verifier --prepare-native once before ordinary dotnet build/run; no consumer Cargo target is installed." />
+    <Error Condition="!Exists('../../artifacts/a20-native/linux-x64/libnativeweave_verification_interop.so')" Text="Run the maintainer A20 verifier --prepare-native once before ordinary dotnet build/run; no consumer native compiler target is installed." />
   </Target>
 </Project>

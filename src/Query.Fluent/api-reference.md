@@ -142,7 +142,7 @@ NativeWeave.Query.SetOperation.Except = 3
 
 Uses the native Except policy.
 
-Operands must have the same source, field order, aliases, codecs and nullability. Rust snapshots the right operand; SQL duplicate and NULL semantics apply.
+Operands must have the same source, field order, aliases, codecs and nullability. The native engine snapshots the right operand; SQL duplicate and NULL semantics apply.
 
 
 ## `F:NativeWeave.Query.SetOperation.Intersect`
@@ -153,7 +153,7 @@ NativeWeave.Query.SetOperation.Intersect = 2
 
 Uses the native Intersect policy.
 
-Operands must have the same source, field order, aliases, codecs and nullability. Rust snapshots the right operand; SQL duplicate and NULL semantics apply.
+Operands must have the same source, field order, aliases, codecs and nullability. The native engine snapshots the right operand; SQL duplicate and NULL semantics apply.
 
 
 ## `F:NativeWeave.Query.SetOperation.Union`
@@ -164,7 +164,7 @@ NativeWeave.Query.SetOperation.Union = 0
 
 Uses the native Union policy.
 
-Operands must have the same source, field order, aliases, codecs and nullability. Rust snapshots the right operand; SQL duplicate and NULL semantics apply.
+Operands must have the same source, field order, aliases, codecs and nullability. The native engine snapshots the right operand; SQL duplicate and NULL semantics apply.
 
 
 ## `F:NativeWeave.Query.SetOperation.UnionAll`
@@ -175,7 +175,7 @@ NativeWeave.Query.SetOperation.UnionAll = 1
 
 Uses the native UnionAll policy.
 
-Operands must have the same source, field order, aliases, codecs and nullability. Rust snapshots the right operand; SQL duplicate and NULL semantics apply.
+Operands must have the same source, field order, aliases, codecs and nullability. The native engine snapshots the right operand; SQL duplicate and NULL semantics apply.
 
 
 ## `F:NativeWeave.Query.SortDirection.Ascending`
@@ -206,7 +206,7 @@ The native query validates each enum value before mutation. Direction is explici
 public NativeWeave.Query.Query<TEntity> NativeWeave.Database.DataSession.From<TEntity>(NativeWeave.Data.Table<TEntity> table) where TEntity : class
 ```
 
-Creates one mutable native SeaQuery arena bound to this session and exact static table.
+Creates one mutable native query arena bound to this session and exact static table.
 
 The returned query owns one native arena and borrows this session's admission. Composition copies values immediately; dispose the query after its terminal or stream has retired.
 
@@ -1525,7 +1525,7 @@ public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlArithmeti
 
 Performs native numeric add with explicit SQL NULL propagation.
 
-Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. Rust owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
+Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
 - **expression**: The compatible native scalar owned by the same live query.
 - **value**: The typed value to snapshot now, or the compatible same-query native expression.
@@ -1544,7 +1544,7 @@ public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlArithmeti
 
 Performs native numeric add with explicit SQL NULL propagation.
 
-Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. Rust owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
+Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
 - **expression**: The compatible native scalar owned by the same live query.
 - **value**: The typed value to snapshot now, or the compatible same-query native expression.
@@ -1563,7 +1563,7 @@ public static NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlArithmetic
 
 Performs native numeric add with explicit SQL NULL propagation.
 
-Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. Rust owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
+Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
 - **expression**: The compatible native scalar owned by the same live query.
 - **value**: The typed value to snapshot now, or the compatible same-query native expression.
@@ -1582,7 +1582,7 @@ public static NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlArithmetic
 
 Performs native numeric add with explicit SQL NULL propagation.
 
-Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. Rust owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
+Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
 - **expression**: The compatible native scalar owned by the same live query.
 - **value**: The typed value to snapshot now, or the compatible same-query native expression.
@@ -1601,7 +1601,7 @@ public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlArithmeti
 
 Performs native numeric divide with explicit SQL NULL propagation.
 
-Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. Rust owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
+Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
 - **expression**: The compatible native scalar owned by the same live query.
 - **value**: The typed value to snapshot now, or the compatible same-query native expression.
@@ -1620,7 +1620,7 @@ public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlArithmeti
 
 Performs native numeric divide with explicit SQL NULL propagation.
 
-Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. Rust owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
+Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
 - **expression**: The compatible native scalar owned by the same live query.
 - **value**: The typed value to snapshot now, or the compatible same-query native expression.
@@ -1639,7 +1639,7 @@ public static NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlArithmetic
 
 Performs native numeric divide with explicit SQL NULL propagation.
 
-Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. Rust owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
+Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
 - **expression**: The compatible native scalar owned by the same live query.
 - **value**: The typed value to snapshot now, or the compatible same-query native expression.
@@ -1658,7 +1658,7 @@ public static NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlArithmetic
 
 Performs native numeric divide with explicit SQL NULL propagation.
 
-Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. Rust owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
+Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
 - **expression**: The compatible native scalar owned by the same live query.
 - **value**: The typed value to snapshot now, or the compatible same-query native expression.
@@ -1677,7 +1677,7 @@ public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlArithmeti
 
 Performs native numeric multiply with explicit SQL NULL propagation.
 
-Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. Rust owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
+Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
 - **expression**: The compatible native scalar owned by the same live query.
 - **value**: The typed value to snapshot now, or the compatible same-query native expression.
@@ -1696,7 +1696,7 @@ public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlArithmeti
 
 Performs native numeric multiply with explicit SQL NULL propagation.
 
-Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. Rust owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
+Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
 - **expression**: The compatible native scalar owned by the same live query.
 - **value**: The typed value to snapshot now, or the compatible same-query native expression.
@@ -1715,7 +1715,7 @@ public static NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlArithmetic
 
 Performs native numeric multiply with explicit SQL NULL propagation.
 
-Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. Rust owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
+Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
 - **expression**: The compatible native scalar owned by the same live query.
 - **value**: The typed value to snapshot now, or the compatible same-query native expression.
@@ -1734,7 +1734,7 @@ public static NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlArithmetic
 
 Performs native numeric multiply with explicit SQL NULL propagation.
 
-Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. Rust owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
+Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
 - **expression**: The compatible native scalar owned by the same live query.
 - **value**: The typed value to snapshot now, or the compatible same-query native expression.
@@ -1753,7 +1753,7 @@ public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlArithmeti
 
 Performs native numeric subtract with explicit SQL NULL propagation.
 
-Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. Rust owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
+Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
 - **expression**: The compatible native scalar owned by the same live query.
 - **value**: The typed value to snapshot now, or the compatible same-query native expression.
@@ -1772,7 +1772,7 @@ public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlArithmeti
 
 Performs native numeric subtract with explicit SQL NULL propagation.
 
-Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. Rust owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
+Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
 - **expression**: The compatible native scalar owned by the same live query.
 - **value**: The typed value to snapshot now, or the compatible same-query native expression.
@@ -1791,7 +1791,7 @@ public static NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlArithmetic
 
 Performs native numeric subtract with explicit SQL NULL propagation.
 
-Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. Rust owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
+Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
 - **expression**: The compatible native scalar owned by the same live query.
 - **value**: The typed value to snapshot now, or the compatible same-query native expression.
@@ -1810,7 +1810,7 @@ public static NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlArithmetic
 
 Performs native numeric subtract with explicit SQL NULL propagation.
 
-Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. Rust owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
+Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
 - **expression**: The compatible native scalar owned by the same live query.
 - **value**: The typed value to snapshot now, or the compatible same-query native expression.
@@ -3246,7 +3246,7 @@ This borrowed view is valid only while its projection remains current in the liv
 NativeWeave.Query.Query<TEntity> where TEntity : class | kind=Class;static=False;sealed=True;abstract=False;base=System.Object;interfaces=System.IDisposable
 ```
 
-One mutable, source-bound native SeaQuery arena with a strongly typed application facade.
+One mutable, source-bound native query arena with a strongly typed application facade.
 
 Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
@@ -3271,7 +3271,7 @@ NativeWeave.Query.SetOperation | kind=Enum;static=False;sealed=True;abstract=Fal
 
 Native SQL set operation with exact compatible projection types.
 
-Operands must have the same source, field order, aliases, codecs and nullability. Rust snapshots the right operand; SQL duplicate and NULL semantics apply.
+Operands must have the same source, field order, aliases, codecs and nullability. The native engine snapshots the right operand; SQL duplicate and NULL semantics apply.
 
 
 ## `T:NativeWeave.Query.SortDirection`
@@ -3293,7 +3293,7 @@ NativeWeave.Query.SqlArithmeticExtensions | kind=Class;static=True;sealed=False;
 
 Statically numeric native SQL arithmetic; overflow, precision and division remain provider semantics.
 
-Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. Rust owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
+Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
 
 ## `T:NativeWeave.Query.SqlExpression`1`

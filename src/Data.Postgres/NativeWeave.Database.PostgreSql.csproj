@@ -6,7 +6,7 @@
     <IsAotCompatible>true</IsAotCompatible>
     <NativeWeavePostgresRuntimeIdentifier Condition="'$(NativeWeavePostgresRuntimeIdentifier)' == ''">linux-x64</NativeWeavePostgresRuntimeIdentifier>
     <NativeWeavePostgresAssetName Condition="'$(NativeWeavePostgresAssetName)' == ''">libnw_database_postgresql.so</NativeWeavePostgresAssetName>
-    <NativeWeavePostgresAssetPath Condition="'$(NativeWeavePostgresAssetPath)' == ''">$(MSBuildThisFileDirectory)../../target/release/$(NativeWeavePostgresAssetName)</NativeWeavePostgresAssetPath>
+    <NativeWeavePostgresAssetPath Condition="'$(NativeWeavePostgresAssetPath)' == ''">$(MSBuildThisFileDirectory)../../artifacts/native-install/linux-x64-release/lib/$(NativeWeavePostgresAssetName)</NativeWeavePostgresAssetPath>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifiers)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifiers).aot.lock.json</NuGetLockFilePath>
     <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifier)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifier).aot.lock.json</NuGetLockFilePath>
@@ -24,7 +24,7 @@
     <Compile Include="../Data.NativeHost/Providers/PostgreSql/**/*.cs" />
   </ItemGroup>
   <Target Name="GeneratePostgreSqlAssetIdentity" BeforeTargets="CoreCompile">
-    <Error Condition="!Exists('$(NativeWeavePostgresAssetPath)')" Text="Build the maintainer PostgreSQL native Database Host first or supply NativeWeavePostgresAssetPath. Consumer builds never invoke Cargo." />
+    <Error Condition="!Exists('$(NativeWeavePostgresAssetPath)')" Text="Build the maintainer PostgreSQL native Database Host first or supply NativeWeavePostgresAssetPath. Consumer builds use precompiled assets and never invoke a native compiler." />
     <GetFileHash Files="$(NativeWeavePostgresAssetPath)" Algorithm="SHA256">
       <Output TaskParameter="Items" ItemName="_PostgreSqlNativeHash" />
     </GetFileHash>

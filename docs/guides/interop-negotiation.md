@@ -1,5 +1,7 @@
 # Engine metadata and module preflight
 
+> **DB-CPP-01 implementation update.** The public C# examples, signatures and ownership contracts in this guide remain the compatibility inputs. The current maintained native implementation is C++20; its module mapping, direct libpq/sqlite3 execution, Clang/CMake commands and package production are documented in [C++ native implementation](cpp-native.md). Descriptions below of Rust, SQLx, SeaQuery or Tokio internals are retained as the fixed `465cd0f` behavioral reference, not current build dependencies. The named verification entry points now build the ported C++ fixtures and retain their original managed assertions.
+
 Task A02 implements the metadata and loader part of `NativeWeave.Core` for the
 Task-02 Linux x64 delivery. The [compiled API reference](../../src/Interop.Negotiation/api-reference.md)
 contains the exact 84 A02 public symbols and their XML documentation. The three
@@ -148,7 +150,7 @@ not represented as verified platform support.
 
 ## Verification and sample state
 
-Run the scoped verifier with the pinned SDK/Rust toolchain:
+Run the scoped verifier with the pinned SDK/Clang toolchain:
 
 ```sh
 python3 tests/Interop.Negotiation/verify.py \

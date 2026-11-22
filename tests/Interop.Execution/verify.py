@@ -9,9 +9,12 @@ import platform
 import resource
 import shutil
 import subprocess
+import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "tests"))
+from native_build import prepare as prepare_native, FIXTURES as CPP_FIXTURES, BINARIES as CPP_BINARIES, SOURCE_INPUTS as NATIVE_INPUTS
 
 
 def sha(path):
@@ -31,7 +34,7 @@ def main():
     output.mkdir(parents=True, exist_ok=False)
     env = os.environ.copy()
     env.update(DOTNET_CLI_TELEMETRY_OPTOUT="1", DOTNET_CLI_USE_MSBUILD_SERVER="0", MSBUILDDISABLENODEREUSE="1")
-    env["LD_LIBRARY_PATH"] = str(ROOT / "target/release") + (":" + env["LD_LIBRARY_PATH"] if env.get("LD_LIBRARY_PATH") else "")
+    env["LD_LIBRARY_PATH"] = str(CPP_FIXTURES) + (":" + env["LD_LIBRARY_PATH"] if env.get("LD_LIBRARY_PATH") else "")
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
     report = {"task": "A08", "platform": "linux-x64", "passed": False, "commands": [], "artifacts": {},
               "os_release": Path("/etc/os-release").read_text(),
@@ -60,44 +63,26 @@ def main():
         if report["source_dirty"] and not args.allow_dirty:
             raise ValueError("Formal A08 verification requires a clean committed source; use --allow-dirty only for development.")
         sdk_version = run("dotnet-version", ["dotnet", "--version"]).strip()
-        rust_version = run("rust-version", ["rustc", "-vV"])
-        if sdk_version != "11.0.100" or "release: 1.100.0" not in rust_version:
-            raise ValueError("The fixed SDK/Rust toolchain differs from repository acceptance.")
-        run("cargo-version", ["cargo", "--version"])
+        if sdk_version != "11.0.100":
+            raise ValueError("Use the fixed .NET SDK 11.0.100.")
         run("clang-version", ["clang", "--version"])
         scopes = ["src/Interop.Execution", "tests/Interop.Execution", "native/interop/execution", "samples/api/interop-execution",
                   "docs/guides/interop-execution.md", "src/NativeWeave.Core", "src/Interop.Abi", "src/Interop.Negotiation",
                   "src/Interop.Lifetime", "src/Interop.Memory", "src/Interop.Errors", "src/Interop.Callbacks", "src/Interop.Async",
                   "native/interop/abi", "native/interop/errors", "native/interop/async",
-                  "Directory.Build.props", "Directory.Build.targets", "global.json", "rust-toolchain.toml", "Cargo.toml", "Cargo.lock"]
+                  "Directory.Build.props", "Directory.Build.targets", "global.json", *NATIVE_INPUTS]
         paths = run("source-files", ["git", "ls-files", "--cached", "--others", "--exclude-standard", "--", *scopes]).splitlines()
         report["source_sha256"] = {p: sha(ROOT / p) for p in sorted(set(paths)) if (ROOT / p).is_file()}
-        run("native-format", ["cargo", "fmt", "-p", "nativeweave-interop-execution", "--", "--check"])
-        run("native-tests", ["cargo", "test", "--release", "--locked", "-p", "nativeweave-interop-execution"])
-        run("native-default-build", ["cargo", "build", "--release", "--locked", "-p", "nativeweave-interop-execution"])
-        probe = output / "downstream.rs"
-        probe.write_text('''use nativeweave_interop_execution::{EngineExecutor, Limits};
-#[unsafe(no_mangle)]
-pub extern "C" fn nw_execution_link_probe_v1() -> u64 {
-    let executor = EngineExecutor::new(Limits { workers: 1, blocking_workers: 1, admitted: 0, waiters: 0, bytes: 0, cleanup: 0 }).unwrap();
-    u64::from(executor.join())
-}
-''')
-        command = ["rustc", "--edition", "2024", "--crate-type", "cdylib", probe, "--extern",
-                   "nativeweave_interop_execution=" + str(ROOT / "target/release/libnativeweave_interop_execution.rlib"),
-                   "-o", output / "libdownstream.so"]
-        for directory in sorted({p.parent for p in (ROOT / "target/release").rglob("*.rlib")}):
-            command += ["-L", "dependency=" + str(directory)]
-        run("downstream-build", command)
-        exports = run("downstream-exports", ["nm", "-D", "--defined-only", output / "libdownstream.so"])
+        report["native_compiler_provenance"] = prepare_native(run, ["nativeweave_interop_execution", "nw_execution_downstream", "nw_execution_tests"], test_regex=r"^native\.(interop|execution)$")
+        downstream = CPP_FIXTURES / "libnw_execution_downstream.so"
+        exported = run("downstream-exports", ["nm", "-D", "--defined-only", downstream])
+        exports = exported[0] if isinstance(exported, tuple) else exported
         names = sorted(line.split()[-1] for line in exports.splitlines() if line.strip())
         if names != ["nw_execution_link_probe_v1"]:
-            raise ValueError("Normal downstream link leaked fixture/helper exports: " + repr(names))
+            raise RuntimeError("Reusable C++ component leaked fixture/helper exports: " + repr(names))
         report["default_downstream_exports"] = names
-        report["artifacts"]["default_downstream"] = {"path": str(output / "libdownstream.so"), "sha256": sha(output / "libdownstream.so")}
-        run("native-conformance-build", ["cargo", "build", "--release", "--locked", "-p", "nativeweave-interop-execution", "--features", "conformance"])
-        run("native-clippy", ["cargo", "clippy", "--locked", "-p", "nativeweave-interop-execution", "--all-targets", "--all-features", "--", "-D", "warnings"])
-        native = ROOT / "target/release/libnativeweave_interop_execution.so"
+        report["artifacts"]["default_downstream"] = {"path": str(downstream), "sha256": sha(downstream)}
+        native = CPP_FIXTURES / "libnativeweave_interop_execution.so"
         report["artifacts"]["native"] = {"path": str(native), "sha256": sha(native)}
         run("native-conformance-exports", ["nm", "-D", "--defined-only", native])
         common = ["-p:UseSharedCompilation=false", "-nr:false", "-m:1"]

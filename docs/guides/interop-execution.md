@@ -1,5 +1,7 @@
 # Optional engine-local execution and close
 
+> **DB-CPP-01 implementation update.** The public C# examples, signatures and ownership contracts in this guide remain the compatibility inputs. The current maintained native implementation is C++20; its module mapping, direct libpq/sqlite3 execution, Clang/CMake commands and package production are documented in [C++ native implementation](cpp-native.md). Descriptions below of Rust, SQLx, SeaQuery or Tokio internals are retained as the fixed `465cd0f` behavioral reference, not current build dependencies. The named verification entry points now build the ported C++ fixtures and retain their original managed assertions.
+
 A08 implements the internal execution profile required by an asynchronous Rust
 engine. An engine explicitly constructs an `EngineExecutor` instance with its own
 worker and capacity limits. Referencing NativeWeave.Core, inspecting package
@@ -134,7 +136,7 @@ managed terminal trampoline remains A07's static exact ABI entry.
 python3 tests/Interop.Execution/verify.py --output artifacts/task04/A08/acceptance
 ```
 
-The entry point uses the fixed repository SDK/Rust versions and locked manifests.
+The entry point uses the fixed repository SDK/Clang versions and locked manifests.
 It runs real native capacity/FIFO/cancel/issued-permit races, real native Tokio
 future and blocking panic paths, actual OS-worker join, the C# consumer under JIT
 and explicit `linux-x64` Native AOT, and both minimal/timeout sample paths. It also

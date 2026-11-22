@@ -1,0 +1,7 @@
+repos:
+  - repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: ce4bd7270237e95464b37d808b942f02785192c4 # clang-format 23.1.5
+    hooks:
+      - id: clang-format
+        files: '^(native/|tests/|src/Verification\.(Interop|EndToEnd)/).*\.(c|cc|cpp|cxx|h|hh|hpp|hxx)$'
+        exclude: '(^|/)(third_party|vendor|generated)/|^native/interop/abi/include/nativeweave_abi_v1\.h$|^native/database/binding/nativeweave_database_binding_v1\.h$|^tests/Interop\.Abi/native/layout\.(c|cpp)$'

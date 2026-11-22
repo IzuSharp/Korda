@@ -8,7 +8,7 @@ using NativeWeave.Interop.Memory;
 
 namespace NativeWeave.Verification.Interop;
 
-/// <summary>Independent mathematical/CLR oracles over actual compiled C, Rust and Core helpers.</summary>
+/// <summary>Independent mathematical/CLR oracles over actual compiled C, C++ and Core helpers.</summary>
 /// <remarks>Numeric addresses are never dereferenced by extent tests. Owner tests use real creator allocations only.</remarks>
 internal static class PropertySuite
 {

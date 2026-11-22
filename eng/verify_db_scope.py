@@ -5,13 +5,11 @@ import json
 from pathlib import Path
 import subprocess
 import sys
-import tomllib
 import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
 REQUIRED = [
-    "native/database/host", "native/database/postgres", "native/database/sqlite",
-    "native/database/query", "native/database/relations", "native/database/migrations",
+    "native/cpp/src", "native/cpp/include/nw", "native/cpp/tests", "native/database/binding",
     "src/Data.NativeHost", "src/Data.Postgres", "src/Data.Sqlite", "src/Data.Transactions",
     "src/Data.Streaming", "src/Data.Materialization", "src/Query.Fluent", "src/Query.Generator",
     "src/Query.Binding", "src/Orm.Relations", "src/NativeWeave.Core", "src/Interop.Abi",
@@ -39,11 +37,16 @@ def check():
         assert (ROOT / name).is_dir(), "Retained database dependency is missing: " + name
     for name in REMOVED:
         assert not (ROOT / name).exists(), "Retired product still exists: " + name
-    cargo = tomllib.loads((ROOT / "Cargo.toml").read_text())
-    for member in cargo["workspace"]["members"]:
-        assert member.startswith(("native/database/", "native/interop/")) or member in (
-            "tests/Interop.Errors/native", "src/Verification.Interop/native"), member
-        assert (ROOT / member / "Cargo.toml").is_file(), member
+    for name in ("Cargo.toml", "Cargo.lock", "rust-toolchain.toml", ".cargo"):
+        assert not (ROOT / name).exists(), "Replaced Rust product entry still exists: " + name
+    names = subprocess.check_output(["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z"], cwd=ROOT).decode().split("\0")
+    for name in names:
+        if name and (ROOT / name).is_file():
+            assert Path(name).suffix != ".rs" and Path(name).name not in ("Cargo.toml", "Cargo.lock"), name
+    cmake = (ROOT / "CMakeLists.txt").read_text()
+    for name in ("nw_database_sqlite", "nw_database_postgresql", "nativeweave_database_host"):
+        assert "nw_database_target(" + name + " " in cmake, name
+    assert (ROOT / "native/dependencies.lock.json").is_file()
     solution = ET.parse(ROOT / "NativeWeave.slnx").getroot()
     for node in solution.iter("Project"):
         assert (ROOT / node.attrib["Path"]).is_file(), node.attrib
@@ -66,8 +69,8 @@ def check():
     spec.loader.exec_module(model)
     assert set(model.MANAGED) | set(model.LEAVES) == EXPECTED_PACKAGES
     assert set(model.ENGINES) == {"database.sqlite", "database.postgresql"}
-    print(json.dumps({"task": "DB-Scope-01", "status": "passed", "databaseHostRetained": True,
-                      "cargoMembers": len(cargo["workspace"]["members"]), "managedProjects": count,
+    print(json.dumps({"task": "DB-CPP-01", "status": "passed", "databaseHostRetained": True,
+                      "nativeImplementation": "C++20", "rustProductInputs": 0, "managedProjects": count,
                       "databasePackages": sorted(EXPECTED_PACKAGES)}, indent=2))
 
 

@@ -4,7 +4,7 @@ namespace NativeWeave.Reference.TaskService;
 
 internal sealed record OperationResult(string Scope, string RequestKey, string RequestHash, string OperationId, string Tenant, string Principal, string Semantic, long ResponseVersion, long ResponseStatus, byte[] ResponseBytes, long CompletedAt);
 
-/// <summary>Static application metadata, consumed by the existing Rust query and relation engine.</summary>
+/// <summary>Static application metadata, consumed by the precompiled C++ query and relation engine.</summary>
 internal static class Operations
 {
     private static readonly TableBuilder<OperationResult> Builder = new("operations");
@@ -26,7 +26,7 @@ internal static class Operations
 
 internal sealed record Item(string Tenant, string ItemId, string OperationId, string Title, long CreatedAt, long Version);
 
-/// <summary>Static application metadata, consumed by the existing Rust query and relation engine.</summary>
+/// <summary>Static application metadata, consumed by the precompiled C++ query and relation engine.</summary>
 internal static class Items
 {
     private static readonly TableBuilder<Item> Builder = new("items");
@@ -43,7 +43,7 @@ internal static class Items
 
 internal sealed record OutboxEvent(string EventId, string Tenant, string OperationId, long PayloadVersion, byte[] Payload, long DeliveryState, long AttemptCount, long AvailableAt, long LeaseUntil, long CompletedAt);
 
-/// <summary>Static application metadata, consumed by the existing Rust query and relation engine.</summary>
+/// <summary>Static application metadata, consumed by the precompiled C++ query and relation engine.</summary>
 internal static class Outbox
 {
     private static readonly TableBuilder<OutboxEvent> Builder = new("outbox");
@@ -64,7 +64,7 @@ internal static class Outbox
 
 internal sealed record Attachment(string Tenant, string ItemId, string ContentHash, long ContentLength, string OperationId, long Version);
 
-/// <summary>Static application metadata, consumed by the existing Rust query and relation engine.</summary>
+/// <summary>Static application metadata, consumed by the precompiled C++ query and relation engine.</summary>
 internal static class Attachments
 {
     private static readonly TableBuilder<Attachment> Builder = new("attachments");
@@ -81,7 +81,7 @@ internal static class Attachments
 
 internal sealed record ConsumerReceipt(string EventId, string PayloadHash, long DeliveryAttempts, long Effects);
 
-/// <summary>Static application metadata, consumed by the existing Rust query and relation engine.</summary>
+/// <summary>Static application metadata, consumed by the precompiled C++ query and relation engine.</summary>
 internal static class ConsumerReceipts
 {
     private static readonly TableBuilder<ConsumerReceipt> Builder = new("receipts");

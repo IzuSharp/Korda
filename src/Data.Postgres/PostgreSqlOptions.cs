@@ -12,7 +12,7 @@ public enum PostgreSqlTlsMode
     DisableForLocalDevelopment
 }
 
-/// <summary>Configures the SQLx PostgreSQL provider before a datasource is opened.</summary>
+/// <summary>Configures the libpq PostgreSQL provider before a datasource is opened.</summary>
 /// <remarks>Mutable configuration is snapshotted by the owning B04 factory before native admission. Do not mutate it during configuration. It starts no runtime and opens no connection. Invalid values fail before opening. Connection strings use a PostgreSQL TCP URI with explicit user and database; query-string options and ambient PG* policy variables are rejected, so they cannot weaken this typed TLS policy. The component has no managed database fallback.</remarks>
 public sealed class PostgreSqlOptions
 {
@@ -32,7 +32,7 @@ public sealed class PostgreSqlOptions
     public TimeSpan ConnectTimeout { get; set; } = TimeSpan.FromSeconds(15);
 }
 
-/// <summary>Creates PostgreSQL datasources backed by the maintainer-built Rust Database Host.</summary>
+/// <summary>Creates PostgreSQL datasources backed by the maintainer-built C++ Database Host.</summary>
 /// <remarks>Reading Engine is pure metadata. Inspect verifies the asset and starts no runtime or connection. Create snapshots typed options before native admission.</remarks>
 public static partial class PostgreSqlDataSource
 {

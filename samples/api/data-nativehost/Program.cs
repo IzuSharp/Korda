@@ -26,7 +26,7 @@ await using (var source = builder.Build())
     await session.ExecuteAsync(SqlCommand.Create("CREATE TABLE " + table + " (id BIGINT PRIMARY KEY, name TEXT NOT NULL)", kind: SqlCommandKind.Mutation));
     try
     {
-        // Minimal: typed values are bound in Rust. The unique table identifier is
+        // Minimal: typed values are bound in C++. The unique table identifier is
         // application-owned trusted SQL, never a value hole from external input.
         await session.ExecuteAsync(SqlCommand.Create("INSERT INTO " + table + " VALUES (@id,@name)",
             new SqlParameters().Add("id", 1L, Codecs.Int64).Add("name", "Ada", Codecs.String), SqlCommandKind.Mutation));

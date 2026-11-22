@@ -11,17 +11,20 @@ import resource
 import shutil
 import signal
 import subprocess
+import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "tests"))
+from native_build import prepare as prepare_native, FIXTURES as CPP_FIXTURES, BINARIES as CPP_BINARIES, PRESET as CPP_PRESET, SOURCE_INPUTS as NATIVE_INPUTS
 OWNED = ["src/Verification.Interop", "tests/Verification.Interop",
          "samples/api/verification-interop", "docs/guides/verification-interop.md"]
 INPUTS = OWNED + ["src/NativeWeave.Core", "src/Interop.Abi", "src/Interop.Negotiation",
     "src/Interop.Lifetime", "src/Interop.Memory", "src/Interop.Errors", "src/Interop.Callbacks",
     "src/Interop.Async", "native/interop/abi", "native/interop/lifetime", "native/interop/memory",
     "native/interop/errors", "native/interop/callbacks", "native/interop/async",
-    "src/Build.Integration/ApiReference", "Cargo.toml", "Cargo.lock", "global.json",
-    "rust-toolchain.toml", "Directory.Build.props", "Directory.Build.targets"]
+    "src/Build.Integration/ApiReference", "global.json",
+    "Directory.Build.props", "Directory.Build.targets", *NATIVE_INPUTS]
 
 
 def sha(path):
@@ -60,10 +63,10 @@ def main():
     report = dict(task="A20", platform="linux-x64", passed=False, started_utc=utc(),
         preparation_only=args.prepare or args.prepare_native, commands=[], artifacts={},
         os_release=Path("/etc/os-release").read_text(), design_commit="c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9",
-        scope="Actual Core C/Rust/C# differential properties and bounded schedules; maintainer harness, no distributed package.",
+        scope="Actual Core C/C++/C# differential properties and bounded schedules; maintainer harness, no distributed package.",
         coverage=json.loads((ROOT / "tests/Verification.Interop/coverage.json").read_text()),
         sanitizer={"instrumented": ["C serialized-input decoder", "C independent oracles", "C fatal child driver"],
-                   "uninstrumented": ["stable Rust libraries", "CLR", "Native AOT runtime"],
+                   "uninstrumented": ["Release C++ fixture libraries (native ASan/UBSan CTest is a separate gate)", "CLR", "Native AOT runtime"],
                    "address": True, "undefined_behavior": True, "leaks": not args.disable_leak_sanitizer,
                    "environment": {key: value for key, value in sanitized.items() if key in ("ASAN_OPTIONS", "UBSAN_OPTIONS", "ASAN_SYMBOLIZER_PATH")}},
         claims_excluded=["Windows", "all weak-memory schedules", "unbounded liveness", "full FFI sanitizer coverage",
@@ -109,31 +112,21 @@ def main():
         report["source_sha256"] = {p: sha(ROOT / p) for p in sorted(set(paths)) if (ROOT / p).is_file()}
         if run("sdk", ["dotnet", "--version"]).strip() != "11.0.100":
             raise RuntimeError("Pinned SDK 11.0.100 required.")
-        if "release: 1.100.0" not in run("rustc", ["rustc", "-vV"]):
-            raise RuntimeError("Pinned Rust 1.100.0 required.")
-        run("cargo-version", ["cargo", "--version"])
         run("clang-version", ["clang", "--version"])
-        for name in ["dotnet", "rustc", "cargo", "clang", "llvm-symbolizer"]:
+        for name in ["dotnet", "clang", "clang++", "cmake", "ninja", "llvm-symbolizer"]:
             executable = shutil.which(name)
             if executable:
                 artifact("tool-" + name, Path(executable).resolve())
-        run("native-format", ["cargo", "fmt", "-p", "nativeweave-verification-interop", "--", "--check"])
-        run("native-clippy", ["cargo", "clippy", "--offline", "--locked", "-p", "nativeweave-verification-interop", "--all-targets", "--", "-D", "warnings"])
-        # Build dependencies' maintainer exports explicitly. They are not enabled by normal engine dependencies.
-        for label, package, features in [("property", "nativeweave-verification-interop", []),
-                ("memory", "nativeweave-interop-memory", []),
-                ("callbacks", "nativeweave-interop-callbacks", ["--features", "conformance"]),
-                ("async", "nativeweave-interop-async", ["--features", "conformance"])]:
-            run("native-build-" + label, ["cargo", "build", "--offline", "--locked", "--release", "-p", package, *features])
+        report["native_compiler_provenance"] = prepare_native(run, ["nativeweave_verification_interop",
+            "nativeweave_verification_interop_c", "nativeweave_interop_memory",
+            "nativeweave_interop_callbacks", "nativeweave_interop_async"])
         for name in ["verification_interop", "interop_memory", "interop_callbacks", "interop_async"]:
             filename = "libnativeweave_" + name + ".so"
-            shutil.copy2(ROOT / "target/release" / filename, staged / filename)
-        run("c-layout-build", ["clang", "-std=c11", "-Wall", "-Wextra", "-Werror", "-fPIC", "-shared",
-                               "-I", ROOT / "native/interop/abi/include", ROOT / "src/Verification.Interop/layout.c",
-                               "-o", staged / "libnativeweave_verification_interop_c.so"])
+            shutil.copy2(CPP_FIXTURES / filename, staged / filename)
+        shutil.copy2(CPP_FIXTURES / "libnativeweave_verification_interop_c.so", staged / "libnativeweave_verification_interop_c.so")
         for path in sorted(staged.glob("*.so")):
             artifact(path.name, path)
-        run("native-dependencies", ["cargo", "tree", "--offline", "--locked", "-p", "nativeweave-verification-interop", "-e", "normal,features"])
+        run("native-dependencies", ["readelf", "-d", staged / "libnativeweave_verification_interop.so"])
         if args.prepare_native:
             report["native_staged"] = True
             return
@@ -179,13 +172,11 @@ def main():
                 contains=("EXPECTED_QUARANTINE", "successful-retirement=0"))
             run(mode + "-stale-cookie-child", [*command, "--child-stale-cookie"], expected=(42,), timeout=45,
                 contains=("EXPECTED_PROTOCOL_VIOLATION stale-cookie-reuse", "no safe-retirement claim"))
-        flags = ["-std=c11", "-Wall", "-Wextra", "-Werror", "-g", "-O1", "-fno-omit-frame-pointer",
-                 "-I", ROOT / "native/interop/abi/include", "-L", staged, "-lnativeweave_verification_interop"]
         fuzz = output / "fuzz"; negative = output / "fuzz-oracle-negative"; fatal = output / "fatal"
-        run("fuzz-build", ["clang", *flags, "-fsanitize=fuzzer,address,undefined", "tests/Verification.Interop/fuzz/interop.c", "-o", fuzz])
-        run("fuzz-negative-build", ["clang", *flags, "-fsanitize=fuzzer,address,undefined", "-DA20_ORACLE_NEGATIVE",
-                                    "tests/Verification.Interop/fuzz/interop.c", "-o", negative])
-        run("fatal-build", ["clang", *flags, "-fsanitize=address,undefined", "tests/Verification.Interop/fuzz/fatal.c", "-o", fatal])
+        run("fuzz-build", ["cmake", "--build", "--preset", CPP_PRESET, "--parallel", "4", "--target",
+            "nw_interop_fuzz", "nw_interop_fuzz_negative", "nw_interop_fatal"])
+        for target, path in [("nw_interop_fuzz", fuzz), ("nw_interop_fuzz_negative", negative), ("nw_interop_fatal", fatal)]:
+            shutil.copy2(CPP_BINARIES / target, path)
         for name, path in [("fuzz", fuzz), ("fuzz-oracle-negative", negative), ("fatal", fatal)]:
             artifact(name, path)
         corpus = output / "corpus"; corpus.mkdir()
@@ -205,14 +196,14 @@ def main():
         original = output / "oracle-original.bin"; shutil.copy2(corpus / "end-wrap", original)
         minimized = output / "oracle-minimized.bin"
         run("oracle-negative-original", [negative, original], environment=sanitized, expected=(77,), timeout=30,
-            contains=("Assertion", "status==(expected?NW_OK:NW_INVALID_ARGUMENT)"))
+            contains=("Assertion", "status == (expected ? NW_OK : NW_INVALID_ARGUMENT)"))
         # libFuzzer minimizes only the deliberate numeric-oracle defect. Product Core is unmodified.
         run("oracle-minimize", [negative, *budget, "-minimize_crash=1", "-runs=1000", "-exact_artifact_path=" + str(minimized), original],
             environment=sanitized, timeout=90)
         if not minimized.is_file():
             raise RuntimeError("No retained minimized oracle counterexample.")
         run("oracle-negative-minimized", [negative, minimized], environment=sanitized, expected=(77,), timeout=30,
-            contains=("Assertion", "status==(expected?NW_OK:NW_INVALID_ARGUMENT)"))
+            contains=("Assertion", "status == (expected ? NW_OK : NW_INVALID_ARGUMENT)"))
         run("oracle-corrected-replay", [fuzz, original, minimized], environment=sanitized, timeout=30)
         artifact("oracle-original", original); artifact("oracle-minimized", minimized)
         run("fatal-invalid-pointer", [fatal, "invalid-pointer"], environment=sanitized, expected=(1,), timeout=30,

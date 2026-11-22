@@ -2,7 +2,7 @@ namespace NativeWeave.Data;
 
 /// <summary>Opts a model into deterministic, static table and DTO mapping generation.</summary>
 /// <remarks>The generator reads source symbols and emits the same TableBuilder calls as manual metadata.
-/// It never opens a database, loads a native module, runs Cargo or discovers runtime model types.</remarks>
+/// It never opens a database, loads a native module, compiles native code or discovers runtime model types.</remarks>
 [AttributeUsage(AttributeTargets.Class, Inherited = false)]
 public sealed class WeaveTableAttribute : Attribute
 {

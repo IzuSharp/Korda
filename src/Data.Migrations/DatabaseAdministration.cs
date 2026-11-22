@@ -24,7 +24,7 @@ public sealed class DatabaseAdministration
 {
     private readonly DataSource _source;
     internal DatabaseAdministration(DataSource source) => _source = source;
-    /// <summary>Applies the selected forward migration range using SQLx and its persisted checksum ledger.</summary>
+    /// <summary>Applies the selected forward migration range using the native provider and the retained checksum ledger.</summary>
     /// <param name="bundle">An immutable trusted bundle for this source's provider.</param>
     /// <param name="options">Target and explicit nontransactional policy; null uses transactional defaults.</param>
     /// <param name="cancellationToken">Requests cancellation while retained native work and connection closure complete.</param>

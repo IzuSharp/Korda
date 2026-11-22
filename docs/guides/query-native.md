@@ -1,119 +1,46 @@
-# Native SeaQuery implementation
+# Native C++ query implementation
 
-The database query owner calls SeaQuery 1.0.2 directly. B09 validates the canonical
-operation, token identity, codec, capability, and lifetime; B11 retains the actual
-SeaQuery expression/statement; B04 supplies the runtime, session and operation
-owners; the existing B02/B03 provider calls B07's sole checked SQLx binder.
+The retained public `NativeWeave.Query` namespace belongs to `NativeWeave.Database`. The C# Fluent and internal QueryBinding calls enter the unchanged 42-function database C ABI. `native/cpp/src/query.cpp` owns runtime expressions, aliases, clauses, plans, rendering and the prepared shape cache. `host_abi.cpp` admits the call; the Host schedules execution through the selected direct libpq or sqlite3 provider.
 
-The public `NativeWeave.Query` namespace belongs to `NativeWeave.Database`.
-Applications do not load a query-only assembly, emit SQL syntax, call an FFI
-function, or rebuild native code when adding an ordinary entity. This internal
-component does not advertise a separately published package.
+This is the C++ replacement of the accepted implementation at `465cd0f90e6af05ec50eb581156240377cf0825b`. The fixed NativeWeave validator and SeaQuery 1.0.2 sources define compatibility, including the existing SQL-output goldens. SeaQuery is no longer a linked or built product dependency. See [the native implementation guide](cpp-native.md) for the complete source map, dependencies, ownership and reproduction commands.
 
-## Native call and ownership path
+## Query and expression ownership
 
-`B13 typed call → B09 QueryBinding → existing C ABI → B04 owner admission →
-B11 NativeQuery → SeaQuery → B04 provider operation → B07 SQLx Arguments`.
+The query owns a mutable runtime arena. Generation-bearing tokens identify expressions, aliases and imported immutable dependencies. Metadata arrives as canonical bytes from C#; ordinary business tables need not exist when the C++ library is built. Each mutation validates a private candidate before publication, so failure cannot expose a half-join, partial projection or changed SQL. Unknown capabilities and malformed records reject before execution. Unexpected native exceptions are contained at the ABI and poison the appropriate engine owner; this is not a recoverable-OOM guarantee.
 
-The query owns its mutable SeaQuery state. Every expression refers to B09's
-generation-bearing token. Queries retain models, aliases and imported immutable
-dependencies. A failed clause first discards its private candidate: no half-join,
-partial projection or changed SQL is published. Unknown capabilities and malformed
-records fail before execution. A caught engine panic poisons the owner; panic
-catching is not a feature-capability probe or a recoverable-OOM guarantee.
+Sealing creates an immutable plan. Ordinary plans admit one execution; prepared plans accept separate copied parameters for each execution and may run through distinct sessions of the same source. Mutation after seal and foreign query tokens reject. Disposing a query releases its own roots while admitted plans and cursors retain their dependencies until retirement.
 
-Sealing creates an immutable plan. Ordinary plans admit one execution. Prepared
-plans use separate copied parameters on each execution and can be used concurrently
-through distinct sessions of the same source. Mutation after seal and cross-query
-tokens reject. Close drops query-owned roots while admitted plans/cursors retain
-their own dependencies until retirement.
+LEFT JOIN reserves an alias, builds ON expressions and then commits or aborts. Both outcomes invalidate provisional right-side tokens. Committed nullable access creates fresh tokens. A private constant marker in the derived table distinguishes an absent joined row from a matched row whose business fields are NULL. Nullable lifting changes metadata; it never substitutes a sentinel or changes SQL equality semantics.
 
-## Values and dialects
+## Parameter and dialect semantics
 
-Identifiers originate in validated model/projection metadata and are quoted by
-SeaQuery. Native expressions use private placeholder identities. SeaQuery renders
-their exact SQL order; the adapter then emits one B01 canonical parameter payload
-in that order. The provider feeds that payload to B07. The marker never reaches
-SQLx, is never a raw pointer, and cannot collide with validated LIMIT/OFFSET
-values. Literal text, binary data, Unicode and SQL-looking values stay parameters.
-Prepared parameter IDs remain source-bound; clone/CTE/set/subquery composition
-retains their identities and rejects incompatible names, types or configurations.
+Validated table/column metadata supplies identifiers. Values remain ordered parameters, including Unicode, text that resembles SQL and binary content. The renderer emits the exact legacy SQL/parameter order and a canonical db-wire argument payload; the provider performs the checked scalar conversion. Runtime placeholder identities are neither raw pointers nor SQL fragments. Prepared parameter IDs retain source identity and reject incompatible names, types or configurations when plans are cloned or composed as CTEs, sets and subqueries.
 
-SQLite row locks reject before render. PostgreSQL row-lock plans carry an explicit
-transaction requirement through nested plans; B04 rejects execution outside a live
-transaction before dispatch. SQLite/PostgreSQL capabilities determine
-CTE, recursive CTE, set operation, window, null-safe equality and prepared-shape
-support. Unsupported required opcodes are structured failures; there is no managed
-fallback or implicit ignored clause. Native nullable lifting changes metadata only:
-there is no COALESCE, sentinel replacement or cast that could make a NULL FK match
-parent key zero.
+The original capabilities continue to distinguish providers. SQLite rejects row locks before rendering. PostgreSQL plans retain the transaction requirement through nested plans, and the Host rejects execution outside a live transaction before sending SQL. CTEs, recursive CTEs, set operations, windows and null-safe equality keep their accepted rules. Unsupported required opcodes report the same structured failure.
 
-LEFT JOIN reserves an alias, constructs ON expressions, then commits or aborts.
-Either outcome invalidates every captured provisional right-side expression.
-Committed left-side nullable access creates fresh tokens. `HasMatch` uses a private
-constant marker in a derived table, so a matched row containing nullable business
-columns remains distinguishable from an absent joined row.
+Window expressions snapshot their partition/order/frame state; later builder mutation cannot alter an already retained OVER expression. Collations use the exact provider allowlist and identifier quoting. Recursive CTEs require a physical anchor and UNION or UNION ALL with the declared self-reference. The existing rejection rules for aggregate, grouped, nested-set and window recursive members remain. PostgreSQL aggregate widening surrounds the full OVER expression, preserving the Int64/Double result schema.
 
-Window snapshots use SeaQuery's public `SelectExpr`/window renderer. Its generated
-template and bound placeholder values are retained as a native expression, enabling
-ordinary native composition without an independent SQL/window emitter. Later
-window mutations cannot alter an existing OVER expression. Collations are limited
-to the exact provider allowlist and are quoted as identifiers. Recursive CTEs require
-one physical anchor plus UNION/UNION ALL with one declared self-reference. Aggregate,
-grouped, nested-set and window recursive members are rejected before rendering.
-PostgreSQL widened aggregate casts surround the complete OVER expression, preserving
-the exact Int64/Double result schema consumed by B07.
+## Copies, limits and prepared shapes
 
-## Costs and bounds
+Each direct binding call uses one existing ABI operation. Borrowed input is copied before synchronous return. Native nodes and immutable seal/clone snapshots are bounded by the original token, depth, expanded-expression and encoded-byte limits. Candidate copies retain failure atomicity. No new runtime or pool is created for query preparation.
 
-This version performs one existing FFI operation per direct query call. It copies
-borrowed value/control input during synchronous validation, retains native SeaQuery
-nodes and copies the immutable shape at seal/clone. Clause mutations use a bounded
-private native candidate before publication. Expanded-expression charging covers
-cloned children, in addition to B09 token/depth/encoded-byte limits. This deliberately
-trades bounded copies for clear failure atomicity; it makes no zero-allocation or
-throughput claim. Query preparation does not create a new runtime or pool.
+The source owns an entry-and-byte-bounded LRU of immutable SQL/parameter schemas. Its key includes SHA-256 of the exact binding signature inventory, source generation, provider, retained metadata, projection, operators, ordered codecs and named parameter identity. Ordinary values are excluded. Each execution owns fresh arguments and a provider-ready SQL copy; the cache owns no connection, callback or managed delegate. Eviction releases the cache root while active plans remain valid. A shape larger than the cache allowance may still execute within the query limits without entering the cache.
 
-Each immutable plan compiles at most once. The source owns an entry-and-byte-bounded
-LRU of immutable SQL/parameter schemas. Keys include its exact module ABI, source
-generation/provider profile, every retained metadata hash, projection, rendered
-operators, ordered codecs and named parameter identities. Ordinary values are
-excluded. Each call owns a fresh canonical argument payload and a provider-ready SQL
-copy. The cache never holds SQLx Arguments, sessions, callbacks or managed delegates.
-Eviction releases only its root; active plan/shape references remain valid. An
-individually oversized shape executes within query limits without entering the
-smaller cache. This is a bounded resource policy, not a measured speedup claim.
+## Retained verification
 
-## Verification and consumer scope
+`tests/Query.Native/golden/oracle` contains the 52 immutable SQL, ordered-parameter and actual-row oracles from the accepted Plan commit, with provenance and per-file hashes. The ported native checks retain query/mutation assertions. The unchanged C# composition driver calls the actual combined Host and checks SQL, typed results, refusals, callbacks, retirement and released buffers against both databases, then runs as Linux Native AOT. A second model/DTO build must leave the native module hash unchanged.
 
-`tests/Query.Native/verify.py` runs the exact Linux x64 row with a disposable real
-PostgreSQL 18 instance and SQLite. It checks canonical ABI signatures, formatting,
-strict Clippy, native SQL/placeholder/argument behavior and actual results. Native
-oracles are emitted from the executed queries; the C# driver replays the same
-composition through the actual B04 module, compares exact generated SQL and typed
-rows, then repeats as an explicit-RID Native AOT executable. Every callback root
-remains until a native retirement receipt; each transferred buffer is released.
-New C# entity metadata and a static constructor execute with an unchanged native
-module hash. No fixture replaces the database Host in this verification.
+The [maintainer example](../../samples/api/query-native/Examples.cs) remains compiled into both executed consumers. This component adds no public CLR symbol or separate query package. The public Fluent facade, package consumers and complete old/new business comparison remain separate gates; a native unit pass does not stand for those results.
 
-The compiled [maintainer example](../../samples/api/query-native/Examples.cs) uses
-the existing internal binding and is included in both executed consumers. B11 adds
-no public CLR symbol or separate assembly, so its API applicability/reference
-records identify the reused B09 signatures. B13 owns the public Fluent facade.
-Full pristine NuGet consumption remains A16/B24; other operating systems are not
-claimed by a Linux run. Consult Plan B11 evidence for actual completed runs, failures,
-source/lock/module/executable hashes and independent review; a built driver or
-AOT binary without execution is not a passed acceptance row.
+After building the shared Release preset, use the immutable historical Design declaration input described in README:
 
 ```sh
 python3 tests/Query.Native/verify.py \
-  --design ../NativeWeave-Design \
-  --postgres-bin /path/to/postgresql-18/bin \
-  --native-module /path/to/libnativeweave_database_host.so \
-  --host-source /path/to/committed/NativeWeave \
+  --design artifacts/frozen-design \
+  --postgres-bin "$NW_POSTGRES_BIN" \
+  --native-module artifacts/cmake/linux-x64-release/libnativeweave_database_host.so \
+  --host-source "$PWD" \
   --output artifacts/query-native-linux
 ```
 
-The command requires committed inputs and creates a fresh evidence directory. An
-absent PostgreSQL endpoint/toolchain, missing host export or failed execution is a
-failure; the verifier cannot silently convert it into a passed provider row.
+Verification requires committed inputs and a fresh evidence directory. The migration report in Plan owns actual tested-source identities, CI and acceptance; neither building a driver nor publishing an unexecuted AOT binary establishes a passing provider cell.

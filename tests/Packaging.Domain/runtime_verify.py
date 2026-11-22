@@ -10,7 +10,7 @@ import subprocess
 import tempfile
 
 RUNTIME_IMAGE = "mcr.microsoft.com/dotnet/runtime-deps:10.0.15-noble-amd64@sha256:ebb73a172b49758c6de2462305e872ea0cb37ad3ca27cc0d86bc48b6271eaace"
-TASK = "DB-Scope-01"
+TASK = "DB-CPP-01"
 PROVIDERS = {"sqlite": ["sqlite"], "postgresql": ["postgresql"], "combined": ["sqlite", "postgresql"]}
 
 
@@ -47,7 +47,8 @@ def main():
     output.mkdir(parents=True, exist_ok=False)
     if os.environ.get("B24_RUNTIME_IMAGE") != RUNTIME_IMAGE:
         raise ValueError("Runtime execution requires the existing pinned runtime-only image")
-    absence = {tool: shutil.which(tool) is None for tool in ("dotnet", "cargo", "rustc", "rustup", "clang", "cc")}
+    absence = {tool: shutil.which(tool) is None for tool in
+               ("dotnet", "cargo", "rustc", "rustup", "clang", "clang++", "clang-cl", "cmake", "ninja", "gcc", "g++", "cc", "c++")}
     if not all(absence.values()):
         raise ValueError("Runtime-only image contains a managed/native build tool")
     manifest = json.loads((bundle / "manifest.json").read_text())

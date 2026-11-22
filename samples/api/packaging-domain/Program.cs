@@ -51,7 +51,7 @@ internal static class Program
 #endif
             var nativeLibraries = ObserveNativeLibraries(provider);
             await database.DisposeAsync();
-            var receipt = new ConsumerReceipt(1, "DB-Scope-01", provider,
+            var receipt = new ConsumerReceipt(1, "DB-CPP-01", provider,
                 RuntimeFeature.IsDynamicCodeSupported, Checks.ToArray(), nativeLibraries);
             Console.WriteLine("B24_RESULT " + JsonSerializer.Serialize(receipt, ConsumerJson.Default.ConsumerReceipt));
             return 0;

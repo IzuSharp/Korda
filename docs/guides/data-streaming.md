@@ -1,5 +1,7 @@
 # Bounded data batches and typed streaming
 
+> **DB-CPP-01 implementation update.** The public C# examples, signatures and ownership contracts in this guide remain the compatibility inputs. The current maintained native implementation is C++20; its module mapping, direct libpq/sqlite3 execution, Clang/CMake commands and package production are documented in [C++ native implementation](cpp-native.md). Descriptions below of Rust, SQLx, SeaQuery or Tokio internals are retained as the fixed `465cd0f` behavioral reference, not current build dependencies. The named verification entry points now build the ported C++ fixtures and retain their original managed assertions.
+
 This B06 component implements owned native batches and the internal typed stream
 adapter on Linux x64. It composes the actual B02 PostgreSQL and B03 SQLite session
 adapters and B07 checked scalar codecs. B01 remains the sole owner of projections,
@@ -175,7 +177,7 @@ remain B22/B23 gates.
 
 ## Verification
 
-Use the repository-pinned .NET 11.0.100 / C# 15 and Rust 1.100.0 toolchains:
+Use the repository-pinned .NET 11.0.100 / C# 15 and LLVM 23.1.5 toolchains:
 
 ```sh
 python3 tests/Data.Streaming/verify.py \

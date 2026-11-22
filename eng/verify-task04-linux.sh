@@ -5,7 +5,7 @@ cd "$(dirname "$0")/.."
 
 python3 tests/Packaging.Linux/verify.py --require-baseline --output artifacts/task04/A14/ci
 python3 tests/Packaging.Linux/minimum_cpu.py artifacts/task04/A14/ci/runtime-transfer \
-  --output artifacts/task04/A14/minimum-cpu --require-baseline
+  --output artifacts/task04/A14/minimum-cpu --require-baseline --cc "${CC:?Select the pinned Clang toolchain first}"
 
 # A16's unique package-task/release guards now run against the actual database
 # packages in Packaging.Domain; no artificial product or generator package remains.

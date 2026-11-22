@@ -266,7 +266,7 @@ public enum NativeWeave.Database.Sqlite.SqliteBeginMode : int
 public static class NativeWeave.Database.Sqlite.SqliteDataSource
 ```
 
-**summary:** Creates SQLite datasources backed by the maintainer-built Rust Database Host.
+**summary:** Creates SQLite datasources backed by the maintainer-built C++ Database Host.
 
 **remarks:** Descriptor access is pure metadata. Inspect verifies the packaged asset without creating a runtime or opening a connection; Create owns the configured runtime and datasource.
 
@@ -294,7 +294,7 @@ public enum NativeWeave.Database.Sqlite.SqliteJournalMode : int
 public enum NativeWeave.Database.Sqlite.SqliteOpenMode : int
 ```
 
-**summary:** Specifies how the Rust SQLite provider opens the configured database.
+**summary:** Specifies how the C++ SQLite provider opens the configured database.
 
 ## `T:NativeWeave.Database.Sqlite.SqliteOptions`
 
@@ -302,7 +302,7 @@ public enum NativeWeave.Database.Sqlite.SqliteOpenMode : int
 public sealed class NativeWeave.Database.Sqlite.SqliteOptions
 ```
 
-**summary:** Configures the precompiled Rust SQLx SQLite provider.
+**summary:** Configures the precompiled sqlite3 provider.
 
 **remarks:** Configure before source creation. A builder snapshots these mutable values once; concurrent mutation during snapshot is unsupported. Values do not create a connection, worker or runtime. Each physical connection receives this profile. Ordinary SQLite isolation is Serializable; BEGIN mode is independent. Progress cancellation is cooperative and cannot preempt every busy wait or native instruction.
 
