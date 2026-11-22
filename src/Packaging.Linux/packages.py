@@ -17,8 +17,8 @@ def pack(destination, identity, version, entries, dependencies=None, repository=
     package = ET.Element("package", xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd")
     metadata = ET.SubElement(package, "metadata")
     for key, value in {"id": identity, "version": version, "authors": "IzuSharp",
-                       "description": "NativeWeave scoped component package. Local conformance; not a public release.",
-                       "license": "MIT"}.items():
+                       "description": f"{identity} component for NativeWeave applications and tooling.",
+                       "license": "MIT", "licenseUrl": "https://licenses.nuget.org/MIT"}.items():
         element = ET.SubElement(metadata, key, {"type": "expression"} if key == "license" else {})
         element.text = value
     if repository is not None:
