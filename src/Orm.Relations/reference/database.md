@@ -26,7 +26,7 @@ NativeWeave.Database.BulkAtomicity.PerBatch = 1
 NativeWeave.Database.DatabaseProvider.PostgreSql = 0
 ```
 
-**summary:** The SQLx PostgreSQL provider.
+**summary:** The libpq PostgreSQL provider.
 
 ## `F:NativeWeave.Database.DatabaseProvider.Sqlite`
 
@@ -34,7 +34,7 @@ NativeWeave.Database.DatabaseProvider.PostgreSql = 0
 NativeWeave.Database.DatabaseProvider.Sqlite = 1
 ```
 
-**summary:** The serialized SQLx SQLite provider.
+**summary:** The serialized sqlite3 provider.
 
 ## `F:NativeWeave.Database.MigrationTransactionMode.NonTransactional`
 
@@ -206,7 +206,7 @@ NativeWeave.Query.SetOperation.Except = 3
 
 **inheritdoc:**
 
-**Inherited type policy:** Operands must have the same source, field order, aliases, codecs and nullability. Rust snapshots the right operand; SQL duplicate and NULL semantics apply.
+**Inherited type policy:** Operands must have the same source, field order, aliases, codecs and nullability. The native engine snapshots the right operand; SQL duplicate and NULL semantics apply.
 
 ## `F:NativeWeave.Query.SetOperation.Intersect`
 
@@ -218,7 +218,7 @@ NativeWeave.Query.SetOperation.Intersect = 2
 
 **inheritdoc:**
 
-**Inherited type policy:** Operands must have the same source, field order, aliases, codecs and nullability. Rust snapshots the right operand; SQL duplicate and NULL semantics apply.
+**Inherited type policy:** Operands must have the same source, field order, aliases, codecs and nullability. The native engine snapshots the right operand; SQL duplicate and NULL semantics apply.
 
 ## `F:NativeWeave.Query.SetOperation.Union`
 
@@ -230,7 +230,7 @@ NativeWeave.Query.SetOperation.Union = 0
 
 **inheritdoc:**
 
-**Inherited type policy:** Operands must have the same source, field order, aliases, codecs and nullability. Rust snapshots the right operand; SQL duplicate and NULL semantics apply.
+**Inherited type policy:** Operands must have the same source, field order, aliases, codecs and nullability. The native engine snapshots the right operand; SQL duplicate and NULL semantics apply.
 
 ## `F:NativeWeave.Query.SetOperation.UnionAll`
 
@@ -242,7 +242,7 @@ NativeWeave.Query.SetOperation.UnionAll = 1
 
 **inheritdoc:**
 
-**Inherited type policy:** Operands must have the same source, field order, aliases, codecs and nullability. Rust snapshots the right operand; SQL duplicate and NULL semantics apply.
+**Inherited type policy:** Operands must have the same source, field order, aliases, codecs and nullability. The native engine snapshots the right operand; SQL duplicate and NULL semantics apply.
 
 ## `F:NativeWeave.Query.SortDirection.Ascending`
 
@@ -816,7 +816,7 @@ public System.Threading.Tasks.Task<TEntity?> NativeWeave.Database.DataSession.Fi
 public NativeWeave.Query.Query<TEntity> NativeWeave.Database.DataSession.From<TEntity>(NativeWeave.Data.Table<TEntity> table) where TEntity : class
 ```
 
-**summary:** Creates one mutable native SeaQuery arena bound to this session and exact static table.
+**summary:** Creates one mutable native query arena bound to this session and exact static table.
 
 **typeparam TEntity:** The statically described entity class.
 
@@ -1324,7 +1324,7 @@ public System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Nati
 public System.Threading.Tasks.Task<NativeWeave.Database.MigrationReport> NativeWeave.Database.DatabaseAdministration.MigrateAsync(NativeWeave.Database.MigrationBundle bundle, NativeWeave.Database.MigrationOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
 ```
 
-**summary:** Applies the selected forward migration range using SQLx and its persisted checksum ledger.
+**summary:** Applies the selected forward migration range using the native provider and the retained checksum ledger.
 
 **param bundle:** An immutable trusted bundle for this source's provider.
 
@@ -1590,7 +1590,7 @@ public NativeWeave.Database.MigrationBundle.MigrationBundle(NativeWeave.Database
 
 **remarks:** The input collection may be changed after return; this instance retains its own snapshot.
 
-**Inherited type policy:** Construction performs no native load or database I/O. Its SHA-256 identity covers the canonical kind12 provider and entry sequence before the hash field is added. Each entry separately contains SQL SHA-256; the native SQLx ledger retains SQLx's own SHA-384 checksum. Scripts must be trusted deployment artifacts.
+**Inherited type policy:** Construction performs no native load or database I/O. Its SHA-256 identity covers the canonical kind12 provider and entry sequence before the hash field is added. Each entry separately contains SQL SHA-256; the native ledger preserves the existing SQLx-compatible SHA-384 checksum. Scripts must be trusted deployment artifacts.
 
 ## `M:NativeWeave.Database.MigrationOptions.#ctor`
 
@@ -1784,9 +1784,9 @@ public NativeWeave.Database.MigrationStatus.MigrationStatus(long Version, string
 
 **param Description:** The immutable bundle description.
 
-**param Checksum:** The lowercase hexadecimal SQLx SHA-384 checksum, distinct from the bundle hash.
+**param Checksum:** The lowercase hexadecimal SQLx-compatible SHA-384 checksum, distinct from the bundle hash.
 
-**param Applied:** True only when the successful SQLx ledger contains this exact migration.
+**param Applied:** True only when the successful retained migration ledger contains this exact migration.
 
 **Inherited type policy:** This detached managed record owns its immutable strings. Native result buffers are released before the task returns; the source bounds aggregate record and UTF-8 byte costs.
 
@@ -4064,7 +4064,7 @@ public NativeWeave.Query.SetOperation.SetOperation()
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
-**Inherited type policy:** Operands must have the same source, field order, aliases, codecs and nullability. Rust snapshots the right operand; SQL duplicate and NULL semantics apply.
+**Inherited type policy:** Operands must have the same source, field order, aliases, codecs and nullability. The native engine snapshots the right operand; SQL duplicate and NULL semantics apply.
 
 ## `M:NativeWeave.Query.SortDirection.#ctor`
 
@@ -4102,7 +4102,7 @@ public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlArithmeti
 
 **exception:** Native capability, finite resource limits or provider execution rejects the operation.
 
-**Inherited type policy:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. Rust owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
+**Inherited type policy:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
 ## `M:NativeWeave.Query.SqlArithmeticExtensions.Add``1(NativeWeave.Query.SqlExpression{System.Nullable{``0}},``0)`
 
@@ -4130,7 +4130,7 @@ public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlArithmeti
 
 **exception:** Native capability, finite resource limits or provider execution rejects the operation.
 
-**Inherited type policy:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. Rust owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
+**Inherited type policy:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
 ## `M:NativeWeave.Query.SqlArithmeticExtensions.Add``1(NativeWeave.Query.SqlExpression{``0},NativeWeave.Query.SqlExpression{``0})`
 
@@ -4158,7 +4158,7 @@ public static NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlArithmetic
 
 **exception:** Native capability, finite resource limits or provider execution rejects the operation.
 
-**Inherited type policy:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. Rust owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
+**Inherited type policy:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
 ## `M:NativeWeave.Query.SqlArithmeticExtensions.Add``1(NativeWeave.Query.SqlExpression{``0},``0)`
 
@@ -4186,7 +4186,7 @@ public static NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlArithmetic
 
 **exception:** Native capability, finite resource limits or provider execution rejects the operation.
 
-**Inherited type policy:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. Rust owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
+**Inherited type policy:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
 ## `M:NativeWeave.Query.SqlArithmeticExtensions.Divide``1(NativeWeave.Query.SqlExpression{System.Nullable{``0}},NativeWeave.Query.SqlExpression{System.Nullable{``0}})`
 
@@ -4214,7 +4214,7 @@ public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlArithmeti
 
 **exception:** Native capability, finite resource limits or provider execution rejects the operation.
 
-**Inherited type policy:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. Rust owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
+**Inherited type policy:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
 ## `M:NativeWeave.Query.SqlArithmeticExtensions.Divide``1(NativeWeave.Query.SqlExpression{System.Nullable{``0}},``0)`
 
@@ -4242,7 +4242,7 @@ public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlArithmeti
 
 **exception:** Native capability, finite resource limits or provider execution rejects the operation.
 
-**Inherited type policy:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. Rust owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
+**Inherited type policy:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
 ## `M:NativeWeave.Query.SqlArithmeticExtensions.Divide``1(NativeWeave.Query.SqlExpression{``0},NativeWeave.Query.SqlExpression{``0})`
 
@@ -4270,7 +4270,7 @@ public static NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlArithmetic
 
 **exception:** Native capability, finite resource limits or provider execution rejects the operation.
 
-**Inherited type policy:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. Rust owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
+**Inherited type policy:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
 ## `M:NativeWeave.Query.SqlArithmeticExtensions.Divide``1(NativeWeave.Query.SqlExpression{``0},``0)`
 
@@ -4298,7 +4298,7 @@ public static NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlArithmetic
 
 **exception:** Native capability, finite resource limits or provider execution rejects the operation.
 
-**Inherited type policy:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. Rust owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
+**Inherited type policy:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
 ## `M:NativeWeave.Query.SqlArithmeticExtensions.Multiply``1(NativeWeave.Query.SqlExpression{System.Nullable{``0}},NativeWeave.Query.SqlExpression{System.Nullable{``0}})`
 
@@ -4326,7 +4326,7 @@ public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlArithmeti
 
 **exception:** Native capability, finite resource limits or provider execution rejects the operation.
 
-**Inherited type policy:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. Rust owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
+**Inherited type policy:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
 ## `M:NativeWeave.Query.SqlArithmeticExtensions.Multiply``1(NativeWeave.Query.SqlExpression{System.Nullable{``0}},``0)`
 
@@ -4354,7 +4354,7 @@ public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlArithmeti
 
 **exception:** Native capability, finite resource limits or provider execution rejects the operation.
 
-**Inherited type policy:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. Rust owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
+**Inherited type policy:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
 ## `M:NativeWeave.Query.SqlArithmeticExtensions.Multiply``1(NativeWeave.Query.SqlExpression{``0},NativeWeave.Query.SqlExpression{``0})`
 
@@ -4382,7 +4382,7 @@ public static NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlArithmetic
 
 **exception:** Native capability, finite resource limits or provider execution rejects the operation.
 
-**Inherited type policy:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. Rust owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
+**Inherited type policy:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
 ## `M:NativeWeave.Query.SqlArithmeticExtensions.Multiply``1(NativeWeave.Query.SqlExpression{``0},``0)`
 
@@ -4410,7 +4410,7 @@ public static NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlArithmetic
 
 **exception:** Native capability, finite resource limits or provider execution rejects the operation.
 
-**Inherited type policy:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. Rust owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
+**Inherited type policy:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
 ## `M:NativeWeave.Query.SqlArithmeticExtensions.Subtract``1(NativeWeave.Query.SqlExpression{System.Nullable{``0}},NativeWeave.Query.SqlExpression{System.Nullable{``0}})`
 
@@ -4438,7 +4438,7 @@ public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlArithmeti
 
 **exception:** Native capability, finite resource limits or provider execution rejects the operation.
 
-**Inherited type policy:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. Rust owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
+**Inherited type policy:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
 ## `M:NativeWeave.Query.SqlArithmeticExtensions.Subtract``1(NativeWeave.Query.SqlExpression{System.Nullable{``0}},``0)`
 
@@ -4466,7 +4466,7 @@ public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlArithmeti
 
 **exception:** Native capability, finite resource limits or provider execution rejects the operation.
 
-**Inherited type policy:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. Rust owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
+**Inherited type policy:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
 ## `M:NativeWeave.Query.SqlArithmeticExtensions.Subtract``1(NativeWeave.Query.SqlExpression{``0},NativeWeave.Query.SqlExpression{``0})`
 
@@ -4494,7 +4494,7 @@ public static NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlArithmetic
 
 **exception:** Native capability, finite resource limits or provider execution rejects the operation.
 
-**Inherited type policy:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. Rust owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
+**Inherited type policy:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
 ## `M:NativeWeave.Query.SqlArithmeticExtensions.Subtract``1(NativeWeave.Query.SqlExpression{``0},``0)`
 
@@ -4522,7 +4522,7 @@ public static NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlArithmetic
 
 **exception:** Native capability, finite resource limits or provider execution rejects the operation.
 
-**Inherited type policy:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. Rust owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
+**Inherited type policy:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
 ## `M:NativeWeave.Query.SqlExpression`1.#ctor`
 
@@ -6746,7 +6746,7 @@ public string NativeWeave.Database.MigrationBundle.ContentHash { get; }
 
 **summary:** Gets the lowercase SHA-256 of the canonical provider and immutable entry sequence.
 
-**Inherited type policy:** Construction performs no native load or database I/O. Its SHA-256 identity covers the canonical kind12 provider and entry sequence before the hash field is added. Each entry separately contains SQL SHA-256; the native SQLx ledger retains SQLx's own SHA-384 checksum. Scripts must be trusted deployment artifacts.
+**Inherited type policy:** Construction performs no native load or database I/O. Its SHA-256 identity covers the canonical kind12 provider and entry sequence before the hash field is added. Each entry separately contains SQL SHA-256; the native ledger preserves the existing SQLx-compatible SHA-384 checksum. Scripts must be trusted deployment artifacts.
 
 ## `P:NativeWeave.Database.MigrationOptions.AllowNonTransactional`
 
@@ -6818,7 +6818,7 @@ public long? NativeWeave.Database.MigrationReport.CurrentVersion { get; init; }
 public bool NativeWeave.Database.MigrationStatus.Applied { get; init; }
 ```
 
-**summary:** True only when the successful SQLx ledger contains this exact migration.
+**summary:** True only when the successful retained migration ledger contains this exact migration.
 
 **Inherited type policy:** This detached managed record owns its immutable strings. Native result buffers are released before the task returns; the source bounds aggregate record and UTF-8 byte costs.
 
@@ -6828,7 +6828,7 @@ public bool NativeWeave.Database.MigrationStatus.Applied { get; init; }
 public string NativeWeave.Database.MigrationStatus.Checksum { get; init; }
 ```
 
-**summary:** The lowercase hexadecimal SQLx SHA-384 checksum, distinct from the bundle hash.
+**summary:** The lowercase hexadecimal SQLx-compatible SHA-384 checksum, distinct from the bundle hash.
 
 **Inherited type policy:** This detached managed record owns its immutable strings. Native result buffers are released before the task returns; the source bounds aggregate record and UTF-8 byte costs.
 
@@ -7024,7 +7024,7 @@ public sealed class NativeWeave.Database.DataSession : System.IDisposable, Syste
 public sealed class NativeWeave.Database.DataSource : System.IDisposable, System.IAsyncDisposable
 ```
 
-**summary:** Owns one lazy Rust pool, bounded runtime and source-generation metadata registry.
+**summary:** Owns one lazy C++ connection pool, bounded runtime and source-generation metadata registry.
 
 **remarks:** Sources support concurrent independent session opens. Closing rejects new work and retains every admitted native operation until real retirement. Dispose requests cleanup; DisposeAsync joins local safety.
 
@@ -7074,7 +7074,7 @@ public sealed record class NativeWeave.Database.DatabaseLimits : System.IEquatab
 public enum NativeWeave.Database.DatabaseProvider : int
 ```
 
-**summary:** The selected independently packaged Rust database provider.
+**summary:** The selected independently packaged C++ database provider.
 
 ## `T:NativeWeave.Database.Migration`
 
@@ -7102,7 +7102,7 @@ public sealed class NativeWeave.Database.MigrationBundle
 
 **summary:** Snapshots a strictly ordered, provider-bound set of explicit SQL scripts.
 
-**remarks:** Construction performs no native load or database I/O. Its SHA-256 identity covers the canonical kind12 provider and entry sequence before the hash field is added. Each entry separately contains SQL SHA-256; the native SQLx ledger retains SQLx's own SHA-384 checksum. Scripts must be trusted deployment artifacts.
+**remarks:** Construction performs no native load or database I/O. Its SHA-256 identity covers the canonical kind12 provider and entry sequence before the hash field is added. Each entry separately contains SQL SHA-256; the native ledger preserves the existing SQLx-compatible SHA-384 checksum. Scripts must be trusted deployment artifacts.
 
 ## `T:NativeWeave.Database.MigrationOptions`
 
@@ -7144,9 +7144,9 @@ public sealed record class NativeWeave.Database.MigrationStatus : System.IEquata
 
 **param Description:** The immutable bundle description.
 
-**param Checksum:** The lowercase hexadecimal SQLx SHA-384 checksum, distinct from the bundle hash.
+**param Checksum:** The lowercase hexadecimal SQLx-compatible SHA-384 checksum, distinct from the bundle hash.
 
-**param Applied:** True only when the successful SQLx ledger contains this exact migration.
+**param Applied:** True only when the successful retained migration ledger contains this exact migration.
 
 ## `T:NativeWeave.Database.MigrationTransactionMode`
 
@@ -7154,7 +7154,7 @@ public sealed record class NativeWeave.Database.MigrationStatus : System.IEquata
 public enum NativeWeave.Database.MigrationTransactionMode : int
 ```
 
-**summary:** Selects SQLx transactional execution or explicitly resumable PostgreSQL execution.
+**summary:** Selects native transactional execution or explicitly resumable PostgreSQL execution.
 
 ## `T:NativeWeave.Database.SchemaColumn`
 
@@ -7346,7 +7346,7 @@ public readonly struct NativeWeave.Query.QuerySelection<T>
 public sealed class NativeWeave.Query.Query<TEntity> : System.IDisposable where TEntity : class
 ```
 
-**summary:** One mutable, source-bound native SeaQuery arena with a strongly typed application facade.
+**summary:** One mutable, source-bound native query arena with a strongly typed application facade.
 
 **typeparam TEntity:** The explicitly described root entity class.
 
@@ -7370,7 +7370,7 @@ public enum NativeWeave.Query.SetOperation : int
 
 **summary:** Native SQL set operation with exact compatible projection types.
 
-**remarks:** Operands must have the same source, field order, aliases, codecs and nullability. Rust snapshots the right operand; SQL duplicate and NULL semantics apply.
+**remarks:** Operands must have the same source, field order, aliases, codecs and nullability. The native engine snapshots the right operand; SQL duplicate and NULL semantics apply.
 
 ## `T:NativeWeave.Query.SortDirection`
 
@@ -7390,7 +7390,7 @@ public static class NativeWeave.Query.SqlArithmeticExtensions
 
 **summary:** Statically numeric native SQL arithmetic; overflow, precision and division remain provider semantics.
 
-**remarks:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. Rust owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
+**remarks:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
 ## `T:NativeWeave.Query.SqlExpression`1`
 

@@ -23,7 +23,7 @@ public NativeWeave.Data.WeaveTableAttribute.WeaveTableAttribute(System.String na
 
 Declares the exact store table name.
 
-The generator reads source symbols and emits the same TableBuilder calls as manual metadata. It never opens a database, loads a native module, runs Cargo or discovers runtime model types.
+The generator reads source symbols and emits the same TableBuilder calls as manual metadata. It never opens a database, loads a native module, compiles native code or discovers runtime model types.
 
 - **name**: A nonempty table identifier; casing is preserved.
 - **T:System.ArgumentException**: The name is empty or whitespace.
@@ -47,7 +47,7 @@ public System.String? NativeWeave.Data.WeaveTableAttribute.DescriptorName | gett
 
 Gets or initializes the generated static descriptor class name; default is EntityNameMapping.
 
-The generator reads source symbols and emits the same TableBuilder calls as manual metadata. It never opens a database, loads a native module, runs Cargo or discovers runtime model types.
+The generator reads source symbols and emits the same TableBuilder calls as manual metadata. It never opens a database, loads a native module, compiles native code or discovers runtime model types.
 
 
 ## `P:NativeWeave.Data.WeaveTableAttribute.Schema`
@@ -58,7 +58,7 @@ public System.String? NativeWeave.Data.WeaveTableAttribute.Schema | getter=Publi
 
 Gets or initializes the optional exact schema name.
 
-The generator reads source symbols and emits the same TableBuilder calls as manual metadata. It never opens a database, loads a native module, runs Cargo or discovers runtime model types.
+The generator reads source symbols and emits the same TableBuilder calls as manual metadata. It never opens a database, loads a native module, compiles native code or discovers runtime model types.
 
 
 ## `T:NativeWeave.Data.WeaveColumnAttribute`
@@ -102,7 +102,7 @@ NativeWeave.Data.WeaveTableAttribute | kind=Class;static=False;sealed=True;abstr
 
 Opts a model into deterministic, static table and DTO mapping generation.
 
-The generator reads source symbols and emits the same TableBuilder calls as manual metadata. It never opens a database, loads a native module, runs Cargo or discovers runtime model types.
+The generator reads source symbols and emits the same TableBuilder calls as manual metadata. It never opens a database, loads a native module, compiles native code or discovers runtime model types.
 
 
 ## `T:NativeWeave.Data.WeaveVersionAttribute`

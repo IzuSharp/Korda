@@ -898,7 +898,7 @@ public static NativeWeave.Data.SqlCommand NativeWeave.Data.SqlCommand.Create(str
 
 **exception:** The kind or timeout is invalid.
 
-**Inherited type policy:** This type does not parse SQL, choose dialects, prove safety or contact a provider. Rust transports placeholders and validates actual capability/effect policy before dispatch. Interpolated convenience has boxing costs.
+**Inherited type policy:** This type does not parse SQL, choose dialects, prove safety or contact a provider. The native engine transports placeholders and validates actual capability/effect policy before dispatch. Interpolated convenience has boxing costs.
 
 ## `M:NativeWeave.Data.SqlCommand.Parameterized(System.FormattableString,NativeWeave.Data.SqlCommandKind,System.Nullable{System.TimeSpan})`
 
@@ -914,7 +914,7 @@ public static NativeWeave.Data.SqlCommand NativeWeave.Data.SqlCommand.Parameteri
 
 **param timeout:** A nonnegative finite timeout, or the source's configured default; zero expires before dispatch.
 
-**returns:** An immutable template whose value holes will be bound by Rust.
+**returns:** An immutable template whose value holes will be bound by the native engine.
 
 **exception:** is null.
 
@@ -922,7 +922,7 @@ public static NativeWeave.Data.SqlCommand NativeWeave.Data.SqlCommand.Parameteri
 
 **exception:** The kind or timeout is invalid.
 
-**Inherited type policy:** This type does not parse SQL, choose dialects, prove safety or contact a provider. Rust transports placeholders and validates actual capability/effect policy before dispatch. Interpolated convenience has boxing costs.
+**Inherited type policy:** This type does not parse SQL, choose dialects, prove safety or contact a provider. The native engine transports placeholders and validates actual capability/effect policy before dispatch. Interpolated convenience has boxing costs.
 
 ## `M:NativeWeave.Data.SqlCommandKind.#ctor`
 
@@ -1126,7 +1126,7 @@ public NativeWeave.Data.WeaveTableAttribute.WeaveTableAttribute(string name)
 
 **inheritdoc:**
 
-**Inherited type policy:** The generator reads source symbols and emits the same TableBuilder calls as manual metadata. It never opens a database, loads a native module, runs Cargo or discovers runtime model types.
+**Inherited type policy:** The generator reads source symbols and emits the same TableBuilder calls as manual metadata. It never opens a database, loads a native module, compiles native code or discovers runtime model types.
 
 ## `M:NativeWeave.Data.WeaveVersionAttribute.#ctor`
 
@@ -1584,7 +1584,7 @@ public string? NativeWeave.Data.WeaveTableAttribute.DescriptorName { get; init; 
 
 **inheritdoc:**
 
-**Inherited type policy:** The generator reads source symbols and emits the same TableBuilder calls as manual metadata. It never opens a database, loads a native module, runs Cargo or discovers runtime model types.
+**Inherited type policy:** The generator reads source symbols and emits the same TableBuilder calls as manual metadata. It never opens a database, loads a native module, compiles native code or discovers runtime model types.
 
 ## `P:NativeWeave.Data.WeaveTableAttribute.Schema`
 
@@ -1596,7 +1596,7 @@ public string? NativeWeave.Data.WeaveTableAttribute.Schema { get; init; }
 
 **inheritdoc:**
 
-**Inherited type policy:** The generator reads source symbols and emits the same TableBuilder calls as manual metadata. It never opens a database, loads a native module, runs Cargo or discovers runtime model types.
+**Inherited type policy:** The generator reads source symbols and emits the same TableBuilder calls as manual metadata. It never opens a database, loads a native module, compiles native code or discovers runtime model types.
 
 ## `T:NativeWeave.Data.Changes`1`
 
@@ -1814,7 +1814,7 @@ public sealed class NativeWeave.Data.SqlCommand
 
 **summary:** An immutable, shareable trusted SQL template and owned typed parameter snapshot.
 
-**remarks:** This type does not parse SQL, choose dialects, prove safety or contact a provider. Rust transports placeholders and validates actual capability/effect policy before dispatch. Interpolated convenience has boxing costs.
+**remarks:** This type does not parse SQL, choose dialects, prove safety or contact a provider. The native engine transports placeholders and validates actual capability/effect policy before dispatch. Interpolated convenience has boxing costs.
 
 ## `T:NativeWeave.Data.SqlCommandKind`
 
@@ -1912,7 +1912,7 @@ public sealed class NativeWeave.Data.WeaveTableAttribute : System.Attribute
 
 **summary:** Opts a model into deterministic, static table and DTO mapping generation.
 
-**remarks:** The generator reads source symbols and emits the same TableBuilder calls as manual metadata. It never opens a database, loads a native module, runs Cargo or discovers runtime model types.
+**remarks:** The generator reads source symbols and emits the same TableBuilder calls as manual metadata. It never opens a database, loads a native module, compiles native code or discovers runtime model types.
 
 ## `T:NativeWeave.Data.WeaveVersionAttribute`
 
