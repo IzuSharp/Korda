@@ -19,13 +19,7 @@ dotnet add package NativeWeave.Database.Sqlite --prerelease
 dotnet add package NativeWeave.Database.PostgreSql --prerelease
 ```
 
-| Selection | Public provider package | Independent native leaf |
-| --- | --- | --- |
-| SQLite | [NativeWeave.Database.Sqlite](https://www.nuget.org/packages/NativeWeave.Database.Sqlite) | NativeWeave.Database.Sqlite.Native |
-| PostgreSQL | [NativeWeave.Database.PostgreSql](https://www.nuget.org/packages/NativeWeave.Database.PostgreSql) | NativeWeave.Database.PostgreSql.Native |
-| Both | Both provider packages | Exactly the two database native leaves |
-
-The database package graph has twelve NativeWeave package IDs, including shared Core, ABI, Data, transaction/streaming and query components. A provider-only application does not restore the other provider's native package. The existing optional database dependency-injection source project is retained separately; this batch does not introduce a new package feature.
+Each provider includes the shared ORM assemblies, query generator, MSBuild validation and its Linux x64 native library. Applications using both databases can reference both providers. The twelve-component graph is retained for internal compatibility tests.
 
 See [getting started](docs/getting-started.md), the [package guide](docs/guides/packaging-domain.md), and the [API index](docs/api-reference.md).
 
@@ -60,4 +54,4 @@ After a pull request merges into `main`, [CI](https://github.com/IzuSharp/Native
 - [Current product design](https://github.com/IzuSharp/NativeWeave-Design/blob/main/docs/database/current-product.md)
 - [Plan and acceptance](https://github.com/IzuSharp/Plan)
 
-The existing [MIT license](LICENSE) is unchanged. Candidate native leaves include their actual dependency license inventory and notices; see [third-party notices](THIRD_PARTY_NOTICES.md).
+The existing [MIT license](LICENSE) is unchanged. Both public packages include their actual dependency license inventory and notices; see [third-party notices](THIRD_PARTY_NOTICES.md).

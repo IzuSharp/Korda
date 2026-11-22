@@ -6,6 +6,85 @@ add_library(nw_interop_support STATIC
   "${PROJECT_SOURCE_DIR}/native/cpp/src/interop.cpp")
 target_link_libraries(nw_interop_support PUBLIC nw_project_options)
 
+function(nw_fixture name source)
+  add_library(${name} SHARED "fixtures/${source}")
+  target_link_libraries(${name} PRIVATE nw_interop_support)
+  set_target_properties(${name} PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${NW_FIXTURE_OUTPUT}" RUNTIME_OUTPUT_DIRECTORY "${NW_FIXTURE_OUTPUT}")
+  if(UNIX AND NOT APPLE)
+    target_link_options(${name} PRIVATE "LINKER:--exclude-libs,ALL"
+      "LINKER:--version-script=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/exports.map")
+    if(NOT NW_SANITIZERS)
+      target_link_options(${name} PRIVATE "LINKER:--no-undefined")
+    endif()
+  endif()
+endfunction()
+
+if(NW_BUILD_SQLITE)
+  nw_fixture(nativeweave_sqlite_fixture sqlite.cpp)
+  target_sources(nativeweave_sqlite_fixture PRIVATE
+    "${PROJECT_SOURCE_DIR}/native/cpp/src/query.cpp"
+    "${PROJECT_SOURCE_DIR}/native/cpp/src/mutations.cpp"
+    "${PROJECT_SOURCE_DIR}/native/cpp/src/scalar.cpp"
+    "${PROJECT_SOURCE_DIR}/native/cpp/src/provider.cpp"
+    "${PROJECT_SOURCE_DIR}/native/cpp/src/host.cpp"
+    "${PROJECT_SOURCE_DIR}/native/cpp/src/administration.cpp")
+  target_compile_definitions(nativeweave_sqlite_fixture PRIVATE NW_HOST_TEST_HOOKS=1 NW_ENABLE_SQLITE=1 NW_ENABLE_POSTGRES=0)
+  target_link_libraries(nativeweave_sqlite_fixture PRIVATE nw_sqlite_engine)
+  add_executable(nw_sqlite_fixture_tests sqlite_fixture_tests.cpp)
+  target_link_libraries(nw_sqlite_fixture_tests PRIVATE nw_project_options nativeweave_sqlite_fixture)
+  set_target_properties(nw_sqlite_fixture_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${NW_TEST_OUTPUT}")
+  add_test(NAME native.sqlite14 COMMAND nw_sqlite_fixture_tests)
+  set_tests_properties(native.sqlite14 PROPERTIES TIMEOUT 120 LABELS "native;contract;provider")
+endif()
+if(NW_BUILD_POSTGRESQL)
+  add_library(nw_host_test_support STATIC
+    "${PROJECT_SOURCE_DIR}/native/cpp/src/contracts.cpp"
+    "${PROJECT_SOURCE_DIR}/native/cpp/src/interop.cpp"
+    "${PROJECT_SOURCE_DIR}/native/cpp/src/query.cpp"
+    "${PROJECT_SOURCE_DIR}/native/cpp/src/mutations.cpp"
+    "${PROJECT_SOURCE_DIR}/native/cpp/src/scalar.cpp"
+    "${PROJECT_SOURCE_DIR}/native/cpp/src/provider.cpp"
+    "${PROJECT_SOURCE_DIR}/native/cpp/src/host.cpp"
+    "${PROJECT_SOURCE_DIR}/native/cpp/src/administration.cpp")
+  target_link_libraries(nw_host_test_support PUBLIC nw_project_options
+    "${NW_LIBPQ_STATIC}" "${NW_PGCOMMON_SHARED_STATIC}" "${NW_PGPORT_SHARED_STATIC}"
+    OpenSSL::SSL ZLIB::ZLIB ${CMAKE_DL_LIBS})
+  target_include_directories(nw_host_test_support SYSTEM PRIVATE ${PostgreSQL_INCLUDE_DIRS})
+  if(NW_BUILD_SQLITE)
+    target_link_libraries(nw_host_test_support PUBLIC nw_sqlite_engine)
+  endif()
+  target_compile_definitions(nw_host_test_support PUBLIC NW_ENABLE_SQLITE=$<BOOL:${NW_BUILD_SQLITE}> NW_ENABLE_POSTGRES=1 NW_HOST_TEST_HOOKS=1)
+
+  function(nw_host_fixture name source)
+    add_library(${name} SHARED "fixtures/${source}")
+    target_link_libraries(${name} PRIVATE nw_host_test_support)
+    set_target_properties(${name} PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${NW_FIXTURE_OUTPUT}" RUNTIME_OUTPUT_DIRECTORY "${NW_FIXTURE_OUTPUT}")
+    if(UNIX AND NOT APPLE)
+      target_link_options(${name} PRIVATE "LINKER:--exclude-libs,ALL"
+        "LINKER:--version-script=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/exports.map")
+      if(NOT NW_SANITIZERS)
+        target_link_options(${name} PRIVATE "LINKER:--no-undefined")
+      endif()
+    endif()
+  endfunction()
+  nw_host_fixture(nativeweave_postgres_fixture postgres.cpp)
+  nw_fixture(nativeweave_data_postgres postgres_component.cpp)
+  add_executable(nw_postgres_fixture_tests postgres_fixture_tests.cpp)
+  target_link_libraries(nw_postgres_fixture_tests PRIVATE nw_project_options nativeweave_postgres_fixture)
+  set_target_properties(nw_postgres_fixture_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${NW_TEST_OUTPUT}")
+endif()
+if(NOT (NW_BUILD_SQLITE AND NW_BUILD_POSTGRESQL))
+  add_executable(nw_selected_abi database_abi.c)
+  if(NW_BUILD_SQLITE)
+    target_link_libraries(nw_selected_abi PRIVATE nw_project_options nw_database_sqlite)
+  else()
+    target_link_libraries(nw_selected_abi PRIVATE nw_project_options nw_database_postgresql)
+  endif()
+  target_compile_options(nw_selected_abi PRIVATE $<IF:$<C_COMPILER_ID:MSVC>,/UNDEBUG,-UNDEBUG>)
+  add_test(NAME native.selected.abi COMMAND nw_selected_abi)
+  return()
+endif()
+
 function(nw_native_test name source)
   add_executable(nw_${name}_tests "${source}")
   target_link_libraries(nw_${name}_tests PRIVATE nw_interop_support)
@@ -53,19 +132,6 @@ add_test(NAME native.host_review COMMAND nw_host_review_tests)
 set_tests_properties(native.interop native.contracts native.query native.scalar native.execution native.administration native.provider native.host_review
   PROPERTIES TIMEOUT 60 LABELS "native;contract")
 
-function(nw_fixture name source)
-  add_library(${name} SHARED "fixtures/${source}")
-  target_link_libraries(${name} PRIVATE nw_interop_support)
-  set_target_properties(${name} PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${NW_FIXTURE_OUTPUT}" RUNTIME_OUTPUT_DIRECTORY "${NW_FIXTURE_OUTPUT}")
-  if(UNIX AND NOT APPLE)
-    target_link_options(${name} PRIVATE "LINKER:--exclude-libs,ALL"
-      "LINKER:--version-script=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/exports.map")
-    if(NOT NW_SANITIZERS)
-      target_link_options(${name} PRIVATE "LINKER:--no-undefined")
-    endif()
-  endif()
-endfunction()
-
 nw_fixture(nw_abi_conformance abi.cpp)
 nw_fixture(nativeweave_interop_lifetime lifetime.cpp)
 nw_fixture(nativeweave_interop_memory memory.cpp)
@@ -87,37 +153,8 @@ nw_fixture(nw_execution_downstream execution_downstream.cpp)
 
 # Fault seams exist only in the retained B05/B06 maintainer bridges. The three
 # product Host targets never receive NW_HOST_TEST_HOOKS.
-add_library(nw_host_test_support STATIC
-  "${PROJECT_SOURCE_DIR}/native/cpp/src/contracts.cpp"
-  "${PROJECT_SOURCE_DIR}/native/cpp/src/interop.cpp"
-  "${PROJECT_SOURCE_DIR}/native/cpp/src/query.cpp"
-  "${PROJECT_SOURCE_DIR}/native/cpp/src/mutations.cpp"
-  "${PROJECT_SOURCE_DIR}/native/cpp/src/scalar.cpp"
-  "${PROJECT_SOURCE_DIR}/native/cpp/src/provider.cpp"
-  "${PROJECT_SOURCE_DIR}/native/cpp/src/host.cpp"
-  "${PROJECT_SOURCE_DIR}/native/cpp/src/administration.cpp")
-target_link_libraries(nw_host_test_support PUBLIC nw_project_options nw_sqlite_engine
-  "${NW_LIBPQ_STATIC}" "${NW_PGCOMMON_SHARED_STATIC}" "${NW_PGPORT_SHARED_STATIC}"
-  OpenSSL::SSL ZLIB::ZLIB ${CMAKE_DL_LIBS})
-target_include_directories(nw_host_test_support SYSTEM PRIVATE ${PostgreSQL_INCLUDE_DIRS})
-target_compile_definitions(nw_host_test_support PUBLIC NW_ENABLE_SQLITE=1 NW_ENABLE_POSTGRES=1 NW_HOST_TEST_HOOKS=1)
-
-function(nw_host_fixture name source)
-  add_library(${name} SHARED "fixtures/${source}")
-  target_link_libraries(${name} PRIVATE nw_host_test_support)
-  set_target_properties(${name} PROPERTIES LIBRARY_OUTPUT_DIRECTORY "${NW_FIXTURE_OUTPUT}" RUNTIME_OUTPUT_DIRECTORY "${NW_FIXTURE_OUTPUT}")
-  if(UNIX AND NOT APPLE)
-    target_link_options(${name} PRIVATE "LINKER:--exclude-libs,ALL"
-      "LINKER:--version-script=${CMAKE_CURRENT_SOURCE_DIR}/fixtures/exports.map")
-    if(NOT NW_SANITIZERS)
-      target_link_options(${name} PRIVATE "LINKER:--no-undefined")
-    endif()
-  endif()
-endfunction()
 nw_host_fixture(nativeweave_transactions_fixture transactions.cpp)
 nw_host_fixture(nativeweave_streaming_fixture streaming.cpp)
-nw_host_fixture(nativeweave_postgres_fixture postgres.cpp)
-nw_fixture(nativeweave_data_postgres postgres_component.cpp)
 foreach(component IN ITEMS transaction streaming)
   add_executable(nw_${component}_tests ${component}_tests.cpp)
   target_link_libraries(nw_${component}_tests PRIVATE nw_host_test_support)
@@ -132,26 +169,6 @@ set_target_properties(nw_codec_roundtrip PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${
 add_executable(nw_postgres_sync_tests postgres_sync_tests.cpp)
 target_link_libraries(nw_postgres_sync_tests PRIVATE nw_host_test_support)
 set_target_properties(nw_postgres_sync_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${NW_TEST_OUTPUT}")
-add_executable(nw_postgres_fixture_tests postgres_fixture_tests.cpp)
-target_link_libraries(nw_postgres_fixture_tests PRIVATE nw_project_options nativeweave_postgres_fixture)
-set_target_properties(nw_postgres_fixture_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${NW_TEST_OUTPUT}")
-
-nw_fixture(nativeweave_sqlite_fixture sqlite.cpp)
-target_sources(nativeweave_sqlite_fixture PRIVATE
-  "${PROJECT_SOURCE_DIR}/native/cpp/src/query.cpp"
-  "${PROJECT_SOURCE_DIR}/native/cpp/src/mutations.cpp"
-  "${PROJECT_SOURCE_DIR}/native/cpp/src/scalar.cpp"
-  "${PROJECT_SOURCE_DIR}/native/cpp/src/provider.cpp"
-  "${PROJECT_SOURCE_DIR}/native/cpp/src/host.cpp"
-  "${PROJECT_SOURCE_DIR}/native/cpp/src/administration.cpp")
-target_compile_definitions(nativeweave_sqlite_fixture PRIVATE NW_HOST_TEST_HOOKS=1 NW_ENABLE_SQLITE=1 NW_ENABLE_POSTGRES=0)
-target_link_libraries(nativeweave_sqlite_fixture PRIVATE nw_sqlite_engine)
-add_executable(nw_sqlite_fixture_tests sqlite_fixture_tests.cpp)
-target_link_libraries(nw_sqlite_fixture_tests PRIVATE nw_project_options nativeweave_sqlite_fixture)
-set_target_properties(nw_sqlite_fixture_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${NW_TEST_OUTPUT}")
-add_test(NAME native.sqlite14 COMMAND nw_sqlite_fixture_tests)
-set_tests_properties(native.sqlite14 PROPERTIES TIMEOUT 120 LABELS "native;contract;provider")
-
 set(NW_NEGOTIATION_VARIANTS alpha beta minor_zero future_size bad_major bad_size bad_pointer bad_reserved bad_pending bad_unknown)
 foreach(variant IN LISTS NW_NEGOTIATION_VARIANTS)
   nw_fixture(nw_a02_${variant} negotiation.cpp)

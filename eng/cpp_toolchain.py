@@ -39,11 +39,11 @@ def download(url, checksum, path):
     return path
 
 
-def sources(output):
+def sources(output, providers=('sqlite', 'postgresql')):
     """Bind archives and every consumed header/amalgamation, including cache reuse."""
     result = {}
     for item in json.loads(LOCK.read_text())['dependencies']:
-        if item['name'] == 'libpq':
+        if item['name'] == 'libpq' or not set(providers).intersection(item['providers']):
             continue  # Independently source-built by postgres-tools.sh.
         filename = 'nlohmann-json-3.12.0.tar.xz' if item['name'] == 'nlohmann-json' else 'sqlite-amalgamation-3510300.zip'
         archive = download(item['url'], item['archiveSha256'], output / 'downloads' / filename)

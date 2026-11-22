@@ -2,6 +2,20 @@
 
 DB-CPP-01 replaces the fixed Rust product at `465cd0f90e6af05ec50eb581156240377cf0825b`. The C# API, package IDs, provider split, `db-wire/1` payloads, ABI signatures and database persistence formats remain the compatibility boundary. Actual completion is recorded in the [migration report](https://github.com/IzuSharp/Plan/blob/main/ledger/evidence/batches/DB-CPP-01/migration-report-linux.md); this guide alone is not a test receipt.
 
+## Linux developer build
+
+Install Python 3.11+, curl, tar/zstd, native build prerequisites and OpenSSL/zlib development headers. PostgreSQL also needs Make, pkg-config, Bison and Flex. Run `python3 eng/cpp_toolchain.py` once to install or verify the locked Clang, CMake and Ninja under the checkout; source `artifacts/toolchain/environment.sh` or select that CMake executable in the IDE. With sccache on PATH, the project enables its C/C++ launchers automatically.
+
+Choose `linux-x64-release` for both databases and tests (the defaults), `linux-x64-sqlite` or `linux-x64-postgresql` for one, or `linux-x64-asan-ubsan` for instrumentation. Configure, build and test using the same preset:
+
+```sh
+cmake --preset linux-x64-sqlite
+cmake --build --preset linux-x64-sqlite
+ctest --preset linux-x64-sqlite
+```
+
+Linux PostgreSQL configuration prepares a project-private, patched client automatically. SQLite-only configuration skips this step. Full fault tests use `bash eng/postgres-tools.sh` to install the server and tools as well. Both paths validate compiler and archive hashes. Cache keys cover compiler, libraries, profile and build recipe. Increase the cache revision in `eng/postgres-cache-key.py` when forcing a refresh.
+
 ## Runtime ownership and source map
 
 | Existing responsibility | Current maintained implementation |

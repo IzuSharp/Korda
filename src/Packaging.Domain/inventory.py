@@ -16,10 +16,10 @@ def verified_record(record):
     return path
 
 
-def collect(build_manifest_path):
+def collect(build_manifest_path, provider=None):
     build = json.loads(Path(build_manifest_path).read_text())
     if (build.get('schemaVersion'), build.get('task'), build.get('rid'), build.get('target'),
-        build.get('sourceDirty'), build.get('preset')) != (2, 'DB-CPP-01', RID, 'x86_64-unknown-linux-gnu', False, 'linux-x64-release'):
+        build.get('sourceDirty'), build.get('preset')) != (2, 'DB-CPP-01', RID, 'x86_64-unknown-linux-gnu', False, 'linux-x64-' + (provider or 'release')):
         raise ValueError('Exact clean C++ Linux Release producer evidence is required')
     if not re.fullmatch(r'[0-9a-f]{40}', build.get('sourceCommit', '')):
         raise ValueError('Native source commit is missing')
@@ -59,6 +59,8 @@ def collect(build_manifest_path):
             if build['tools'].get(name, {}).get('sha256') != expected:
                 raise ValueError('Toolchain executable is not pinned: ' + name)
     for item in lock['dependencies']:
+        if provider and provider not in item['providers']:
+            continue
         if item['name'] == 'libpq':
             if build['postgres']['version'] != item['version'] or 'clang' not in build['postgres']['compiler']:
                 raise ValueError('libpq source/compiler version mismatch')
@@ -73,7 +75,7 @@ def collect(build_manifest_path):
     exports = [re.search(r'\b(nw_db_\w+_v1)\(', item).group(1) for item in signatures]
     exports += ['nw_db_diagnostic_count_v1', 'nw_database_get_abi_v1']
     assets = {item['engineId']: item for item in build['assets']}
-    if set(assets) != set(ENGINES) or len(assets) != len(build['assets']):
+    if set(assets) != ({'database.' + provider} if provider else set(ENGINES)) or len(assets) != len(build['assets']):
         raise ValueError('Exactly the two selected database native artifacts are required')
     profile = module('domain_linux_profile', 'src/Packaging.Linux/linux_profile.py')
     result = {}

@@ -5,15 +5,12 @@ on:
       version:
         type: string
         default: 0.1.0-db-cpp.1
-      source-commit:
+      plan:
         type: string
-        default: ""
-      compare-rust-reference:
-        type: boolean
-        default: false
-    outputs:
+        required: true
       artifact:
-        value: ${{ jobs.build.outputs.artifact }}
+        type: string
+        required: true
 permissions:
   contents: read
   actions: read
@@ -24,7 +21,7 @@ jobs:
     timeout-minutes: 120
     services:
       postgres:
-        image: postgres:18.0@sha256:41fc5342eefba6cc2ccda736aaf034bbbb7c3df0fdb81516eba1ba33f360162c
+        image: ${{ (fromJSON(inputs.plan).scope != 'sqlite' || fromJSON(inputs.plan).packages[0] != null) && 'postgres:18.0@sha256:41fc5342eefba6cc2ccda736aaf034bbbb7c3df0fdb81516eba1ba33f360162c' || '' }}
         env:
           POSTGRES_USER: nativeweave
           POSTGRES_DB: postgres
@@ -34,8 +31,6 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U nativeweave -d postgres"
           --health-interval 5s --health-timeout 5s --health-retries 12
-    outputs:
-      artifact: nativeweave-database-linux-${{ github.run_id }}-${{ github.run_attempt }}
     env:
       CI: "true"
       DOTNET_NOLOGO: "true"
@@ -45,10 +40,15 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ inputs.source-commit || github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
+      - name: Materialize the PR plan
+        env:
+          PLAN: ${{ inputs.plan }}
+        run: mkdir -p artifacts && echo "$PLAN" > artifacts/plan.json
       - name: Read immutable historical database API signatures
+        if: fromJSON(inputs.plan).scope != 'pack'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: IzuSharp/NativeWeave-Design
@@ -56,6 +56,7 @@ jobs:
           path: artifacts/frozen-design
           persist-credentials: false
       - name: Read immutable historical Core API acceptance inputs
+        if: fromJSON(inputs.plan).scope == 'full'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: IzuSharp/Plan
@@ -63,6 +64,7 @@ jobs:
           path: artifacts/frozen-plan
           persist-credentials: false
       - name: Read fixed database-scope compatibility inputs
+        if: fromJSON(inputs.plan).scope == 'full'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: IzuSharp/NativeWeave-Design
@@ -73,38 +75,86 @@ jobs:
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           global-json-file: global.json
+          cache: true
+          cache-dependency-path: |
+            global.json
+            **/packages*.lock.json
+      - name: Restore pinned tool downloads
+        if: fromJSON(inputs.plan).scope != 'pack'
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          key: linux-x64-tools-${{ hashFiles('native/dependencies.lock.json') }}
+          path: |
+            artifacts/toolchain/downloads
+            artifacts/dependencies/downloads
       - name: Install native build prerequisites and pinned Clang tools
+        if: fromJSON(inputs.plan).scope != 'pack'
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends zstd zlib1g-dev libssl-dev qemu-user bison flex python3-cryptography
           python3 eng/cpp_toolchain.py
+          bash eng/ci/sccache.sh install
+      - name: Restore compiler objects
+        if: fromJSON(inputs.plan).scope != 'pack'
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25
+        with:
+          path: ~/.cache/sccache
+          key: sccache-linux-x64-v017-${{ hashFiles('native/dependencies.lock.json', 'CMakePresets.json') }}-${{ github.sha }}
+          restore-keys: |
+            sccache-linux-x64-v017-${{ hashFiles('native/dependencies.lock.json', 'CMakePresets.json') }}-
+      - id: pg
+        if: contains(fromJSON('["full","postgresql"]'), fromJSON(inputs.plan).scope)
+        run: echo "key=$(python3 eng/postgres-cache-key.py full)" >> "$GITHUB_OUTPUT"
+      - name: Restore exact PostgreSQL installation
+        if: steps.pg.outputs.key
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25
+        with:
+          key: postgres-full-ubuntu24-x64-${{ steps.pg.outputs.key }}
+          path: artifacts/postgres-tools/install
       - name: Prepare pinned PostgreSQL tools for real TLS and process fault oracles
+        if: steps.pg.outputs.key
         run: bash eng/postgres-tools.sh
       - name: Verify database workspaces, API, regressions and actual package JIT/AOT consumers
+        if: fromJSON(inputs.plan).scope == 'full'
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          COMPARE_RUST_REFERENCE: ${{ inputs.compare-rust-reference }}
+        run: python3 eng/build.py verify --version "$PACKAGE_VERSION"
+      - name: Run selected provider checks
+        if: contains(fromJSON('["sqlite","postgresql"]'), fromJSON(inputs.plan).scope)
+        env:
+          PROVIDER: ${{ fromJSON(inputs.plan).scope }}
         run: |
-          db_cpp_compare_args=()
-          if [ "$COMPARE_RUST_REFERENCE" = true ]; then db_cpp_compare_args+=(--compare-rust-reference); fi
-          python3 eng/build.py verify --version "$PACKAGE_VERSION" "${db_cpp_compare_args[@]}"
+          python3 eng/task07_native.py --output artifacts/provider-native --provider "$PROVIDER"
+          if [ "$PROVIDER" = sqlite ]; then
+            python3 tests/Data.Sqlite/verify.py --output artifacts/provider-tests --design artifacts/frozen-design --native-build artifacts/cmake/linux-x64-sqlite
+          else
+            python3 tests/Data.Postgres/verify.py --output artifacts/provider-tests --design-root artifacts/frozen-design --postgres-bin "$NW_POSTGRES_BIN" --native-build artifacts/cmake/linux-x64-postgresql
+          fi
+      - name: Run packaging regression checks
+        if: fromJSON(inputs.plan).scope == 'pack'
+        run: python3 -m unittest discover -s tests/Packaging.Linux -p test_profile.py -v
       - name: Reject generated source or dependency drift
         run: git diff --exit-code
       - name: Verify shared ASan and UBSan preset with leak detection enabled
+        if: fromJSON(inputs.plan).scope == 'full' && fromJSON(inputs.plan).deep
         run: bash eng/verify-cpp-sanitizers.sh
       - name: Verify retained cross-version compatibility and Core property/fuzz gates
+        if: fromJSON(inputs.plan).scope == 'full' && fromJSON(inputs.plan).deep
         run: |
           python3 tests/Verification.Compatibility/verify.py --evidence artifacts/cpp-compatibility --design-root artifacts/scope-design
           python3 tests/Verification.Interop/verify.py --output artifacts/cpp-interop-properties
       - name: Verify retained Core package closure and minimum CPU/runtime transfer
+        if: fromJSON(inputs.plan).scope == 'full' && fromJSON(inputs.plan).deep
         run: bash eng/verify-task04-linux.sh
       - name: Reject shared packaging source or dependency drift
         run: git diff --exit-code
       - name: Verify database release recovery, no-Rust SDK consumption and runtime-only transfer
+        if: fromJSON(inputs.plan).scope == 'full' && fromJSON(inputs.plan).deep
         run: bash eng/verify-task07-linux.sh
       - name: Reject database packaging source or dependency drift
         run: git diff --exit-code
       - name: Build and package C++ assets in a fresh Linux image without Rust
+        if: fromJSON(inputs.plan).scope == 'full' && fromJSON(inputs.plan).deep
         run: bash eng/verify-cpp-clean.sh
       - name: Restore runner ownership of exported database evidence
         if: always()
@@ -121,7 +171,7 @@ jobs:
             fi
           done
       - name: Retain verification logs and evidence
-        if: always()
+        if: always() && fromJSON(inputs.plan).scope == 'full'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: nativeweave-evidence-${{ github.run_id }}-${{ github.run_attempt }}
@@ -167,16 +217,26 @@ jobs:
             artifacts/db-scope/evidence/
           if-no-files-found: error
           retention-days: 14
-      - name: Retain the exact verified database candidate
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      - name: Compose and consume the public providers
+        if: fromJSON(inputs.plan).packages[0] != null || fromJSON(inputs.plan).scope == 'pack'
+        env:
+          SCOPE: ${{ fromJSON(inputs.plan).scope }}
+        run: |
+          args=()
+          case "$SCOPE" in
+            full) args+=(--components artifacts/db-scope/prepared/candidate) ;;
+            sqlite|postgresql) args+=(--native artifacts/provider-native/manifest.json) ;;
+          esac
+          python3 eng/ci/bundles.py --plan artifacts/plan.json --version "$PACKAGE_VERSION.2" "${args[@]}"
+          python3 eng/ci/consume.py artifacts/public/release.json artifacts/plan.json
+      - name: Compiler cache statistics
+        if: always() && fromJSON(inputs.plan).scope != 'pack'
+        run: bash eng/ci/sccache.sh stats
+      - name: Retain the exact PR-tested public candidates
+        if: fromJSON(inputs.plan).packages[0] != null
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: nativeweave-database-linux-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            artifacts/db-scope/prepared/candidate/feed/
-            artifacts/db-scope/prepared/manifest.json
-            artifacts/db-scope/prepared/candidate/release.json
-            artifacts/cpp-clean/prepared/candidate/feed/
-            artifacts/cpp-clean/prepared/manifest.json
-            artifacts/cpp-clean/prepared/candidate/release.json
+          name: ${{ inputs.artifact }}
+          path: artifacts/public/
           if-no-files-found: error
           retention-days: 14

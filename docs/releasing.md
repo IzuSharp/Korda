@@ -1,9 +1,9 @@
-# Database preview releases
+# Database previews
 
-A pull request runs the Linux package, database, Native AOT and security checks. After it merges, the main CI run builds once and calls `release.yml` after Verify succeeds. The publishing job uses the `nuget` environment and the existing NuGet trusted publisher. Direct pushes, PR builds and manual CI runs do not publish.
+Pull requests run the checks selected by `python3 eng/ci/impact.py BASE`. The file ownership map and tests live in `eng/ci/impact.py` and `tests/Tooling/test_impact.py`. The planner compares version-independent input hashes with nuget.org so that an unpublished change remains pending across subsequent merges. Check the CI summary for the reason a lane was selected.
 
-CI publishes the twelve IDs in the verified database dependency graph from that run's candidate feed. Package versions use `0.1.0-preview.<CI run number>` followed by the producer's existing suffix: `.1` for the seven shared packages and `.2` for the database facade, two providers and two native leaves. Applications install the provider; NuGet resolves its exact dependencies. Historical HelloWorld versions remain on nuget.org.
+The public package allowlist contains **NativeWeave.Database.Sqlite** and **NativeWeave.Database.PostgreSql**. Each package includes the shared managed assemblies, build integration, generator, third-party notices and its selected provider library. Internal component packages and HelloWorld receive no new public versions.
 
-The job checks each uploaded package against the candidate and verifies its NuGet repository signature. It polls for indexing every two minutes and runs the SQLite and PostgreSQL examples from nuget.org in JIT and Native AOT. If publication stops after some packages are pushed, rerun the failed job of the same CI run to reuse its original candidate. An existing version must match the verified payload.
+Each candidate uses `0.1.0-preview.<CI run number>.2`. The PR validates the Git integration tree and retains the exact tested files. On merge, CI looks up the successful same-repository PR run. A matching tree, package selection and artifact allow promotion; a stale, missing or external candidate requires a fresh main build. Direct pushes, manual runs and scheduled checks cannot publish. The trusted `release.yml` job checks the allowlist and hashes before authentication, polls nuget.org every two minutes, verifies signed payloads and runs consumers against the registry. Rerun a failed release job to reuse its immutable candidate.
 
-For a local candidate, run `python3 eng/build.py verify` with the [native build prerequisites](guides/cpp-native.md). The package feed is written to `artifacts/db-scope/prepared/candidate/feed`.
+Use `workflow_dispatch` for full Linux validation. Weekly CI runs the full compatibility, sanitizer, clean-image and recovery gates. The internal twelve-package feed remains available for historical compatibility work.
