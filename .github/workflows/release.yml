@@ -1,0 +1,164 @@
+name: Publish accepted database packages to NuGet
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/release.yml
+      - packaging/releases/DB-CPP-01-nuget.json
+      - eng/publish_nuget.py
+      - eng/verify_nuget_public.py
+      - tests/Packaging.Domain/test_nuget_publication.py
+      - tests/Packaging.Domain/test_nuget_public_consumer.py
+  push:
+    branches: [main]
+    paths:
+      - packaging/releases/DB-CPP-01-nuget.json
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: nuget-publication-db-cpp-01
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    name: Validate the accepted publication identity
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check the existing publication enable switch
+        env:
+          NUGET_PUBLISH_ENABLED: ${{ vars.NUGET_PUBLISH_ENABLED }}
+        run: |
+          printf 'Existing NuGet publication switch: %s\n' "$NUGET_PUBLISH_ENABLED"
+          test "$NUGET_PUBLISH_ENABLED" = true
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          global-json-file: global.json
+      - name: Check publication rejection controls
+        run: |
+          python3 tests/Packaging.Domain/test_nuget_publication.py
+          python3 tests/Packaging.Domain/test_nuget_public_consumer.py
+      - name: Verify the successful main build and exact original packages
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          python3 eng/publish_nuget.py preflight
+          --manifest packaging/releases/DB-CPP-01-nuget.json
+          --work-dir artifacts/nuget-publication
+
+  publish:
+    name: Publish to dekueon and verify public consumption
+    needs: preflight
+    if: >-
+      github.repository == 'IzuSharp/NativeWeave' &&
+      github.ref == 'refs/heads/main' &&
+      vars.NUGET_PUBLISH_ENABLED == 'true' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    environment: nuget
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
+    services:
+      postgres:
+        image: postgres:18.0@sha256:41fc5342eefba6cc2ccda736aaf034bbbb7c3df0fdb81516eba1ba33f360162c
+        env:
+          POSTGRES_USER: nativeweave
+          POSTGRES_DB: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - "127.0.0.1:5432:5432"
+        options: >-
+          --health-cmd "pg_isready -U nativeweave -d postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      DOTNET_NOLOGO: "true"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      NW_TEST_POSTGRES: postgresql://nativeweave@127.0.0.1:5432/postgres
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+        with:
+          global-json-file: global.json
+      - name: Install ordinary .NET Native AOT consumer prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang zlib1g-dev libssl-dev
+      - name: Revalidate the immutable publication source
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          python3 eng/publish_nuget.py preflight
+          --manifest packaging/releases/DB-CPP-01-nuget.json
+          --work-dir artifacts/nuget-publication
+      - name: Obtain the existing NuGet trusted publisher credential
+        id: nuget-login
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
+        with:
+          user: dekueon
+      - name: Unlist every retired HelloWorld version
+        id: retire
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          NUGET_API_KEY: ${{ steps.nuget-login.outputs.NUGET_API_KEY }}
+        run: >-
+          python3 eng/publish_nuget.py unlist-helloworld
+          --manifest packaging/releases/DB-CPP-01-nuget.json
+          --work-dir artifacts/nuget-publication
+      - name: Refresh the existing publisher credential before package upload
+        id: package-login
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
+        with:
+          user: dekueon
+      - name: Publish the twelve accepted packages and verify NuGet readback
+        id: packages
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          NUGET_API_KEY: ${{ steps.package-login.outputs.NUGET_API_KEY }}
+        run: >-
+          python3 eng/publish_nuget.py publish
+          --manifest packaging/releases/DB-CPP-01-nuget.json
+          --work-dir artifacts/nuget-publication
+      - name: Consume the public packages in both databases and runtimes
+        id: consumers
+        run: >-
+          python3 eng/verify_nuget_public.py
+          --release-record artifacts/nuget-publication/source/db-scope/prepared/candidate/release.json
+          --signature-policy artifacts/nuget-publication/signature-policy.json
+          --expected-source 3badc05be503991b5591732629dd7e5b0dbad111
+          --output artifacts/nuget-publication/consumer
+      - name: Require publication, public consumption and retirement
+        if: always()
+        env:
+          RETIRE_RESULT: ${{ steps.retire.outcome }}
+          PACKAGE_RESULT: ${{ steps.packages.outcome }}
+          CONSUMER_RESULT: ${{ steps.consumers.outcome }}
+        run: |
+          test "$RETIRE_RESULT" = success
+          test "$PACKAGE_RESULT" = success
+          test "$CONSUMER_RESULT" = success
+      - name: Retain the actual public registry and consumer receipts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: nuget-publication-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            artifacts/nuget-publication/*.json
+            artifacts/nuget-publication/signatures/
+            artifacts/nuget-publication/consumer/
+          if-no-files-found: warn
+          retention-days: 30

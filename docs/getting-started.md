@@ -1,10 +1,10 @@
-# Use the database candidate from ordinary C#
+# Use the database from ordinary C#
 
-The current candidate targets Linux x64 and .NET11, with JIT and Native AOT. Choose `NativeWeave.Database.Sqlite`, `NativeWeave.Database.PostgreSql`, or both. No NativeWeave server or protocol package is required.
+The accepted database product targets Linux x64 and .NET11, with JIT and Native AOT. Choose `NativeWeave.Database.Sqlite`, `NativeWeave.Database.PostgreSql`, or both. These are provider entry points for one database product; their shared components are restored automatically. No NativeWeave server or protocol package is required.
 
 ## Restore outside the source tree
 
-A maintainer first runs the verified candidate workflow described in the root README. It creates the exact local feed at `artifacts/db-scope/prepared/candidate/feed`; the manifest records facade/native and shared package versions. With the default version base, the provider version is `0.1.0-db-cpp.1.2` and shared dependencies are pinned by the package.
+The authorized public release uses provider version `0.1.0-db-cpp.1.2`; shared dependencies are pinned by the provider package. [Publication receipts](releasing.md) distinguish an actual NuGet delivery from a candidate-only build. Once that release completes, ordinary consumers restore directly from `https://api.nuget.org/v3/index.json`; they do not download CI archives or build NativeWeave's source.
 
 Create an ordinary executable project outside the NativeWeave checkout:
 
@@ -22,7 +22,9 @@ Create an ordinary executable project outside the NativeWeave checkout:
 </Project>
 ```
 
-Point a local NuGet.Config at the candidate feed and nuget.org; map `NativeWeave.*` to that exact feed. Add the PostgreSQL provider PackageReference when needed. Use the candidate manifest's version when the producer selected a different version base.
+Use nuget.org as the package source. Add the PostgreSQL provider PackageReference at the same exact provider version when needed. No separate manual installation of Core, ABI or native leaf packages is required.
+
+Maintainers testing an unpublished candidate can still use the local feed at `artifacts/db-scope/prepared/candidate/feed`, with `NativeWeave.*` mapped to that exact feed in their local NuGet.Config. The candidate manifest supplies that build's versions. This development path does not publish packages.
 
 ## Typed queries and DTOs
 

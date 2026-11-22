@@ -20,7 +20,7 @@ The database product does not include NativeWeave HTTP/gRPC servers, routing or 
 | PostgreSQL | NativeWeave.Database.PostgreSql | NativeWeave.Database.PostgreSql.Native |
 | Both | Both provider packages | Exactly the two database native leaves |
 
-The complete candidate graph has twelve NativeWeave package IDs, including shared Core, ABI, Data, transaction/streaming and query components. A provider-only application does not restore the other provider's native package. The existing optional database dependency-injection source project is retained separately; this batch does not introduce a new package feature.
+NativeWeave is one database product. An application installs its selected provider package; NuGet restores the shared components automatically. The complete graph has twelve package IDs, including shared Core, ABI, Data, transaction/streaming and query components. A provider-only application does not restore the other provider's native package. The existing optional database dependency-injection source project is retained separately; this batch does not introduce a new package feature.
 
 See [getting started](docs/getting-started.md), the [package guide](docs/guides/packaging-domain.md), and the [API index](docs/api-reference.md).
 
@@ -48,7 +48,7 @@ Linux CI also runs the retained Core packaging/minimum-CPU checks, ASan/UBSan wi
 
 ## Status and history
 
-The database packages produced by this workflow are local candidates, not a new public NuGet release. [Release boundaries](docs/releasing.md) describe this distinction. Performance optimization is deferred; no performance advantage is claimed by this implementation migration.
+Build CI produces local candidates. The separately authorized [NuGet publication](docs/releasing.md) promotes the exact accepted main-build packages to the existing `dekueon` account, verifies registry signatures and public-source JIT/AOT consumption, and unlists the retired HelloWorld versions. Its fixed provider version is `0.1.0-db-cpp.1.2`; common dependencies remain at their accepted exact versions. A build artifact alone is never treated as a public release. Performance optimization is deferred; no performance advantage is claimed by this implementation migration.
 
 - [Background](docs/background.md) and [verification](docs/verification.md)
 - [Contributing](CONTRIBUTING.md) and [security policy](SECURITY.md)

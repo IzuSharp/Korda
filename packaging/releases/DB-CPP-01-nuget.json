@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "repository": "IzuSharp/NativeWeave",
+  "sourceCommit": "3badc05be503991b5591732629dd7e5b0dbad111",
+  "sourceTree": "3264de79b73c8a89f1cac1eff57d0c0ff2c841c2",
+  "runId": 44977773509,
+  "artifactId": 14738115742,
+  "artifactName": "nativeweave-database-linux-44977773509-1",
+  "artifactSize": 6169499,
+  "artifactSha256": "bb63f9fe71ea4c2f68dd63b748af3820c8bc0174199ce6fa7e2a92197f31e8b9",
+  "candidatePath": "db-scope/prepared/candidate",
+  "packageOwner": "dekueon",
+  "retiredPackageId": "NativeWeave.HelloWorld",
+  "packageVersions": {
+    "NativeWeave.Core": "0.1.0-db-cpp.1.1",
+    "NativeWeave.Data": "0.1.0-db-cpp.1.1",
+    "NativeWeave.Data.Streaming": "0.1.0-db-cpp.1.1",
+    "NativeWeave.Database": "0.1.0-db-cpp.1.2",
+    "NativeWeave.Database.PostgreSql": "0.1.0-db-cpp.1.2",
+    "NativeWeave.Database.PostgreSql.Native": "0.1.0-db-cpp.1.2",
+    "NativeWeave.Database.Sqlite": "0.1.0-db-cpp.1.2",
+    "NativeWeave.Database.Sqlite.Native": "0.1.0-db-cpp.1.2",
+    "NativeWeave.Database.Transactions": "0.1.0-db-cpp.1.1",
+    "NativeWeave.Interop.Abi": "0.1.0-db-cpp.1.1",
+    "NativeWeave.Query.Binding": "0.1.0-db-cpp.1.1",
+    "NativeWeave.Query.Generator": "0.1.0-db-cpp.1.1"
+  },
+  "packageArchiveSha256": {
+    "NativeWeave.Core": "1cc48f50cf637c67608b434bef16018ec1190b23e5fec17ee2398c4f9caa4fa6",
+    "NativeWeave.Data": "6515ce4639c469c7b909e507a174a7d27e46a165064f7acc521060dd4fcfe632",
+    "NativeWeave.Data.Streaming": "cb6abc54e7037ea66889e87db43fc13ead12576009a86784ba03e1e33785eaac",
+    "NativeWeave.Database": "5c5588deadd5b14742d2747472009d6c1236d08d458f98b52ea64305cffcfe26",
+    "NativeWeave.Database.PostgreSql": "8ead1a0f2ef88dc281e1f044cacebdd964d34028ace75ca0cbe5f892f8363b52",
+    "NativeWeave.Database.PostgreSql.Native": "560f507e9c896b47e7dd47878b0f4a51aeb60c727bde0d5fece9ec9a862475af",
+    "NativeWeave.Database.Sqlite": "9bad78f32e9af4d88cc1e71e7228be66994e1630ed50b8d62b654058df1c9fd6",
+    "NativeWeave.Database.Sqlite.Native": "8aa855291d51a6cb056656f091514f674319e5261edbcdd53bb1c2634990bd70",
+    "NativeWeave.Database.Transactions": "9c09c86b3c7d0692b5bbda7047d4d2bb1e6ea68348482787d924e59021b85a9f",
+    "NativeWeave.Interop.Abi": "d322f4a17de695b668896b4e8eb662a645b698acf774b92be8fd08fdb2af69cc",
+    "NativeWeave.Query.Binding": "a957f90a91ff392224d623faad9f708a368918dfbebccdaf1add6ee0998bc83f",
+    "NativeWeave.Query.Generator": "6789de0b8bfbfeaf66e450f574653d2a470160c98e021e6bada740f03c15f3f2"
+  }
+}
