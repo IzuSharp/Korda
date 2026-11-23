@@ -29,6 +29,8 @@ def purpose(path, registered):
     file = PurePosixPath(path)
     if file.name in {"LICENSE", "THIRD_PARTY_NOTICES.md"}:
         return registered
+    if "/reference/" in path and file.suffix in {".md", ".json"}:
+        return "api"
     if "/ApiCheck/" in path or file.name in {
         "api-reference.md",
         "public-api.expected.json",

@@ -316,7 +316,7 @@ def recipes():
         )
     add(
         "fluent.api",
-        build("tests/Query.Fluent/NativeWeave.Query.Fluent.Tests.csproj"),
+        build("src/Data.NativeHost/NativeWeave.Database.csproj"),
         (
             "dotnet",
             "run",
