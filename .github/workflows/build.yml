@@ -17,9 +17,6 @@ on:
       plan:
         type: string
         required: true
-      artifact:
-        type: string
-        required: true
 permissions:
   contents: read
   actions: read
@@ -133,7 +130,6 @@ jobs:
         env:
           SCOPE: ${{ inputs.scope }}
           MODE: ${{ inputs.mode }}
-          NW_VERSION: ${{ inputs.version }}.2
           TMPDIR: ${{ runner.temp }}
           GITHUB_TOKEN: ${{ github.token }}
         run: |
@@ -158,11 +154,12 @@ jobs:
           path: ${{ fromJSON(inputs.plan).artifacts[inputs.scope] }}
           if-no-files-found: error
           overwrite: true
-      - name: Retain the exact PR-tested public candidates
-        if: (inputs.mode == 'module-pack' && contains(fromJSON(inputs.plan).candidates, inputs.scope)) || (inputs.mode == 'run' && fromJSON(inputs.plan).packages[0] != null && contains(fromJSON(inputs.plan).actions[inputs.scope], 'public.validate'))
+      - name: Retain independently verified package
+        if: inputs.mode == 'module-pack' || (inputs.mode == 'run' && contains(fromJSON(inputs.plan).public_checks, inputs.scope))
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: ${{ inputs.artifact }}
+          name: candidate-${{ inputs.scope }}
+          overwrite: true
           path: artifacts/public/
           if-no-files-found: error
           retention-days: 14

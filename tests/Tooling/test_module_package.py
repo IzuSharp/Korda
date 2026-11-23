@@ -15,7 +15,10 @@ from facts import inputs
 from validate_public import validate
 
 
-@unittest.skipUnless(hasattr(hashlib, "file_digest"), "The existing package verifier requires Python 3.11+")
+@unittest.skipUnless(
+    hasattr(hashlib, "file_digest"),
+    "The existing package verifier requires Python 3.11+",
+)
 class PackageTests(unittest.TestCase):
     def test_candidate_packing_consumption_and_validation(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -55,7 +58,15 @@ class PackageTests(unittest.TestCase):
 
             def commit():
                 git("add", ".")
-                git("-c", "user.name=CI", "-c", "user.email=ci@example.invalid", "commit", "-qm", "fixture")
+                git(
+                    "-c",
+                    "user.name=CI",
+                    "-c",
+                    "user.email=ci@example.invalid",
+                    "commit",
+                    "-qm",
+                    "fixture",
+                )
 
             git("init", "-q")
             commit()
@@ -72,9 +83,10 @@ class PackageTests(unittest.TestCase):
                     "module_packages": ["widget"],
                     "packages": [],
                     "candidates": ["widget"],
+                    "public_checks": [],
                     "inputs": inputs("HEAD"),
                 }
-                version = "0.1.0-preview.1.2"
+                version = "0.1.0-preview.1"
                 module_job.execute("pack", "widget", plan, version)
                 self.assertTrue((root / "artifacts/consumed").exists())
                 package = validate(out, plan, version, "widget")["Korda.Widget"]

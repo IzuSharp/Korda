@@ -7,7 +7,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 from catalog import DIRECTORY, git, load_catalog
-from registry import public_heads
+from registry import next_preview, public_heads
 
 from facts import IDS as IDS, PROVIDERS, files, fingerprints, inputs as inputs
 from language import language, purpose
@@ -70,7 +70,17 @@ def classify(paths, catalog, entries, previous):
     return direct, affected_modules, affected_packages, reasons
 
 
-def make_plan(catalog, paths, entries, previous, full=False, old_entries=None, *, images=False):
+def make_plan(
+    catalog,
+    paths,
+    entries,
+    previous,
+    full=False,
+    old_entries=None,
+    *,
+    images=False,
+    reconcile=False,
+):
     direct, consumers, touched, reasons = classify(paths, catalog, entries, previous)
     if old_entries is not None:
         # The solution is an index shared by otherwise independent products.
@@ -89,23 +99,26 @@ def make_plan(catalog, paths, entries, previous, full=False, old_entries=None, *
         old_hashes = fingerprints(previous, old_entries)
         touched.update(name for name in catalog.packages if old_hashes.get(name) != hashes[name])
     db = set(PROVIDERS) & catalog.packages.keys()
-    published = {p: {"version": None, "inputs": None} for p in catalog.packages}
-    if touched:
-        lookup = touched | (db if db & touched else set())
-        published.update(public_heads({p: catalog.packages[p] for p in sorted(lookup)}))
-    pending = {p for p in touched if published[p].get("inputs") != hashes[p]}
+    # Ordinary diffs select checks. Main also checks each ID for a missing or stale preview.
+    published = public_heads(catalog.packages) if reconcile else {}
+    pending = {p for p in catalog.packages if published[p]["inputs"] != hashes[p]} if reconcile else set()
+    package_checks = set(touched) | pending
     selected = set(catalog.modules) if full else direct | consumers
     result = plan_actions(
         catalog,
         reasons,
         direct,
         touched & db,
-        pending & db,
+        package_checks & db,
         previous=previous,
         entries=entries,
         full=full,
         images=images,
     )
+    # A first or missed release may have no changed files in this push. Build any
+    # registered internal artifacts needed to package it in this run.
+    for name in pending - db:
+        selected.update(m for m in catalog.dependencies(name) if catalog.modules[m].get("artifacts"))
     run_steps = {}
     for name in selected:
         spec = catalog.modules[name]
@@ -117,17 +130,20 @@ def make_plan(catalog, paths, entries, previous, full=False, old_entries=None, *
     languages = set(changed_languages) & {"python", "csharp"}
     if full or ".github/workflows/security.yml" in paths:
         languages.update(("python", "csharp"))
-    releases = [{"module": "", "suffix": ""}] if pending & db else []
-    releases.extend({"module": p, "suffix": "-" + p} for p in sorted(pending - db))
-    validate_packages = set(catalog.packages) if full else pending | (direct & catalog.packages.keys())
+    releases = [{"module": p, "database": p in db} for p in sorted(pending)]
+    validate_packages = set(catalog.packages) if full else package_checks | (direct & catalog.packages.keys())
     module_packages = sorted(validate_packages - db)
     return dict(
         result,
         changed_languages=changed_languages,
         inputs=hashes,
         published=published,
-        packages=sorted(pending & db),
+        packages=sorted(package_checks & db),
         candidates=sorted(pending),
+        versions={
+            p: next_preview(published[p]["version"]) if p in pending else "0.1.0-ci.1"
+            for p in sorted(catalog.packages)
+        },
         releases=releases,
         modules=modules,
         run_steps=run_steps,
@@ -145,7 +161,7 @@ def make_plan(catalog, paths, entries, previous, full=False, old_entries=None, *
     )
 
 
-def plan_tree(base, tree="HEAD", *, replay=None, full=False, images=False):
+def plan_tree(base, tree="HEAD", *, replay=None, full=False, images=False, reconcile=False):
     paths = changed_paths(base, tree) if replay is None else replay
     catalog = load_catalog(tree)
     previous = catalog
@@ -158,7 +174,16 @@ def plan_tree(base, tree="HEAD", *, replay=None, full=False, images=False):
         for p in replay:
             if p not in entries or catalog.owner(p)[1] != "tests":
                 raise ValueError("Replay accepts tracked test or documentation paths only: " + p)
-    return make_plan(catalog, paths, entries, previous, full, old_files, images=images)
+    return make_plan(
+        catalog,
+        paths,
+        entries,
+        previous,
+        full,
+        old_files,
+        images=images,
+        reconcile=reconcile,
+    )
 
 
 def main():
@@ -167,12 +192,16 @@ def main():
     parser.add_argument("--tree", default="HEAD")
     parser.add_argument("--full", action="store_true")
     parser.add_argument(
-        "--images", action="store_true", help="Include clean images and CPU emulation in a full run"
+        "--images",
+        action="store_true",
+        help="Include clean images and CPU emulation in a full run",
     )
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
     data = json.dumps(
-        plan_tree(args.base, args.tree, full=args.full, images=args.images), indent=2, sort_keys=True
+        plan_tree(args.base, args.tree, full=args.full, images=args.images),
+        indent=2,
+        sort_keys=True,
     )
     print(data)
     if args.output:

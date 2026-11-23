@@ -26,9 +26,16 @@ def execute(action, name, plan, version):
     spec = load_catalog().modules[name]
     env = {"NW_MODULE": name, "NW_VERSION": version}
     if action == "public":
-        if name not in plan["candidates"]:
+        if name not in plan["module_packages"]:
             raise ValueError("Unexpected public consumer: " + name)
-        consume(spec, env | {"NW_PACKAGE": spec["package"], "NW_FEED": "https://api.nuget.org/v3/index.json"})
+        consume(
+            spec,
+            env
+            | {
+                "NW_PACKAGE": spec["package"],
+                "NW_FEED": "https://api.nuget.org/v3/index.json",
+            },
+        )
         return
     if name not in plan["module_packages"]:
         raise ValueError("Package not selected in the plan: " + name)

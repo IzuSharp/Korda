@@ -8,7 +8,7 @@ The Fluent ORM supports PostgreSQL and SQLite. Write queries, map entities and D
 
 The validated target is **Linux x64 with .NET 11 and Native AOT**. Each provider bundles the shared ORM, query generator, build integration and its precompiled native library. Entity and DTO changes require only a C# rebuild.
 
-Install the provider for your database once its Korda preview is available on nuget.org. Applications can reference both.
+Each provider is independently installable. Choose the matching command when its preview is available on nuget.org.
 
 ```sh
 dotnet add package Korda.Database.Sqlite --prerelease

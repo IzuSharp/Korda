@@ -28,6 +28,7 @@ def fingerprints(catalog, entries):
                 if module in catalog.dependencies(name):
                     digest.update(entry + b"\0")
     for name, digest in digests.items():
+        digest.update(catalog.packages[name].encode() + b"\0")
         for module in sorted(catalog.dependencies(name)):
             spec = catalog.modules[module]
             if spec.get("artifacts"):

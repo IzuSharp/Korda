@@ -9,7 +9,7 @@ import xml.etree.ElementTree as ET
 import zipfile
 
 
-def pack(destination, identity, version, entries, dependencies=None, repository=None):
+def pack(destination, identity, version, entries, dependencies=None, repository=None, *, description=None, readme=None):
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,99}", identity):
         raise ValueError("Invalid package identity")
     if not re.fullmatch(r"\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?", version):
@@ -17,10 +17,14 @@ def pack(destination, identity, version, entries, dependencies=None, repository=
     package = ET.Element("package", xmlns="http://schemas.microsoft.com/packaging/2013/05/nuspec.xsd")
     metadata = ET.SubElement(package, "metadata")
     for key, value in {"id": identity, "version": version, "authors": "IzuSharp",
-                       "description": f"{identity} component for Korda applications and tooling.",
+                       "description": description or f"{identity} component for Korda applications and tooling.",
                        "license": "MIT", "licenseUrl": "https://licenses.nuget.org/MIT"}.items():
         element = ET.SubElement(metadata, key, {"type": "expression"} if key == "license" else {})
         element.text = value
+    if readme is not None:
+        if readme not in entries:
+            raise ValueError("Package README is missing from its payload")
+        ET.SubElement(metadata, "readme").text = readme
     if repository is not None:
         url, commit = repository
         if not url.startswith("https://") or not re.fullmatch(r"[0-9a-f]{40}", commit):

@@ -5,53 +5,49 @@ from modules.database import PROVIDERS, py, recipes
 from language import purpose
 
 
-def catalog_steps(scope, public=(), validate=False, grouped=False):
+def catalog_steps(scope):
     steps = recipes()
-    if not public:
+    if scope not in PROVIDERS:
         return steps
-    single = len(public) == 1
-    selected = public[0] if single else None
-    if single and not grouped:
-        args = ("--native", f"artifacts/provider-native/{selected}/manifest.json")
-        prerequisite = selected + ".build"
-    else:
-        args = ("--components", "artifacts/db-scope/prepared/candidate")
-        prerequisite = "database.pack"
     steps["public.pack"] = Command(
         "public.pack",
         ("dotnet",),
-        (prerequisite,),
+        (scope + ".build",),
         (
             py(
                 "eng/ci/bundles.py",
                 "--plan",
                 "{plan}",
                 "--version",
-                "{version}.2",
-                *args,
+                "{version}",
+                "--provider",
+                scope,
+                "--native",
+                f"artifacts/provider-native/{scope}/manifest.json",
             ),
         ),
     )
     steps["public.consume-aot"] = Command(
         "public.consume-aot",
-        ("pg-server",) if "postgresql" in public else (),
+        ("pg-server",) if scope == "postgresql" else (),
         ("public.pack",),
         (py("eng/ci/consume.py", "artifacts/public/release.json", "{plan}"),),
     )
-    if validate:
-        steps["public.validate"] = Command(
-            "public.validate",
-            (),
-            ("public.consume-aot",),
-            (
-                py(
-                    "eng/ci/validate_public.py",
-                    "artifacts/public",
-                    "{plan}",
-                    "{version}.2",
-                ),
+    steps["public.validate"] = Command(
+        "public.validate",
+        (),
+        ("public.consume-aot",),
+        (
+            py(
+                "eng/ci/validate_public.py",
+                "artifacts/public",
+                "{plan}",
+                "{version}",
+                "--module",
+                scope,
             ),
-        )
+        ),
+    )
     return steps
 
 
@@ -79,7 +75,7 @@ def plan_actions(catalog, reasons, direct, touched, pending, *, previous, entrie
     if "consumer.check" in desired or "bundle.check" in desired:
         desired.difference_update({"consumer.check", "bundle.check"})
         # Publishing code has local archive contract tests; exercise a checked candidate on the host as well.
-        tested_public.update(pending or PROVIDERS)
+        tested_public.update(set(PROVIDERS) & catalog.packages.keys())
     for provider in touched:
         desired.update({provider + ".dependencies", provider + ".api", provider + ".test"})
     if full:
@@ -100,10 +96,6 @@ def plan_actions(catalog, reasons, direct, touched, pending, *, previous, entrie
         image_actions = {a for a in desired if a.startswith("image.")}
         deferred.update(image_actions)
         desired -= image_actions
-    if len(tested_public) > 1 or "database.regressions" in desired:
-        if any(p + ".dependencies" in desired for p in PROVIDERS):
-            desired -= {p + ".dependencies" for p in PROVIDERS}
-            desired.add("database.dependencies")
     if "database.regressions" in desired:
         desired -= {
             n.lower() + ".test"
@@ -125,45 +117,34 @@ def plan_actions(catalog, reasons, direct, touched, pending, *, previous, entrie
             "binding.test",
             "interop.execution",
             "interop.negotiation",
-            *(p + ".test" for p in PROVIDERS),
-            *(p + ".api" for p in PROVIDERS),
         }
     manual = {name for name in desired if name.startswith("manual.")}
     desired -= manual
     deferred |= manual
-    public = sorted(tested_public)
-    # Validation must describe exactly the candidates present in the outgoing feed.
-    if pending:
-        public = sorted(pending)
-    grouped = len(public) > 1 or "database.pack" in ordered(desired, recipes())
-    if public:
-        desired.add("public.validate" if pending else "public.consume-aot")
-    steps = catalog_steps("linux", public, bool(pending), grouped)
-    actions = ordered(desired, steps)
-    # A single build directory and package feed stay in one DAG. Independent fixture checks can run alongside it.
-    groups = {}
-    separate_providers = not public and all(p + ".build" in actions for p in PROVIDERS)
-    for name in actions:
+    if "database.regressions" in desired:
+        for provider in PROVIDERS:
+            desired.update((provider + ".test", provider + ".api"))
+    lanes = {}
+    for name in sorted(desired):
         prefix = name.partition(".")[0]
-        if prefix == "fixture":
-            lane = "fixtures"
-        elif prefix == "interop" or (separate_providers and prefix in PROVIDERS):
-            lane = prefix
-        else:
-            lane = "linux"
-        groups.setdefault(lane, []).append(name)
-    resources = {
-        group: sorted({resource for name in names for resource in steps[name].resources})
-        for group, names in groups.items()
-    }
+        scope = {"fixture": "fixtures", "interop": "interop"}.get(
+            prefix, prefix if prefix in PROVIDERS else "linux"
+        )
+        lanes.setdefault(scope, set()).add(name)
+    for provider in tested_public:
+        lanes.setdefault(provider, set()).add("public.validate")
+
+    groups, resources = {}, {}
+    for scope, selected in sorted(lanes.items()):
+        steps = catalog_steps(scope)
+        groups[scope] = ordered(selected, steps)
+        resources[scope] = sorted({r for name in groups[scope] for r in steps[name].resources})
     return dict(
-        scope=public[0] if len(public) == 1 else "linux",
+        scope="linux",
         deep=full,
-        rebuild_task=False,
         build_scopes=list(groups),
         actions=groups,
         resources=resources,
-        public_checks=public,
-        grouped_pack=grouped,
+        public_checks=sorted(tested_public),
         deferred=sorted(deferred),
     )

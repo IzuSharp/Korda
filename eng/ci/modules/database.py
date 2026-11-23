@@ -109,7 +109,7 @@ def recipes():
     )
     add(
         "database.regressions",
-        py("eng/build.py", "regressions"),
+        py("eng/build.py", "regressions", "--separate-provider-tests"),
         needs=("database.native",),
         resources=("dotnet", "design", "plan", "pg-server"),
     )

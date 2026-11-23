@@ -2,7 +2,6 @@
 
 import argparse
 import json
-import re
 from pathlib import Path
 import sys
 from catalog import ROOT, git, load_catalog
@@ -16,19 +15,15 @@ import compatibility as compat
 
 
 def validate(folder, plan, version, module=""):
-    source = plan.get("retry_merge", "HEAD")
-    if source != "HEAD":
-        if not re.fullmatch(r"[0-9a-f]{40}", source):
-            raise ValueError("Invalid recovery merge commit")
-        git("merge-base", "--is-ancestor", source, "HEAD")
-    tree = git("rev-parse", source + "^{tree}").decode().strip()
+    tree = git("rev-parse", "HEAD^{tree}").decode().strip()
     record = compat.read_json(folder / "release.json")
     identities = load_catalog().packages
-    if module and module not in plan["candidates"]:
+    if module and module not in set(plan["public_checks"] + plan["module_packages"]):
         raise ValueError("Module is outside the release plan")
     expected = {identities[name] for name in ([module] if module else plan["packages"])}
     if (
         record["source_tree"] != tree
+        or record["source_commit"] != git("rev-parse", "HEAD").decode().strip()
         or record["inputs"] != inputs("HEAD")
         or record["source_dirty"] is not False
     ):
@@ -51,7 +46,10 @@ def validate(folder, plan, version, module=""):
         with zipfile.ZipFile(path) as archive:
             if json.loads(archive.read("korda/public.json"))["inputs"] != record["inputs"][provider]:
                 raise ValueError("Packaged provider fingerprint differs from the tested inputs")
-            if ET.fromstring(archive.read(name + ".nuspec")).find(".//{*}dependency") is not None:
+            metadata = ET.fromstring(archive.read(name + ".nuspec")).find("{*}metadata")
+            if metadata.findtext("{*}id") != name or metadata.findtext("{*}version") != version:
+                raise ValueError("Packed NuGet identity differs from the release plan")
+            if metadata.find(".//{*}dependency") is not None:
                 raise ValueError("Public provider requires another package")
         paths[name] = path
     if set(paths.values()) != set((folder / "feed").iterdir()):

@@ -1,6 +1,6 @@
 # Use Korda from C#
 
-In your .NET 11 application, install the Linux x64 provider for your database:
+When its preview is available on nuget.org, install the provider for your .NET 11 Linux x64 application:
 
 ```sh
 dotnet add package Korda.Database.Sqlite --prerelease
@@ -28,4 +28,4 @@ dotnet publish -c Release -r linux-x64 -p:PublishAot=true -o publish
 
 Native AOT needs the platform C linker prerequisites. Applications use the precompiled provider library restored from NuGet. The strict package targets validate the exact restored graph and selected native bytes. Do not suppress a closure error or substitute a native binary.
 
-The maintained consumer verifier runs SQLite-only, PostgreSQL-only and combined dependency graphs; it checks the actual mapped native modules and hashes as well as the package and publish directory. See [packaging](guides/packaging-domain.md) for reproducing those checks.
+Each public package has its own CI job that restores the exact package and runs a compiled Native AOT consumer against its database. The internal compatibility suite also exercises combined graphs. See [packaging](guides/packaging-domain.md) for reproducing those checks.

@@ -9,7 +9,6 @@ import subprocess
 import sys
 import tempfile
 import xml.etree.ElementTree as ET
-from impact import IDS
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tests/Packaging.Domain"))
@@ -24,9 +23,6 @@ def main():
     args = parser.parse_args()
     record = json.loads(args.record.read_text())
     selected = {p["id"]: p["version"] for p in record["packages"]}
-    versions = {
-        IDS[p]: v["version"] for p, v in json.loads(args.plan.read_text())["published"].items() if p in IDS
-    } | selected
     with tempfile.TemporaryDirectory(prefix="korda-public-") as tmp:
         work = Path(tmp)
         conf = ET.parse(ROOT / "NuGet.Config")
@@ -70,7 +66,7 @@ def main():
             project(
                 app / "Consumer.csproj",
                 refs,
-                versions,
+                selected,
                 [*symbols, "PUBLIC_PROVIDER_BUNDLE"],
             )
 
