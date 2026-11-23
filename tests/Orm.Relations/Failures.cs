@@ -1,6 +1,6 @@
-using NativeWeave.Data;
-using NativeWeave.Database;
-using NativeWeave.Query;
+using Korda.Data;
+using Korda.Database;
+using Korda.Query;
 using System.Runtime.CompilerServices;
 
 internal static partial class Suite
@@ -97,10 +97,10 @@ internal static partial class Suite
         {
             var exact = Relation<Item, Child>.CreateOptional(Items.Table, Items.Tenant, Children.Table, Children.Tenant).AndOptional(Items.Id, Children.ParentId);
             var parent = dedup.RegisterModel(Items.Table); var child = dedup.RegisterModel(Children.Table);
-            var wrappers = new NativeWeave.Query.Internal.DatabaseOwner?[32];
+            var wrappers = new Korda.Query.Internal.DatabaseOwner?[32];
             try
             {
-                Parallel.For(0, wrappers.Length, i => wrappers[i] = NativeWeave.Query.Internal.MetadataBindings.RegisterRelation(dedup.Owner, parent, child, exact));
+                Parallel.For(0, wrappers.Length, i => wrappers[i] = Korda.Query.Internal.MetadataBindings.RegisterRelation(dedup.Owner, parent, child, exact));
                 Check(wrappers.All(x => x is not null) && wrappers.Distinct().Count() == 32, "actual ABI concurrently deduplicates one relation entry within exact combined three-entry budget while returning independent owners");
             }
             finally { foreach (var owner in wrappers) owner?.Dispose(); }
@@ -122,7 +122,7 @@ internal static partial class Suite
             async Task KillThenFail() { Check(await killer.ScalarAsync(SqlCommand.Create("SELECT pg_terminate_backend(" + pid + ")"), Codecs.Boolean), "actual cleanup backend terminated"); throw original; }
             var failure = await Throws<InputFailure>(() => session.InsertManyAsync(Items.Table, new OneThenDispose(new(51, 1, "rollback fails", 1), KillThenFail), new() { BatchSize = 1 }));
             Check(ReferenceEquals(failure, original) && BulkFailure.TryGetProgress(failure, out var progress) && progress.CurrentTransactionOutcome == TransactionOutcome.InProgress, "rollback failure preserves primary and never invents unknown commit");
-            Check(failure.Data.Contains("NativeWeave.Database.BulkCleanup.v1") || failure.Data.Contains("NativeWeave.Database.BulkCleanupSnapshot.v1"), "actual rollback failure retains cleanup detail");
+            Check(failure.Data.Contains("Korda.Database.BulkCleanup.v1") || failure.Data.Contains("Korda.Database.BulkCleanupSnapshot.v1"), "actual rollback failure retains cleanup detail");
         }
     }
 }

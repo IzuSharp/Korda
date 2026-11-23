@@ -2,7 +2,7 @@ using System.Buffers.Binary;
 using System.Globalization;
 using System.Text;
 
-namespace NativeWeave.Data;
+namespace Korda.Data;
 
 internal sealed record ParameterValue(uint Id, string Name, CodecDescriptor Codec, byte[]? Bytes);
 internal sealed record TemplateSegment(uint Kind, byte[] Bytes);

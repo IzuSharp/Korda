@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Text;
 
-namespace NativeWeave.Interop;
+namespace Korda.Interop;
 
 // The v1 cold-metadata limits are part of the pinned Interop contract.
 internal static class MetadataValidation

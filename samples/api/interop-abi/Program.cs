@@ -2,7 +2,7 @@
 // not publish raw ABI access as an application API or initialize a domain engine.
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using NativeWeave.Interop.Abi;
+using Korda.Interop.Abi;
 
 internal static unsafe partial class Program
 {

@@ -152,7 +152,7 @@ def plan_tree(base, tree="HEAD", *, replay=None, full=False, images=False):
     old_files = files(base)
     has_registry = any(p.startswith(DIRECTORY + "/") for p in old_files)
     if has_registry and any(p.startswith(DIRECTORY + "/") or p.endswith(".csproj") for p in paths):
-        previous = load_catalog(base)
+        previous = load_catalog(base, historical=True)
     entries = files(tree)
     if replay is not None:
         for p in replay:

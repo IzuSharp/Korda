@@ -1,4 +1,4 @@
-using NativeWeave.Interop;
+using Korda.Interop;
 
 // The fixture supplies real C++-owned bytes; an application receives the same
 // NativeBuffer from its typed engine. It does not construct raw ownership itself.

@@ -1,12 +1,12 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Text;
-using NativeWeave.Interop;
-using NativeWeave.Interop.Abi;
-using NativeWeave.Interop.Extensibility;
-using NativeWeave.Interop.Memory;
+using Korda.Interop;
+using Korda.Interop.Abi;
+using Korda.Interop.Extensibility;
+using Korda.Interop.Memory;
 
-namespace NativeWeave.Verification.Interop;
+namespace Korda.Verification.Interop;
 
 /// <summary>Independent mathematical/CLR oracles over actual compiled C, C++ and Core helpers.</summary>
 /// <remarks>Numeric addresses are never dereferenced by extent tests. Owner tests use real creator allocations only.</remarks>

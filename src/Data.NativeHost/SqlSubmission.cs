@@ -1,8 +1,8 @@
-using NativeWeave.Data;
-using NativeWeave.Interop.Abi;
-using NativeWeave.Query.Internal;
+using Korda.Data;
+using Korda.Interop.Abi;
+using Korda.Query.Internal;
 
-namespace NativeWeave.Database;
+namespace Korda.Database;
 
 internal static class SqlSubmission
 {

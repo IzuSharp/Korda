@@ -1,11 +1,11 @@
-using NativeWeave.Database;
-using NativeWeave.Database.PostgreSql;
-using NativeWeave.Database.Sqlite;
+using Korda.Database;
+using Korda.Database.PostgreSql;
+using Korda.Database.Sqlite;
 
 var provider = args.FirstOrDefault() == "postgresql" ? DatabaseProvider.PostgreSql : DatabaseProvider.Sqlite;
 var connection = provider == DatabaseProvider.PostgreSql
     ? Environment.GetEnvironmentVariable("NW_TEST_POSTGRES") ?? throw new InvalidOperationException("Provide the PostgreSQL test URI.")
-    : args.ElementAtOrDefault(1) ?? Path.Combine(Path.GetTempPath(), "nativeweave-migrations-sample.db");
+    : args.ElementAtOrDefault(1) ?? Path.Combine(Path.GetTempPath(), "korda-migrations-sample.db");
 // Local-development TLS opt-out is deliberate in this runnable test example.
 var builder = provider == DatabaseProvider.Sqlite ? new DataSourceBuilder().UseSqlite(connection)
     : new DataSourceBuilder().UsePostgreSql(connection, options => options.TlsMode = PostgreSqlTlsMode.DisableForLocalDevelopment);

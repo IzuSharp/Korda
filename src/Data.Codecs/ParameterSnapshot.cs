@@ -1,6 +1,6 @@
-using NativeWeave.Data;
+using Korda.Data;
 
-namespace NativeWeave.Database.Internal;
+namespace Korda.Database.Internal;
 
 // Internal adapter only. Application-facing Codecs/ValueCodec/SqlParameters are
 // defined exactly once in B01; this assembly adds no public CLR contract.

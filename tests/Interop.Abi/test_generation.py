@@ -17,7 +17,7 @@ class SignatureGenerationTests(unittest.TestCase):
         changed = deepcopy(SCHEMA)
         changed["callbacks"][1]["parameters"][-1][1] = "u32"
         outputs = generator.generated(changed)
-        self.assertIn("const void * payload, uint32_t payload_bytes", outputs["native/interop/abi/include/nativeweave_abi_v1.h"])
+        self.assertIn("const void * payload, uint32_t payload_bytes", outputs["native/interop/abi/include/korda_abi_v1.h"])
         self.assertIn("nw_status (NW_CDECL *)(uintptr_t, uint32_t, const void *, uint32_t)", outputs["tests/Interop.Abi/native/layout.cpp"])
         self.assertIn("delegate* unmanaged[Cdecl]<nuint, uint, void*, uint, uint>", outputs["src/Interop.Abi/WireRecords.g.cs"])
 
@@ -25,7 +25,7 @@ class SignatureGenerationTests(unittest.TestCase):
         changed = deepcopy(SCHEMA)
         changed["callbacks"][0]["return"] = "u64"
         outputs = generator.generated(changed)
-        self.assertIn("typedef uint64_t (NW_CDECL *nw_on_terminal_fn)", outputs["native/interop/abi/include/nativeweave_abi_v1.h"])
+        self.assertIn("typedef uint64_t (NW_CDECL *nw_on_terminal_fn)", outputs["native/interop/abi/include/korda_abi_v1.h"])
         self.assertIn("uint64_t (NW_CDECL *)(uintptr_t, uint32_t, const nw_error_info_v1 *)", outputs["tests/Interop.Abi/native/layout.cpp"])
         self.assertIn("delegate* unmanaged[Cdecl]<nuint, uint, NwErrorInfoV1*, ulong>", outputs["src/Interop.Abi/WireRecords.g.cs"])
 
@@ -33,7 +33,7 @@ class SignatureGenerationTests(unittest.TestCase):
         changed = deepcopy(SCHEMA)
         changed["bootstrap"]["parameters"][1][1] = "u64"
         changed["bootstrap"]["return"] = "u64"
-        header = generator.generated(changed)["native/interop/abi/include/nativeweave_abi_v1.h"]
+        header = generator.generated(changed)["native/interop/abi/include/korda_abi_v1.h"]
         self.assertIn("typedef uint64_t (NW_CDECL *nw_get_abi_v1_fn)(uint32_t requested_major, uint64_t out_capacity, nw_abi_info_v1 * out_info);", header)
 
     def test_unsupported_language_boolean_cannot_enter_wire_signatures(self):

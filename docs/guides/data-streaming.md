@@ -15,7 +15,7 @@ specification inputs, not evidence that this product component executed.
 
 ## Component and public API boundaries
 
-`NativeWeave.Data.Streaming` is an internal, non-packable implementation assembly.
+`Korda.Data.Streaming` is an internal, non-packable implementation assembly.
 Its [generated reference](../../src/Data.Streaming/api-reference.md) must continue
 to contain zero exported types. It does not add public native handles, transport
 interfaces, another `DataSession`, a managed database provider, or a default Rust
@@ -123,7 +123,7 @@ allocations are outside this charged-data bound.
    the current batch, closes further admission, requests stop, and awaits the
    provider's explicit retirement receipt. A constructor exception is preserved;
    an additional cleanup failure is retained separately on the exception under
-   `NativeWeave.Database.StreamCleanup.v1`.
+   `Korda.Database.StreamCleanup.v1`.
 
 The method and enumerator cancellation tokens are linked when necessary. An
 already canceled token does not start the factory. After admission, cancellation
@@ -188,7 +188,7 @@ python3 tests/Data.Streaming/verify.py \
 The runner starts an isolated PostgreSQL instance in the same process namespace,
 builds the actual provider-composed fixture, runs normal managed and explicit
 `linux-x64` NativeAOT executables, and stops the service in `finally`. An explicit
-`NATIVEWEAVE_TEST_POSTGRES_URL` can select an existing isolated test service;
+`KORDA_TEST_POSTGRES_URL` can select an existing isolated test service;
 there is no successful missing-service skip. The component fixture uses the
 provider's explicitly named local-development plaintext profile; TLS acceptance
 belongs to the B02 provider tests.

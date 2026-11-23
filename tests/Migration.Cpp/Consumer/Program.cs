@@ -4,11 +4,11 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using NativeWeave.Data;
-using NativeWeave.Database;
-using NativeWeave.Database.PostgreSql;
-using NativeWeave.Database.Sqlite;
-using NativeWeave.Query;
+using Korda.Data;
+using Korda.Database;
+using Korda.Database.PostgreSql;
+using Korda.Database.Sqlite;
+using Korda.Query;
 
 AppDomain.CurrentDomain.UnhandledException += (_, error) =>
 {

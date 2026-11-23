@@ -1,6 +1,6 @@
 """Local NuGet V3 readback regression over the actual database candidate bytes.
 
-This loopback verification fixture is not a NativeWeave application server or a
+This loopback verification fixture is not a Korda application server or a
 registry publication. An unlisted version must remain restorable by exact ID.
 """
 from __future__ import annotations
@@ -54,7 +54,7 @@ def restore_unlisted(consumer, root, record):
         ET.SubElement(sources, "add", key="nuget.org", value="https://api.nuget.org/v3/index.json")
         mappings = ET.SubElement(configuration, "packageSourceMapping")
         local = ET.SubElement(mappings, "packageSource", key="unlisted-loopback")
-        ET.SubElement(local, "package", pattern="NativeWeave.*")
+        ET.SubElement(local, "package", pattern="Korda.*")
         external = ET.SubElement(mappings, "packageSource", key="nuget.org")
         ET.SubElement(external, "package", pattern="*")
         # Keep auditing enabled while the protocol fixture serves only packages.

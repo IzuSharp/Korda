@@ -1,8 +1,8 @@
 using System.Buffers.Binary;
 using System.Text;
-using NativeWeave.Data;
+using Korda.Data;
 
-namespace NativeWeave.Database.PostgreSql;
+namespace Korda.Database.PostgreSql;
 
 // The canonical shared contract owns the field envelope. This module only owns
 // the kind8 field meanings; B04 composes the surrounding datasource record.

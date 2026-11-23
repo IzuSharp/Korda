@@ -1,6 +1,6 @@
 """Bounded external process/evidence helpers for database-only composition.
 
-No NativeWeave implementation is imported. The reference fixture supplies its independent SQL adapter, never product outcomes.
+No Korda implementation is imported. The reference fixture supplies its independent SQL adapter, never product outcomes.
 """
 from __future__ import annotations
 
@@ -175,8 +175,8 @@ class PostgresCluster:
         with socket.socket() as listener:
             listener.bind(("127.0.0.1", 0)); self.port = listener.getsockname()[1]
         self.data = self.output / "data"
-        self.run("init", [self.binary / "initdb", "-D", self.data, "-U", "nativeweave", "--auth=trust", "--no-locale", "--encoding=UTF8"])
-        self.uri = f"postgresql://nativeweave@127.0.0.1:{self.port}/postgres"
+        self.run("init", [self.binary / "initdb", "-D", self.data, "-U", "korda", "--auth=trust", "--no-locale", "--encoding=UTF8"])
+        self.uri = f"postgresql://korda@127.0.0.1:{self.port}/postgres"
         self.start()
         write_json(self.output / "identity.json", {"version": version, "postgresSha256": sha(self.binary / "postgres"), "psqlSha256": sha(self.binary / "psql")})
         return self

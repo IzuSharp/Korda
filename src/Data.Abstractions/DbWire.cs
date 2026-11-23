@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
 using System.Text.Json;
 
-namespace NativeWeave.Data;
+namespace Korda.Data;
 
 internal enum PayloadKind : ushort { Parameters = 1, Rows = 2, ExpressionValues = 3, MutationValues = 4 }
 internal sealed record WireDescriptor(uint Id, CodecDescriptor Codec, uint BoundCodecId);

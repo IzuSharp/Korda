@@ -1,7 +1,7 @@
 using System.Data;
-using NativeWeave.Data;
+using Korda.Data;
 
-namespace NativeWeave.Database;
+namespace Korda.Database;
 
 /// <summary>Knowledge of database effects, independent from operation completion and local disposal.</summary>
 public enum TransactionOutcome

@@ -3,12 +3,12 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using NativeWeave.Data;
-using NativeWeave.Database;
-using NativeWeave.Database.PostgreSql;
-using NativeWeave.Database.Sqlite;
-using NativeWeave.Query;
-using NativeWeave.Interop.Async;
+using Korda.Data;
+using Korda.Database;
+using Korda.Database.PostgreSql;
+using Korda.Database.Sqlite;
+using Korda.Query;
+using Korda.Interop.Async;
 
 await Suite.Run(args);
 
@@ -280,7 +280,7 @@ internal static class Suite
         var before = GC.GetAllocatedBytesForCurrentThread(); var started = Stopwatch.GetTimestamp();
         for (var i = 0; i < iterations; i++) Compose(i % 3);
         var elapsed = Stopwatch.GetTimestamp() - started; var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
-        int encoded = NativeWeave.Query.Internal.OperandEncoding.Value(session.Source.Binding.SemanticProfile, Codecs.Int64, 3, 1L).Length;
+        int encoded = Korda.Query.Internal.OperandEncoding.Value(session.Source.Binding.SemanticProfile, Codecs.Int64, 3, 1L).Length;
         Check(encoded > sizeof(long) && allocated > 0, "Direct boundary allocations and encoded copies are explicit");
         Costs.Add(new(session.Source.Provider.ToString(), iterations, allocated, elapsed, Stopwatch.Frequency, encoded, 15));
     }

@@ -113,7 +113,7 @@ jobs:
           if [ "$GITHUB_EVENT_NAME" = push ]; then test "$SECURITY" = skipped; else test "$SECURITY" = success; fi
   publish:
     needs: [plan, verify]
-    if: github.repository == 'IzuSharp/NativeWeave' && needs.plan.outputs.merged == 'true' && needs.plan.outputs.pending == 'true' && vars.NUGET_PUBLISH_ENABLED == 'true'
+    if: github.repository == 'IzuSharp/Korda' && needs.plan.outputs.merged == 'true' && needs.plan.outputs.pending == 'true' && vars.NUGET_PUBLISH_ENABLED == 'true'
     strategy:
       fail-fast: false
       matrix:

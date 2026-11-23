@@ -2,13 +2,13 @@
   "version": 1,
   "dependencies": {
     "net11.0": {
-      "nativeweave.core": {
+      "korda.core": {
         "type": "Project",
         "dependencies": {
-          "NativeWeave.Interop.Abi": "[0.1.0-preview.1, )"
+          "Korda.Interop.Abi": "[0.1.0-preview.1, )"
         }
       },
-      "NativeWeave.Interop.Abi": {
+      "Korda.Interop.Abi": {
         "type": "Project"
       }
     }

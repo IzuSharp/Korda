@@ -1,6 +1,6 @@
 # Third-party notices
 
-NativeWeave remains MIT licensed under LICENSE. The maintained native database product is C++20. Candidate native leaves contain selected source and patch hashes, exact linked input hashes, compiler provenance, ELF dependency records and original notices in `nativeweave/dependencies.json` and `nativeweave/licenses`.
+Korda remains MIT licensed under LICENSE. The maintained native database product is C++20. Candidate native leaves contain selected source and patch hashes, exact linked input hashes, compiler provenance, ELF dependency records and original notices in `korda/dependencies.json` and `korda/licenses`.
 
 | Selected component | Version | Use and original terms |
 | --- | --- | --- |

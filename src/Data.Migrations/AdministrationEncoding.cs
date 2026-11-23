@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
-using NativeWeave.Data;
+using Korda.Data;
 
-namespace NativeWeave.Database;
+namespace Korda.Database;
 
 internal static class AdministrationEncoding
 {

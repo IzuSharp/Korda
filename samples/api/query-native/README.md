@@ -1,11 +1,11 @@
 # Native query maintainer example
 
 B11 is internal. Application examples use B13's strongly typed Fluent surface in
-`NativeWeave.Database`. [Examples.cs](Examples.cs) demonstrates the actual narrow
+`Korda.Database`. [Examples.cs](Examples.cs) demonstrates the actual narrow
 integration seam: static table/DTO mapping, metadata registration, native filter and
 projection calls, clone/seal into an immutable reusable shape, execution through the
 real B04 Host, and deterministic reverse-order disposal. It is compiled into
-`tests/Query.Native/NativeWeave.Query.Native.Tests.csproj` and called by both the JIT
+`tests/Query.Native/Korda.Query.Native.Tests.csproj` and called by both the JIT
 and Native AOT runs; it introduces no separately distributed package or public FFI.
 
 The native consumer in `tests/Query.Native/native/src/tests.rs` supplies the direct

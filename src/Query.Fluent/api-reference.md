@@ -1,11 +1,11 @@
 # Fluent query API reference
 
-Generated from the actual compiled public API and XML; compared against the exact pinned design declarations. The public namespace is composed into NativeWeave.Database. All expression and SQL operations use B09/B11 native owners; B01/B12 own static row contracts.
+Generated from the actual compiled public API and XML; compared against the exact pinned design declarations. The public namespace is composed into Korda.Database. All expression and SQL operations use B09/B11 native owners; B01/B12 own static row contracts.
 
-## `F:NativeWeave.Query.FrameBoundary.CurrentRow`
+## `F:Korda.Query.FrameBoundary.CurrentRow`
 
 ```csharp
-NativeWeave.Query.FrameBoundary.CurrentRow = 1
+Korda.Query.FrameBoundary.CurrentRow = 1
 ```
 
 Uses the native CurrentRow policy.
@@ -13,10 +13,10 @@ Uses the native CurrentRow policy.
 Only these ROWS endpoints are supported. Reversed or unsupported bounds fail before native state publication; finite numeric PRECEDING/FOLLOWING frames are not declared.
 
 
-## `F:NativeWeave.Query.FrameBoundary.UnboundedFollowing`
+## `F:Korda.Query.FrameBoundary.UnboundedFollowing`
 
 ```csharp
-NativeWeave.Query.FrameBoundary.UnboundedFollowing = 2
+Korda.Query.FrameBoundary.UnboundedFollowing = 2
 ```
 
 Uses the native UnboundedFollowing policy.
@@ -24,10 +24,10 @@ Uses the native UnboundedFollowing policy.
 Only these ROWS endpoints are supported. Reversed or unsupported bounds fail before native state publication; finite numeric PRECEDING/FOLLOWING frames are not declared.
 
 
-## `F:NativeWeave.Query.FrameBoundary.UnboundedPreceding`
+## `F:Korda.Query.FrameBoundary.UnboundedPreceding`
 
 ```csharp
-NativeWeave.Query.FrameBoundary.UnboundedPreceding = 0
+Korda.Query.FrameBoundary.UnboundedPreceding = 0
 ```
 
 Uses the native UnboundedPreceding policy.
@@ -35,10 +35,10 @@ Uses the native UnboundedPreceding policy.
 Only these ROWS endpoints are supported. Reversed or unsupported bounds fail before native state publication; finite numeric PRECEDING/FOLLOWING frames are not declared.
 
 
-## `F:NativeWeave.Query.LockWait.NoWait`
+## `F:Korda.Query.LockWait.NoWait`
 
 ```csharp
-NativeWeave.Query.LockWait.NoWait = 1
+Korda.Query.LockWait.NoWait = 1
 ```
 
 Uses the native NoWait policy.
@@ -46,10 +46,10 @@ Uses the native NoWait policy.
 Controls PostgreSQL row-lock conflicts within the same transaction and total query deadline; it does not enable transparent retries.
 
 
-## `F:NativeWeave.Query.LockWait.SkipLocked`
+## `F:Korda.Query.LockWait.SkipLocked`
 
 ```csharp
-NativeWeave.Query.LockWait.SkipLocked = 2
+Korda.Query.LockWait.SkipLocked = 2
 ```
 
 Uses the native SkipLocked policy.
@@ -57,10 +57,10 @@ Uses the native SkipLocked policy.
 Controls PostgreSQL row-lock conflicts within the same transaction and total query deadline; it does not enable transparent retries.
 
 
-## `F:NativeWeave.Query.LockWait.Wait`
+## `F:Korda.Query.LockWait.Wait`
 
 ```csharp
-NativeWeave.Query.LockWait.Wait = 0
+Korda.Query.LockWait.Wait = 0
 ```
 
 Uses the native Wait policy.
@@ -68,10 +68,10 @@ Uses the native Wait policy.
 Controls PostgreSQL row-lock conflicts within the same transaction and total query deadline; it does not enable transparent retries.
 
 
-## `F:NativeWeave.Query.NullOrder.First`
+## `F:Korda.Query.NullOrder.First`
 
 ```csharp
-NativeWeave.Query.NullOrder.First = 0
+Korda.Query.NullOrder.First = 0
 ```
 
 Uses the native First policy.
@@ -79,10 +79,10 @@ Uses the native First policy.
 Both providers render explicit SQL NULL placement. Ordering alone supplies no uniqueness or snapshot guarantee.
 
 
-## `F:NativeWeave.Query.NullOrder.Last`
+## `F:Korda.Query.NullOrder.Last`
 
 ```csharp
-NativeWeave.Query.NullOrder.Last = 1
+Korda.Query.NullOrder.Last = 1
 ```
 
 Uses the native Last policy.
@@ -90,10 +90,10 @@ Uses the native Last policy.
 Both providers render explicit SQL NULL placement. Ordering alone supplies no uniqueness or snapshot guarantee.
 
 
-## `F:NativeWeave.Query.RowLockMode.KeyShare`
+## `F:Korda.Query.RowLockMode.KeyShare`
 
 ```csharp
-NativeWeave.Query.RowLockMode.KeyShare = 3
+Korda.Query.RowLockMode.KeyShare = 3
 ```
 
 Uses the native KeyShare policy.
@@ -101,10 +101,10 @@ Uses the native KeyShare policy.
 Available only on PostgreSQL with an explicit live transaction. SQLite rejects the operation before provider dispatch.
 
 
-## `F:NativeWeave.Query.RowLockMode.NoKeyUpdate`
+## `F:Korda.Query.RowLockMode.NoKeyUpdate`
 
 ```csharp
-NativeWeave.Query.RowLockMode.NoKeyUpdate = 2
+Korda.Query.RowLockMode.NoKeyUpdate = 2
 ```
 
 Uses the native NoKeyUpdate policy.
@@ -112,10 +112,10 @@ Uses the native NoKeyUpdate policy.
 Available only on PostgreSQL with an explicit live transaction. SQLite rejects the operation before provider dispatch.
 
 
-## `F:NativeWeave.Query.RowLockMode.Share`
+## `F:Korda.Query.RowLockMode.Share`
 
 ```csharp
-NativeWeave.Query.RowLockMode.Share = 1
+Korda.Query.RowLockMode.Share = 1
 ```
 
 Uses the native Share policy.
@@ -123,10 +123,10 @@ Uses the native Share policy.
 Available only on PostgreSQL with an explicit live transaction. SQLite rejects the operation before provider dispatch.
 
 
-## `F:NativeWeave.Query.RowLockMode.Update`
+## `F:Korda.Query.RowLockMode.Update`
 
 ```csharp
-NativeWeave.Query.RowLockMode.Update = 0
+Korda.Query.RowLockMode.Update = 0
 ```
 
 Uses the native Update policy.
@@ -134,10 +134,10 @@ Uses the native Update policy.
 Available only on PostgreSQL with an explicit live transaction. SQLite rejects the operation before provider dispatch.
 
 
-## `F:NativeWeave.Query.SetOperation.Except`
+## `F:Korda.Query.SetOperation.Except`
 
 ```csharp
-NativeWeave.Query.SetOperation.Except = 3
+Korda.Query.SetOperation.Except = 3
 ```
 
 Uses the native Except policy.
@@ -145,10 +145,10 @@ Uses the native Except policy.
 Operands must have the same source, field order, aliases, codecs and nullability. The native engine snapshots the right operand; SQL duplicate and NULL semantics apply.
 
 
-## `F:NativeWeave.Query.SetOperation.Intersect`
+## `F:Korda.Query.SetOperation.Intersect`
 
 ```csharp
-NativeWeave.Query.SetOperation.Intersect = 2
+Korda.Query.SetOperation.Intersect = 2
 ```
 
 Uses the native Intersect policy.
@@ -156,10 +156,10 @@ Uses the native Intersect policy.
 Operands must have the same source, field order, aliases, codecs and nullability. The native engine snapshots the right operand; SQL duplicate and NULL semantics apply.
 
 
-## `F:NativeWeave.Query.SetOperation.Union`
+## `F:Korda.Query.SetOperation.Union`
 
 ```csharp
-NativeWeave.Query.SetOperation.Union = 0
+Korda.Query.SetOperation.Union = 0
 ```
 
 Uses the native Union policy.
@@ -167,10 +167,10 @@ Uses the native Union policy.
 Operands must have the same source, field order, aliases, codecs and nullability. The native engine snapshots the right operand; SQL duplicate and NULL semantics apply.
 
 
-## `F:NativeWeave.Query.SetOperation.UnionAll`
+## `F:Korda.Query.SetOperation.UnionAll`
 
 ```csharp
-NativeWeave.Query.SetOperation.UnionAll = 1
+Korda.Query.SetOperation.UnionAll = 1
 ```
 
 Uses the native UnionAll policy.
@@ -178,10 +178,10 @@ Uses the native UnionAll policy.
 Operands must have the same source, field order, aliases, codecs and nullability. The native engine snapshots the right operand; SQL duplicate and NULL semantics apply.
 
 
-## `F:NativeWeave.Query.SortDirection.Ascending`
+## `F:Korda.Query.SortDirection.Ascending`
 
 ```csharp
-NativeWeave.Query.SortDirection.Ascending = 0
+Korda.Query.SortDirection.Ascending = 0
 ```
 
 Uses the native Ascending policy.
@@ -189,10 +189,10 @@ Uses the native Ascending policy.
 The native query validates each enum value before mutation. Direction is explicit; it does not change SQL NULL ordering.
 
 
-## `F:NativeWeave.Query.SortDirection.Descending`
+## `F:Korda.Query.SortDirection.Descending`
 
 ```csharp
-NativeWeave.Query.SortDirection.Descending = 1
+Korda.Query.SortDirection.Descending = 1
 ```
 
 Uses the native Descending policy.
@@ -200,10 +200,10 @@ Uses the native Descending policy.
 The native query validates each enum value before mutation. Direction is explicit; it does not change SQL NULL ordering.
 
 
-## `M:NativeWeave.Database.DataSession.From``1(NativeWeave.Data.Table{``0})`
+## `M:Korda.Database.DataSession.From``1(Korda.Data.Table{``0})`
 
 ```csharp
-public NativeWeave.Query.Query<TEntity> NativeWeave.Database.DataSession.From<TEntity>(NativeWeave.Data.Table<TEntity> table) where TEntity : class
+public Korda.Query.Query<TEntity> Korda.Database.DataSession.From<TEntity>(Korda.Data.Table<TEntity> table) where TEntity : class
 ```
 
 Creates one mutable native query arena bound to this session and exact static table.
@@ -215,12 +215,12 @@ The returned query owns one native arena and borrows this session's admission. C
 - **returns**: A query to dispose after its terminal or enumeration completes.
 - **T:System.ArgumentNullException**: is null.
 - **T:System.ObjectDisposedException**: Session or source admission is closed.
-- **T:NativeWeave.Data.DatabaseException**: The native metadata, capability or capacity rejects construction.
+- **T:Korda.Data.DatabaseException**: The native metadata, capability or capacity rejects construction.
 
-## `M:NativeWeave.Query.CommonTable`1.Create(NativeWeave.Data.Table{`0},NativeWeave.Query.QuerySelection{`0},System.Boolean)`
+## `M:Korda.Query.CommonTable`1.Create(Korda.Data.Table{`0},Korda.Query.QuerySelection{`0},System.Boolean)`
 
 ```csharp
-public static NativeWeave.Query.CommonTable<T> NativeWeave.Query.CommonTable<T>.Create(NativeWeave.Data.Table<T> declaredShape, NativeWeave.Query.QuerySelection<T> body, [System.Boolean recursive = false])
+public static Korda.Query.CommonTable<T> Korda.Query.CommonTable<T>.Create(Korda.Data.Table<T> declaredShape, Korda.Query.QuerySelection<T> body, [System.Boolean recursive = false])
 ```
 
 Clones a native selected body into the declared shape; recursive mode requires a validated anchor/member UNION.
@@ -234,12 +234,12 @@ The snapshot is bound to one source and a declared static row shape. With import
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.CommonTable`1.Dispose`
+## `M:Korda.Query.CommonTable`1.Dispose`
 
 ```csharp
-public void NativeWeave.Query.CommonTable<T>.Dispose()
+public void Korda.Query.CommonTable<T>.Dispose()
 ```
 
 Prevents new CTE imports and releases this native snapshot reference.
@@ -247,10 +247,10 @@ Prevents new CTE imports and releases this native snapshot reference.
 The snapshot is bound to one source and a declared static row shape. With imports a native retained reference. Disposal prevents new imports and does not mutate previously imported snapshots. Recursive creation requires one validated anchor/member self-reference.
 
 
-## `M:NativeWeave.Query.JoinPredicate`2.Left``1(NativeWeave.Data.Column{`0,``0})`
+## `M:Korda.Query.JoinPredicate`2.Left``1(Korda.Data.Column{`0,``0})`
 
 ```csharp
-public NativeWeave.Query.SqlExpression<T> NativeWeave.Query.JoinPredicate<TLeft, TRight>.Left<T>(NativeWeave.Data.Column<TLeft, T> column)
+public Korda.Query.SqlExpression<T> Korda.Query.JoinPredicate<TLeft, TRight>.Left<T>(Korda.Data.Column<TLeft, T> column)
 ```
 
 Reads a root-table column during the synchronous ON callback.
@@ -263,12 +263,12 @@ Use only inside the synchronous JOIN callback. Provisional right-side expression
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.JoinPredicate`2.Right``1(NativeWeave.Data.Column{`1,``0})`
+## `M:Korda.Query.JoinPredicate`2.Right``1(Korda.Data.Column{`1,``0})`
 
 ```csharp
-public NativeWeave.Query.SqlExpression<T> NativeWeave.Query.JoinPredicate<TLeft, TRight>.Right<T>(NativeWeave.Data.Column<TRight, T> column)
+public Korda.Query.SqlExpression<T> Korda.Query.JoinPredicate<TLeft, TRight>.Right<T>(Korda.Data.Column<TRight, T> column)
 ```
 
 Reads a provisional joined column; the resulting ON token expires on commit or abort.
@@ -281,12 +281,12 @@ Use only inside the synchronous JOIN callback. Provisional right-side expression
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.PreparedQuery`1.AsAsyncEnumerable(NativeWeave.Database.DataSession,NativeWeave.Query.QueryParameters,System.Threading.CancellationToken)`
+## `M:Korda.Query.PreparedQuery`1.AsAsyncEnumerable(Korda.Database.DataSession,Korda.Query.QueryParameters,System.Threading.CancellationToken)`
 
 ```csharp
-public System.Collections.Generic.IAsyncEnumerable<T> NativeWeave.Query.PreparedQuery<T>.AsAsyncEnumerable(NativeWeave.Database.DataSession session, [NativeWeave.Query.QueryParameters? parameters = null], [System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)])
+public System.Collections.Generic.IAsyncEnumerable<T> Korda.Query.PreparedQuery<T>.AsAsyncEnumerable(Korda.Database.DataSession session, [Korda.Query.QueryParameters? parameters = null], [System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)])
 ```
 
 Snapshots exact parameter values now and creates one independent lazy native stream.
@@ -300,14 +300,14 @@ Concurrent execution uses separate sessions from the same source. Disposing prev
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 - **T:System.OperationCanceledException**: Cancellation requests termination and cleanup.
 - **T:System.TimeoutException**: The finite total query deadline expires; cleanup still completes.
 
-## `M:NativeWeave.Query.PreparedQuery`1.Dispose`
+## `M:Korda.Query.PreparedQuery`1.Dispose`
 
 ```csharp
-public void NativeWeave.Query.PreparedQuery<T>.Dispose()
+public void Korda.Query.PreparedQuery<T>.Dispose()
 ```
 
 Prevents new execution and releases this plan reference without cancelling accepted operations.
@@ -315,10 +315,10 @@ Prevents new execution and releases this plan reference without cancelling accep
 Concurrent execution uses separate sessions from the same source. Disposing prevents new dispatch; accepted native operations retain their plan independently and complete safely.
 
 
-## `M:NativeWeave.Query.PreparedQuery`1.ToListAsync(NativeWeave.Database.DataSession,NativeWeave.Query.QueryParameters,System.Threading.CancellationToken)`
+## `M:Korda.Query.PreparedQuery`1.ToListAsync(Korda.Database.DataSession,Korda.Query.QueryParameters,System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<T>> NativeWeave.Query.PreparedQuery<T>.ToListAsync(NativeWeave.Database.DataSession session, [NativeWeave.Query.QueryParameters? parameters = null], [System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)])
+public System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<T>> Korda.Query.PreparedQuery<T>.ToListAsync(Korda.Database.DataSession session, [Korda.Query.QueryParameters? parameters = null], [System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)])
 ```
 
 Snapshots the exact declared parameter set before await and executes a bounded owned list.
@@ -332,14 +332,14 @@ Concurrent execution uses separate sessions from the same source. Disposing prev
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 - **T:System.OperationCanceledException**: Cancellation requests termination and cleanup.
 - **T:System.TimeoutException**: The finite total query deadline expires; cleanup still completes.
 
-## `M:NativeWeave.Query.ProjectionBuilder`1.Add``1(NativeWeave.Query.SqlExpression{``0},System.String)`
+## `M:Korda.Query.ProjectionBuilder`1.Add``1(Korda.Query.SqlExpression{``0},System.String)`
 
 ```csharp
-public NativeWeave.Data.ResultColumn<TValue> NativeWeave.Query.ProjectionBuilder<T>.Add<TValue>(NativeWeave.Query.SqlExpression<TValue> expression, System.String alias)
+public Korda.Data.ResultColumn<TValue> Korda.Query.ProjectionBuilder<T>.Add<TValue>(Korda.Query.SqlExpression<TValue> expression, System.String alias)
 ```
 
 Adds an exact same-query scalar and unique result alias, returning its projection token.
@@ -353,12 +353,12 @@ Fields must come from its exact live query. Build freezes field order, unique na
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.ProjectionBuilder`1.Build(NativeWeave.Data.RowMaterializer{`0})`
+## `M:Korda.Query.ProjectionBuilder`1.Build(Korda.Data.RowMaterializer{`0})`
 
 ```csharp
-public NativeWeave.Data.Projection<T> NativeWeave.Query.ProjectionBuilder<T>.Build(NativeWeave.Data.RowMaterializer<T> materializer)
+public Korda.Data.Projection<T> Korda.Query.ProjectionBuilder<T>.Build(Korda.Data.RowMaterializer<T> materializer)
 ```
 
 Consumes the builder and freezes a direct AOT-visible materializer; it does not execute SQL.
@@ -370,12 +370,12 @@ Fields must come from its exact live query. Build freezes field order, unique na
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.QueryParameters.#ctor`
+## `M:Korda.Query.QueryParameters.#ctor`
 
 ```csharp
-public NativeWeave.Query.QueryParameters.QueryParameters()
+public Korda.Query.QueryParameters.QueryParameters()
 ```
 
 Creates an empty explicit parameter set.
@@ -383,10 +383,10 @@ Creates an empty explicit parameter set.
 Set snapshots each encoded value before returning. A terminal copies the complete finite set before its first await; later Set calls do not change admitted execution. Missing, extra, foreign or codec-incompatible identities reject before native dispatch. No global parameter dictionary exists.
 
 
-## `M:NativeWeave.Query.QueryParameters.Set``1(NativeWeave.Query.QueryParameter{``0},``0)`
+## `M:Korda.Query.QueryParameters.Set``1(Korda.Query.QueryParameter{``0},``0)`
 
 ```csharp
-public NativeWeave.Query.QueryParameters NativeWeave.Query.QueryParameters.Set<T>(NativeWeave.Query.QueryParameter<T> parameter, T value)
+public Korda.Query.QueryParameters Korda.Query.QueryParameters.Set<T>(Korda.Query.QueryParameter<T> parameter, T value)
 ```
 
 Copies or replaces one typed parameter value; default or conflicting source identities reject.
@@ -400,12 +400,12 @@ Set snapshots each encoded value before returning. A terminal copies the complet
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.QueryRow`1.Equal``1(NativeWeave.Data.Column{`0,``0},``0)`
+## `M:Korda.Query.QueryRow`1.Equal``1(Korda.Data.Column{`0,``0},``0)`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.QueryRow<TEntity>.Equal<T>(NativeWeave.Data.Column<TEntity, T> column, T value)
+public Korda.Query.SqlPredicate Korda.Query.QueryRow<TEntity>.Equal<T>(Korda.Data.Column<TEntity, T> column, T value)
 ```
 
 Snapshots a typed value and creates native SQL equality.
@@ -419,12 +419,12 @@ This borrowed proxy retains its query association. Default, foreign, closed or s
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.QueryRow`1.Get``1(NativeWeave.Data.Column{`0,``0})`
+## `M:Korda.Query.QueryRow`1.Get``1(Korda.Data.Column{`0,``0})`
 
 ```csharp
-public NativeWeave.Query.SqlExpression<T> NativeWeave.Query.QueryRow<TEntity>.Get<T>(NativeWeave.Data.Column<TEntity, T> column)
+public Korda.Query.SqlExpression<T> Korda.Query.QueryRow<TEntity>.Get<T>(Korda.Data.Column<TEntity, T> column)
 ```
 
 Creates an immediate native expression for an exact root-table column.
@@ -437,12 +437,12 @@ This borrowed proxy retains its query association. Default, foreign, closed or s
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.QueryRow`1.GreaterThanOrEqual``1(NativeWeave.Data.Column{`0,``0},``0)`
+## `M:Korda.Query.QueryRow`1.GreaterThanOrEqual``1(Korda.Data.Column{`0,``0},``0)`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.QueryRow<TEntity>.GreaterThanOrEqual<T>(NativeWeave.Data.Column<TEntity, T> column, T value)
+public Korda.Query.SqlPredicate Korda.Query.QueryRow<TEntity>.GreaterThanOrEqual<T>(Korda.Data.Column<TEntity, T> column, T value)
 ```
 
 Snapshots a typed lower bound and creates a native comparison.
@@ -456,12 +456,12 @@ This borrowed proxy retains its query association. Default, foreign, closed or s
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.QueryRow`1.IsNotNull``1(NativeWeave.Data.Column{`0,``0})`
+## `M:Korda.Query.QueryRow`1.IsNotNull``1(Korda.Data.Column{`0,``0})`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.QueryRow<TEntity>.IsNotNull<T>(NativeWeave.Data.Column<TEntity, T> column)
+public Korda.Query.SqlPredicate Korda.Query.QueryRow<TEntity>.IsNotNull<T>(Korda.Data.Column<TEntity, T> column)
 ```
 
 Tests the exact root column for SQL non-NULL.
@@ -474,12 +474,12 @@ This borrowed proxy retains its query association. Default, foreign, closed or s
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.QueryRow`1.IsNull``1(NativeWeave.Data.Column{`0,``0})`
+## `M:Korda.Query.QueryRow`1.IsNull``1(Korda.Data.Column{`0,``0})`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.QueryRow<TEntity>.IsNull<T>(NativeWeave.Data.Column<TEntity, T> column)
+public Korda.Query.SqlPredicate Korda.Query.QueryRow<TEntity>.IsNull<T>(Korda.Data.Column<TEntity, T> column)
 ```
 
 Tests the exact root column for SQL NULL.
@@ -492,12 +492,12 @@ This borrowed proxy retains its query association. Default, foreign, closed or s
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.QuerySelection`1.AsAsyncEnumerable(System.Threading.CancellationToken)`
+## `M:Korda.Query.QuerySelection`1.AsAsyncEnumerable(System.Threading.CancellationToken)`
 
 ```csharp
-public System.Collections.Generic.IAsyncEnumerable<T> NativeWeave.Query.QuerySelection<T>.AsAsyncEnumerable([System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)])
+public System.Collections.Generic.IAsyncEnumerable<T> Korda.Query.QuerySelection<T>.AsAsyncEnumerable([System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)])
 ```
 
 Seals synchronously and creates a one-shot bounded stream whose first MoveNext dispatches.
@@ -509,14 +509,14 @@ This borrowed view is valid only while its projection remains current in the liv
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 - **T:System.OperationCanceledException**: Cancellation requests termination and cleanup.
 - **T:System.TimeoutException**: The finite total query deadline expires; cleanup still completes.
 
-## `M:NativeWeave.Query.QuerySelection`1.Combine(NativeWeave.Query.QuerySelection{`0},NativeWeave.Query.SetOperation)`
+## `M:Korda.Query.QuerySelection`1.Combine(Korda.Query.QuerySelection{`0},Korda.Query.SetOperation)`
 
 ```csharp
-public NativeWeave.Query.QuerySelection<T> NativeWeave.Query.QuerySelection<T>.Combine(NativeWeave.Query.QuerySelection<T> other, [NativeWeave.Query.SetOperation operation = NativeWeave.Query.SetOperation.UnionAll])
+public Korda.Query.QuerySelection<T> Korda.Query.QuerySelection<T>.Combine(Korda.Query.QuerySelection<T> other, [Korda.Query.SetOperation operation = Korda.Query.SetOperation.UnionAll])
 ```
 
 Appends a native set operation using a frozen same-source selection; the other query remains mutable.
@@ -529,12 +529,12 @@ This borrowed view is valid only while its projection remains current in the liv
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.QuerySelection`1.FirstAsync(System.Threading.CancellationToken)`
+## `M:Korda.Query.QuerySelection`1.FirstAsync(System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task<T> NativeWeave.Query.QuerySelection<T>.FirstAsync([System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)])
+public System.Threading.Tasks.Task<T> Korda.Query.QuerySelection<T>.FirstAsync([System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)])
 ```
 
 Reads at most one business row and retires the cursor; absence throws.
@@ -546,14 +546,14 @@ This borrowed view is valid only while its projection remains current in the liv
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 - **T:System.OperationCanceledException**: Cancellation requests termination and cleanup.
 - **T:System.TimeoutException**: The finite total query deadline expires; cleanup still completes.
 
-## `M:NativeWeave.Query.QuerySelection`1.FirstOrDefaultAsync(System.Threading.CancellationToken)`
+## `M:Korda.Query.QuerySelection`1.FirstOrDefaultAsync(System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task<T?> NativeWeave.Query.QuerySelection<T>.FirstOrDefaultAsync([System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)])
+public System.Threading.Tasks.Task<T?> Korda.Query.QuerySelection<T>.FirstOrDefaultAsync([System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)])
 ```
 
 Reads at most one business row, returning default(T) on absence.
@@ -565,14 +565,14 @@ This borrowed view is valid only while its projection remains current in the liv
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 - **T:System.OperationCanceledException**: Cancellation requests termination and cleanup.
 - **T:System.TimeoutException**: The finite total query deadline expires; cleanup still completes.
 
-## `M:NativeWeave.Query.QuerySelection`1.Prepare`
+## `M:Korda.Query.QuerySelection`1.Prepare`
 
 ```csharp
-public NativeWeave.Query.PreparedQuery<T> NativeWeave.Query.QuerySelection<T>.Prepare()
+public Korda.Query.PreparedQuery<T> Korda.Query.QuerySelection<T>.Prepare()
 ```
 
 Seals and transfers an immutable source-bound native plan for independent parameter snapshots.
@@ -583,12 +583,12 @@ This borrowed view is valid only while its projection remains current in the liv
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.QuerySelection`1.SingleAsync(System.Threading.CancellationToken)`
+## `M:Korda.Query.QuerySelection`1.SingleAsync(System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task<T> NativeWeave.Query.QuerySelection<T>.SingleAsync([System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)])
+public System.Threading.Tasks.Task<T> Korda.Query.QuerySelection<T>.SingleAsync([System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)])
 ```
 
 Reads at most two business rows and requires exactly one, with cleanup on either cardinality failure.
@@ -600,14 +600,14 @@ This borrowed view is valid only while its projection remains current in the liv
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 - **T:System.OperationCanceledException**: Cancellation requests termination and cleanup.
 - **T:System.TimeoutException**: The finite total query deadline expires; cleanup still completes.
 
-## `M:NativeWeave.Query.QuerySelection`1.SingleOrDefaultAsync(System.Threading.CancellationToken)`
+## `M:Korda.Query.QuerySelection`1.SingleOrDefaultAsync(System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task<T?> NativeWeave.Query.QuerySelection<T>.SingleOrDefaultAsync([System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)])
+public System.Threading.Tasks.Task<T?> Korda.Query.QuerySelection<T>.SingleOrDefaultAsync([System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)])
 ```
 
 Requires at most one business row and returns default(T) when absent.
@@ -619,14 +619,14 @@ This borrowed view is valid only while its projection remains current in the liv
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 - **T:System.OperationCanceledException**: Cancellation requests termination and cleanup.
 - **T:System.TimeoutException**: The finite total query deadline expires; cleanup still completes.
 
-## `M:NativeWeave.Query.QuerySelection`1.ToArrayAsync(System.Threading.CancellationToken)`
+## `M:Korda.Query.QuerySelection`1.ToArrayAsync(System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task<T[]> NativeWeave.Query.QuerySelection<T>.ToArrayAsync([System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)])
+public System.Threading.Tasks.Task<T[]> Korda.Query.QuerySelection<T>.ToArrayAsync([System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)])
 ```
 
 Seals once and returns a bounded owned array after native cursor retirement.
@@ -638,14 +638,14 @@ This borrowed view is valid only while its projection remains current in the liv
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 - **T:System.OperationCanceledException**: Cancellation requests termination and cleanup.
 - **T:System.TimeoutException**: The finite total query deadline expires; cleanup still completes.
 
-## `M:NativeWeave.Query.QuerySelection`1.ToListAsync(System.Threading.CancellationToken)`
+## `M:Korda.Query.QuerySelection`1.ToListAsync(System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<T>> NativeWeave.Query.QuerySelection<T>.ToListAsync([System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)])
+public System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<T>> Korda.Query.QuerySelection<T>.ToListAsync([System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)])
 ```
 
 Seals once and returns a bounded owned list after native cursor retirement.
@@ -657,14 +657,14 @@ This borrowed view is valid only while its projection remains current in the liv
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 - **T:System.OperationCanceledException**: Cancellation requests termination and cleanup.
 - **T:System.TimeoutException**: The finite total query deadline expires; cleanup still completes.
 
-## `M:NativeWeave.Query.QuerySelection`1.ToSql`
+## `M:Korda.Query.QuerySelection`1.ToSql`
 
 ```csharp
-public System.String NativeWeave.Query.QuerySelection<T>.ToSql()
+public System.String Korda.Query.QuerySelection<T>.ToSql()
 ```
 
 Renders a bounded native clone with placeholders and no parameter values; does not execute or seal.
@@ -675,12 +675,12 @@ This borrowed view is valid only while its projection remains current in the liv
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.Query`1.AnyAsync(System.Threading.CancellationToken)`
+## `M:Korda.Query.Query`1.AnyAsync(System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task<System.Boolean> NativeWeave.Query.Query<TEntity>.AnyAsync([System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)])
+public System.Threading.Tasks.Task<System.Boolean> Korda.Query.Query<TEntity>.AnyAsync([System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)])
 ```
 
 Performs native EXISTS over the fully composed query.
@@ -692,14 +692,14 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 - **T:System.OperationCanceledException**: Cancellation requests termination and cleanup.
 - **T:System.TimeoutException**: The finite total query deadline expires; cleanup still completes.
 
-## `M:NativeWeave.Query.Query`1.Clone`
+## `M:Korda.Query.Query`1.Clone`
 
 ```csharp
-public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.Clone()
+public Korda.Query.Query<TEntity> Korda.Query.Query<TEntity>.Clone()
 ```
 
 Creates an explicit deep native mutable clone; existing expression/alias proxies remain bound to this query.
@@ -710,12 +710,12 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.Query`1.Column``1(NativeWeave.Data.Column{`0,``0})`
+## `M:Korda.Query.Query`1.Column``1(Korda.Data.Column{`0,``0})`
 
 ```csharp
-public NativeWeave.Query.SqlExpression<T> NativeWeave.Query.Query<TEntity>.Column<T>(NativeWeave.Data.Column<TEntity, T> column)
+public Korda.Query.SqlExpression<T> Korda.Query.Query<TEntity>.Column<T>(Korda.Data.Column<TEntity, T> column)
 ```
 
 Creates an immediate root-column native scalar token.
@@ -728,12 +728,12 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.Query`1.Column``2(NativeWeave.Query.JoinedTable{``0},NativeWeave.Data.Column{``0,``1})`
+## `M:Korda.Query.Query`1.Column``2(Korda.Query.JoinedTable{``0},Korda.Data.Column{``0,``1})`
 
 ```csharp
-public NativeWeave.Query.SqlExpression<T> NativeWeave.Query.Query<TEntity>.Column<TJoin, T>(NativeWeave.Query.JoinedTable<TJoin> table, NativeWeave.Data.Column<TJoin, T> column) where TJoin : class
+public Korda.Query.SqlExpression<T> Korda.Query.Query<TEntity>.Column<TJoin, T>(Korda.Query.JoinedTable<TJoin> table, Korda.Data.Column<TJoin, T> column) where TJoin : class
 ```
 
 Creates a scalar from an exact same-query inner-join alias and table.
@@ -748,12 +748,12 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.Query`1.CountAsync(System.Threading.CancellationToken)`
+## `M:Korda.Query.Query`1.CountAsync(System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task<System.Int64> NativeWeave.Query.Query<TEntity>.CountAsync([System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)])
+public System.Threading.Tasks.Task<System.Int64> Korda.Query.Query<TEntity>.CountAsync([System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)])
 ```
 
 Counts the fully composed native result without fetching DTOs into managed memory.
@@ -765,14 +765,14 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 - **T:System.OperationCanceledException**: Cancellation requests termination and cleanup.
 - **T:System.TimeoutException**: The finite total query deadline expires; cleanup still completes.
 
-## `M:NativeWeave.Query.Query`1.CountRows`
+## `M:Korda.Query.Query`1.CountRows`
 
 ```csharp
-public NativeWeave.Query.SqlExpression<System.Int64> NativeWeave.Query.Query<TEntity>.CountRows()
+public Korda.Query.SqlExpression<System.Int64> Korda.Query.Query<TEntity>.CountRows()
 ```
 
 Creates a native COUNT(*) aggregate with exact Int64 result metadata.
@@ -783,12 +783,12 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.Query`1.DeleteAsync(System.Threading.CancellationToken)`
+## `M:Korda.Query.Query`1.DeleteAsync(System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task<System.Int64> NativeWeave.Query.Query<TEntity>.DeleteAsync([System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)])
+public System.Threading.Tasks.Task<System.Int64> Korda.Query.Query<TEntity>.DeleteAsync([System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)])
 ```
 
 Executes a filtered native DELETE; missing filters and unsupported joined/grouped writes reject.
@@ -800,14 +800,14 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 - **T:System.OperationCanceledException**: Cancellation requests termination and cleanup.
 - **T:System.TimeoutException**: The finite total query deadline expires; cleanup still completes.
 
-## `M:NativeWeave.Query.Query`1.Dispose`
+## `M:Korda.Query.Query`1.Dispose`
 
 ```csharp
-public void NativeWeave.Query.Query<TEntity>.Dispose()
+public void Korda.Query.Query<TEntity>.Dispose()
 ```
 
 Closes query admission, requests any active cursor stop and releases the native arena reference.
@@ -815,10 +815,10 @@ Closes query admission, requests any active cursor stop and releases the native 
 Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
 
-## `M:NativeWeave.Query.Query`1.Distinct`
+## `M:Korda.Query.Query`1.Distinct`
 
 ```csharp
-public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.Distinct()
+public Korda.Query.Query<TEntity> Korda.Query.Query<TEntity>.Distinct()
 ```
 
 Applies native SQL DISTINCT to the selected shape.
@@ -829,12 +829,12 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.Query`1.Exists``1(NativeWeave.Query.QuerySelection{``0})`
+## `M:Korda.Query.Query`1.Exists``1(Korda.Query.QuerySelection{``0})`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.Query<TEntity>.Exists<T>(NativeWeave.Query.QuerySelection<T> subquery)
+public Korda.Query.SqlPredicate Korda.Query.Query<TEntity>.Exists<T>(Korda.Query.QuerySelection<T> subquery)
 ```
 
 Snapshots a same-source selection into a native EXISTS condition.
@@ -847,12 +847,12 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.Query`1.ForUpdate(NativeWeave.Query.RowLockMode,NativeWeave.Query.LockWait)`
+## `M:Korda.Query.Query`1.ForUpdate(Korda.Query.RowLockMode,Korda.Query.LockWait)`
 
 ```csharp
-public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.ForUpdate([NativeWeave.Query.RowLockMode mode = NativeWeave.Query.RowLockMode.Update], [NativeWeave.Query.LockWait wait = NativeWeave.Query.LockWait.Wait])
+public Korda.Query.Query<TEntity> Korda.Query.Query<TEntity>.ForUpdate([Korda.Query.RowLockMode mode = Korda.Query.RowLockMode.Update], [Korda.Query.LockWait wait = Korda.Query.LockWait.Wait])
 ```
 
 Applies an admitted PostgreSQL row lock; execution requires an explicit active transaction.
@@ -865,12 +865,12 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.Query`1.GroupBy``1(NativeWeave.Query.SqlExpression{``0})`
+## `M:Korda.Query.Query`1.GroupBy``1(Korda.Query.SqlExpression{``0})`
 
 ```csharp
-public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.GroupBy<T>(NativeWeave.Query.SqlExpression<T> expression)
+public Korda.Query.Query<TEntity> Korda.Query.Query<TEntity>.GroupBy<T>(Korda.Query.SqlExpression<T> expression)
 ```
 
 Appends a native grouping key.
@@ -883,12 +883,12 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.Query`1.HasMatch``1(NativeWeave.Query.LeftJoinedTable{``0})`
+## `M:Korda.Query.Query`1.HasMatch``1(Korda.Query.LeftJoinedTable{``0})`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.Query<TEntity>.HasMatch<TJoin>(NativeWeave.Query.LeftJoinedTable<TJoin> table) where TJoin : class
+public Korda.Query.SqlPredicate Korda.Query.Query<TEntity>.HasMatch<TJoin>(Korda.Query.LeftJoinedTable<TJoin> table) where TJoin : class
 ```
 
 Tests the native explicit LEFT JOIN match marker, independently from nullable child data.
@@ -901,12 +901,12 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.Query`1.Having(NativeWeave.Query.SqlPredicate)`
+## `M:Korda.Query.Query`1.Having(Korda.Query.SqlPredicate)`
 
 ```csharp
-public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.Having(NativeWeave.Query.SqlPredicate predicate)
+public Korda.Query.Query<TEntity> Korda.Query.Query<TEntity>.Having(Korda.Query.SqlPredicate predicate)
 ```
 
 Appends a same-query native group predicate.
@@ -918,12 +918,12 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.Query`1.InnerJoin``1(NativeWeave.Data.Table{``0},System.String,System.Func{NativeWeave.Query.JoinPredicate{`0,``0},NativeWeave.Query.SqlPredicate})`
+## `M:Korda.Query.Query`1.InnerJoin``1(Korda.Data.Table{``0},System.String,System.Func{Korda.Query.JoinPredicate{`0,``0},Korda.Query.SqlPredicate})`
 
 ```csharp
-public NativeWeave.Query.JoinedTable<TJoin> NativeWeave.Query.Query<TEntity>.InnerJoin<TJoin>(NativeWeave.Data.Table<TJoin> table, System.String alias, System.Func<NativeWeave.Query.JoinPredicate<TEntity, TJoin>, NativeWeave.Query.SqlPredicate> on) where TJoin : class
+public Korda.Query.JoinedTable<TJoin> Korda.Query.Query<TEntity>.InnerJoin<TJoin>(Korda.Data.Table<TJoin> table, System.String alias, System.Func<Korda.Query.JoinPredicate<TEntity, TJoin>, Korda.Query.SqlPredicate> on) where TJoin : class
 ```
 
 Reserves, builds and atomically commits an explicit native INNER JOIN ON clause.
@@ -938,12 +938,12 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.Query`1.LeftJoin``1(NativeWeave.Data.Table{``0},System.String,System.Func{NativeWeave.Query.JoinPredicate{`0,``0},NativeWeave.Query.SqlPredicate})`
+## `M:Korda.Query.Query`1.LeftJoin``1(Korda.Data.Table{``0},System.String,System.Func{Korda.Query.JoinPredicate{`0,``0},Korda.Query.SqlPredicate})`
 
 ```csharp
-public NativeWeave.Query.LeftJoinedTable<TJoin> NativeWeave.Query.Query<TEntity>.LeftJoin<TJoin>(NativeWeave.Data.Table<TJoin> table, System.String alias, System.Func<NativeWeave.Query.JoinPredicate<TEntity, TJoin>, NativeWeave.Query.SqlPredicate> on) where TJoin : class
+public Korda.Query.LeftJoinedTable<TJoin> Korda.Query.Query<TEntity>.LeftJoin<TJoin>(Korda.Data.Table<TJoin> table, System.String alias, System.Func<Korda.Query.JoinPredicate<TEntity, TJoin>, Korda.Query.SqlPredicate> on) where TJoin : class
 ```
 
 Commits a native LEFT JOIN and returns a nullable-only projected alias.
@@ -958,12 +958,12 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.Query`1.NullableReference``2(NativeWeave.Query.LeftJoinedTable{``0},NativeWeave.Data.Column{``0,``1})`
+## `M:Korda.Query.Query`1.NullableReference``2(Korda.Query.LeftJoinedTable{``0},Korda.Data.Column{``0,``1})`
 
 ```csharp
-public NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.Query<TEntity>.NullableReference<TJoin, T>(NativeWeave.Query.LeftJoinedTable<TJoin> table, NativeWeave.Data.Column<TJoin, T> column) where TJoin : class where T : class?
+public Korda.Query.SqlExpression<T?> Korda.Query.Query<TEntity>.NullableReference<TJoin, T>(Korda.Query.LeftJoinedTable<TJoin> table, Korda.Data.Column<TJoin, T> column) where TJoin : class where T : class?
 ```
 
 Reads a reference column through a LEFT JOIN with explicit nullable result metadata.
@@ -978,12 +978,12 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.Query`1.NullableValue``2(NativeWeave.Query.LeftJoinedTable{``0},NativeWeave.Data.Column{``0,System.Nullable{``1}})`
+## `M:Korda.Query.Query`1.NullableValue``2(Korda.Query.LeftJoinedTable{``0},Korda.Data.Column{``0,System.Nullable{``1}})`
 
 ```csharp
-public NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.Query<TEntity>.NullableValue<TJoin, T>(NativeWeave.Query.LeftJoinedTable<TJoin> table, NativeWeave.Data.Column<TJoin, T?> column) where TJoin : class where T : struct
+public Korda.Query.SqlExpression<T?> Korda.Query.Query<TEntity>.NullableValue<TJoin, T>(Korda.Query.LeftJoinedTable<TJoin> table, Korda.Data.Column<TJoin, T?> column) where TJoin : class where T : struct
 ```
 
 Preserves an already nullable value column through a LEFT JOIN.
@@ -998,12 +998,12 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.Query`1.NullableValue``2(NativeWeave.Query.LeftJoinedTable{``0},NativeWeave.Data.Column{``0,``1})`
+## `M:Korda.Query.Query`1.NullableValue``2(Korda.Query.LeftJoinedTable{``0},Korda.Data.Column{``0,``1})`
 
 ```csharp
-public NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.Query<TEntity>.NullableValue<TJoin, T>(NativeWeave.Query.LeftJoinedTable<TJoin> table, NativeWeave.Data.Column<TJoin, T> column) where TJoin : class where T : struct
+public Korda.Query.SqlExpression<T?> Korda.Query.Query<TEntity>.NullableValue<TJoin, T>(Korda.Query.LeftJoinedTable<TJoin> table, Korda.Data.Column<TJoin, T> column) where TJoin : class where T : struct
 ```
 
 Reads a non-null value column through a LEFT JOIN as an explicitly nullable scalar.
@@ -1018,12 +1018,12 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.Query`1.OrderBy``1(NativeWeave.Data.Column{`0,``0},NativeWeave.Query.SortDirection,NativeWeave.Query.NullOrder)`
+## `M:Korda.Query.Query`1.OrderBy``1(Korda.Data.Column{`0,``0},Korda.Query.SortDirection,Korda.Query.NullOrder)`
 
 ```csharp
-public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.OrderBy<T>(NativeWeave.Data.Column<TEntity, T> column, [NativeWeave.Query.SortDirection direction = NativeWeave.Query.SortDirection.Ascending], [NativeWeave.Query.NullOrder nullOrder = NativeWeave.Query.NullOrder.Last])
+public Korda.Query.Query<TEntity> Korda.Query.Query<TEntity>.OrderBy<T>(Korda.Data.Column<TEntity, T> column, [Korda.Query.SortDirection direction = Korda.Query.SortDirection.Ascending], [Korda.Query.NullOrder nullOrder = Korda.Query.NullOrder.Last])
 ```
 
 Replaces native ordering with the exact root column and explicit NULL policy.
@@ -1038,12 +1038,12 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.Query`1.OrderBy``1(NativeWeave.Query.SqlExpression{``0},NativeWeave.Query.SortDirection,NativeWeave.Query.NullOrder)`
+## `M:Korda.Query.Query`1.OrderBy``1(Korda.Query.SqlExpression{``0},Korda.Query.SortDirection,Korda.Query.NullOrder)`
 
 ```csharp
-public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.OrderBy<T>(NativeWeave.Query.SqlExpression<T> expression, [NativeWeave.Query.SortDirection direction = NativeWeave.Query.SortDirection.Ascending], [NativeWeave.Query.NullOrder nullOrder = NativeWeave.Query.NullOrder.Last])
+public Korda.Query.Query<TEntity> Korda.Query.Query<TEntity>.OrderBy<T>(Korda.Query.SqlExpression<T> expression, [Korda.Query.SortDirection direction = Korda.Query.SortDirection.Ascending], [Korda.Query.NullOrder nullOrder = Korda.Query.NullOrder.Last])
 ```
 
 Replaces native ordering with the same-query expression and explicit NULL policy.
@@ -1058,12 +1058,12 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.Query`1.ParameterValue``1(NativeWeave.Query.QueryParameter{``0})`
+## `M:Korda.Query.Query`1.ParameterValue``1(Korda.Query.QueryParameter{``0})`
 
 ```csharp
-public NativeWeave.Query.SqlExpression<T> NativeWeave.Query.Query<TEntity>.ParameterValue<T>(NativeWeave.Query.QueryParameter<T> parameter)
+public Korda.Query.SqlExpression<T> Korda.Query.Query<TEntity>.ParameterValue<T>(Korda.Query.QueryParameter<T> parameter)
 ```
 
 Creates a native reference to an identity already declared or imported into this query.
@@ -1076,12 +1076,12 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.Query`1.Parameter``1(System.String,NativeWeave.Data.ValueCodec{``0})`
+## `M:Korda.Query.Query`1.Parameter``1(System.String,Korda.Data.ValueCodec{``0})`
 
 ```csharp
-public NativeWeave.Query.QueryParameter<T> NativeWeave.Query.Query<TEntity>.Parameter<T>(System.String name, NativeWeave.Data.ValueCodec<T> codec)
+public Korda.Query.QueryParameter<T> Korda.Query.Query<TEntity>.Parameter<T>(System.String name, Korda.Data.ValueCodec<T> codec)
 ```
 
 Allocates one nonrecycled source-generation parameter identity and declares it in this query.
@@ -1095,12 +1095,12 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.Query`1.Projection``1`
+## `M:Korda.Query.Query`1.Projection``1`
 
 ```csharp
-public NativeWeave.Query.ProjectionBuilder<T> NativeWeave.Query.Query<TEntity>.Projection<T>()
+public Korda.Query.ProjectionBuilder<T> Korda.Query.Query<TEntity>.Projection<T>()
 ```
 
 Starts an explicit typed DTO projection in this query.
@@ -1112,12 +1112,12 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.Query`1.SeekAfter``1(NativeWeave.Data.Column{`0,``0},``0)`
+## `M:Korda.Query.Query`1.SeekAfter``1(Korda.Data.Column{`0,``0},``0)`
 
 ```csharp
-public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.SeekAfter<T>(NativeWeave.Data.Column<TEntity, T> uniqueOrderKey, T value)
+public Korda.Query.Query<TEntity> Korda.Query.Query<TEntity>.SeekAfter<T>(Korda.Data.Column<TEntity, T> uniqueOrderKey, T value)
 ```
 
 Appends strict keyset comparison for one non-null unique ascending root key.
@@ -1131,12 +1131,12 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.Query`1.SelectAll`
+## `M:Korda.Query.Query`1.SelectAll`
 
 ```csharp
-public NativeWeave.Query.QuerySelection<TEntity> NativeWeave.Query.Query<TEntity>.SelectAll()
+public Korda.Query.QuerySelection<TEntity> Korda.Query.Query<TEntity>.SelectAll()
 ```
 
 Selects only root-table columns in the static entity constructor order.
@@ -1147,12 +1147,12 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.Query`1.Select``1(NativeWeave.Data.Projection{``0})`
+## `M:Korda.Query.Query`1.Select``1(Korda.Data.Projection{``0})`
 
 ```csharp
-public NativeWeave.Query.QuerySelection<T> NativeWeave.Query.Query<TEntity>.Select<T>(NativeWeave.Data.Projection<T> projection)
+public Korda.Query.QuerySelection<T> Korda.Query.Query<TEntity>.Select<T>(Korda.Data.Projection<T> projection)
 ```
 
 Selects a projection built by this exact query, or the root table's static row descriptor.
@@ -1165,12 +1165,12 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.Query`1.Select``1(NativeWeave.Query.SqlExpression{``0})`
+## `M:Korda.Query.Query`1.Select``1(Korda.Query.SqlExpression{``0})`
 
 ```csharp
-public NativeWeave.Query.QuerySelection<T> NativeWeave.Query.Query<TEntity>.Select<T>(NativeWeave.Query.SqlExpression<T> expression)
+public Korda.Query.QuerySelection<T> Korda.Query.Query<TEntity>.Select<T>(Korda.Query.SqlExpression<T> expression)
 ```
 
 Selects one same-query native expression through its exact static codec.
@@ -1183,12 +1183,12 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.Query`1.Select``3(NativeWeave.Query.SqlExpression{``0},NativeWeave.Query.SqlExpression{``1},System.Func{``0,``1,``2})`
+## `M:Korda.Query.Query`1.Select``3(Korda.Query.SqlExpression{``0},Korda.Query.SqlExpression{``1},System.Func{``0,``1,``2})`
 
 ```csharp
-public NativeWeave.Query.QuerySelection<TOut> NativeWeave.Query.Query<TEntity>.Select<T1, T2, TOut>(NativeWeave.Query.SqlExpression<T1> first, NativeWeave.Query.SqlExpression<T2> second, System.Func<T1, T2, TOut> materializer)
+public Korda.Query.QuerySelection<TOut> Korda.Query.Query<TEntity>.Select<T1, T2, TOut>(Korda.Query.SqlExpression<T1> first, Korda.Query.SqlExpression<T2> second, System.Func<T1, T2, TOut> materializer)
 ```
 
 Selects two native expressions into an AOT-visible direct DTO factory.
@@ -1205,12 +1205,12 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.Query`1.Skip(System.Int32)`
+## `M:Korda.Query.Query`1.Skip(System.Int32)`
 
 ```csharp
-public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.Skip(System.Int32 count)
+public Korda.Query.Query<TEntity> Korda.Query.Query<TEntity>.Skip(System.Int32 count)
 ```
 
 Sets a finite nonnegative offset only with known unique ordering.
@@ -1222,12 +1222,12 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.Query`1.Take(System.Int32)`
+## `M:Korda.Query.Query`1.Take(System.Int32)`
 
 ```csharp
-public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.Take(System.Int32 count)
+public Korda.Query.Query<TEntity> Korda.Query.Query<TEntity>.Take(System.Int32 count)
 ```
 
 Sets a finite nonnegative native row limit; without order the selected rows are nondeterministic.
@@ -1239,12 +1239,12 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.Query`1.ThenBy``1(NativeWeave.Data.Column{`0,``0},NativeWeave.Query.SortDirection,NativeWeave.Query.NullOrder)`
+## `M:Korda.Query.Query`1.ThenBy``1(Korda.Data.Column{`0,``0},Korda.Query.SortDirection,Korda.Query.NullOrder)`
 
 ```csharp
-public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.ThenBy<T>(NativeWeave.Data.Column<TEntity, T> column, [NativeWeave.Query.SortDirection direction = NativeWeave.Query.SortDirection.Ascending], [NativeWeave.Query.NullOrder nullOrder = NativeWeave.Query.NullOrder.Last])
+public Korda.Query.Query<TEntity> Korda.Query.Query<TEntity>.ThenBy<T>(Korda.Data.Column<TEntity, T> column, [Korda.Query.SortDirection direction = Korda.Query.SortDirection.Ascending], [Korda.Query.NullOrder nullOrder = Korda.Query.NullOrder.Last])
 ```
 
 Appends a root-column order after an existing order.
@@ -1259,12 +1259,12 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.Query`1.ThenBy``1(NativeWeave.Query.SqlExpression{``0},NativeWeave.Query.SortDirection,NativeWeave.Query.NullOrder)`
+## `M:Korda.Query.Query`1.ThenBy``1(Korda.Query.SqlExpression{``0},Korda.Query.SortDirection,Korda.Query.NullOrder)`
 
 ```csharp
-public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.ThenBy<T>(NativeWeave.Query.SqlExpression<T> expression, [NativeWeave.Query.SortDirection direction = NativeWeave.Query.SortDirection.Ascending], [NativeWeave.Query.NullOrder nullOrder = NativeWeave.Query.NullOrder.Last])
+public Korda.Query.Query<TEntity> Korda.Query.Query<TEntity>.ThenBy<T>(Korda.Query.SqlExpression<T> expression, [Korda.Query.SortDirection direction = Korda.Query.SortDirection.Ascending], [Korda.Query.NullOrder nullOrder = Korda.Query.NullOrder.Last])
 ```
 
 Appends a same-query expression after an existing order.
@@ -1279,12 +1279,12 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.Query`1.UpdateAsync(NativeWeave.Data.Changes{`0},System.Threading.CancellationToken)`
+## `M:Korda.Query.Query`1.UpdateAsync(Korda.Data.Changes{`0},System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task<System.Int64> NativeWeave.Query.Query<TEntity>.UpdateAsync(NativeWeave.Data.Changes<TEntity> changes, [System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)])
+public System.Threading.Tasks.Task<System.Int64> Korda.Query.Query<TEntity>.UpdateAsync(Korda.Data.Changes<TEntity> changes, [System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)])
 ```
 
 Snapshots explicit typed changes and performs a filtered native set-based UPDATE.
@@ -1297,14 +1297,14 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 - **T:System.OperationCanceledException**: Cancellation requests termination and cleanup.
 - **T:System.TimeoutException**: The finite total query deadline expires; cleanup still completes.
 
-## `M:NativeWeave.Query.Query`1.UpdateAsync(System.Action{NativeWeave.Query.UpdateSetters{`0}},System.Threading.CancellationToken)`
+## `M:Korda.Query.Query`1.UpdateAsync(System.Action{Korda.Query.UpdateSetters{`0}},System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task<System.Int64> NativeWeave.Query.Query<TEntity>.UpdateAsync(System.Action<NativeWeave.Query.UpdateSetters<TEntity>> setters, [System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)])
+public System.Threading.Tasks.Task<System.Int64> Korda.Query.Query<TEntity>.UpdateAsync(System.Action<Korda.Query.UpdateSetters<TEntity>> setters, [System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)])
 ```
 
 Runs a synchronous typed setter callback, then applies complete native assignments and a filtered UPDATE.
@@ -1317,14 +1317,14 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 - **T:System.OperationCanceledException**: Cancellation requests termination and cleanup.
 - **T:System.TimeoutException**: The finite total query deadline expires; cleanup still completes.
 
-## `M:NativeWeave.Query.Query`1.Value``1(``0,NativeWeave.Data.ValueCodec{``0})`
+## `M:Korda.Query.Query`1.Value``1(``0,Korda.Data.ValueCodec{``0})`
 
 ```csharp
-public NativeWeave.Query.SqlExpression<T> NativeWeave.Query.Query<TEntity>.Value<T>(T value, NativeWeave.Data.ValueCodec<T> codec)
+public Korda.Query.SqlExpression<T> Korda.Query.Query<TEntity>.Value<T>(T value, Korda.Data.ValueCodec<T> codec)
 ```
 
 Immediately snapshots a typed literal into the native arena.
@@ -1338,12 +1338,12 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.Query`1.Where(NativeWeave.Query.SqlPredicate)`
+## `M:Korda.Query.Query`1.Where(Korda.Query.SqlPredicate)`
 
 ```csharp
-public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.Where(NativeWeave.Query.SqlPredicate predicate)
+public Korda.Query.Query<TEntity> Korda.Query.Query<TEntity>.Where(Korda.Query.SqlPredicate predicate)
 ```
 
 Appends a same-query native predicate with AND.
@@ -1355,12 +1355,12 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.Query`1.Where(System.Func{NativeWeave.Query.QueryRow{`0},NativeWeave.Query.SqlPredicate})`
+## `M:Korda.Query.Query`1.Where(System.Func{Korda.Query.QueryRow{`0},Korda.Query.SqlPredicate})`
 
 ```csharp
-public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.Where(System.Func<NativeWeave.Query.QueryRow<TEntity>, NativeWeave.Query.SqlPredicate> predicate)
+public Korda.Query.Query<TEntity> Korda.Query.Query<TEntity>.Where(System.Func<Korda.Query.QueryRow<TEntity>, Korda.Query.SqlPredicate> predicate)
 ```
 
 Invokes the typed callback synchronously once, then attaches its complete native predicate.
@@ -1372,12 +1372,12 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.Query`1.WhereEqual``1(NativeWeave.Data.Column{`0,``0},``0)`
+## `M:Korda.Query.Query`1.WhereEqual``1(Korda.Data.Column{`0,``0},``0)`
 
 ```csharp
-public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.WhereEqual<T>(NativeWeave.Data.Column<TEntity, T> column, T value)
+public Korda.Query.Query<TEntity> Korda.Query.Query<TEntity>.WhereEqual<T>(Korda.Data.Column<TEntity, T> column, T value)
 ```
 
 Snapshots the value and appends root-column equality without a predicate delegate.
@@ -1391,12 +1391,12 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.Query`1.WhereGreaterThanOrEqual``1(NativeWeave.Data.Column{`0,``0},``0)`
+## `M:Korda.Query.Query`1.WhereGreaterThanOrEqual``1(Korda.Data.Column{`0,``0},``0)`
 
 ```csharp
-public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.WhereGreaterThanOrEqual<T>(NativeWeave.Data.Column<TEntity, T> column, T value)
+public Korda.Query.Query<TEntity> Korda.Query.Query<TEntity>.WhereGreaterThanOrEqual<T>(Korda.Data.Column<TEntity, T> column, T value)
 ```
 
 Snapshots the value and appends an inclusive native lower bound.
@@ -1410,12 +1410,12 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.Query`1.WhereIf(System.Boolean,System.Func{NativeWeave.Query.QueryRow{`0},NativeWeave.Query.SqlPredicate})`
+## `M:Korda.Query.Query`1.WhereIf(System.Boolean,System.Func{Korda.Query.QueryRow{`0},Korda.Query.SqlPredicate})`
 
 ```csharp
-public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.WhereIf(System.Boolean condition, System.Func<NativeWeave.Query.QueryRow<TEntity>, NativeWeave.Query.SqlPredicate> predicate)
+public Korda.Query.Query<TEntity> Korda.Query.Query<TEntity>.WhereIf(System.Boolean condition, System.Func<Korda.Query.QueryRow<TEntity>, Korda.Query.SqlPredicate> predicate)
 ```
 
 Invokes and attaches the callback only when the condition is true; false binds no captured values.
@@ -1428,12 +1428,12 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.Query`1.WhereIsNotNull``1(NativeWeave.Data.Column{`0,``0})`
+## `M:Korda.Query.Query`1.WhereIsNotNull``1(Korda.Data.Column{`0,``0})`
 
 ```csharp
-public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.WhereIsNotNull<T>(NativeWeave.Data.Column<TEntity, T> column)
+public Korda.Query.Query<TEntity> Korda.Query.Query<TEntity>.WhereIsNotNull<T>(Korda.Data.Column<TEntity, T> column)
 ```
 
 Appends an explicit root-column IS NOT NULL predicate.
@@ -1446,12 +1446,12 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.Query`1.WhereIsNull``1(NativeWeave.Data.Column{`0,``0})`
+## `M:Korda.Query.Query`1.WhereIsNull``1(Korda.Data.Column{`0,``0})`
 
 ```csharp
-public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.WhereIsNull<T>(NativeWeave.Data.Column<TEntity, T> column)
+public Korda.Query.Query<TEntity> Korda.Query.Query<TEntity>.WhereIsNull<T>(Korda.Data.Column<TEntity, T> column)
 ```
 
 Appends an explicit root-column IS NULL predicate.
@@ -1464,12 +1464,12 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.Query`1.Window`
+## `M:Korda.Query.Query`1.Window`
 
 ```csharp
-public NativeWeave.Query.WindowDefinition NativeWeave.Query.Query<TEntity>.Window()
+public Korda.Query.WindowDefinition Korda.Query.Query<TEntity>.Window()
 ```
 
 Creates finite query-owned native window state.
@@ -1480,12 +1480,12 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.Query`1.WithTimeout(System.TimeSpan)`
+## `M:Korda.Query.Query`1.WithTimeout(System.TimeSpan)`
 
 ```csharp
-public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.WithTimeout(System.TimeSpan timeout)
+public Korda.Query.Query<TEntity> Korda.Query.Query<TEntity>.WithTimeout(System.TimeSpan timeout)
 ```
 
 Snapshots a finite total execution/cursor timeout; zero expires before dispatch.
@@ -1497,12 +1497,12 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.Query`1.With``1(NativeWeave.Query.CommonTable{``0})`
+## `M:Korda.Query.Query`1.With``1(Korda.Query.CommonTable{``0})`
 
 ```csharp
-public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.With<TCte>(NativeWeave.Query.CommonTable<TCte> commonTable) where TCte : class
+public Korda.Query.Query<TEntity> Korda.Query.Query<TEntity>.With<TCte>(Korda.Query.CommonTable<TCte> commonTable) where TCte : class
 ```
 
 Attaches a frozen same-source native CTE and its exact immutable parameter identities.
@@ -1515,12 +1515,12 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlArithmeticExtensions.Add``1(NativeWeave.Query.SqlExpression{System.Nullable{``0}},NativeWeave.Query.SqlExpression{System.Nullable{``0}})`
+## `M:Korda.Query.SqlArithmeticExtensions.Add``1(Korda.Query.SqlExpression{System.Nullable{``0}},Korda.Query.SqlExpression{System.Nullable{``0}})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlArithmeticExtensions.Add<T>(NativeWeave.Query.SqlExpression<T?> expression, NativeWeave.Query.SqlExpression<T?> value) where T : struct, System.Numerics.INumber<T>
+public static Korda.Query.SqlExpression<T?> Korda.Query.SqlArithmeticExtensions.Add<T>(Korda.Query.SqlExpression<T?> expression, Korda.Query.SqlExpression<T?> value) where T : struct, System.Numerics.INumber<T>
 ```
 
 Performs native numeric add with explicit SQL NULL propagation.
@@ -1534,12 +1534,12 @@ Operators require compatible same-query numeric codecs and preserve declared SQL
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlArithmeticExtensions.Add``1(NativeWeave.Query.SqlExpression{System.Nullable{``0}},``0)`
+## `M:Korda.Query.SqlArithmeticExtensions.Add``1(Korda.Query.SqlExpression{System.Nullable{``0}},``0)`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlArithmeticExtensions.Add<T>(NativeWeave.Query.SqlExpression<T?> expression, T value) where T : struct, System.Numerics.INumber<T>
+public static Korda.Query.SqlExpression<T?> Korda.Query.SqlArithmeticExtensions.Add<T>(Korda.Query.SqlExpression<T?> expression, T value) where T : struct, System.Numerics.INumber<T>
 ```
 
 Performs native numeric add with explicit SQL NULL propagation.
@@ -1553,12 +1553,12 @@ Operators require compatible same-query numeric codecs and preserve declared SQL
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlArithmeticExtensions.Add``1(NativeWeave.Query.SqlExpression{``0},NativeWeave.Query.SqlExpression{``0})`
+## `M:Korda.Query.SqlArithmeticExtensions.Add``1(Korda.Query.SqlExpression{``0},Korda.Query.SqlExpression{``0})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlArithmeticExtensions.Add<T>(NativeWeave.Query.SqlExpression<T> expression, NativeWeave.Query.SqlExpression<T> value) where T : System.Numerics.INumber<T>
+public static Korda.Query.SqlExpression<T> Korda.Query.SqlArithmeticExtensions.Add<T>(Korda.Query.SqlExpression<T> expression, Korda.Query.SqlExpression<T> value) where T : System.Numerics.INumber<T>
 ```
 
 Performs native numeric add with explicit SQL NULL propagation.
@@ -1572,12 +1572,12 @@ Operators require compatible same-query numeric codecs and preserve declared SQL
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlArithmeticExtensions.Add``1(NativeWeave.Query.SqlExpression{``0},``0)`
+## `M:Korda.Query.SqlArithmeticExtensions.Add``1(Korda.Query.SqlExpression{``0},``0)`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlArithmeticExtensions.Add<T>(NativeWeave.Query.SqlExpression<T> expression, T value) where T : System.Numerics.INumber<T>
+public static Korda.Query.SqlExpression<T> Korda.Query.SqlArithmeticExtensions.Add<T>(Korda.Query.SqlExpression<T> expression, T value) where T : System.Numerics.INumber<T>
 ```
 
 Performs native numeric add with explicit SQL NULL propagation.
@@ -1591,12 +1591,12 @@ Operators require compatible same-query numeric codecs and preserve declared SQL
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlArithmeticExtensions.Divide``1(NativeWeave.Query.SqlExpression{System.Nullable{``0}},NativeWeave.Query.SqlExpression{System.Nullable{``0}})`
+## `M:Korda.Query.SqlArithmeticExtensions.Divide``1(Korda.Query.SqlExpression{System.Nullable{``0}},Korda.Query.SqlExpression{System.Nullable{``0}})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlArithmeticExtensions.Divide<T>(NativeWeave.Query.SqlExpression<T?> expression, NativeWeave.Query.SqlExpression<T?> value) where T : struct, System.Numerics.INumber<T>
+public static Korda.Query.SqlExpression<T?> Korda.Query.SqlArithmeticExtensions.Divide<T>(Korda.Query.SqlExpression<T?> expression, Korda.Query.SqlExpression<T?> value) where T : struct, System.Numerics.INumber<T>
 ```
 
 Performs native numeric divide with explicit SQL NULL propagation.
@@ -1610,12 +1610,12 @@ Operators require compatible same-query numeric codecs and preserve declared SQL
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlArithmeticExtensions.Divide``1(NativeWeave.Query.SqlExpression{System.Nullable{``0}},``0)`
+## `M:Korda.Query.SqlArithmeticExtensions.Divide``1(Korda.Query.SqlExpression{System.Nullable{``0}},``0)`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlArithmeticExtensions.Divide<T>(NativeWeave.Query.SqlExpression<T?> expression, T value) where T : struct, System.Numerics.INumber<T>
+public static Korda.Query.SqlExpression<T?> Korda.Query.SqlArithmeticExtensions.Divide<T>(Korda.Query.SqlExpression<T?> expression, T value) where T : struct, System.Numerics.INumber<T>
 ```
 
 Performs native numeric divide with explicit SQL NULL propagation.
@@ -1629,12 +1629,12 @@ Operators require compatible same-query numeric codecs and preserve declared SQL
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlArithmeticExtensions.Divide``1(NativeWeave.Query.SqlExpression{``0},NativeWeave.Query.SqlExpression{``0})`
+## `M:Korda.Query.SqlArithmeticExtensions.Divide``1(Korda.Query.SqlExpression{``0},Korda.Query.SqlExpression{``0})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlArithmeticExtensions.Divide<T>(NativeWeave.Query.SqlExpression<T> expression, NativeWeave.Query.SqlExpression<T> value) where T : System.Numerics.INumber<T>
+public static Korda.Query.SqlExpression<T> Korda.Query.SqlArithmeticExtensions.Divide<T>(Korda.Query.SqlExpression<T> expression, Korda.Query.SqlExpression<T> value) where T : System.Numerics.INumber<T>
 ```
 
 Performs native numeric divide with explicit SQL NULL propagation.
@@ -1648,12 +1648,12 @@ Operators require compatible same-query numeric codecs and preserve declared SQL
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlArithmeticExtensions.Divide``1(NativeWeave.Query.SqlExpression{``0},``0)`
+## `M:Korda.Query.SqlArithmeticExtensions.Divide``1(Korda.Query.SqlExpression{``0},``0)`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlArithmeticExtensions.Divide<T>(NativeWeave.Query.SqlExpression<T> expression, T value) where T : System.Numerics.INumber<T>
+public static Korda.Query.SqlExpression<T> Korda.Query.SqlArithmeticExtensions.Divide<T>(Korda.Query.SqlExpression<T> expression, T value) where T : System.Numerics.INumber<T>
 ```
 
 Performs native numeric divide with explicit SQL NULL propagation.
@@ -1667,12 +1667,12 @@ Operators require compatible same-query numeric codecs and preserve declared SQL
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlArithmeticExtensions.Multiply``1(NativeWeave.Query.SqlExpression{System.Nullable{``0}},NativeWeave.Query.SqlExpression{System.Nullable{``0}})`
+## `M:Korda.Query.SqlArithmeticExtensions.Multiply``1(Korda.Query.SqlExpression{System.Nullable{``0}},Korda.Query.SqlExpression{System.Nullable{``0}})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlArithmeticExtensions.Multiply<T>(NativeWeave.Query.SqlExpression<T?> expression, NativeWeave.Query.SqlExpression<T?> value) where T : struct, System.Numerics.INumber<T>
+public static Korda.Query.SqlExpression<T?> Korda.Query.SqlArithmeticExtensions.Multiply<T>(Korda.Query.SqlExpression<T?> expression, Korda.Query.SqlExpression<T?> value) where T : struct, System.Numerics.INumber<T>
 ```
 
 Performs native numeric multiply with explicit SQL NULL propagation.
@@ -1686,12 +1686,12 @@ Operators require compatible same-query numeric codecs and preserve declared SQL
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlArithmeticExtensions.Multiply``1(NativeWeave.Query.SqlExpression{System.Nullable{``0}},``0)`
+## `M:Korda.Query.SqlArithmeticExtensions.Multiply``1(Korda.Query.SqlExpression{System.Nullable{``0}},``0)`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlArithmeticExtensions.Multiply<T>(NativeWeave.Query.SqlExpression<T?> expression, T value) where T : struct, System.Numerics.INumber<T>
+public static Korda.Query.SqlExpression<T?> Korda.Query.SqlArithmeticExtensions.Multiply<T>(Korda.Query.SqlExpression<T?> expression, T value) where T : struct, System.Numerics.INumber<T>
 ```
 
 Performs native numeric multiply with explicit SQL NULL propagation.
@@ -1705,12 +1705,12 @@ Operators require compatible same-query numeric codecs and preserve declared SQL
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlArithmeticExtensions.Multiply``1(NativeWeave.Query.SqlExpression{``0},NativeWeave.Query.SqlExpression{``0})`
+## `M:Korda.Query.SqlArithmeticExtensions.Multiply``1(Korda.Query.SqlExpression{``0},Korda.Query.SqlExpression{``0})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlArithmeticExtensions.Multiply<T>(NativeWeave.Query.SqlExpression<T> expression, NativeWeave.Query.SqlExpression<T> value) where T : System.Numerics.INumber<T>
+public static Korda.Query.SqlExpression<T> Korda.Query.SqlArithmeticExtensions.Multiply<T>(Korda.Query.SqlExpression<T> expression, Korda.Query.SqlExpression<T> value) where T : System.Numerics.INumber<T>
 ```
 
 Performs native numeric multiply with explicit SQL NULL propagation.
@@ -1724,12 +1724,12 @@ Operators require compatible same-query numeric codecs and preserve declared SQL
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlArithmeticExtensions.Multiply``1(NativeWeave.Query.SqlExpression{``0},``0)`
+## `M:Korda.Query.SqlArithmeticExtensions.Multiply``1(Korda.Query.SqlExpression{``0},``0)`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlArithmeticExtensions.Multiply<T>(NativeWeave.Query.SqlExpression<T> expression, T value) where T : System.Numerics.INumber<T>
+public static Korda.Query.SqlExpression<T> Korda.Query.SqlArithmeticExtensions.Multiply<T>(Korda.Query.SqlExpression<T> expression, T value) where T : System.Numerics.INumber<T>
 ```
 
 Performs native numeric multiply with explicit SQL NULL propagation.
@@ -1743,12 +1743,12 @@ Operators require compatible same-query numeric codecs and preserve declared SQL
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlArithmeticExtensions.Subtract``1(NativeWeave.Query.SqlExpression{System.Nullable{``0}},NativeWeave.Query.SqlExpression{System.Nullable{``0}})`
+## `M:Korda.Query.SqlArithmeticExtensions.Subtract``1(Korda.Query.SqlExpression{System.Nullable{``0}},Korda.Query.SqlExpression{System.Nullable{``0}})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlArithmeticExtensions.Subtract<T>(NativeWeave.Query.SqlExpression<T?> expression, NativeWeave.Query.SqlExpression<T?> value) where T : struct, System.Numerics.INumber<T>
+public static Korda.Query.SqlExpression<T?> Korda.Query.SqlArithmeticExtensions.Subtract<T>(Korda.Query.SqlExpression<T?> expression, Korda.Query.SqlExpression<T?> value) where T : struct, System.Numerics.INumber<T>
 ```
 
 Performs native numeric subtract with explicit SQL NULL propagation.
@@ -1762,12 +1762,12 @@ Operators require compatible same-query numeric codecs and preserve declared SQL
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlArithmeticExtensions.Subtract``1(NativeWeave.Query.SqlExpression{System.Nullable{``0}},``0)`
+## `M:Korda.Query.SqlArithmeticExtensions.Subtract``1(Korda.Query.SqlExpression{System.Nullable{``0}},``0)`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlArithmeticExtensions.Subtract<T>(NativeWeave.Query.SqlExpression<T?> expression, T value) where T : struct, System.Numerics.INumber<T>
+public static Korda.Query.SqlExpression<T?> Korda.Query.SqlArithmeticExtensions.Subtract<T>(Korda.Query.SqlExpression<T?> expression, T value) where T : struct, System.Numerics.INumber<T>
 ```
 
 Performs native numeric subtract with explicit SQL NULL propagation.
@@ -1781,12 +1781,12 @@ Operators require compatible same-query numeric codecs and preserve declared SQL
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlArithmeticExtensions.Subtract``1(NativeWeave.Query.SqlExpression{``0},NativeWeave.Query.SqlExpression{``0})`
+## `M:Korda.Query.SqlArithmeticExtensions.Subtract``1(Korda.Query.SqlExpression{``0},Korda.Query.SqlExpression{``0})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlArithmeticExtensions.Subtract<T>(NativeWeave.Query.SqlExpression<T> expression, NativeWeave.Query.SqlExpression<T> value) where T : System.Numerics.INumber<T>
+public static Korda.Query.SqlExpression<T> Korda.Query.SqlArithmeticExtensions.Subtract<T>(Korda.Query.SqlExpression<T> expression, Korda.Query.SqlExpression<T> value) where T : System.Numerics.INumber<T>
 ```
 
 Performs native numeric subtract with explicit SQL NULL propagation.
@@ -1800,12 +1800,12 @@ Operators require compatible same-query numeric codecs and preserve declared SQL
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlArithmeticExtensions.Subtract``1(NativeWeave.Query.SqlExpression{``0},``0)`
+## `M:Korda.Query.SqlArithmeticExtensions.Subtract``1(Korda.Query.SqlExpression{``0},``0)`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlArithmeticExtensions.Subtract<T>(NativeWeave.Query.SqlExpression<T> expression, T value) where T : System.Numerics.INumber<T>
+public static Korda.Query.SqlExpression<T> Korda.Query.SqlArithmeticExtensions.Subtract<T>(Korda.Query.SqlExpression<T> expression, T value) where T : System.Numerics.INumber<T>
 ```
 
 Performs native numeric subtract with explicit SQL NULL propagation.
@@ -1819,12 +1819,12 @@ Operators require compatible same-query numeric codecs and preserve declared SQL
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlExpression`1.Between(`0,`0)`
+## `M:Korda.Query.SqlExpression`1.Between(`0,`0)`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.Between(T lower, T upper)
+public Korda.Query.SqlPredicate Korda.Query.SqlExpression<T>.Between(T lower, T upper)
 ```
 
 Snapshots two bounds and creates native inclusive BETWEEN.
@@ -1837,12 +1837,12 @@ No SQL tree or delegate is retained. Values are snapshotted immediately; default
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlExpression`1.Equal(NativeWeave.Query.SqlExpression{`0})`
+## `M:Korda.Query.SqlExpression`1.Equal(Korda.Query.SqlExpression{`0})`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.Equal(NativeWeave.Query.SqlExpression<T> other)
+public Korda.Query.SqlPredicate Korda.Query.SqlExpression<T>.Equal(Korda.Query.SqlExpression<T> other)
 ```
 
 Applies native Equal with exact codec/source checks and SQL NULL semantics.
@@ -1854,12 +1854,12 @@ No SQL tree or delegate is retained. Values are snapshotted immediately; default
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlExpression`1.Equal(`0)`
+## `M:Korda.Query.SqlExpression`1.Equal(`0)`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.Equal(T value)
+public Korda.Query.SqlPredicate Korda.Query.SqlExpression<T>.Equal(T value)
 ```
 
 Applies native Equal with exact codec/source checks and SQL NULL semantics.
@@ -1871,12 +1871,12 @@ No SQL tree or delegate is retained. Values are snapshotted immediately; default
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlExpression`1.GreaterThan(NativeWeave.Query.SqlExpression{`0})`
+## `M:Korda.Query.SqlExpression`1.GreaterThan(Korda.Query.SqlExpression{`0})`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.GreaterThan(NativeWeave.Query.SqlExpression<T> other)
+public Korda.Query.SqlPredicate Korda.Query.SqlExpression<T>.GreaterThan(Korda.Query.SqlExpression<T> other)
 ```
 
 Applies native GreaterThan with exact codec/source checks and SQL NULL semantics.
@@ -1888,12 +1888,12 @@ No SQL tree or delegate is retained. Values are snapshotted immediately; default
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlExpression`1.GreaterThan(`0)`
+## `M:Korda.Query.SqlExpression`1.GreaterThan(`0)`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.GreaterThan(T value)
+public Korda.Query.SqlPredicate Korda.Query.SqlExpression<T>.GreaterThan(T value)
 ```
 
 Applies native GreaterThan with exact codec/source checks and SQL NULL semantics.
@@ -1905,12 +1905,12 @@ No SQL tree or delegate is retained. Values are snapshotted immediately; default
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlExpression`1.GreaterThanOrEqual(NativeWeave.Query.SqlExpression{`0})`
+## `M:Korda.Query.SqlExpression`1.GreaterThanOrEqual(Korda.Query.SqlExpression{`0})`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.GreaterThanOrEqual(NativeWeave.Query.SqlExpression<T> other)
+public Korda.Query.SqlPredicate Korda.Query.SqlExpression<T>.GreaterThanOrEqual(Korda.Query.SqlExpression<T> other)
 ```
 
 Applies native GreaterThanOrEqual with exact codec/source checks and SQL NULL semantics.
@@ -1922,12 +1922,12 @@ No SQL tree or delegate is retained. Values are snapshotted immediately; default
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlExpression`1.GreaterThanOrEqual(`0)`
+## `M:Korda.Query.SqlExpression`1.GreaterThanOrEqual(`0)`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.GreaterThanOrEqual(T value)
+public Korda.Query.SqlPredicate Korda.Query.SqlExpression<T>.GreaterThanOrEqual(T value)
 ```
 
 Applies native GreaterThanOrEqual with exact codec/source checks and SQL NULL semantics.
@@ -1939,12 +1939,12 @@ No SQL tree or delegate is retained. Values are snapshotted immediately; default
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlExpression`1.In(NativeWeave.Query.QuerySelection{`0})`
+## `M:Korda.Query.SqlExpression`1.In(Korda.Query.QuerySelection{`0})`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.In(NativeWeave.Query.QuerySelection<T> subquery)
+public Korda.Query.SqlPredicate Korda.Query.SqlExpression<T>.In(Korda.Query.QuerySelection<T> subquery)
 ```
 
 Snapshots a compatible same-source single-column subquery into native IN.
@@ -1956,12 +1956,12 @@ No SQL tree or delegate is retained. Values are snapshotted immediately; default
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlExpression`1.In(System.ReadOnlySpan{`0})`
+## `M:Korda.Query.SqlExpression`1.In(System.ReadOnlySpan{`0})`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.In(System.ReadOnlySpan<T> values)
+public Korda.Query.SqlPredicate Korda.Query.SqlExpression<T>.In(System.ReadOnlySpan<T> values)
 ```
 
 Snapshots a finite value span; an empty span yields native FALSE.
@@ -1973,12 +1973,12 @@ No SQL tree or delegate is retained. Values are snapshotted immediately; default
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlExpression`1.IsNotNull`
+## `M:Korda.Query.SqlExpression`1.IsNotNull`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.IsNotNull()
+public Korda.Query.SqlPredicate Korda.Query.SqlExpression<T>.IsNotNull()
 ```
 
 Tests SQL non-NULL explicitly.
@@ -1989,12 +1989,12 @@ No SQL tree or delegate is retained. Values are snapshotted immediately; default
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlExpression`1.IsNull`
+## `M:Korda.Query.SqlExpression`1.IsNull`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.IsNull()
+public Korda.Query.SqlPredicate Korda.Query.SqlExpression<T>.IsNull()
 ```
 
 Tests SQL NULL explicitly without substituting a sentinel.
@@ -2005,12 +2005,12 @@ No SQL tree or delegate is retained. Values are snapshotted immediately; default
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlExpression`1.LessThan(NativeWeave.Query.SqlExpression{`0})`
+## `M:Korda.Query.SqlExpression`1.LessThan(Korda.Query.SqlExpression{`0})`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.LessThan(NativeWeave.Query.SqlExpression<T> other)
+public Korda.Query.SqlPredicate Korda.Query.SqlExpression<T>.LessThan(Korda.Query.SqlExpression<T> other)
 ```
 
 Applies native LessThan with exact codec/source checks and SQL NULL semantics.
@@ -2022,12 +2022,12 @@ No SQL tree or delegate is retained. Values are snapshotted immediately; default
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlExpression`1.LessThan(`0)`
+## `M:Korda.Query.SqlExpression`1.LessThan(`0)`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.LessThan(T value)
+public Korda.Query.SqlPredicate Korda.Query.SqlExpression<T>.LessThan(T value)
 ```
 
 Applies native LessThan with exact codec/source checks and SQL NULL semantics.
@@ -2039,12 +2039,12 @@ No SQL tree or delegate is retained. Values are snapshotted immediately; default
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlExpression`1.LessThanOrEqual(NativeWeave.Query.SqlExpression{`0})`
+## `M:Korda.Query.SqlExpression`1.LessThanOrEqual(Korda.Query.SqlExpression{`0})`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.LessThanOrEqual(NativeWeave.Query.SqlExpression<T> other)
+public Korda.Query.SqlPredicate Korda.Query.SqlExpression<T>.LessThanOrEqual(Korda.Query.SqlExpression<T> other)
 ```
 
 Applies native LessThanOrEqual with exact codec/source checks and SQL NULL semantics.
@@ -2056,12 +2056,12 @@ No SQL tree or delegate is retained. Values are snapshotted immediately; default
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlExpression`1.LessThanOrEqual(`0)`
+## `M:Korda.Query.SqlExpression`1.LessThanOrEqual(`0)`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.LessThanOrEqual(T value)
+public Korda.Query.SqlPredicate Korda.Query.SqlExpression<T>.LessThanOrEqual(T value)
 ```
 
 Applies native LessThanOrEqual with exact codec/source checks and SQL NULL semantics.
@@ -2073,12 +2073,12 @@ No SQL tree or delegate is retained. Values are snapshotted immediately; default
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlExpression`1.NotEqual(NativeWeave.Query.SqlExpression{`0})`
+## `M:Korda.Query.SqlExpression`1.NotEqual(Korda.Query.SqlExpression{`0})`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.NotEqual(NativeWeave.Query.SqlExpression<T> other)
+public Korda.Query.SqlPredicate Korda.Query.SqlExpression<T>.NotEqual(Korda.Query.SqlExpression<T> other)
 ```
 
 Applies native NotEqual with exact codec/source checks and SQL NULL semantics.
@@ -2090,12 +2090,12 @@ No SQL tree or delegate is retained. Values are snapshotted immediately; default
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlExpression`1.NotEqual(`0)`
+## `M:Korda.Query.SqlExpression`1.NotEqual(`0)`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.NotEqual(T value)
+public Korda.Query.SqlPredicate Korda.Query.SqlExpression<T>.NotEqual(T value)
 ```
 
 Applies native NotEqual with exact codec/source checks and SQL NULL semantics.
@@ -2107,12 +2107,12 @@ No SQL tree or delegate is retained. Values are snapshotted immediately; default
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlExpression`1.NotIn(System.ReadOnlySpan{`0})`
+## `M:Korda.Query.SqlExpression`1.NotIn(System.ReadOnlySpan{`0})`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.NotIn(System.ReadOnlySpan<T> values)
+public Korda.Query.SqlPredicate Korda.Query.SqlExpression<T>.NotIn(System.ReadOnlySpan<T> values)
 ```
 
 Snapshots a finite value span; an empty span yields native TRUE.
@@ -2124,12 +2124,12 @@ No SQL tree or delegate is retained. Values are snapshotted immediately; default
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlExpression`1.NullSafeEqual(NativeWeave.Query.SqlExpression{`0})`
+## `M:Korda.Query.SqlExpression`1.NullSafeEqual(Korda.Query.SqlExpression{`0})`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.NullSafeEqual(NativeWeave.Query.SqlExpression<T> other)
+public Korda.Query.SqlPredicate Korda.Query.SqlExpression<T>.NullSafeEqual(Korda.Query.SqlExpression<T> other)
 ```
 
 Applies native NullSafeEqual with exact codec/source checks and SQL NULL semantics.
@@ -2141,12 +2141,12 @@ No SQL tree or delegate is retained. Values are snapshotted immediately; default
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlExpression`1.NullSafeEqual(`0)`
+## `M:Korda.Query.SqlExpression`1.NullSafeEqual(`0)`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.NullSafeEqual(T value)
+public Korda.Query.SqlPredicate Korda.Query.SqlExpression<T>.NullSafeEqual(T value)
 ```
 
 Applies native NullSafeEqual with exact codec/source checks and SQL NULL semantics.
@@ -2158,12 +2158,12 @@ No SQL tree or delegate is retained. Values are snapshotted immediately; default
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlExpression`1.Over(NativeWeave.Query.WindowDefinition)`
+## `M:Korda.Query.SqlExpression`1.Over(Korda.Query.WindowDefinition)`
 
 ```csharp
-public NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlExpression<T>.Over(NativeWeave.Query.WindowDefinition window)
+public Korda.Query.SqlExpression<T> Korda.Query.SqlExpression<T>.Over(Korda.Query.WindowDefinition window)
 ```
 
 Snapshots same-query native window state onto an eligible aggregate or rank expression.
@@ -2175,12 +2175,12 @@ No SQL tree or delegate is retained. Values are snapshotted immediately; default
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlFunctions.Average(NativeWeave.Query.SqlExpression{System.Decimal})`
+## `M:Korda.Query.SqlFunctions.Average(Korda.Query.SqlExpression{System.Decimal})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<System.Decimal?> NativeWeave.Query.SqlFunctions.Average(NativeWeave.Query.SqlExpression<System.Decimal> expression)
+public static Korda.Query.SqlExpression<System.Decimal?> Korda.Query.SqlFunctions.Average(Korda.Query.SqlExpression<System.Decimal> expression)
 ```
 
 Aggregates native decimal inputs to nullable decimal, preserving empty-input NULL and explicit conversion failures.
@@ -2192,12 +2192,12 @@ SQL NULL, collation, overflow and conversion semantics remain explicit provider 
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlFunctions.Average(NativeWeave.Query.SqlExpression{System.Double})`
+## `M:Korda.Query.SqlFunctions.Average(Korda.Query.SqlExpression{System.Double})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<System.Double?> NativeWeave.Query.SqlFunctions.Average(NativeWeave.Query.SqlExpression<System.Double> expression)
+public static Korda.Query.SqlExpression<System.Double?> Korda.Query.SqlFunctions.Average(Korda.Query.SqlExpression<System.Double> expression)
 ```
 
 Aggregates native double inputs to nullable double, preserving empty-input NULL and explicit conversion failures.
@@ -2209,12 +2209,12 @@ SQL NULL, collation, overflow and conversion semantics remain explicit provider 
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlFunctions.Average(NativeWeave.Query.SqlExpression{System.Int32})`
+## `M:Korda.Query.SqlFunctions.Average(Korda.Query.SqlExpression{System.Int32})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<System.Double?> NativeWeave.Query.SqlFunctions.Average(NativeWeave.Query.SqlExpression<System.Int32> expression)
+public static Korda.Query.SqlExpression<System.Double?> Korda.Query.SqlFunctions.Average(Korda.Query.SqlExpression<System.Int32> expression)
 ```
 
 Aggregates native int inputs to nullable double, preserving empty-input NULL and explicit conversion failures.
@@ -2226,12 +2226,12 @@ SQL NULL, collation, overflow and conversion semantics remain explicit provider 
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlFunctions.Average(NativeWeave.Query.SqlExpression{System.Int64})`
+## `M:Korda.Query.SqlFunctions.Average(Korda.Query.SqlExpression{System.Int64})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<System.Double?> NativeWeave.Query.SqlFunctions.Average(NativeWeave.Query.SqlExpression<System.Int64> expression)
+public static Korda.Query.SqlExpression<System.Double?> Korda.Query.SqlFunctions.Average(Korda.Query.SqlExpression<System.Int64> expression)
 ```
 
 Aggregates native long inputs to nullable double, preserving empty-input NULL and explicit conversion failures.
@@ -2243,12 +2243,12 @@ SQL NULL, collation, overflow and conversion semantics remain explicit provider 
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlFunctions.Average(NativeWeave.Query.SqlExpression{System.Nullable{System.Decimal}})`
+## `M:Korda.Query.SqlFunctions.Average(Korda.Query.SqlExpression{System.Nullable{System.Decimal}})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<System.Decimal?> NativeWeave.Query.SqlFunctions.Average(NativeWeave.Query.SqlExpression<System.Decimal?> expression)
+public static Korda.Query.SqlExpression<System.Decimal?> Korda.Query.SqlFunctions.Average(Korda.Query.SqlExpression<System.Decimal?> expression)
 ```
 
 Aggregates native decimal? inputs to nullable decimal, preserving empty-input NULL and explicit conversion failures.
@@ -2260,12 +2260,12 @@ SQL NULL, collation, overflow and conversion semantics remain explicit provider 
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlFunctions.Average(NativeWeave.Query.SqlExpression{System.Nullable{System.Double}})`
+## `M:Korda.Query.SqlFunctions.Average(Korda.Query.SqlExpression{System.Nullable{System.Double}})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<System.Double?> NativeWeave.Query.SqlFunctions.Average(NativeWeave.Query.SqlExpression<System.Double?> expression)
+public static Korda.Query.SqlExpression<System.Double?> Korda.Query.SqlFunctions.Average(Korda.Query.SqlExpression<System.Double?> expression)
 ```
 
 Aggregates native double? inputs to nullable double, preserving empty-input NULL and explicit conversion failures.
@@ -2277,12 +2277,12 @@ SQL NULL, collation, overflow and conversion semantics remain explicit provider 
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlFunctions.Average(NativeWeave.Query.SqlExpression{System.Nullable{System.Int32}})`
+## `M:Korda.Query.SqlFunctions.Average(Korda.Query.SqlExpression{System.Nullable{System.Int32}})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<System.Double?> NativeWeave.Query.SqlFunctions.Average(NativeWeave.Query.SqlExpression<System.Int32?> expression)
+public static Korda.Query.SqlExpression<System.Double?> Korda.Query.SqlFunctions.Average(Korda.Query.SqlExpression<System.Int32?> expression)
 ```
 
 Aggregates native int? inputs to nullable double, preserving empty-input NULL and explicit conversion failures.
@@ -2294,12 +2294,12 @@ SQL NULL, collation, overflow and conversion semantics remain explicit provider 
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlFunctions.Average(NativeWeave.Query.SqlExpression{System.Nullable{System.Int64}})`
+## `M:Korda.Query.SqlFunctions.Average(Korda.Query.SqlExpression{System.Nullable{System.Int64}})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<System.Double?> NativeWeave.Query.SqlFunctions.Average(NativeWeave.Query.SqlExpression<System.Int64?> expression)
+public static Korda.Query.SqlExpression<System.Double?> Korda.Query.SqlFunctions.Average(Korda.Query.SqlExpression<System.Int64?> expression)
 ```
 
 Aggregates native long? inputs to nullable double, preserving empty-input NULL and explicit conversion failures.
@@ -2311,12 +2311,12 @@ SQL NULL, collation, overflow and conversion semantics remain explicit provider 
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlFunctions.Average(NativeWeave.Query.SqlExpression{System.Nullable{System.Single}})`
+## `M:Korda.Query.SqlFunctions.Average(Korda.Query.SqlExpression{System.Nullable{System.Single}})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<System.Double?> NativeWeave.Query.SqlFunctions.Average(NativeWeave.Query.SqlExpression<System.Single?> expression)
+public static Korda.Query.SqlExpression<System.Double?> Korda.Query.SqlFunctions.Average(Korda.Query.SqlExpression<System.Single?> expression)
 ```
 
 Aggregates native float? inputs to nullable double, preserving empty-input NULL and explicit conversion failures.
@@ -2328,12 +2328,12 @@ SQL NULL, collation, overflow and conversion semantics remain explicit provider 
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlFunctions.Average(NativeWeave.Query.SqlExpression{System.Single})`
+## `M:Korda.Query.SqlFunctions.Average(Korda.Query.SqlExpression{System.Single})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<System.Double?> NativeWeave.Query.SqlFunctions.Average(NativeWeave.Query.SqlExpression<System.Single> expression)
+public static Korda.Query.SqlExpression<System.Double?> Korda.Query.SqlFunctions.Average(Korda.Query.SqlExpression<System.Single> expression)
 ```
 
 Aggregates native float inputs to nullable double, preserving empty-input NULL and explicit conversion failures.
@@ -2345,12 +2345,12 @@ SQL NULL, collation, overflow and conversion semantics remain explicit provider 
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlFunctions.Case``1(NativeWeave.Query.SqlPredicate,NativeWeave.Query.SqlExpression{``0},NativeWeave.Query.SqlExpression{``0})`
+## `M:Korda.Query.SqlFunctions.Case``1(Korda.Query.SqlPredicate,Korda.Query.SqlExpression{``0},Korda.Query.SqlExpression{``0})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlFunctions.Case<T>(NativeWeave.Query.SqlPredicate condition, NativeWeave.Query.SqlExpression<T> whenTrue, NativeWeave.Query.SqlExpression<T> whenFalse)
+public static Korda.Query.SqlExpression<T> Korda.Query.SqlFunctions.Case<T>(Korda.Query.SqlPredicate condition, Korda.Query.SqlExpression<T> whenTrue, Korda.Query.SqlExpression<T> whenFalse)
 ```
 
 Creates a native CASE with same-query compatible scalar alternatives.
@@ -2365,12 +2365,12 @@ SQL NULL, collation, overflow and conversion semantics remain explicit provider 
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlFunctions.CoalesceReference``1(NativeWeave.Query.SqlExpression{``0},``0)`
+## `M:Korda.Query.SqlFunctions.CoalesceReference``1(Korda.Query.SqlExpression{``0},``0)`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlFunctions.CoalesceReference<T>(NativeWeave.Query.SqlExpression<T?> expression, T fallback) where T : class
+public static Korda.Query.SqlExpression<T> Korda.Query.SqlFunctions.CoalesceReference<T>(Korda.Query.SqlExpression<T?> expression, T fallback) where T : class
 ```
 
 Produces a non-null reference scalar with native SQL COALESCE.
@@ -2384,12 +2384,12 @@ SQL NULL, collation, overflow and conversion semantics remain explicit provider 
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlFunctions.Coalesce``1(NativeWeave.Query.SqlExpression{System.Nullable{``0}},``0)`
+## `M:Korda.Query.SqlFunctions.Coalesce``1(Korda.Query.SqlExpression{System.Nullable{``0}},``0)`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlFunctions.Coalesce<T>(NativeWeave.Query.SqlExpression<T?> expression, T fallback) where T : struct
+public static Korda.Query.SqlExpression<T> Korda.Query.SqlFunctions.Coalesce<T>(Korda.Query.SqlExpression<T?> expression, T fallback) where T : struct
 ```
 
 Produces a non-null scalar with native SQL COALESCE and an explicitly copied fallback.
@@ -2403,12 +2403,12 @@ SQL NULL, collation, overflow and conversion semantics remain explicit provider 
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlFunctions.Count``1(NativeWeave.Query.SqlExpression{``0},System.Boolean)`
+## `M:Korda.Query.SqlFunctions.Count``1(Korda.Query.SqlExpression{``0},System.Boolean)`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<System.Int64> NativeWeave.Query.SqlFunctions.Count<T>(NativeWeave.Query.SqlExpression<T> expression, [System.Boolean distinct = false])
+public static Korda.Query.SqlExpression<System.Int64> Korda.Query.SqlFunctions.Count<T>(Korda.Query.SqlExpression<T> expression, [System.Boolean distinct = false])
 ```
 
 Counts non-null native values, optionally using DISTINCT, with exact Int64 result metadata.
@@ -2422,12 +2422,12 @@ SQL NULL, collation, overflow and conversion semantics remain explicit provider 
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlFunctions.MaxNullableText(NativeWeave.Query.SqlExpression{System.String})`
+## `M:Korda.Query.SqlFunctions.MaxNullableText(Korda.Query.SqlExpression{System.String})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<System.String?> NativeWeave.Query.SqlFunctions.MaxNullableText(NativeWeave.Query.SqlExpression<System.String?> expression)
+public static Korda.Query.SqlExpression<System.String?> Korda.Query.SqlFunctions.MaxNullableText(Korda.Query.SqlExpression<System.String?> expression)
 ```
 
 Returns native text maximum under SQL collation with empty-input NULL.
@@ -2439,12 +2439,12 @@ SQL NULL, collation, overflow and conversion semantics remain explicit provider 
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlFunctions.MaxText(NativeWeave.Query.SqlExpression{System.String})`
+## `M:Korda.Query.SqlFunctions.MaxText(Korda.Query.SqlExpression{System.String})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<System.String?> NativeWeave.Query.SqlFunctions.MaxText(NativeWeave.Query.SqlExpression<System.String> expression)
+public static Korda.Query.SqlExpression<System.String?> Korda.Query.SqlFunctions.MaxText(Korda.Query.SqlExpression<System.String> expression)
 ```
 
 Returns native text maximum under SQL collation with empty-input NULL.
@@ -2456,12 +2456,12 @@ SQL NULL, collation, overflow and conversion semantics remain explicit provider 
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlFunctions.Max``1(NativeWeave.Query.SqlExpression{System.Nullable{``0}})`
+## `M:Korda.Query.SqlFunctions.Max``1(Korda.Query.SqlExpression{System.Nullable{``0}})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlFunctions.Max<T>(NativeWeave.Query.SqlExpression<T?> expression) where T : struct
+public static Korda.Query.SqlExpression<T?> Korda.Query.SqlFunctions.Max<T>(Korda.Query.SqlExpression<T?> expression) where T : struct
 ```
 
 Returns the native maximum with the exact scalar codec and empty-input SQL NULL.
@@ -2474,12 +2474,12 @@ SQL NULL, collation, overflow and conversion semantics remain explicit provider 
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlFunctions.Max``1(NativeWeave.Query.SqlExpression{``0})`
+## `M:Korda.Query.SqlFunctions.Max``1(Korda.Query.SqlExpression{``0})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlFunctions.Max<T>(NativeWeave.Query.SqlExpression<T> expression) where T : struct
+public static Korda.Query.SqlExpression<T?> Korda.Query.SqlFunctions.Max<T>(Korda.Query.SqlExpression<T> expression) where T : struct
 ```
 
 Returns the native maximum with the exact scalar codec and empty-input SQL NULL.
@@ -2492,12 +2492,12 @@ SQL NULL, collation, overflow and conversion semantics remain explicit provider 
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlFunctions.MinNullableText(NativeWeave.Query.SqlExpression{System.String})`
+## `M:Korda.Query.SqlFunctions.MinNullableText(Korda.Query.SqlExpression{System.String})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<System.String?> NativeWeave.Query.SqlFunctions.MinNullableText(NativeWeave.Query.SqlExpression<System.String?> expression)
+public static Korda.Query.SqlExpression<System.String?> Korda.Query.SqlFunctions.MinNullableText(Korda.Query.SqlExpression<System.String?> expression)
 ```
 
 Returns native text minimum under SQL collation with empty-input NULL.
@@ -2509,12 +2509,12 @@ SQL NULL, collation, overflow and conversion semantics remain explicit provider 
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlFunctions.MinText(NativeWeave.Query.SqlExpression{System.String})`
+## `M:Korda.Query.SqlFunctions.MinText(Korda.Query.SqlExpression{System.String})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<System.String?> NativeWeave.Query.SqlFunctions.MinText(NativeWeave.Query.SqlExpression<System.String> expression)
+public static Korda.Query.SqlExpression<System.String?> Korda.Query.SqlFunctions.MinText(Korda.Query.SqlExpression<System.String> expression)
 ```
 
 Returns native text minimum under SQL collation with empty-input NULL.
@@ -2526,12 +2526,12 @@ SQL NULL, collation, overflow and conversion semantics remain explicit provider 
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlFunctions.Min``1(NativeWeave.Query.SqlExpression{System.Nullable{``0}})`
+## `M:Korda.Query.SqlFunctions.Min``1(Korda.Query.SqlExpression{System.Nullable{``0}})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlFunctions.Min<T>(NativeWeave.Query.SqlExpression<T?> expression) where T : struct
+public static Korda.Query.SqlExpression<T?> Korda.Query.SqlFunctions.Min<T>(Korda.Query.SqlExpression<T?> expression) where T : struct
 ```
 
 Returns the native minimum with the exact scalar codec and empty-input SQL NULL.
@@ -2544,12 +2544,12 @@ SQL NULL, collation, overflow and conversion semantics remain explicit provider 
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlFunctions.Min``1(NativeWeave.Query.SqlExpression{``0})`
+## `M:Korda.Query.SqlFunctions.Min``1(Korda.Query.SqlExpression{``0})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlFunctions.Min<T>(NativeWeave.Query.SqlExpression<T> expression) where T : struct
+public static Korda.Query.SqlExpression<T?> Korda.Query.SqlFunctions.Min<T>(Korda.Query.SqlExpression<T> expression) where T : struct
 ```
 
 Returns the native minimum with the exact scalar codec and empty-input SQL NULL.
@@ -2562,12 +2562,12 @@ SQL NULL, collation, overflow and conversion semantics remain explicit provider 
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlFunctions.Rank(NativeWeave.Query.WindowDefinition)`
+## `M:Korda.Query.SqlFunctions.Rank(Korda.Query.WindowDefinition)`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<System.Int64> NativeWeave.Query.SqlFunctions.Rank(NativeWeave.Query.WindowDefinition window)
+public static Korda.Query.SqlExpression<System.Int64> Korda.Query.SqlFunctions.Rank(Korda.Query.WindowDefinition window)
 ```
 
 Snapshots a native window into an exact Int64 RANK expression.
@@ -2579,12 +2579,12 @@ SQL NULL, collation, overflow and conversion semantics remain explicit provider 
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlFunctions.RowNumber(NativeWeave.Query.WindowDefinition)`
+## `M:Korda.Query.SqlFunctions.RowNumber(Korda.Query.WindowDefinition)`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<System.Int64> NativeWeave.Query.SqlFunctions.RowNumber(NativeWeave.Query.WindowDefinition window)
+public static Korda.Query.SqlExpression<System.Int64> Korda.Query.SqlFunctions.RowNumber(Korda.Query.WindowDefinition window)
 ```
 
 Snapshots a native window into an exact Int64 ROW_NUMBER expression.
@@ -2596,12 +2596,12 @@ SQL NULL, collation, overflow and conversion semantics remain explicit provider 
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlFunctions.Sum(NativeWeave.Query.SqlExpression{System.Decimal})`
+## `M:Korda.Query.SqlFunctions.Sum(Korda.Query.SqlExpression{System.Decimal})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<System.Decimal?> NativeWeave.Query.SqlFunctions.Sum(NativeWeave.Query.SqlExpression<System.Decimal> expression)
+public static Korda.Query.SqlExpression<System.Decimal?> Korda.Query.SqlFunctions.Sum(Korda.Query.SqlExpression<System.Decimal> expression)
 ```
 
 Aggregates native decimal inputs to nullable decimal, preserving empty-input NULL and explicit conversion failures.
@@ -2613,12 +2613,12 @@ SQL NULL, collation, overflow and conversion semantics remain explicit provider 
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlFunctions.Sum(NativeWeave.Query.SqlExpression{System.Double})`
+## `M:Korda.Query.SqlFunctions.Sum(Korda.Query.SqlExpression{System.Double})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<System.Double?> NativeWeave.Query.SqlFunctions.Sum(NativeWeave.Query.SqlExpression<System.Double> expression)
+public static Korda.Query.SqlExpression<System.Double?> Korda.Query.SqlFunctions.Sum(Korda.Query.SqlExpression<System.Double> expression)
 ```
 
 Aggregates native double inputs to nullable double, preserving empty-input NULL and explicit conversion failures.
@@ -2630,12 +2630,12 @@ SQL NULL, collation, overflow and conversion semantics remain explicit provider 
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlFunctions.Sum(NativeWeave.Query.SqlExpression{System.Int32})`
+## `M:Korda.Query.SqlFunctions.Sum(Korda.Query.SqlExpression{System.Int32})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<System.Int64?> NativeWeave.Query.SqlFunctions.Sum(NativeWeave.Query.SqlExpression<System.Int32> expression)
+public static Korda.Query.SqlExpression<System.Int64?> Korda.Query.SqlFunctions.Sum(Korda.Query.SqlExpression<System.Int32> expression)
 ```
 
 Aggregates native int inputs to nullable long, preserving empty-input NULL and explicit conversion failures.
@@ -2647,12 +2647,12 @@ SQL NULL, collation, overflow and conversion semantics remain explicit provider 
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlFunctions.Sum(NativeWeave.Query.SqlExpression{System.Int64})`
+## `M:Korda.Query.SqlFunctions.Sum(Korda.Query.SqlExpression{System.Int64})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<System.Int64?> NativeWeave.Query.SqlFunctions.Sum(NativeWeave.Query.SqlExpression<System.Int64> expression)
+public static Korda.Query.SqlExpression<System.Int64?> Korda.Query.SqlFunctions.Sum(Korda.Query.SqlExpression<System.Int64> expression)
 ```
 
 Aggregates native long inputs to nullable long, preserving empty-input NULL and explicit conversion failures.
@@ -2664,12 +2664,12 @@ SQL NULL, collation, overflow and conversion semantics remain explicit provider 
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlFunctions.Sum(NativeWeave.Query.SqlExpression{System.Nullable{System.Decimal}})`
+## `M:Korda.Query.SqlFunctions.Sum(Korda.Query.SqlExpression{System.Nullable{System.Decimal}})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<System.Decimal?> NativeWeave.Query.SqlFunctions.Sum(NativeWeave.Query.SqlExpression<System.Decimal?> expression)
+public static Korda.Query.SqlExpression<System.Decimal?> Korda.Query.SqlFunctions.Sum(Korda.Query.SqlExpression<System.Decimal?> expression)
 ```
 
 Aggregates native decimal? inputs to nullable decimal, preserving empty-input NULL and explicit conversion failures.
@@ -2681,12 +2681,12 @@ SQL NULL, collation, overflow and conversion semantics remain explicit provider 
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlFunctions.Sum(NativeWeave.Query.SqlExpression{System.Nullable{System.Double}})`
+## `M:Korda.Query.SqlFunctions.Sum(Korda.Query.SqlExpression{System.Nullable{System.Double}})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<System.Double?> NativeWeave.Query.SqlFunctions.Sum(NativeWeave.Query.SqlExpression<System.Double?> expression)
+public static Korda.Query.SqlExpression<System.Double?> Korda.Query.SqlFunctions.Sum(Korda.Query.SqlExpression<System.Double?> expression)
 ```
 
 Aggregates native double? inputs to nullable double, preserving empty-input NULL and explicit conversion failures.
@@ -2698,12 +2698,12 @@ SQL NULL, collation, overflow and conversion semantics remain explicit provider 
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlFunctions.Sum(NativeWeave.Query.SqlExpression{System.Nullable{System.Int32}})`
+## `M:Korda.Query.SqlFunctions.Sum(Korda.Query.SqlExpression{System.Nullable{System.Int32}})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<System.Int64?> NativeWeave.Query.SqlFunctions.Sum(NativeWeave.Query.SqlExpression<System.Int32?> expression)
+public static Korda.Query.SqlExpression<System.Int64?> Korda.Query.SqlFunctions.Sum(Korda.Query.SqlExpression<System.Int32?> expression)
 ```
 
 Aggregates native int? inputs to nullable long, preserving empty-input NULL and explicit conversion failures.
@@ -2715,12 +2715,12 @@ SQL NULL, collation, overflow and conversion semantics remain explicit provider 
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlFunctions.Sum(NativeWeave.Query.SqlExpression{System.Nullable{System.Int64}})`
+## `M:Korda.Query.SqlFunctions.Sum(Korda.Query.SqlExpression{System.Nullable{System.Int64}})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<System.Int64?> NativeWeave.Query.SqlFunctions.Sum(NativeWeave.Query.SqlExpression<System.Int64?> expression)
+public static Korda.Query.SqlExpression<System.Int64?> Korda.Query.SqlFunctions.Sum(Korda.Query.SqlExpression<System.Int64?> expression)
 ```
 
 Aggregates native long? inputs to nullable long, preserving empty-input NULL and explicit conversion failures.
@@ -2732,12 +2732,12 @@ SQL NULL, collation, overflow and conversion semantics remain explicit provider 
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlFunctions.Sum(NativeWeave.Query.SqlExpression{System.Nullable{System.Single}})`
+## `M:Korda.Query.SqlFunctions.Sum(Korda.Query.SqlExpression{System.Nullable{System.Single}})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<System.Double?> NativeWeave.Query.SqlFunctions.Sum(NativeWeave.Query.SqlExpression<System.Single?> expression)
+public static Korda.Query.SqlExpression<System.Double?> Korda.Query.SqlFunctions.Sum(Korda.Query.SqlExpression<System.Single?> expression)
 ```
 
 Aggregates native float? inputs to nullable double, preserving empty-input NULL and explicit conversion failures.
@@ -2749,12 +2749,12 @@ SQL NULL, collation, overflow and conversion semantics remain explicit provider 
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlFunctions.Sum(NativeWeave.Query.SqlExpression{System.Single})`
+## `M:Korda.Query.SqlFunctions.Sum(Korda.Query.SqlExpression{System.Single})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<System.Double?> NativeWeave.Query.SqlFunctions.Sum(NativeWeave.Query.SqlExpression<System.Single> expression)
+public static Korda.Query.SqlExpression<System.Double?> Korda.Query.SqlFunctions.Sum(Korda.Query.SqlExpression<System.Single> expression)
 ```
 
 Aggregates native float inputs to nullable double, preserving empty-input NULL and explicit conversion failures.
@@ -2766,12 +2766,12 @@ SQL NULL, collation, overflow and conversion semantics remain explicit provider 
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlNullabilityExtensions.AsNullableReference``1(NativeWeave.Query.SqlExpression{``0})`
+## `M:Korda.Query.SqlNullabilityExtensions.AsNullableReference``1(Korda.Query.SqlExpression{``0})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlNullabilityExtensions.AsNullableReference<T>(NativeWeave.Query.SqlExpression<T> expression) where T : class
+public static Korda.Query.SqlExpression<T?> Korda.Query.SqlNullabilityExtensions.AsNullableReference<T>(Korda.Query.SqlExpression<T> expression) where T : class
 ```
 
 Returns a fresh same-query nullable reference token; already-nullable metadata rejects.
@@ -2784,12 +2784,12 @@ These forward-only native metadata lifts preserve the SQL value and codec config
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlNullabilityExtensions.AsNullable``1(NativeWeave.Query.SqlExpression{``0})`
+## `M:Korda.Query.SqlNullabilityExtensions.AsNullable``1(Korda.Query.SqlExpression{``0})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlNullabilityExtensions.AsNullable<T>(NativeWeave.Query.SqlExpression<T> expression) where T : struct
+public static Korda.Query.SqlExpression<T?> Korda.Query.SqlNullabilityExtensions.AsNullable<T>(Korda.Query.SqlExpression<T> expression) where T : struct
 ```
 
 Returns a fresh same-query nullable scalar token, preserving the exact value and codec.
@@ -2802,12 +2802,12 @@ These forward-only native metadata lifts preserve the SQL value and codec config
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlPredicate.And(NativeWeave.Query.SqlPredicate)`
+## `M:Korda.Query.SqlPredicate.And(Korda.Query.SqlPredicate)`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlPredicate.And(NativeWeave.Query.SqlPredicate other)
+public Korda.Query.SqlPredicate Korda.Query.SqlPredicate.And(Korda.Query.SqlPredicate other)
 ```
 
 Combines same-query conditions with native AND.
@@ -2819,12 +2819,12 @@ Boolean composition uses SQL three-valued logic and performs one direct native o
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlPredicate.Not`
+## `M:Korda.Query.SqlPredicate.Not`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlPredicate.Not()
+public Korda.Query.SqlPredicate Korda.Query.SqlPredicate.Not()
 ```
 
 Negates this condition using native SQL NOT.
@@ -2835,12 +2835,12 @@ Boolean composition uses SQL three-valued logic and performs one direct native o
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlPredicate.Or(NativeWeave.Query.SqlPredicate)`
+## `M:Korda.Query.SqlPredicate.Or(Korda.Query.SqlPredicate)`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlPredicate.Or(NativeWeave.Query.SqlPredicate other)
+public Korda.Query.SqlPredicate Korda.Query.SqlPredicate.Or(Korda.Query.SqlPredicate other)
 ```
 
 Combines same-query conditions with native OR.
@@ -2852,12 +2852,12 @@ Boolean composition uses SQL three-valued logic and performs one direct native o
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlStringExtensions.Collate(NativeWeave.Query.SqlExpression{System.String},System.String)`
+## `M:Korda.Query.SqlStringExtensions.Collate(Korda.Query.SqlExpression{System.String},System.String)`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<System.String> NativeWeave.Query.SqlStringExtensions.Collate(NativeWeave.Query.SqlExpression<System.String> expression, System.String collation)
+public static Korda.Query.SqlExpression<System.String> Korda.Query.SqlStringExtensions.Collate(Korda.Query.SqlExpression<System.String> expression, System.String collation)
 ```
 
 Applies only a collation admitted by the provider's fixed allowlist.
@@ -2870,12 +2870,12 @@ Literal-pattern methods snapshot and escape the supplied text before native SQL 
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlStringExtensions.ContainsLiteral(NativeWeave.Query.SqlExpression{System.String},System.String)`
+## `M:Korda.Query.SqlStringExtensions.ContainsLiteral(Korda.Query.SqlExpression{System.String},System.String)`
 
 ```csharp
-public static NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlStringExtensions.ContainsLiteral(NativeWeave.Query.SqlExpression<System.String> expression, System.String value)
+public static Korda.Query.SqlPredicate Korda.Query.SqlStringExtensions.ContainsLiteral(Korda.Query.SqlExpression<System.String> expression, System.String value)
 ```
 
 Escapes wildcard characters and binds a literal contains pattern.
@@ -2888,12 +2888,12 @@ Literal-pattern methods snapshot and escape the supplied text before native SQL 
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlStringExtensions.ContainsNullableLiteral(NativeWeave.Query.SqlExpression{System.String},System.String)`
+## `M:Korda.Query.SqlStringExtensions.ContainsNullableLiteral(Korda.Query.SqlExpression{System.String},System.String)`
 
 ```csharp
-public static NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlStringExtensions.ContainsNullableLiteral(NativeWeave.Query.SqlExpression<System.String?> expression, System.String value)
+public static Korda.Query.SqlPredicate Korda.Query.SqlStringExtensions.ContainsNullableLiteral(Korda.Query.SqlExpression<System.String?> expression, System.String value)
 ```
 
 Escapes literal wildcard characters and searches nullable SQL text.
@@ -2906,12 +2906,12 @@ Literal-pattern methods snapshot and escape the supplied text before native SQL 
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlStringExtensions.EndsWithLiteral(NativeWeave.Query.SqlExpression{System.String},System.String)`
+## `M:Korda.Query.SqlStringExtensions.EndsWithLiteral(Korda.Query.SqlExpression{System.String},System.String)`
 
 ```csharp
-public static NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlStringExtensions.EndsWithLiteral(NativeWeave.Query.SqlExpression<System.String> expression, System.String value)
+public static Korda.Query.SqlPredicate Korda.Query.SqlStringExtensions.EndsWithLiteral(Korda.Query.SqlExpression<System.String> expression, System.String value)
 ```
 
 Escapes wildcard characters and binds a literal suffix pattern.
@@ -2924,12 +2924,12 @@ Literal-pattern methods snapshot and escape the supplied text before native SQL 
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlStringExtensions.Like(NativeWeave.Query.SqlExpression{System.String},System.String,System.Char)`
+## `M:Korda.Query.SqlStringExtensions.Like(Korda.Query.SqlExpression{System.String},System.String,System.Char)`
 
 ```csharp
-public static NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlStringExtensions.Like(NativeWeave.Query.SqlExpression<System.String> expression, System.String pattern, [System.Char escape = '\\'])
+public static Korda.Query.SqlPredicate Korda.Query.SqlStringExtensions.Like(Korda.Query.SqlExpression<System.String> expression, System.String pattern, [System.Char escape = '\\'])
 ```
 
 Binds the supplied raw SQL LIKE pattern with an explicit escape character.
@@ -2943,12 +2943,12 @@ Literal-pattern methods snapshot and escape the supplied text before native SQL 
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlStringExtensions.LikeNullable(NativeWeave.Query.SqlExpression{System.String},System.String,System.Char)`
+## `M:Korda.Query.SqlStringExtensions.LikeNullable(Korda.Query.SqlExpression{System.String},System.String,System.Char)`
 
 ```csharp
-public static NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlStringExtensions.LikeNullable(NativeWeave.Query.SqlExpression<System.String?> expression, System.String pattern, [System.Char escape = '\\'])
+public static Korda.Query.SqlPredicate Korda.Query.SqlStringExtensions.LikeNullable(Korda.Query.SqlExpression<System.String?> expression, System.String pattern, [System.Char escape = '\\'])
 ```
 
 Uses an explicit raw LIKE pattern against nullable SQL text.
@@ -2962,12 +2962,12 @@ Literal-pattern methods snapshot and escape the supplied text before native SQL 
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.SqlStringExtensions.StartsWithLiteral(NativeWeave.Query.SqlExpression{System.String},System.String)`
+## `M:Korda.Query.SqlStringExtensions.StartsWithLiteral(Korda.Query.SqlExpression{System.String},System.String)`
 
 ```csharp
-public static NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlStringExtensions.StartsWithLiteral(NativeWeave.Query.SqlExpression<System.String> expression, System.String value)
+public static Korda.Query.SqlPredicate Korda.Query.SqlStringExtensions.StartsWithLiteral(Korda.Query.SqlExpression<System.String> expression, System.String value)
 ```
 
 Escapes wildcard characters and binds a literal prefix pattern.
@@ -2980,12 +2980,12 @@ Literal-pattern methods snapshot and escape the supplied text before native SQL 
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.UpdateSetters`1.Set``1(NativeWeave.Data.Column{`0,``0},NativeWeave.Query.SqlExpression{``0})`
+## `M:Korda.Query.UpdateSetters`1.Set``1(Korda.Data.Column{`0,``0},Korda.Query.SqlExpression{``0})`
 
 ```csharp
-public NativeWeave.Query.UpdateSetters<TEntity> NativeWeave.Query.UpdateSetters<TEntity>.Set<T>(NativeWeave.Data.Column<TEntity, T> column, NativeWeave.Query.SqlExpression<T> value)
+public Korda.Query.UpdateSetters<TEntity> Korda.Query.UpdateSetters<TEntity>.Set<T>(Korda.Data.Column<TEntity, T> column, Korda.Query.SqlExpression<T> value)
 ```
 
 Stages a compatible same-query expression; assignments attach only after the callback succeeds.
@@ -2999,12 +2999,12 @@ The owner is valid only during the synchronous update callback. Each scalar is s
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.UpdateSetters`1.Set``1(NativeWeave.Data.Column{`0,``0},``0)`
+## `M:Korda.Query.UpdateSetters`1.Set``1(Korda.Data.Column{`0,``0},``0)`
 
 ```csharp
-public NativeWeave.Query.UpdateSetters<TEntity> NativeWeave.Query.UpdateSetters<TEntity>.Set<T>(NativeWeave.Data.Column<TEntity, T> column, T value)
+public Korda.Query.UpdateSetters<TEntity> Korda.Query.UpdateSetters<TEntity>.Set<T>(Korda.Data.Column<TEntity, T> column, T value)
 ```
 
 Copies a typed value for a nonkey, nongenerated root-column assignment.
@@ -3018,12 +3018,12 @@ The owner is valid only during the synchronous update callback. Each scalar is s
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.WindowDefinition.OrderBy``1(NativeWeave.Query.SqlExpression{``0},NativeWeave.Query.SortDirection,NativeWeave.Query.NullOrder)`
+## `M:Korda.Query.WindowDefinition.OrderBy``1(Korda.Query.SqlExpression{``0},Korda.Query.SortDirection,Korda.Query.NullOrder)`
 
 ```csharp
-public NativeWeave.Query.WindowDefinition NativeWeave.Query.WindowDefinition.OrderBy<T>(NativeWeave.Query.SqlExpression<T> expression, [NativeWeave.Query.SortDirection direction = NativeWeave.Query.SortDirection.Ascending], [NativeWeave.Query.NullOrder nullOrder = NativeWeave.Query.NullOrder.Last])
+public Korda.Query.WindowDefinition Korda.Query.WindowDefinition.OrderBy<T>(Korda.Query.SqlExpression<T> expression, [Korda.Query.SortDirection direction = Korda.Query.SortDirection.Ascending], [Korda.Query.NullOrder nullOrder = Korda.Query.NullOrder.Last])
 ```
 
 Appends native ordering with explicit direction and SQL NULL placement.
@@ -3038,12 +3038,12 @@ The owning query bounds lifetime and concurrent access. Rank, RowNumber and Over
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.WindowDefinition.PartitionBy``1(NativeWeave.Query.SqlExpression{``0})`
+## `M:Korda.Query.WindowDefinition.PartitionBy``1(Korda.Query.SqlExpression{``0})`
 
 ```csharp
-public NativeWeave.Query.WindowDefinition NativeWeave.Query.WindowDefinition.PartitionBy<T>(NativeWeave.Query.SqlExpression<T> expression)
+public Korda.Query.WindowDefinition Korda.Query.WindowDefinition.PartitionBy<T>(Korda.Query.SqlExpression<T> expression)
 ```
 
 Appends a same-query native partition expression.
@@ -3056,12 +3056,12 @@ The owning query bounds lifetime and concurrent access. Rank, RowNumber and Over
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `M:NativeWeave.Query.WindowDefinition.RowsBetween(NativeWeave.Query.FrameBoundary,NativeWeave.Query.FrameBoundary)`
+## `M:Korda.Query.WindowDefinition.RowsBetween(Korda.Query.FrameBoundary,Korda.Query.FrameBoundary)`
 
 ```csharp
-public NativeWeave.Query.WindowDefinition NativeWeave.Query.WindowDefinition.RowsBetween(NativeWeave.Query.FrameBoundary start, NativeWeave.Query.FrameBoundary end)
+public Korda.Query.WindowDefinition Korda.Query.WindowDefinition.RowsBetween(Korda.Query.FrameBoundary start, Korda.Query.FrameBoundary end)
 ```
 
 Sets one supported ROWS frame; invalid endpoints reject before publication.
@@ -3074,12 +3074,12 @@ The owning query bounds lifetime and concurrent access. Rank, RowNumber and Over
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
-- **T:NativeWeave.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
+- **T:Korda.Data.DatabaseException**: Native capability, finite resource limits or provider execution rejects the operation.
 
-## `P:NativeWeave.Query.Query`1.Row`
+## `P:Korda.Query.Query`1.Row`
 
 ```csharp
-public NativeWeave.Query.QueryRow<TEntity> NativeWeave.Query.Query<TEntity>.Row | getter=Public;setter=;init=
+public Korda.Query.QueryRow<TEntity> Korda.Query.Query<TEntity>.Row | getter=Public;setter=;init=
 ```
 
 Gets the live typed root-column proxy.
@@ -3087,10 +3087,10 @@ Gets the live typed root-column proxy.
 Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
 
-## `T:NativeWeave.Query.CommonTable`1`
+## `T:Korda.Query.CommonTable`1`
 
 ```csharp
-NativeWeave.Query.CommonTable<T> where T : class | kind=Class;static=False;sealed=True;abstract=False;base=System.Object;interfaces=System.IDisposable
+Korda.Query.CommonTable<T> where T : class | kind=Class;static=False;sealed=True;abstract=False;base=System.Object;interfaces=System.IDisposable
 ```
 
 A frozen native CTE with an explicit declared row shape and source identity.
@@ -3099,10 +3099,10 @@ The snapshot is bound to one source and a declared static row shape. With import
 
 - **T**: The declared CTE row class.
 
-## `T:NativeWeave.Query.FrameBoundary`
+## `T:Korda.Query.FrameBoundary`
 
 ```csharp
-NativeWeave.Query.FrameBoundary | kind=Enum;static=False;sealed=True;abstract=False;base=System.Enum;interfaces=
+Korda.Query.FrameBoundary | kind=Enum;static=False;sealed=True;abstract=False;base=System.Enum;interfaces=
 ```
 
 Supported finite window-frame endpoint choices.
@@ -3110,10 +3110,10 @@ Supported finite window-frame endpoint choices.
 Only these ROWS endpoints are supported. Reversed or unsupported bounds fail before native state publication; finite numeric PRECEDING/FOLLOWING frames are not declared.
 
 
-## `T:NativeWeave.Query.JoinPredicate`2`
+## `T:Korda.Query.JoinPredicate`2`
 
 ```csharp
-NativeWeave.Query.JoinPredicate<TLeft, TRight> where TLeft : class where TRight : class | kind=Struct;static=False;sealed=True;abstract=False;base=System.ValueType;interfaces=
+Korda.Query.JoinPredicate<TLeft, TRight> where TLeft : class where TRight : class | kind=Struct;static=False;sealed=True;abstract=False;base=System.ValueType;interfaces=
 ```
 
 A synchronous native JOIN ON proxy; both sides retain their declared nullability.
@@ -3123,10 +3123,10 @@ Use only inside the synchronous JOIN callback. Provisional right-side expression
 - **TLeft**: The root entity class.
 - **TRight**: The explicitly joined entity class.
 
-## `T:NativeWeave.Query.JoinedTable`1`
+## `T:Korda.Query.JoinedTable`1`
 
 ```csharp
-NativeWeave.Query.JoinedTable<TEntity> where TEntity : class | kind=Struct;static=False;sealed=True;abstract=False;base=System.ValueType;interfaces=
+Korda.Query.JoinedTable<TEntity> where TEntity : class | kind=Struct;static=False;sealed=True;abstract=False;base=System.ValueType;interfaces=
 ```
 
 An opaque inner-join alias belonging to exactly one native query and table.
@@ -3135,10 +3135,10 @@ The alias is a borrowed token, not an independently disposable query. Default al
 
 - **TEntity**: The joined entity class.
 
-## `T:NativeWeave.Query.LeftJoinedTable`1`
+## `T:Korda.Query.LeftJoinedTable`1`
 
 ```csharp
-NativeWeave.Query.LeftJoinedTable<TEntity> where TEntity : class | kind=Struct;static=False;sealed=True;abstract=False;base=System.ValueType;interfaces=
+Korda.Query.LeftJoinedTable<TEntity> where TEntity : class | kind=Struct;static=False;sealed=True;abstract=False;base=System.ValueType;interfaces=
 ```
 
 An opaque left-join alias whose projected columns require explicit nullable reads.
@@ -3147,10 +3147,10 @@ Use NullableValue or NullableReference to project its columns and HasMatch to di
 
 - **TEntity**: The joined entity class.
 
-## `T:NativeWeave.Query.LockWait`
+## `T:Korda.Query.LockWait`
 
 ```csharp
-NativeWeave.Query.LockWait | kind=Enum;static=False;sealed=True;abstract=False;base=System.Enum;interfaces=
+Korda.Query.LockWait | kind=Enum;static=False;sealed=True;abstract=False;base=System.Enum;interfaces=
 ```
 
 PostgreSQL row-lock conflict behavior.
@@ -3158,10 +3158,10 @@ PostgreSQL row-lock conflict behavior.
 Controls PostgreSQL row-lock conflicts within the same transaction and total query deadline; it does not enable transparent retries.
 
 
-## `T:NativeWeave.Query.NullOrder`
+## `T:Korda.Query.NullOrder`
 
 ```csharp
-NativeWeave.Query.NullOrder | kind=Enum;static=False;sealed=True;abstract=False;base=System.Enum;interfaces=
+Korda.Query.NullOrder | kind=Enum;static=False;sealed=True;abstract=False;base=System.Enum;interfaces=
 ```
 
 Explicit SQL NULL placement.
@@ -3169,10 +3169,10 @@ Explicit SQL NULL placement.
 Both providers render explicit SQL NULL placement. Ordering alone supplies no uniqueness or snapshot guarantee.
 
 
-## `T:NativeWeave.Query.PreparedQuery`1`
+## `T:Korda.Query.PreparedQuery`1`
 
 ```csharp
-NativeWeave.Query.PreparedQuery<T> | kind=Class;static=False;sealed=True;abstract=False;base=System.Object;interfaces=System.IDisposable
+Korda.Query.PreparedQuery<T> | kind=Class;static=False;sealed=True;abstract=False;base=System.Object;interfaces=System.IDisposable
 ```
 
 An immutable source-bound native query plan with independent execution values and cursor owners.
@@ -3181,10 +3181,10 @@ Concurrent execution uses separate sessions from the same source. Disposing prev
 
 - **T**: The owned static result type.
 
-## `T:NativeWeave.Query.ProjectionBuilder`1`
+## `T:Korda.Query.ProjectionBuilder`1`
 
 ```csharp
-NativeWeave.Query.ProjectionBuilder<T> | kind=Class;static=False;sealed=True;abstract=False;base=System.Object;interfaces=
+Korda.Query.ProjectionBuilder<T> | kind=Class;static=False;sealed=True;abstract=False;base=System.Object;interfaces=
 ```
 
 A query-scoped static projection builder that freezes typed result tokens and a direct constructor.
@@ -3193,10 +3193,10 @@ Fields must come from its exact live query. Build freezes field order, unique na
 
 - **T**: The statically known owned result type.
 
-## `T:NativeWeave.Query.QueryParameter`1`
+## `T:Korda.Query.QueryParameter`1`
 
 ```csharp
-NativeWeave.Query.QueryParameter<T> | kind=Struct;static=False;sealed=True;abstract=False;base=System.ValueType;interfaces=
+Korda.Query.QueryParameter<T> | kind=Struct;static=False;sealed=True;abstract=False;base=System.ValueType;interfaces=
 ```
 
 An immutable source-generation parameter identity, distinct from a query-arena expression.
@@ -3205,10 +3205,10 @@ Parameter IDs are monotonically allocated within a source generation, independen
 
 - **T**: The exact statically encoded parameter type.
 
-## `T:NativeWeave.Query.QueryParameters`
+## `T:Korda.Query.QueryParameters`
 
 ```csharp
-NativeWeave.Query.QueryParameters | kind=Class;static=False;sealed=True;abstract=False;base=System.Object;interfaces=
+Korda.Query.QueryParameters | kind=Class;static=False;sealed=True;abstract=False;base=System.Object;interfaces=
 ```
 
 A finite explicit parameter set; each Set copies its value and each execution takes a separate snapshot.
@@ -3216,10 +3216,10 @@ A finite explicit parameter set; each Set copies its value and each execution ta
 Set snapshots each encoded value before returning. A terminal copies the complete finite set before its first await; later Set calls do not change admitted execution. Missing, extra, foreign or codec-incompatible identities reject before native dispatch. No global parameter dictionary exists.
 
 
-## `T:NativeWeave.Query.QueryRow`1`
+## `T:Korda.Query.QueryRow`1`
 
 ```csharp
-NativeWeave.Query.QueryRow<TEntity> where TEntity : class | kind=Struct;static=False;sealed=True;abstract=False;base=System.ValueType;interfaces=
+Korda.Query.QueryRow<TEntity> where TEntity : class | kind=Struct;static=False;sealed=True;abstract=False;base=System.ValueType;interfaces=
 ```
 
 A stack-independent typed root-table proxy that belongs to one live native query.
@@ -3228,10 +3228,10 @@ This borrowed proxy retains its query association. Default, foreign, closed or s
 
 - **TEntity**: The declared root entity class.
 
-## `T:NativeWeave.Query.QuerySelection`1`
+## `T:Korda.Query.QuerySelection`1`
 
 ```csharp
-NativeWeave.Query.QuerySelection<T> | kind=Struct;static=False;sealed=True;abstract=False;base=System.ValueType;interfaces=
+Korda.Query.QuerySelection<T> | kind=Struct;static=False;sealed=True;abstract=False;base=System.ValueType;interfaces=
 ```
 
 A borrowed typed view of a native query's current selection; it owns no second arena.
@@ -3240,10 +3240,10 @@ This borrowed view is valid only while its projection remains current in the liv
 
 - **T**: The statically materialized owned result type.
 
-## `T:NativeWeave.Query.Query`1`
+## `T:Korda.Query.Query`1`
 
 ```csharp
-NativeWeave.Query.Query<TEntity> where TEntity : class | kind=Class;static=False;sealed=True;abstract=False;base=System.Object;interfaces=System.IDisposable
+Korda.Query.Query<TEntity> where TEntity : class | kind=Class;static=False;sealed=True;abstract=False;base=System.Object;interfaces=System.IDisposable
 ```
 
 One mutable, source-bound native query arena with a strongly typed application facade.
@@ -3252,10 +3252,10 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 
 - **TEntity**: The explicitly described root entity class.
 
-## `T:NativeWeave.Query.RowLockMode`
+## `T:Korda.Query.RowLockMode`
 
 ```csharp
-NativeWeave.Query.RowLockMode | kind=Enum;static=False;sealed=True;abstract=False;base=System.Enum;interfaces=
+Korda.Query.RowLockMode | kind=Enum;static=False;sealed=True;abstract=False;base=System.Enum;interfaces=
 ```
 
 PostgreSQL row lock strength requiring an explicit transaction.
@@ -3263,10 +3263,10 @@ PostgreSQL row lock strength requiring an explicit transaction.
 Available only on PostgreSQL with an explicit live transaction. SQLite rejects the operation before provider dispatch.
 
 
-## `T:NativeWeave.Query.SetOperation`
+## `T:Korda.Query.SetOperation`
 
 ```csharp
-NativeWeave.Query.SetOperation | kind=Enum;static=False;sealed=True;abstract=False;base=System.Enum;interfaces=
+Korda.Query.SetOperation | kind=Enum;static=False;sealed=True;abstract=False;base=System.Enum;interfaces=
 ```
 
 Native SQL set operation with exact compatible projection types.
@@ -3274,10 +3274,10 @@ Native SQL set operation with exact compatible projection types.
 Operands must have the same source, field order, aliases, codecs and nullability. The native engine snapshots the right operand; SQL duplicate and NULL semantics apply.
 
 
-## `T:NativeWeave.Query.SortDirection`
+## `T:Korda.Query.SortDirection`
 
 ```csharp
-NativeWeave.Query.SortDirection | kind=Enum;static=False;sealed=True;abstract=False;base=System.Enum;interfaces=
+Korda.Query.SortDirection | kind=Enum;static=False;sealed=True;abstract=False;base=System.Enum;interfaces=
 ```
 
 Native SQL ordering direction.
@@ -3285,10 +3285,10 @@ Native SQL ordering direction.
 The native query validates each enum value before mutation. Direction is explicit; it does not change SQL NULL ordering.
 
 
-## `T:NativeWeave.Query.SqlArithmeticExtensions`
+## `T:Korda.Query.SqlArithmeticExtensions`
 
 ```csharp
-NativeWeave.Query.SqlArithmeticExtensions | kind=Class;static=True;sealed=False;abstract=False;base=System.Object;interfaces=
+Korda.Query.SqlArithmeticExtensions | kind=Class;static=True;sealed=False;abstract=False;base=System.Object;interfaces=
 ```
 
 Statically numeric native SQL arithmetic; overflow, precision and division remain provider semantics.
@@ -3296,10 +3296,10 @@ Statically numeric native SQL arithmetic; overflow, precision and division remai
 Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
 
-## `T:NativeWeave.Query.SqlExpression`1`
+## `T:Korda.Query.SqlExpression`1`
 
 ```csharp
-NativeWeave.Query.SqlExpression<T> | kind=Struct;static=False;sealed=True;abstract=False;base=System.ValueType;interfaces=
+Korda.Query.SqlExpression<T> | kind=Struct;static=False;sealed=True;abstract=False;base=System.ValueType;interfaces=
 ```
 
 An opaque query-owned scalar token with its exact static codec and SQL nullability.
@@ -3308,10 +3308,10 @@ No SQL tree or delegate is retained. Values are snapshotted immediately; default
 
 - **T**: The statically known value type.
 
-## `T:NativeWeave.Query.SqlFunctions`
+## `T:Korda.Query.SqlFunctions`
 
 ```csharp
-NativeWeave.Query.SqlFunctions | kind=Class;static=True;sealed=False;abstract=False;base=System.Object;interfaces=
+Korda.Query.SqlFunctions | kind=Class;static=True;sealed=False;abstract=False;base=System.Object;interfaces=
 ```
 
 Static typed native aggregates, ranking and conditional scalar composition.
@@ -3319,10 +3319,10 @@ Static typed native aggregates, ranking and conditional scalar composition.
 SQL NULL, collation, overflow and conversion semantics remain explicit provider behavior.
 
 
-## `T:NativeWeave.Query.SqlNullabilityExtensions`
+## `T:Korda.Query.SqlNullabilityExtensions`
 
 ```csharp
-NativeWeave.Query.SqlNullabilityExtensions | kind=Class;static=True;sealed=False;abstract=False;base=System.Object;interfaces=
+Korda.Query.SqlNullabilityExtensions | kind=Class;static=True;sealed=False;abstract=False;base=System.Object;interfaces=
 ```
 
 Explicit one-way SQL nullability lifts; no SQL cast, coalesce or new parameter is emitted.
@@ -3330,10 +3330,10 @@ Explicit one-way SQL nullability lifts; no SQL cast, coalesce or new parameter i
 These forward-only native metadata lifts preserve the SQL value and codec configuration. They do not emit a sentinel, COALESCE or reverse conversion. Default/foreign owners reject, and repeating a reference lift rejects its already nullable descriptor.
 
 
-## `T:NativeWeave.Query.SqlPredicate`
+## `T:Korda.Query.SqlPredicate`
 
 ```csharp
-NativeWeave.Query.SqlPredicate | kind=Struct;static=False;sealed=True;abstract=False;base=System.ValueType;interfaces=
+Korda.Query.SqlPredicate | kind=Struct;static=False;sealed=True;abstract=False;base=System.ValueType;interfaces=
 ```
 
 An opaque same-query native SQL condition; default predicates reject.
@@ -3341,10 +3341,10 @@ An opaque same-query native SQL condition; default predicates reject.
 Boolean composition uses SQL three-valued logic and performs one direct native operation.
 
 
-## `T:NativeWeave.Query.SqlStringExtensions`
+## `T:Korda.Query.SqlStringExtensions`
 
 ```csharp
-NativeWeave.Query.SqlStringExtensions | kind=Class;static=True;sealed=False;abstract=False;base=System.Object;interfaces=
+Korda.Query.SqlStringExtensions | kind=Class;static=True;sealed=False;abstract=False;base=System.Object;interfaces=
 ```
 
 Explicit SQL string pattern and allowlisted collation operations; no CLR culture comparison.
@@ -3352,10 +3352,10 @@ Explicit SQL string pattern and allowlisted collation operations; no CLR culture
 Literal-pattern methods snapshot and escape the supplied text before native SQL rendering; LikePattern deliberately accepts SQL wildcards. Collate resolves an exact provider allowlist, never arbitrary SQL. NULL behavior follows SQL three-valued logic.
 
 
-## `T:NativeWeave.Query.UpdateSetters`1`
+## `T:Korda.Query.UpdateSetters`1`
 
 ```csharp
-NativeWeave.Query.UpdateSetters<TEntity> where TEntity : class | kind=Class;static=False;sealed=True;abstract=False;base=System.Object;interfaces=
+Korda.Query.UpdateSetters<TEntity> where TEntity : class | kind=Class;static=False;sealed=True;abstract=False;base=System.Object;interfaces=
 ```
 
 A callback-scoped typed assignment collector; scalar expressions are built natively immediately.
@@ -3364,10 +3364,10 @@ The owner is valid only during the synchronous update callback. Each scalar is s
 
 - **TEntity**: The root entity class.
 
-## `T:NativeWeave.Query.WindowDefinition`
+## `T:Korda.Query.WindowDefinition`
 
 ```csharp
-NativeWeave.Query.WindowDefinition | kind=Class;static=False;sealed=True;abstract=False;base=System.Object;interfaces=
+Korda.Query.WindowDefinition | kind=Class;static=False;sealed=True;abstract=False;base=System.Object;interfaces=
 ```
 
 Finite mutable native window state; each Over/rank call snapshots its current definition.

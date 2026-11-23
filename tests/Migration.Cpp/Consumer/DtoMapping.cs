@@ -1,5 +1,5 @@
-using NativeWeave.Database;
-using NativeWeave.Query;
+using Korda.Database;
+using Korda.Query;
 
 internal sealed record WorkSummary(long Id, string Title, string? Note);
 

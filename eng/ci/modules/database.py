@@ -287,7 +287,7 @@ def recipes():
     add(
         "api.tool",
         build(tool),
-        build("src/Data.NativeHost/NativeWeave.Database.csproj"),
+        build("src/Data.NativeHost/Korda.Database.csproj"),
         resources=("dotnet",),
     )
     for ident, directory in (
@@ -301,14 +301,14 @@ def recipes():
                 "--design",
                 DESIGN,
                 "--tool",
-                tool + "/bin/Release/net11.0/NativeWeave.Build.ApiReference.dll",
+                tool + "/bin/Release/net11.0/Korda.Build.ApiReference.dll",
             ),
             needs=("api.tool",),
             resources=("design",),
         )
     add(
         "fluent.api",
-        build("src/Data.NativeHost/NativeWeave.Database.csproj"),
+        build("src/Data.NativeHost/Korda.Database.csproj"),
         (
             "dotnet",
             "run",

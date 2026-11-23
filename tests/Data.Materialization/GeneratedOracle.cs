@@ -1,4 +1,4 @@
-using NativeWeave.Data;
+using Korda.Data;
 
 // Both static implementations consume the independent ShapeOracle from the
 // handwritten suite; generated metadata never supplies the expected fields.

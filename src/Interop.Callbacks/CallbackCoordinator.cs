@@ -1,4 +1,4 @@
-namespace NativeWeave.Interop.Callbacks;
+namespace Korda.Interop.Callbacks;
 
 /// <summary>Engine-owned bounded retry slots; constructing Core alone creates no scheduler.</summary>
 /// <remarks>One timer serves a fixed number of admitted contexts. Each context owns at most

@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace NativeWeave.Interop.Lifetime;
+namespace Korda.Interop.Lifetime;
 
 /// <summary>Internal D04 logical admission and physical SafeHandle leases.</summary>
 /// <remarks>

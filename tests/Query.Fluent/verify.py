@@ -37,7 +37,7 @@ server = None
 server_log = None
 common = ['-p:UseSharedCompilation=false', '-nr:false', '-m:1']
 modules = [a.sqlite_module.resolve(), a.postgres_module.resolve()]
-assets = [f'-p:NativeWeaveSqliteAssetPath={modules[0]}', f'-p:NativeWeavePostgresAssetPath={modules[1]}']
+assets = [f'-p:KordaSqliteAssetPath={modules[0]}', f'-p:KordaPostgresAssetPath={modules[1]}']
 
 def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -70,7 +70,7 @@ def inputs(root, scopes):
 scopes = ['src/Query.Fluent', 'tests/Query.Fluent', 'samples/api/query-fluent', 'src/Data.Materialization',
           'docs/guides/query-fluent.md', 'src/Data.Abstractions', 'src/Data.Streaming', 'src/Data.NativeHost',
           'src/Data.Sqlite', 'src/Data.Postgres', 'src/Data.Transactions', 'src/Query.Binding', 'src/Query.Generator',
-          'src/Interop.Abi', 'src/NativeWeave.Core', 'Directory.Build.props', 'Directory.Build.targets', 'global.json', 'src/Packaging.Release', 'src/Packaging.Linux/packages.py', 'LICENSE', 'tests/Data.Materialization/package_feed.py']
+          'src/Interop.Abi', 'src/Korda.Core', 'Directory.Build.props', 'Directory.Build.targets', 'global.json', 'src/Packaging.Release', 'src/Packaging.Linux/packages.py', 'LICENSE', 'tests/Data.Materialization/package_feed.py']
 host_scopes = ['native/cpp', 'native/database/binding', 'native/interop/abi', 'native/dependencies.lock.json', 'CMakeLists.txt', 'CMakePresets.json']
 source = inputs(ROOT, scopes)
 host_source = inputs(a.host_source.resolve(), host_scopes)
@@ -91,29 +91,29 @@ try:
     pg = a.postgres_bin.resolve()
     data = out / 'postgres-data'
     run('postgres-identity', [pg / 'postgres', '--version'])
-    run('postgres-init', [pg / 'initdb', '-D', data, '-U', 'nativeweave', '--auth=trust', '--no-locale', '--encoding=UTF8'])
+    run('postgres-init', [pg / 'initdb', '-D', data, '-U', 'korda', '--auth=trust', '--no-locale', '--encoding=UTF8'])
     with socket.socket() as listener:
         listener.bind(('127.0.0.1', 0)); port = listener.getsockname()[1]
     server_log = (out / 'postgres.log').open('w')
     server = subprocess.Popen([pg / 'postgres', '-D', data, '-h', '127.0.0.1', '-p', str(port), '-k', ''], stdout=server_log, stderr=subprocess.STDOUT, env=env)
     for _ in range(300):
-        if subprocess.run([pg / 'pg_isready', '-h', '127.0.0.1', '-p', str(port), '-U', 'nativeweave'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
+        if subprocess.run([pg / 'pg_isready', '-h', '127.0.0.1', '-p', str(port), '-U', 'korda'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0:
             break
         if server.poll() is not None:
             raise RuntimeError('PostgreSQL exited before readiness.')
         time.sleep(.05)
     else:
         raise RuntimeError('PostgreSQL did not become ready before deadline.')
-    env['NW_TEST_POSTGRES'] = f'postgresql://nativeweave@127.0.0.1:{port}/postgres'
-    project = 'tests/Query.Fluent/NativeWeave.Query.Fluent.Tests.csproj'
+    env['NW_TEST_POSTGRES'] = f'postgresql://korda@127.0.0.1:{port}/postgres'
+    project = 'tests/Query.Fluent/Korda.Query.Fluent.Tests.csproj'
     run('restore-managed', ['dotnet', 'restore', project, '--locked-mode', *common, *assets])
     run('build-managed', ['dotnet', 'build', project, '-c', 'Release', '--no-restore', *common, *assets])
-    dll = ROOT / 'tests/Query.Fluent/bin/Release/net11.0/NativeWeave.Query.Fluent.Tests.dll'
+    dll = ROOT / 'tests/Query.Fluent/bin/Release/net11.0/Korda.Query.Fluent.Tests.dll'
     run('api-build', ['dotnet', 'build', 'tests/Query.Fluent/ApiCheck/ApiCheck.csproj', '-c', 'Release', *common])
-    run('api-reference-negative-consumers', ['dotnet', ROOT / 'tests/Query.Fluent/ApiCheck/bin/Release/net11.0/NativeWeave.Query.Fluent.ApiCheck.dll', ROOT, a.design.resolve(), env['DOTNET_ROOT']])
+    run('api-reference-negative-consumers', ['dotnet', ROOT / 'tests/Query.Fluent/ApiCheck/bin/Release/net11.0/Korda.Query.Fluent.ApiCheck.dll', ROOT, a.design.resolve(), env['DOTNET_ROOT']])
     run('restore-aot', ['dotnet', 'restore', project, '-r', 'linux-x64', '-p:PublishAot=true', '--locked-mode', *common, *assets])
     run('publish-aot', ['dotnet', 'publish', project, '-c', 'Release', '-r', 'linux-x64', '-p:PublishAot=true', '--no-restore', '-o', out / 'aot', *common, *assets])
-    executable = out / 'aot/NativeWeave.Query.Fluent.Tests'
+    executable = out / 'aot/Korda.Query.Fluent.Tests'
     run('actual-aot', [executable, out / 'aot-results', '--require-aot'])
 
     feed = out / 'feed'; feed.mkdir()
@@ -121,7 +121,7 @@ try:
     packer = importlib.util.module_from_spec(helper); helper.loader.exec_module(packer)
     packages = packer.build_feed(ROOT, feed, modules[0], modules[1], run)
     for name in ['Sqlite', 'PostgreSql']:
-        package = feed / f'NativeWeave.Database.{name}.0.1.0-preview.1.nupkg'
+        package = feed / f'Korda.Database.{name}.0.1.0-preview.1.nupkg'
         asset = 'libnw_database_sqlite.so' if name == 'Sqlite' else 'libnw_database_postgresql.so'
         with zipfile.ZipFile(package) as archive:
             if hashlib.sha256(archive.read('runtimes/linux-x64/native/' + asset)).hexdigest() != sha(modules[0 if name == 'Sqlite' else 1]):
@@ -159,7 +159,7 @@ try:
     if rust_marker.exists():
         raise RuntimeError('Ordinary NuGet consumption unexpectedly invoked Rust.')
     write('consumer-identities.json', {'directory': str(consumer), 'project_references': 0,
-          'nativeweave_packages': packages, 'consumer_sha256': {f.name: sha(f) for f in consumer.iterdir() if f.is_file()},
+          'korda_packages': packages, 'consumer_sha256': {f.name: sha(f) for f in consumer.iterdir() if f.is_file()},
           'managed_sha256': sha(consumer_dll), 'aot_sha256': sha(consumer_aot), 'pristine_machine': False, 'no_consumer_rust': True, 'sdk_package_sha256': {name: sha(feed / f'{name}.11.0.0.nupkg') for name in sdk_packages}})
     run('dotnet-identity', ['dotnet', '--info'])
     if source != inputs(ROOT, scopes) or host_source != inputs(a.host_source.resolve(), host_scopes) or native_hashes != {str(m): sha(m) for m in modules}:
@@ -169,7 +169,7 @@ try:
     write('status.json', {'result': 'passed', 'platform': 'linux-x64', 'candidate': source['commit'], 'host_candidate': host_source['commit'],
           'commands': len(commands),
           'aot': json.loads((out / 'aot-results/result.json').read_text()), 'isolated_nuget_aot': True,
-          'public_facade_owner': 'B13; public namespace source-composed in NativeWeave.Database', 'other_platforms': 'not executed'})
+          'public_facade_owner': 'B13; public namespace source-composed in Korda.Database', 'other_platforms': 'not executed'})
     print('PASS B13 immutable Linux actual Fluent query and isolated NuGet Native AOT', flush=True)
 except Exception as failure:
     write('status.json', {'result': 'failed', 'platform': 'linux-x64', 'candidate': source['commit'], 'error': str(failure), 'completed_commands': len(commands)})

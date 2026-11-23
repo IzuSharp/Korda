@@ -1,5 +1,5 @@
-using NativeWeave.Database.PostgreSql;
-using NativeWeave.Interop;
+using Korda.Database.PostgreSql;
+using Korda.Interop;
 
 // Minimal: constructing configuration and reading a descriptor start no executor.
 var options = new PostgreSqlOptions();

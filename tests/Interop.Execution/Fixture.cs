@@ -1,11 +1,11 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using NativeWeave.Interop;
-using NativeWeave.Interop.Abi;
-using NativeWeave.Interop.Async;
-using NativeWeave.Interop.Callbacks;
-using NativeWeave.Interop.Execution;
-using NativeWeave.Interop.Lifetime;
+using Korda.Interop;
+using Korda.Interop.Abi;
+using Korda.Interop.Async;
+using Korda.Interop.Callbacks;
+using Korda.Interop.Execution;
+using Korda.Interop.Lifetime;
 
 internal sealed class EngineHandle : SafeHandle
 {
@@ -198,7 +198,7 @@ internal struct NativeJoin
 }
 internal static unsafe partial class Fixture
 {
-    private const string Library = "nativeweave_interop_execution";
+    private const string Library = "korda_interop_execution";
     [LibraryImport(Library, EntryPoint = "nw_execution_fixture_create_v1")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
     internal static partial uint Create(uint workers, uint admitted, uint waiters, ulong bytes, uint cleanup, out nint engine);

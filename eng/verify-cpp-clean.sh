@@ -19,8 +19,8 @@ docker run --rm --network host \
     apt-get update
     apt-get install -y --no-install-recommends git python3 curl ca-certificates libssl-dev zlib1g-dev build-essential
     git config --global --add safe.directory /input
-    git clone /input/artifacts/cpp-clean/source.bundle /tmp/nativeweave
-    cd /tmp/nativeweave
+    git clone /input/artifacts/cpp-clean/source.bundle /tmp/korda
+    cd /tmp/korda
     git checkout --detach "$CPP_SOURCE"
     export DOTNET_ROOT=/dotnet DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1
     export PATH=/input/artifacts/toolchain/llvm-23.1.5/bin:/input/artifacts/toolchain/cmake-4.3.3/bin:/input/artifacts/toolchain/ninja-1.13.2:/dotnet:/usr/bin:/bin

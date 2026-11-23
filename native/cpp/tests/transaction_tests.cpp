@@ -275,9 +275,9 @@ void released_savepoint_disposal()
     {
         struct DatabaseFile
         {
-            std::filesystem::path path = std::filesystem::temp_directory_path() /
-                                         ("nativeweave-released-savepoint-" +
-                                          std::to_string(Clock::now().time_since_epoch().count()) + ".sqlite");
+            std::filesystem::path path =
+                std::filesystem::temp_directory_path() /
+                ("korda-released-savepoint-" + std::to_string(Clock::now().time_since_epoch().count()) + ".sqlite");
             ~DatabaseFile()
             {
                 std::error_code ignored;

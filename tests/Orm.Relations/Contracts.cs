@@ -1,7 +1,7 @@
-using NativeWeave.Data;
-using NativeWeave.Database;
-using NativeWeave.Interop.Abi;
-using NativeWeave.Query.Internal;
+using Korda.Data;
+using Korda.Database;
+using Korda.Interop.Abi;
+using Korda.Query.Internal;
 using System.Buffers.Binary;
 
 internal static partial class Suite

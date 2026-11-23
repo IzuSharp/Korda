@@ -1,5 +1,5 @@
 using System.Runtime.InteropServices;
-using NativeWeave.Interop.Lifetime;
+using Korda.Interop.Lifetime;
 
 internal sealed class FixtureHandle : SafeHandle
 {
@@ -9,7 +9,7 @@ internal sealed class FixtureHandle : SafeHandle
 }
 internal static partial class Fixture
 {
-    private const string Library = "nativeweave_interop_lifetime";
+    private const string Library = "korda_interop_lifetime";
     [LibraryImport(Library, EntryPoint = "nw_lifetime_fixture_create_v1")]
     internal static partial uint Create(ulong value, out nint output);
     [LibraryImport(Library, EntryPoint = "nw_lifetime_fixture_child_v1")]

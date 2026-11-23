@@ -1,0 +1,6 @@
+<Project>
+  <ItemGroup Condition="'$(KordaExcludeGenerators)' != 'true'">
+    <Analyzer Include="$(MSBuildThisFileDirectory)..\tools\roslyn\Korda.Query.Generator.dll" />
+    <CompilerVisibleProperty Include="KordaEnabledNativeCodecs" />
+  </ItemGroup>
+</Project>

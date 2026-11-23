@@ -1,7 +1,7 @@
 using System.Buffers.Binary;
-using NativeWeave.Data;
+using Korda.Data;
 
-namespace NativeWeave.Database.Sqlite;
+namespace Korda.Database.Sqlite;
 
 // Maintainer/host composition seam only. B01 owns the canonical control envelope.
 internal static class SqliteConfiguration

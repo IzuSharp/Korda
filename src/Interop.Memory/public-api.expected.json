@@ -4,12 +4,12 @@
   "design_api_sha256": "d3e989c4f8732f2514c66a2c1ecf038b460fc29e3581d0b36855612751e974e4",
   "symbols": [
     {
-      "id": "T:NativeWeave.Interop.Extensibility.NativeBufferFactory",
+      "id": "T:Korda.Interop.Extensibility.NativeBufferFactory",
       "name": "NativeBufferFactory",
-      "namespace": "NativeWeave.Interop.Extensibility",
+      "namespace": "Korda.Interop.Extensibility",
       "containing_type": null,
       "kind": "NamedType",
-      "signature": "public static class NativeWeave.Interop.Extensibility.NativeBufferFactory",
+      "signature": "public static class Korda.Interop.Extensibility.NativeBufferFactory",
       "domain": "interop",
       "specification": "docs/api/interop.md",
       "implicit_member": false,
@@ -38,18 +38,18 @@
       "constant_value_type": null,
       "generic_constraints": [],
       "type_parameters": [],
-      "semantic_policy": "NativeWeave.Interop.Extensibility.NativeBufferFactory",
+      "semantic_policy": "Korda.Interop.Extensibility.NativeBufferFactory",
       "parameters": [],
       "design_only": true,
       "product_implemented": false
     },
     {
-      "id": "M:NativeWeave.Interop.Extensibility.NativeBufferFactory.Adopt(NativeWeave.Interop.EngineInfo,System.Runtime.InteropServices.SafeHandle,System.IntPtr,System.Int32)",
+      "id": "M:Korda.Interop.Extensibility.NativeBufferFactory.Adopt(Korda.Interop.EngineInfo,System.Runtime.InteropServices.SafeHandle,System.IntPtr,System.Int32)",
       "name": "Adopt",
-      "namespace": "NativeWeave.Interop.Extensibility",
-      "containing_type": "NativeWeave.Interop.Extensibility.NativeBufferFactory",
+      "namespace": "Korda.Interop.Extensibility",
+      "containing_type": "Korda.Interop.Extensibility.NativeBufferFactory",
       "kind": "Method",
-      "signature": "public static NativeWeave.Interop.NativeBuffer NativeWeave.Interop.Extensibility.NativeBufferFactory.Adopt(NativeWeave.Interop.EngineInfo engine, System.Runtime.InteropServices.SafeHandle owner, nint address, int length)",
+      "signature": "public static Korda.Interop.NativeBuffer Korda.Interop.Extensibility.NativeBufferFactory.Adopt(Korda.Interop.EngineInfo engine, System.Runtime.InteropServices.SafeHandle owner, nint address, int length)",
       "domain": "interop",
       "specification": "docs/api/interop.md",
       "implicit_member": false,
@@ -63,7 +63,7 @@
       "is_record": null,
       "is_readonly": null,
       "is_ref_like": null,
-      "return_or_value_type": "NativeWeave.Interop.NativeBuffer",
+      "return_or_value_type": "Korda.Interop.NativeBuffer",
       "return_ref_kind": "None",
       "return_attributes": [],
       "base_type": null,
@@ -75,11 +75,11 @@
       "constant_value_type": null,
       "generic_constraints": [],
       "type_parameters": [],
-      "semantic_policy": "NativeWeave.Interop.Extensibility.NativeBufferFactory",
+      "semantic_policy": "Korda.Interop.Extensibility.NativeBufferFactory",
       "parameters": [
         {
           "name": "engine",
-          "type": "NativeWeave.Interop.EngineInfo",
+          "type": "Korda.Interop.EngineInfo",
           "nullable": "NotAnnotated",
           "attributes": [],
           "ref_kind": "None",
@@ -130,12 +130,12 @@
       "product_implemented": false
     },
     {
-      "id": "T:NativeWeave.Interop.NativeBuffer",
+      "id": "T:Korda.Interop.NativeBuffer",
       "name": "NativeBuffer",
-      "namespace": "NativeWeave.Interop",
+      "namespace": "Korda.Interop",
       "containing_type": null,
       "kind": "NamedType",
-      "signature": "public sealed class NativeWeave.Interop.NativeBuffer : System.IDisposable",
+      "signature": "public sealed class Korda.Interop.NativeBuffer : System.IDisposable",
       "domain": "interop",
       "specification": "docs/api/interop.md",
       "implicit_member": false,
@@ -166,18 +166,18 @@
       "constant_value_type": null,
       "generic_constraints": [],
       "type_parameters": [],
-      "semantic_policy": "NativeWeave.Interop.NativeBuffer",
+      "semantic_policy": "Korda.Interop.NativeBuffer",
       "parameters": [],
       "design_only": true,
       "product_implemented": false
     },
     {
-      "id": "M:NativeWeave.Interop.NativeBuffer.CopyTo(System.Int32,System.Span{System.Byte})",
+      "id": "M:Korda.Interop.NativeBuffer.CopyTo(System.Int32,System.Span{System.Byte})",
       "name": "CopyTo",
-      "namespace": "NativeWeave.Interop",
-      "containing_type": "NativeWeave.Interop.NativeBuffer",
+      "namespace": "Korda.Interop",
+      "containing_type": "Korda.Interop.NativeBuffer",
       "kind": "Method",
-      "signature": "public void NativeWeave.Interop.NativeBuffer.CopyTo(int sourceOffset, System.Span<byte> destination)",
+      "signature": "public void Korda.Interop.NativeBuffer.CopyTo(int sourceOffset, System.Span<byte> destination)",
       "domain": "interop",
       "specification": "docs/api/interop.md",
       "implicit_member": false,
@@ -203,7 +203,7 @@
       "constant_value_type": null,
       "generic_constraints": [],
       "type_parameters": [],
-      "semantic_policy": "NativeWeave.Interop.NativeBuffer",
+      "semantic_policy": "Korda.Interop.NativeBuffer",
       "parameters": [
         {
           "name": "sourceOffset",
@@ -234,12 +234,12 @@
       "product_implemented": false
     },
     {
-      "id": "M:NativeWeave.Interop.NativeBuffer.CopyTo(System.Span{System.Byte})",
+      "id": "M:Korda.Interop.NativeBuffer.CopyTo(System.Span{System.Byte})",
       "name": "CopyTo",
-      "namespace": "NativeWeave.Interop",
-      "containing_type": "NativeWeave.Interop.NativeBuffer",
+      "namespace": "Korda.Interop",
+      "containing_type": "Korda.Interop.NativeBuffer",
       "kind": "Method",
-      "signature": "public void NativeWeave.Interop.NativeBuffer.CopyTo(System.Span<byte> destination)",
+      "signature": "public void Korda.Interop.NativeBuffer.CopyTo(System.Span<byte> destination)",
       "domain": "interop",
       "specification": "docs/api/interop.md",
       "implicit_member": false,
@@ -265,7 +265,7 @@
       "constant_value_type": null,
       "generic_constraints": [],
       "type_parameters": [],
-      "semantic_policy": "NativeWeave.Interop.NativeBuffer",
+      "semantic_policy": "Korda.Interop.NativeBuffer",
       "parameters": [
         {
           "name": "destination",
@@ -284,12 +284,12 @@
       "product_implemented": false
     },
     {
-      "id": "M:NativeWeave.Interop.NativeBuffer.CopyToAsync(System.IO.Stream,System.Threading.CancellationToken)",
+      "id": "M:Korda.Interop.NativeBuffer.CopyToAsync(System.IO.Stream,System.Threading.CancellationToken)",
       "name": "CopyToAsync",
-      "namespace": "NativeWeave.Interop",
-      "containing_type": "NativeWeave.Interop.NativeBuffer",
+      "namespace": "Korda.Interop",
+      "containing_type": "Korda.Interop.NativeBuffer",
       "kind": "Method",
-      "signature": "public System.Threading.Tasks.Task NativeWeave.Interop.NativeBuffer.CopyToAsync(System.IO.Stream destination, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))",
+      "signature": "public System.Threading.Tasks.Task Korda.Interop.NativeBuffer.CopyToAsync(System.IO.Stream destination, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))",
       "domain": "interop",
       "specification": "docs/api/interop.md",
       "implicit_member": false,
@@ -315,7 +315,7 @@
       "constant_value_type": null,
       "generic_constraints": [],
       "type_parameters": [],
-      "semantic_policy": "NativeWeave.Interop.NativeBuffer",
+      "semantic_policy": "Korda.Interop.NativeBuffer",
       "parameters": [
         {
           "name": "destination",
@@ -346,12 +346,12 @@
       "product_implemented": false
     },
     {
-      "id": "M:NativeWeave.Interop.NativeBuffer.Dispose",
+      "id": "M:Korda.Interop.NativeBuffer.Dispose",
       "name": "Dispose",
-      "namespace": "NativeWeave.Interop",
-      "containing_type": "NativeWeave.Interop.NativeBuffer",
+      "namespace": "Korda.Interop",
+      "containing_type": "Korda.Interop.NativeBuffer",
       "kind": "Method",
-      "signature": "public void NativeWeave.Interop.NativeBuffer.Dispose()",
+      "signature": "public void Korda.Interop.NativeBuffer.Dispose()",
       "domain": "interop",
       "specification": "docs/api/interop.md",
       "implicit_member": false,
@@ -377,18 +377,18 @@
       "constant_value_type": null,
       "generic_constraints": [],
       "type_parameters": [],
-      "semantic_policy": "NativeWeave.Interop.NativeBuffer",
+      "semantic_policy": "Korda.Interop.NativeBuffer",
       "parameters": [],
       "design_only": true,
       "product_implemented": false
     },
     {
-      "id": "M:NativeWeave.Interop.NativeBuffer.Read(NativeWeave.Interop.NativeBufferReader)",
+      "id": "M:Korda.Interop.NativeBuffer.Read(Korda.Interop.NativeBufferReader)",
       "name": "Read",
-      "namespace": "NativeWeave.Interop",
-      "containing_type": "NativeWeave.Interop.NativeBuffer",
+      "namespace": "Korda.Interop",
+      "containing_type": "Korda.Interop.NativeBuffer",
       "kind": "Method",
-      "signature": "public void NativeWeave.Interop.NativeBuffer.Read(NativeWeave.Interop.NativeBufferReader reader)",
+      "signature": "public void Korda.Interop.NativeBuffer.Read(Korda.Interop.NativeBufferReader reader)",
       "domain": "interop",
       "specification": "docs/api/interop.md",
       "implicit_member": false,
@@ -414,11 +414,11 @@
       "constant_value_type": null,
       "generic_constraints": [],
       "type_parameters": [],
-      "semantic_policy": "NativeWeave.Interop.NativeBuffer",
+      "semantic_policy": "Korda.Interop.NativeBuffer",
       "parameters": [
         {
           "name": "reader",
-          "type": "NativeWeave.Interop.NativeBufferReader",
+          "type": "Korda.Interop.NativeBufferReader",
           "nullable": "NotAnnotated",
           "attributes": [],
           "ref_kind": "None",
@@ -433,12 +433,12 @@
       "product_implemented": false
     },
     {
-      "id": "M:NativeWeave.Interop.NativeBuffer.Read``1(NativeWeave.Interop.NativeBufferReader{``0})",
+      "id": "M:Korda.Interop.NativeBuffer.Read``1(Korda.Interop.NativeBufferReader{``0})",
       "name": "Read",
-      "namespace": "NativeWeave.Interop",
-      "containing_type": "NativeWeave.Interop.NativeBuffer",
+      "namespace": "Korda.Interop",
+      "containing_type": "Korda.Interop.NativeBuffer",
       "kind": "Method",
-      "signature": "public TResult NativeWeave.Interop.NativeBuffer.Read<TResult>(NativeWeave.Interop.NativeBufferReader<TResult> reader)",
+      "signature": "public TResult Korda.Interop.NativeBuffer.Read<TResult>(Korda.Interop.NativeBufferReader<TResult> reader)",
       "domain": "interop",
       "specification": "docs/api/interop.md",
       "implicit_member": false,
@@ -479,11 +479,11 @@
           "constraint_types": []
         }
       ],
-      "semantic_policy": "NativeWeave.Interop.NativeBuffer",
+      "semantic_policy": "Korda.Interop.NativeBuffer",
       "parameters": [
         {
           "name": "reader",
-          "type": "NativeWeave.Interop.NativeBufferReader<TResult>",
+          "type": "Korda.Interop.NativeBufferReader<TResult>",
           "nullable": "NotAnnotated",
           "attributes": [],
           "ref_kind": "None",
@@ -498,12 +498,12 @@
       "product_implemented": false
     },
     {
-      "id": "M:NativeWeave.Interop.NativeBuffer.ToArray",
+      "id": "M:Korda.Interop.NativeBuffer.ToArray",
       "name": "ToArray",
-      "namespace": "NativeWeave.Interop",
-      "containing_type": "NativeWeave.Interop.NativeBuffer",
+      "namespace": "Korda.Interop",
+      "containing_type": "Korda.Interop.NativeBuffer",
       "kind": "Method",
-      "signature": "public byte[] NativeWeave.Interop.NativeBuffer.ToArray()",
+      "signature": "public byte[] Korda.Interop.NativeBuffer.ToArray()",
       "domain": "interop",
       "specification": "docs/api/interop.md",
       "implicit_member": false,
@@ -529,18 +529,18 @@
       "constant_value_type": null,
       "generic_constraints": [],
       "type_parameters": [],
-      "semantic_policy": "NativeWeave.Interop.NativeBuffer",
+      "semantic_policy": "Korda.Interop.NativeBuffer",
       "parameters": [],
       "design_only": true,
       "product_implemented": false
     },
     {
-      "id": "M:NativeWeave.Interop.NativeBuffer.TryCopyTo(System.Span{System.Byte})",
+      "id": "M:Korda.Interop.NativeBuffer.TryCopyTo(System.Span{System.Byte})",
       "name": "TryCopyTo",
-      "namespace": "NativeWeave.Interop",
-      "containing_type": "NativeWeave.Interop.NativeBuffer",
+      "namespace": "Korda.Interop",
+      "containing_type": "Korda.Interop.NativeBuffer",
       "kind": "Method",
-      "signature": "public bool NativeWeave.Interop.NativeBuffer.TryCopyTo(System.Span<byte> destination)",
+      "signature": "public bool Korda.Interop.NativeBuffer.TryCopyTo(System.Span<byte> destination)",
       "domain": "interop",
       "specification": "docs/api/interop.md",
       "implicit_member": false,
@@ -566,7 +566,7 @@
       "constant_value_type": null,
       "generic_constraints": [],
       "type_parameters": [],
-      "semantic_policy": "NativeWeave.Interop.NativeBuffer",
+      "semantic_policy": "Korda.Interop.NativeBuffer",
       "parameters": [
         {
           "name": "destination",
@@ -585,12 +585,12 @@
       "product_implemented": false
     },
     {
-      "id": "P:NativeWeave.Interop.NativeBuffer.IsDisposed",
+      "id": "P:Korda.Interop.NativeBuffer.IsDisposed",
       "name": "IsDisposed",
-      "namespace": "NativeWeave.Interop",
-      "containing_type": "NativeWeave.Interop.NativeBuffer",
+      "namespace": "Korda.Interop",
+      "containing_type": "Korda.Interop.NativeBuffer",
       "kind": "Property",
-      "signature": "public bool NativeWeave.Interop.NativeBuffer.IsDisposed { get; }",
+      "signature": "public bool Korda.Interop.NativeBuffer.IsDisposed { get; }",
       "domain": "interop",
       "specification": "docs/api/interop.md",
       "implicit_member": false,
@@ -616,18 +616,18 @@
       "constant_value_type": null,
       "generic_constraints": [],
       "type_parameters": [],
-      "semantic_policy": "NativeWeave.Interop.NativeBuffer",
+      "semantic_policy": "Korda.Interop.NativeBuffer",
       "parameters": [],
       "design_only": true,
       "product_implemented": false
     },
     {
-      "id": "P:NativeWeave.Interop.NativeBuffer.Length",
+      "id": "P:Korda.Interop.NativeBuffer.Length",
       "name": "Length",
-      "namespace": "NativeWeave.Interop",
-      "containing_type": "NativeWeave.Interop.NativeBuffer",
+      "namespace": "Korda.Interop",
+      "containing_type": "Korda.Interop.NativeBuffer",
       "kind": "Property",
-      "signature": "public int NativeWeave.Interop.NativeBuffer.Length { get; }",
+      "signature": "public int Korda.Interop.NativeBuffer.Length { get; }",
       "domain": "interop",
       "specification": "docs/api/interop.md",
       "implicit_member": false,
@@ -653,18 +653,18 @@
       "constant_value_type": null,
       "generic_constraints": [],
       "type_parameters": [],
-      "semantic_policy": "NativeWeave.Interop.NativeBuffer",
+      "semantic_policy": "Korda.Interop.NativeBuffer",
       "parameters": [],
       "design_only": true,
       "product_implemented": false
     },
     {
-      "id": "T:NativeWeave.Interop.NativeBufferReader",
+      "id": "T:Korda.Interop.NativeBufferReader",
       "name": "NativeBufferReader",
-      "namespace": "NativeWeave.Interop",
+      "namespace": "Korda.Interop",
       "containing_type": null,
       "kind": "NamedType",
-      "signature": "public delegate void NativeWeave.Interop.NativeBufferReader(System.ReadOnlySpan<byte> bytes)",
+      "signature": "public delegate void Korda.Interop.NativeBufferReader(System.ReadOnlySpan<byte> bytes)",
       "domain": "interop",
       "specification": "docs/api/interop.md",
       "implicit_member": false,
@@ -692,7 +692,7 @@
       "constant_value_type": null,
       "generic_constraints": [],
       "type_parameters": [],
-      "semantic_policy": "NativeWeave.Interop.NativeBufferReader",
+      "semantic_policy": "Korda.Interop.NativeBufferReader",
       "parameters": [
         {
           "name": "bytes",
@@ -711,12 +711,12 @@
       "product_implemented": false
     },
     {
-      "id": "M:NativeWeave.Interop.NativeBufferReader.#ctor(System.Object,System.IntPtr)",
+      "id": "M:Korda.Interop.NativeBufferReader.#ctor(System.Object,System.IntPtr)",
       "name": ".ctor",
-      "namespace": "NativeWeave.Interop",
-      "containing_type": "NativeWeave.Interop.NativeBufferReader",
+      "namespace": "Korda.Interop",
+      "containing_type": "Korda.Interop.NativeBufferReader",
       "kind": "Method",
-      "signature": "public NativeWeave.Interop.NativeBufferReader.NativeBufferReader(object @object, nint method)",
+      "signature": "public Korda.Interop.NativeBufferReader.NativeBufferReader(object @object, nint method)",
       "domain": "interop",
       "specification": "docs/api/interop.md",
       "implicit_member": true,
@@ -742,7 +742,7 @@
       "constant_value_type": null,
       "generic_constraints": [],
       "type_parameters": [],
-      "semantic_policy": "NativeWeave.Interop.NativeBufferReader",
+      "semantic_policy": "Korda.Interop.NativeBufferReader",
       "parameters": [
         {
           "name": "object",
@@ -773,12 +773,12 @@
       "product_implemented": false
     },
     {
-      "id": "M:NativeWeave.Interop.NativeBufferReader.BeginInvoke(System.ReadOnlySpan{System.Byte},System.AsyncCallback,System.Object)",
+      "id": "M:Korda.Interop.NativeBufferReader.BeginInvoke(System.ReadOnlySpan{System.Byte},System.AsyncCallback,System.Object)",
       "name": "BeginInvoke",
-      "namespace": "NativeWeave.Interop",
-      "containing_type": "NativeWeave.Interop.NativeBufferReader",
+      "namespace": "Korda.Interop",
+      "containing_type": "Korda.Interop.NativeBufferReader",
       "kind": "Method",
-      "signature": "public virtual System.IAsyncResult NativeWeave.Interop.NativeBufferReader.BeginInvoke(System.ReadOnlySpan<byte> bytes, System.AsyncCallback callback, object @object)",
+      "signature": "public virtual System.IAsyncResult Korda.Interop.NativeBufferReader.BeginInvoke(System.ReadOnlySpan<byte> bytes, System.AsyncCallback callback, object @object)",
       "domain": "interop",
       "specification": "docs/api/interop.md",
       "implicit_member": true,
@@ -804,7 +804,7 @@
       "constant_value_type": null,
       "generic_constraints": [],
       "type_parameters": [],
-      "semantic_policy": "NativeWeave.Interop.NativeBufferReader",
+      "semantic_policy": "Korda.Interop.NativeBufferReader",
       "parameters": [
         {
           "name": "bytes",
@@ -847,12 +847,12 @@
       "product_implemented": false
     },
     {
-      "id": "M:NativeWeave.Interop.NativeBufferReader.EndInvoke(System.IAsyncResult)",
+      "id": "M:Korda.Interop.NativeBufferReader.EndInvoke(System.IAsyncResult)",
       "name": "EndInvoke",
-      "namespace": "NativeWeave.Interop",
-      "containing_type": "NativeWeave.Interop.NativeBufferReader",
+      "namespace": "Korda.Interop",
+      "containing_type": "Korda.Interop.NativeBufferReader",
       "kind": "Method",
-      "signature": "public virtual void NativeWeave.Interop.NativeBufferReader.EndInvoke(System.IAsyncResult result)",
+      "signature": "public virtual void Korda.Interop.NativeBufferReader.EndInvoke(System.IAsyncResult result)",
       "domain": "interop",
       "specification": "docs/api/interop.md",
       "implicit_member": true,
@@ -878,7 +878,7 @@
       "constant_value_type": null,
       "generic_constraints": [],
       "type_parameters": [],
-      "semantic_policy": "NativeWeave.Interop.NativeBufferReader",
+      "semantic_policy": "Korda.Interop.NativeBufferReader",
       "parameters": [
         {
           "name": "result",
@@ -897,12 +897,12 @@
       "product_implemented": false
     },
     {
-      "id": "M:NativeWeave.Interop.NativeBufferReader.Invoke(System.ReadOnlySpan{System.Byte})",
+      "id": "M:Korda.Interop.NativeBufferReader.Invoke(System.ReadOnlySpan{System.Byte})",
       "name": "Invoke",
-      "namespace": "NativeWeave.Interop",
-      "containing_type": "NativeWeave.Interop.NativeBufferReader",
+      "namespace": "Korda.Interop",
+      "containing_type": "Korda.Interop.NativeBufferReader",
       "kind": "Method",
-      "signature": "public virtual void NativeWeave.Interop.NativeBufferReader.Invoke(System.ReadOnlySpan<byte> bytes)",
+      "signature": "public virtual void Korda.Interop.NativeBufferReader.Invoke(System.ReadOnlySpan<byte> bytes)",
       "domain": "interop",
       "specification": "docs/api/interop.md",
       "implicit_member": true,
@@ -928,7 +928,7 @@
       "constant_value_type": null,
       "generic_constraints": [],
       "type_parameters": [],
-      "semantic_policy": "NativeWeave.Interop.NativeBufferReader",
+      "semantic_policy": "Korda.Interop.NativeBufferReader",
       "parameters": [
         {
           "name": "bytes",
@@ -947,12 +947,12 @@
       "product_implemented": false
     },
     {
-      "id": "T:NativeWeave.Interop.NativeBufferReader`1",
+      "id": "T:Korda.Interop.NativeBufferReader`1",
       "name": "NativeBufferReader",
-      "namespace": "NativeWeave.Interop",
+      "namespace": "Korda.Interop",
       "containing_type": null,
       "kind": "NamedType",
-      "signature": "public delegate TResult NativeWeave.Interop.NativeBufferReader<TResult>(System.ReadOnlySpan<byte> bytes)",
+      "signature": "public delegate TResult Korda.Interop.NativeBufferReader<TResult>(System.ReadOnlySpan<byte> bytes)",
       "domain": "interop",
       "specification": "docs/api/interop.md",
       "implicit_member": false,
@@ -995,7 +995,7 @@
           "constraint_types": []
         }
       ],
-      "semantic_policy": "NativeWeave.Interop.NativeBufferReader",
+      "semantic_policy": "Korda.Interop.NativeBufferReader",
       "parameters": [
         {
           "name": "bytes",
@@ -1014,12 +1014,12 @@
       "product_implemented": false
     },
     {
-      "id": "M:NativeWeave.Interop.NativeBufferReader`1.#ctor(System.Object,System.IntPtr)",
+      "id": "M:Korda.Interop.NativeBufferReader`1.#ctor(System.Object,System.IntPtr)",
       "name": ".ctor",
-      "namespace": "NativeWeave.Interop",
-      "containing_type": "NativeWeave.Interop.NativeBufferReader<TResult>",
+      "namespace": "Korda.Interop",
+      "containing_type": "Korda.Interop.NativeBufferReader<TResult>",
       "kind": "Method",
-      "signature": "public NativeWeave.Interop.NativeBufferReader<TResult>.NativeBufferReader(object @object, nint method)",
+      "signature": "public Korda.Interop.NativeBufferReader<TResult>.NativeBufferReader(object @object, nint method)",
       "domain": "interop",
       "specification": "docs/api/interop.md",
       "implicit_member": true,
@@ -1045,7 +1045,7 @@
       "constant_value_type": null,
       "generic_constraints": [],
       "type_parameters": [],
-      "semantic_policy": "NativeWeave.Interop.NativeBufferReader",
+      "semantic_policy": "Korda.Interop.NativeBufferReader",
       "parameters": [
         {
           "name": "object",
@@ -1076,12 +1076,12 @@
       "product_implemented": false
     },
     {
-      "id": "M:NativeWeave.Interop.NativeBufferReader`1.BeginInvoke(System.ReadOnlySpan{System.Byte},System.AsyncCallback,System.Object)",
+      "id": "M:Korda.Interop.NativeBufferReader`1.BeginInvoke(System.ReadOnlySpan{System.Byte},System.AsyncCallback,System.Object)",
       "name": "BeginInvoke",
-      "namespace": "NativeWeave.Interop",
-      "containing_type": "NativeWeave.Interop.NativeBufferReader<TResult>",
+      "namespace": "Korda.Interop",
+      "containing_type": "Korda.Interop.NativeBufferReader<TResult>",
       "kind": "Method",
-      "signature": "public virtual System.IAsyncResult NativeWeave.Interop.NativeBufferReader<TResult>.BeginInvoke(System.ReadOnlySpan<byte> bytes, System.AsyncCallback callback, object @object)",
+      "signature": "public virtual System.IAsyncResult Korda.Interop.NativeBufferReader<TResult>.BeginInvoke(System.ReadOnlySpan<byte> bytes, System.AsyncCallback callback, object @object)",
       "domain": "interop",
       "specification": "docs/api/interop.md",
       "implicit_member": true,
@@ -1107,7 +1107,7 @@
       "constant_value_type": null,
       "generic_constraints": [],
       "type_parameters": [],
-      "semantic_policy": "NativeWeave.Interop.NativeBufferReader",
+      "semantic_policy": "Korda.Interop.NativeBufferReader",
       "parameters": [
         {
           "name": "bytes",
@@ -1150,12 +1150,12 @@
       "product_implemented": false
     },
     {
-      "id": "M:NativeWeave.Interop.NativeBufferReader`1.EndInvoke(System.IAsyncResult)",
+      "id": "M:Korda.Interop.NativeBufferReader`1.EndInvoke(System.IAsyncResult)",
       "name": "EndInvoke",
-      "namespace": "NativeWeave.Interop",
-      "containing_type": "NativeWeave.Interop.NativeBufferReader<TResult>",
+      "namespace": "Korda.Interop",
+      "containing_type": "Korda.Interop.NativeBufferReader<TResult>",
       "kind": "Method",
-      "signature": "public virtual TResult NativeWeave.Interop.NativeBufferReader<TResult>.EndInvoke(System.IAsyncResult result)",
+      "signature": "public virtual TResult Korda.Interop.NativeBufferReader<TResult>.EndInvoke(System.IAsyncResult result)",
       "domain": "interop",
       "specification": "docs/api/interop.md",
       "implicit_member": true,
@@ -1181,7 +1181,7 @@
       "constant_value_type": null,
       "generic_constraints": [],
       "type_parameters": [],
-      "semantic_policy": "NativeWeave.Interop.NativeBufferReader",
+      "semantic_policy": "Korda.Interop.NativeBufferReader",
       "parameters": [
         {
           "name": "result",
@@ -1200,12 +1200,12 @@
       "product_implemented": false
     },
     {
-      "id": "M:NativeWeave.Interop.NativeBufferReader`1.Invoke(System.ReadOnlySpan{System.Byte})",
+      "id": "M:Korda.Interop.NativeBufferReader`1.Invoke(System.ReadOnlySpan{System.Byte})",
       "name": "Invoke",
-      "namespace": "NativeWeave.Interop",
-      "containing_type": "NativeWeave.Interop.NativeBufferReader<TResult>",
+      "namespace": "Korda.Interop",
+      "containing_type": "Korda.Interop.NativeBufferReader<TResult>",
       "kind": "Method",
-      "signature": "public virtual TResult NativeWeave.Interop.NativeBufferReader<TResult>.Invoke(System.ReadOnlySpan<byte> bytes)",
+      "signature": "public virtual TResult Korda.Interop.NativeBufferReader<TResult>.Invoke(System.ReadOnlySpan<byte> bytes)",
       "domain": "interop",
       "specification": "docs/api/interop.md",
       "implicit_member": true,
@@ -1231,7 +1231,7 @@
       "constant_value_type": null,
       "generic_constraints": [],
       "type_parameters": [],
-      "semantic_policy": "NativeWeave.Interop.NativeBufferReader",
+      "semantic_policy": "Korda.Interop.NativeBufferReader",
       "parameters": [
         {
           "name": "bytes",

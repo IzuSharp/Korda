@@ -1,12 +1,12 @@
 {
-  "assembly": "src/Verification.Interop/bin/Release/net11.0/NativeWeave.Verification.Interop.dll",
+  "assembly": "src/Verification.Interop/bin/Release/net11.0/Korda.Verification.Interop.dll",
   "sources": [
     "src/Verification.Interop"
   ],
   "baselines": [
     "src/Verification.Interop/public-api.expected.json"
   ],
-  "title": "NativeWeave internal ABI and ownership verification surface",
+  "title": "Korda internal ABI and ownership verification surface",
   "scope": "A20 internal maintainer harness. No application types or distributed package; the compiled exported API remains empty. Actual Core declarations retain their accepted signatures.",
   "output": "src/Verification.Interop/api-reference.md",
   "guides": [

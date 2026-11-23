@@ -15,19 +15,19 @@ parser.add_argument('--configuration', default='Release')
 args = parser.parse_args()
 pin = 'c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9'
 assert subprocess.check_output(['git', '-C', args.design, 'rev-parse', 'HEAD'], text=True).strip() == pin
-expected = {entry['id']: entry for entry in json.loads((args.design / 'docs/api/public-api.json').read_text())['symbols']}
+expected = {entry['id']: entry for entry in json.loads((args.design / 'docs/api/public-api.json').read_text().replace('NativeWeave.', 'Korda.'))['symbols']}
 types = {
-    'NativeWeave.Data.' + name for name in ['Changes', 'ConcurrencyCheck', 'ConcurrencyConflictException', 'EntityKey', 'Relation']
+    'Korda.Data.' + name for name in ['Changes', 'ConcurrencyCheck', 'ConcurrencyConflictException', 'EntityKey', 'Relation']
 } | {
-    'NativeWeave.Database.' + name for name in ['BulkAtomicity', 'BulkFailure', 'BulkOptions', 'BulkProgress', 'BulkResult', 'ConflictTarget']
-} | {'NativeWeave.Query.UpdateSetters'}
+    'Korda.Database.' + name for name in ['BulkAtomicity', 'BulkFailure', 'BulkOptions', 'BulkProgress', 'BulkResult', 'ConflictTarget']
+} | {'Korda.Query.UpdateSetters'}
 session_members = {'FindAsync', 'LoadRelatedAsync', 'InsertAsync', 'InsertReturningAsync', 'UpdateAsync', 'UpdateCheckedAsync', 'DeleteAsync', 'DeleteCheckedAsync', 'UpsertAsync', 'InsertManyAsync'}
 
 
 def required(entry):
     owner = entry['containing_type'] or (entry['id'][2:] if entry['kind'] == 'NamedType' else '')
     owner = re.split(r'[<`]', owner)[0]
-    return owner in types or owner == 'NativeWeave.Database.DataSession' and entry['name'] in session_members
+    return owner in types or owner == 'Korda.Database.DataSession' and entry['name'] in session_members
 
 
 output = root / 'artifacts/B14/api'
@@ -35,8 +35,8 @@ output.mkdir(parents=True, exist_ok=True)
 summaries = []
 all_ids = set()
 for name, project, assembly, folders in [
-    ('database', 'Data.NativeHost', 'NativeWeave.Database', ['Data.NativeHost', 'Data.Migrations', 'Query.Native', 'Query.Fluent', 'Orm.Relations', 'Data.Materialization']),
-    ('data', 'Data.Abstractions', 'NativeWeave.Data', ['Data.Abstractions', 'Query.Generator/Runtime', 'Orm.Relations']),
+    ('database', 'Data.NativeHost', 'Korda.Database', ['Data.NativeHost', 'Data.Migrations', 'Query.Native', 'Query.Fluent', 'Orm.Relations', 'Data.Materialization']),
+    ('data', 'Data.Abstractions', 'Korda.Data', ['Data.Abstractions', 'Query.Generator/Runtime', 'Orm.Relations']),
 ]:
     reference = root / 'src/Orm.Relations/reference' / (name + '.md')
     config = {

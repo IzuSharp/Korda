@@ -1,9 +1,9 @@
-# NativeWeave.Query.Binding API reference
+# Korda.Query.Binding API reference
 
 Generated from compiled internal function-pointer declarations and XML documentation.
 
 This assembly exports **0 public types and 0 public members**. The application-facing
-Table, Column, Relation and Projection contracts remain in `NativeWeave.Data`.
+Table, Column, Relation and Projection contracts remain in `Korda.Data`.
 The public Query/DataSession facade belongs to B13/B04; this component adds no
 application facade or managed SQL tree.
 

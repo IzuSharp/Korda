@@ -40,7 +40,7 @@ linker prerequisites.
 
 Core contains the implemented descriptor, error, lifetime, buffer and async
 components. It has no native asset and starts no runtime merely by being referenced.
-The local `NativeWeave.Conformance.Core.Native` package is a test closure of real
+The local `Korda.Conformance.Core.Native` package is a test closure of real
 component adapters; it is not a shipping domain engine or public preview package.
 The current database candidate composes this retained Core packaging infrastructure; the former demo publisher is retired.
 

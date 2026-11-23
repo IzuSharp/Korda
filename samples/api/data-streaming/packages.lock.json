@@ -8,13 +8,13 @@
         "resolved": "11.0.0",
         "contentHash": "gK2aq4XvChj5kvozpPHrkfKkr7zc5Z4xoTrJb4GPZzDEPMlCk0TX632bwY3LsWcX2UVcVRQBBGzsBGC2lq6YhA=="
       },
-      "nativeweave.data": {
+      "korda.data": {
         "type": "Project"
       },
-      "nativeweave.data.streaming": {
+      "korda.data.streaming": {
         "type": "Project",
         "dependencies": {
-          "NativeWeave.Data": "[0.1.0-preview.1, )"
+          "Korda.Data": "[0.1.0-preview.1, )"
         }
       }
     }

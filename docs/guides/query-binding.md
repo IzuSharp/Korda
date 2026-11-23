@@ -12,16 +12,16 @@ those modules are assembled, as required by the B09 dependency graph.
 
 ## Consumption and scope
 
-`NativeWeave.Query.Binding` exports zero public CLR types. B10/B11/B13 and the
+`Korda.Query.Binding` exports zero public CLR types. B10/B11/B13 and the
 Database adapter use its internal direct-call descriptors. Application code keeps
-using the canonical `NativeWeave.Data` types; this task does not introduce another
+using the canonical `Korda.Data` types; this task does not introduce another
 Table schema, public query facade, managed SQL tree or LINQ translator. The
 [compiled reference](../../src/Query.Binding/api-reference.md) lists all 42 exact
 Cdecl domain declarations and identifies their applicability. The
 [applicability record](../../src/Query.Binding/api-applicability.json) records the
 internal-only public API check.
 
-The Rust `nativeweave-query-binding` library contains validation and retained
+The Rust `korda-query-binding` library contains validation and retained
 metadata. A successful validator call authorizes one matching native builder
 operation; it does not execute SQL. B11 must apply that operation to its own
 SeaQuery candidate under the same query admission. A failed backend mutation must

@@ -85,7 +85,7 @@ def main():
         pg_cc = capture([str(pg_config), '--cc'])
         if 'clang' not in Path(pg_cc).name:
             raise RuntimeError('libpq must be built with selected Clang, not the default system compiler')
-        pg_record_path = pg_prefix / 'nativeweave-postgresql-build.json'
+        pg_record_path = pg_prefix / 'korda-postgresql-build.json'
         pg_record = json.loads(pg_record_path.read_text())
         pg_lock = next(item for item in lock['dependencies'] if item['name'] == 'libpq')
         if (pg_record['archiveSha256'] != pg_lock['archiveSha256'] or

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Runtime query semantics are migrated from NativeWeave 465cd0f.
+// Runtime query semantics are migrated from Korda 465cd0f.
 // SQL rendering follows the supported SeaQuery 1.0.2 subset at
 // f2d5e04d30919c342da1f8845ff1fde46e3308fc (MIT, Copyright 2020 Tsang Hao Fung).
 // See THIRD_PARTY_NOTICES.md. No Rust code or runtime is linked by this implementation.

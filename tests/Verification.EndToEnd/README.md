@@ -1,6 +1,6 @@
 # Database end-to-end regression
 
-This directory verifies the database product through ordinary C# package consumers. The previous mixed server/protocol fixture has been pruned. Current checks create no NativeWeave HTTP/gRPC/MCP host, and no timed workload is part of DB-Scope-01.
+This directory verifies the database product through ordinary C# package consumers. The previous mixed server/protocol fixture has been pruned. Current checks create no Korda HTTP/gRPC/MCP host, and no timed workload is part of DB-Scope-01.
 
 ## API composition
 

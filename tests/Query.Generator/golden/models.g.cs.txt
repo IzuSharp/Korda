@@ -6,18 +6,18 @@ namespace Fixtures;
 public static class @PartialMapping
 {
     /// <summary>Immutable table metadata, registered lazily by each datasource.</summary>
-    public static readonly global::NativeWeave.Data.Table<global::Fixtures.Partial> Table;
+    public static readonly global::Korda.Data.Table<global::Fixtures.Partial> Table;
     /// <summary>Direct typed row materializer and exact result shape.</summary>
-    public static global::NativeWeave.Data.Projection<global::Fixtures.Partial> Row => Table.Row;
+    public static global::Korda.Data.Projection<global::Fixtures.Partial> Row => Table.Row;
     /// <summary>Typed column token for the exact mapped property.</summary>
-    public static readonly global::NativeWeave.Data.Column<global::Fixtures.Partial, int> @Id;
+    public static readonly global::Korda.Data.Column<global::Fixtures.Partial, int> @Id;
     /// <summary>Typed column token for the exact mapped property.</summary>
-    public static readonly global::NativeWeave.Data.Column<global::Fixtures.Partial, global::System.Guid> @Token;
+    public static readonly global::Korda.Data.Column<global::Fixtures.Partial, global::System.Guid> @Token;
     static @PartialMapping()
     {
-        var builder = new global::NativeWeave.Data.TableBuilder<global::Fixtures.Partial>("partial", null);
-        global::Fixtures.@PartialMapping.@Id = builder.Column("Id", global::NativeWeave.Data.Codecs.Int32, new global::NativeWeave.Data.ColumnOptions { IsPrimaryKey = false, IsGenerated = false, IsConcurrencyToken = false });
-        global::Fixtures.@PartialMapping.@Token = builder.Column("Token", global::NativeWeave.Data.Codecs.Guid, new global::NativeWeave.Data.ColumnOptions { IsPrimaryKey = false, IsGenerated = false, IsConcurrencyToken = false });
+        var builder = new global::Korda.Data.TableBuilder<global::Fixtures.Partial>("partial", null);
+        global::Fixtures.@PartialMapping.@Id = builder.Column("Id", global::Korda.Data.Codecs.Int32, new global::Korda.Data.ColumnOptions { IsPrimaryKey = false, IsGenerated = false, IsConcurrencyToken = false });
+        global::Fixtures.@PartialMapping.@Token = builder.Column("Token", global::Korda.Data.Codecs.Guid, new global::Korda.Data.ColumnOptions { IsPrimaryKey = false, IsGenerated = false, IsConcurrencyToken = false });
         Table = builder.Build(static row => new global::Fixtures.Partial() { @Id = row.Get(global::Fixtures.@PartialMapping.@Id), @Token = row.Get(global::Fixtures.@PartialMapping.@Token) }, static (row, value) =>
         {
             row.Set(global::Fixtures.@PartialMapping.@Id, value.@Id);
@@ -34,21 +34,21 @@ namespace Fixtures;
 public static class @Students
 {
     /// <summary>Immutable table metadata, registered lazily by each datasource.</summary>
-    public static readonly global::NativeWeave.Data.Table<global::Fixtures.Student> Table;
+    public static readonly global::Korda.Data.Table<global::Fixtures.Student> Table;
     /// <summary>Direct typed row materializer and exact result shape.</summary>
-    public static global::NativeWeave.Data.Projection<global::Fixtures.Student> Row => Table.Row;
+    public static global::Korda.Data.Projection<global::Fixtures.Student> Row => Table.Row;
     /// <summary>Typed column token for the exact mapped property.</summary>
-    public static readonly global::NativeWeave.Data.Column<global::Fixtures.Student, long> @Id;
+    public static readonly global::Korda.Data.Column<global::Fixtures.Student, long> @Id;
     /// <summary>Typed column token for the exact mapped property.</summary>
-    public static readonly global::NativeWeave.Data.Column<global::Fixtures.Student, string?> @Name;
+    public static readonly global::Korda.Data.Column<global::Fixtures.Student, string?> @Name;
     /// <summary>Typed column token for the exact mapped property.</summary>
-    public static readonly global::NativeWeave.Data.Column<global::Fixtures.Student, int> @Version;
+    public static readonly global::Korda.Data.Column<global::Fixtures.Student, int> @Version;
     static @Students()
     {
-        var builder = new global::NativeWeave.Data.TableBuilder<global::Fixtures.Student>("students", null);
-        global::Fixtures.@Students.@Id = builder.Column("Id", global::NativeWeave.Data.Codecs.Int64, new global::NativeWeave.Data.ColumnOptions { IsPrimaryKey = true, IsGenerated = false, IsConcurrencyToken = false });
-        global::Fixtures.@Students.@Name = builder.Column("display_name", global::NativeWeave.Data.Codecs.NullableReference(global::NativeWeave.Data.Codecs.String), new global::NativeWeave.Data.ColumnOptions { IsPrimaryKey = false, IsGenerated = false, IsConcurrencyToken = false });
-        global::Fixtures.@Students.@Version = builder.Column("Version", global::NativeWeave.Data.Codecs.Int32, new global::NativeWeave.Data.ColumnOptions { IsPrimaryKey = false, IsGenerated = false, IsConcurrencyToken = true });
+        var builder = new global::Korda.Data.TableBuilder<global::Fixtures.Student>("students", null);
+        global::Fixtures.@Students.@Id = builder.Column("Id", global::Korda.Data.Codecs.Int64, new global::Korda.Data.ColumnOptions { IsPrimaryKey = true, IsGenerated = false, IsConcurrencyToken = false });
+        global::Fixtures.@Students.@Name = builder.Column("display_name", global::Korda.Data.Codecs.NullableReference(global::Korda.Data.Codecs.String), new global::Korda.Data.ColumnOptions { IsPrimaryKey = false, IsGenerated = false, IsConcurrencyToken = false });
+        global::Fixtures.@Students.@Version = builder.Column("Version", global::Korda.Data.Codecs.Int32, new global::Korda.Data.ColumnOptions { IsPrimaryKey = false, IsGenerated = false, IsConcurrencyToken = true });
         Table = builder.Build(static row => new global::Fixtures.Student(row.Get(global::Fixtures.@Students.@Id), row.Get(global::Fixtures.@Students.@Name), row.Get(global::Fixtures.@Students.@Version)), static (row, value) =>
         {
             row.Set(global::Fixtures.@Students.@Id, value.@Id);

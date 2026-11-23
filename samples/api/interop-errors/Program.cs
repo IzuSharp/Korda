@@ -1,4 +1,4 @@
-using NativeWeave.Interop;
+using Korda.Interop;
 
 // Minimal: inspect bounded structured diagnostics; do not infer retry or rollback.
 var failure = new NativeEngineException("database.postgresql", "commit", 9, 7, -42, 73,

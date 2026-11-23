@@ -97,13 +97,13 @@ toolchain['clang_target'] = run('clang-target', ['clang++', '-dumpmachine']).str
 toolchain['cmake'] = run('cmake', ['cmake', '--version'])
 toolchain['ninja'] = run('ninja', ['ninja', '--version'])
 run('schema', ['python3', 'native/database/interfaces/generate_schema.py', '--check'])
-managed = 'tests/Data.Abstractions/NativeWeave.Data.Tests.csproj'
+managed = 'tests/Data.Abstractions/Korda.Data.Tests.csproj'
 api = 'tests/Data.Abstractions/ApiCheck/ApiCheck.csproj'
 sample = 'samples/api/data-abstractions/DataAbstractions.csproj'
 for label, project in [('managed', managed), ('api', api), ('sample', sample)]:
     run(label + '-restore', [DOTNET, 'restore', project, '--locked-mode', '--disable-build-servers', *restore_options])
     run(label + '-build', [DOTNET, 'build', project, '-c', 'Release', '--no-restore', '--disable-build-servers'])
-api_result = json.loads(run('api-exact-xml-reference', [DOTNET, ROOT / 'tests/Data.Abstractions/ApiCheck/bin/Release/net11.0/ApiCheck.dll', ROOT, SDK, ROOT / 'src/Data.Abstractions/bin/Release/net11.0/NativeWeave.Data.dll', *(['--write'] if a.write_reference else [])]))
+api_result = json.loads(run('api-exact-xml-reference', [DOTNET, ROOT / 'tests/Data.Abstractions/ApiCheck/bin/Release/net11.0/ApiCheck.dll', ROOT, SDK, ROOT / 'src/Data.Abstractions/bin/Release/net11.0/Korda.Data.dll', *(['--write'] if a.write_reference else [])]))
 
 # The unchanged managed golden encoder is consumed by the production C++
 # contract implementation, also registered in the shared native CTest preset.
@@ -132,10 +132,10 @@ write_json('dependency-licenses.json', {
                       'notice_sha256': sha(ROOT / 'native/cpp/licenses/openssl-LICENSE.txt')},
     'scope': 'B01 contract executable; database-provider dependencies are recorded by the product build inventory.'})
 
-run('data-pack', [DOTNET, 'pack', 'src/Data.Abstractions/NativeWeave.Data.csproj', '-c', 'Release', '--no-build', '--no-restore', '--output', OUT / 'packages', '--disable-build-servers'])
+run('data-pack', [DOTNET, 'pack', 'src/Data.Abstractions/Korda.Data.csproj', '-c', 'Release', '--no-build', '--no-restore', '--output', OUT / 'packages', '--disable-build-servers'])
 packages = list((OUT / 'packages').glob('*.nupkg'))
 if len(packages) != 1:
-    raise RuntimeError('Expected exactly the independent NativeWeave.Data package.')
+    raise RuntimeError('Expected exactly the independent Korda.Data package.')
 with zipfile.ZipFile(packages[0]) as archive:
     names = archive.namelist()
     if any(n.startswith(('runtimes/', 'build/', 'buildTransitive/')) for n in names):
@@ -151,11 +151,11 @@ with zipfile.ZipFile(packages[0]) as archive:
 
 # Package consumption is outside the source checkout. The trap proves these invocations
 # did not launch Rust; it does not claim a pristine machine (A16/B24 own that gate).
-with tempfile.TemporaryDirectory(prefix='nativeweave-b01-consumer-') as temporary:
+with tempfile.TemporaryDirectory(prefix='korda-b01-consumer-') as temporary:
     consumer = Path(temporary)
     shutil.copy2(ROOT / 'global.json', consumer / 'global.json')
     shutil.copy2(ROOT / 'samples/api/data-abstractions/Program.cs', consumer / 'Program.cs')
-    (consumer / 'Consumer.csproj').write_text(f'''<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net11.0</TargetFramework><LangVersion>15.0</LangVersion><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings><TreatWarningsAsErrors>true</TreatWarningsAsErrors><RestorePackagesWithLockFile>true</RestorePackagesWithLockFile></PropertyGroup><ItemGroup><PackageReference Include="NativeWeave.Data" Version="{package_version}" /></ItemGroup></Project>''')
+    (consumer / 'Consumer.csproj').write_text(f'''<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net11.0</TargetFramework><LangVersion>15.0</LangVersion><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings><TreatWarningsAsErrors>true</TreatWarningsAsErrors><RestorePackagesWithLockFile>true</RestorePackagesWithLockFile></PropertyGroup><ItemGroup><PackageReference Include="Korda.Data" Version="{package_version}" /></ItemGroup></Project>''')
     consumer_config = consumer / 'NuGet.Config'
     feeds = [OUT / 'packages', feed] if a.offline_packages else [OUT / 'packages', 'https://api.nuget.org/v3/index.json']
     config(consumer_config, feeds)
@@ -192,7 +192,7 @@ with tempfile.TemporaryDirectory(prefix='nativeweave-b01-consumer-') as temporar
 
 run('managed-aot-restore', [DOTNET, 'restore', managed, '-r', 'linux-x64', '-p:PublishAot=true', '--locked-mode', '--disable-build-servers', *restore_options])
 run('managed-aot-publish', [DOTNET, 'publish', managed, '-c', 'Release', '-r', 'linux-x64', '-p:PublishAot=true', '--self-contained', 'true', '--no-restore', '--disable-build-servers', '-o', OUT / 'aot-tests'])
-run('managed-aot-run', [OUT / 'aot-tests/NativeWeave.Data.Tests', OUT / 'managed-aot', '--require-aot'])
+run('managed-aot-run', [OUT / 'aot-tests/Korda.Data.Tests', OUT / 'managed-aot', '--require-aot'])
 native_results = json.loads(run('native-aot-goldens', [native_binary, OUT / 'managed-aot']))
 tracked = subprocess.check_output(['git', 'ls-files', '--cached', '--others', '--exclude-standard',
     'src/Data.Abstractions', 'tests/Data.Abstractions', 'native/database/interfaces',
@@ -202,7 +202,7 @@ tracked = subprocess.check_output(['git', 'ls-files', '--cached', '--others', '-
     'docs/guides/data-abstractions.md'], cwd=ROOT, text=True).splitlines()
 tracked = [name for name in tracked if (ROOT / name).is_file()]
 write_json('source-identity.json', {'commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(), 'status': subprocess.check_output(['git', 'status', '--short'], cwd=ROOT, text=True), 'design_commit': 'c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9', 'platform': 'linux-x64', 'files': {f: sha(ROOT / f) for f in tracked}, 'root_build_inputs': {f: sha(ROOT / f) for f in ['global.json', 'Directory.Build.props', 'CMakeLists.txt', 'CMakePresets.json', 'native/cpp/tests/CMakeLists.txt', 'native/dependencies.lock.json', 'THIRD_PARTY_NOTICES.md']}})
-artifacts = [packages[0], ROOT / 'src/Data.Abstractions/bin/Release/net11.0/NativeWeave.Data.dll', native_binary, OUT / 'aot-consumer/Consumer', OUT / 'aot-tests/NativeWeave.Data.Tests']
+artifacts = [packages[0], ROOT / 'src/Data.Abstractions/bin/Release/net11.0/Korda.Data.dll', native_binary, OUT / 'aot-consumer/Consumer', OUT / 'aot-tests/Korda.Data.Tests']
 write_json('artifact-hashes.json', {str(f.relative_to(OUT)) if f.is_relative_to(OUT) else str(f.relative_to(ROOT)) if f.is_relative_to(ROOT) else str(f): sha(f) for f in artifacts})
 write_json('summary.json', {'status': 'passed', 'task': 'B01', 'platform': 'linux-x64', 'compiled_api_symbols': api_result['compiled_symbols'], 'managed_case_families': len(json.loads((OUT / 'managed-aot/managed-results.json').read_text())['cases']), 'negative_compile_cases': 4, 'native_scalar_kinds': native_results['scalar_kinds'], 'native_malformed_rejections': native_results['malformed_rejections'], 'native_cross_language_goldens': native_results['cross_language_goldens'], 'package_native_aot_executed': True, 'managed_contracts_native_aot_executed': True, 'rust_consumer_invocations': 0, 'nuget_audit': 'unavailable_offline' if a.offline_packages else 'normal_restore', 'scope': 'B01 metadata/row/value contracts; not a live database host, generator, provider or final pristine platform acceptance', 'windows': 'deferred_by_user'})
 print('B01 Linux x64 verification passed.', flush=True)

@@ -1,7 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using NativeWeave.Interop;
-using NativeWeave.Interop.Abi;
+using Korda.Interop;
+using Korda.Interop.Abi;
 
 internal static unsafe partial class Program
 {
@@ -90,16 +90,16 @@ internal static unsafe partial class Program
         catch (Exception) { return NativeStatus.CallbackFailed; }
     }
 
-    [LibraryImport("nativeweave_errors_fixture", EntryPoint = "nw_errors_create")]
+    [LibraryImport("korda_errors_fixture", EntryPoint = "nw_errors_create")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
     private static partial uint Create(nuint* owner);
-    [LibraryImport("nativeweave_errors_fixture", EntryPoint = "nw_errors_run")]
+    [LibraryImport("korda_errors_fixture", EntryPoint = "nw_errors_run")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
     private static partial uint Run(nuint owner, uint mode, NwErrorInfoV1* error);
-    [LibraryImport("nativeweave_errors_fixture", EntryPoint = "nw_errors_release")]
+    [LibraryImport("korda_errors_fixture", EntryPoint = "nw_errors_release")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
     private static partial uint Release(nuint owner);
-    [LibraryImport("nativeweave_errors_fixture", EntryPoint = "nw_errors_notify")]
+    [LibraryImport("korda_errors_fixture", EntryPoint = "nw_errors_notify")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
     private static partial uint Notify(delegate* unmanaged[Cdecl]<nuint, uint, uint> callback, nuint cookie, uint terminal, uint* bridge);
 }

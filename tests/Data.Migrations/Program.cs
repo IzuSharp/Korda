@@ -1,15 +1,15 @@
-using NativeWeave.Data;
-using NativeWeave.Database;
-using NativeWeave.Database.Sqlite;
-using NativeWeave.Database.PostgreSql;
-using NativeWeave.Interop;
-using NativeWeave.Interop.Async;
+using Korda.Data;
+using Korda.Database;
+using Korda.Database.Sqlite;
+using Korda.Database.PostgreSql;
+using Korda.Interop;
+using Korda.Interop.Async;
 using System.Diagnostics;
 using System.Buffers.Binary;
-using NativeWeave.Interop.Abi;
-using NativeWeave.Interop.Callbacks;
-using NativeWeave.Interop.Lifetime;
-using NativeWeave.Query.Internal;
+using Korda.Interop.Abi;
+using Korda.Interop.Callbacks;
+using Korda.Interop.Lifetime;
+using Korda.Query.Internal;
 
 if (args.Contains("--manifest-bounds")) { Suite.ManifestBounds(); return; }
 if (args.Length > 0) { await Suite.Worker(args); return; }
@@ -177,7 +177,7 @@ internal static class Suite
         internal override Exception MapFailure(nint operation, uint status, in NwErrorInfoV1 error, CancellationToken token)
         {
             nint owner = 0; var detail = BindingChecks.Error(); HostFailure.Check(source.Binding, source.Binding.Calls.nw_db_operation_take_error_v1(operation, &owner, &detail), detail);
-            using var buffer = new NativeWeave.Database.NativeBuffer(source.Binding, owner); var fields = HostEncoding.ReadControl(buffer.Copy(), 7);
+            using var buffer = new Korda.Database.NativeBuffer(source.Binding, owner); var fields = HostEncoding.ReadControl(buffer.Copy(), 7);
             Check(BinaryPrimitives.ReadUInt32LittleEndian(fields[4]) == (uint)CleanupStatus.Failed, "actual cleanup failure flag");
             Check(BinaryPrimitives.ReadUInt32LittleEndian(fields[5]) == 3 && (uint)ConnectionDisposition.Discarded == 3, "canonical discarded disposition is 3");
             Check(BinaryPrimitives.ReadUInt32LittleEndian(fields[6]) == 1, "dedicated connection local owner released despite cleanup failure");

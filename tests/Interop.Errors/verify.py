@@ -46,11 +46,11 @@ def main():
         report["source_dirty"] = bool(run("source-status", ["git", "status", "--porcelain"])[0].strip())
         for label, cmd in [("cmake", ["cmake", "--version"]), ("ninja", ["ninja", "--version"]), ("dotnet", ["dotnet", "--version"]), ("clang", ["clang", "--version"])]:
             report[label] = run(label, cmd)[0].strip()
-        source_dirs = ["native/interop/errors", "tests/Interop.Errors", "src/Interop.Errors", "src/NativeWeave.Core", "src/Interop.Abi", "native/interop/abi", "samples/api/interop-errors", "docs/guides/interop-errors.md"]
+        source_dirs = ["native/interop/errors", "tests/Interop.Errors", "src/Interop.Errors", "src/Korda.Core", "src/Interop.Abi", "native/interop/abi", "samples/api/interop-errors", "docs/guides/interop-errors.md"]
         tracked = subprocess.check_output(["git", "ls-files", "--cached", "--others", "--exclude-standard", "--", *source_dirs, *NATIVE_INPUTS, "Directory.Build.props", "global.json"], cwd=ROOT, text=True)
         report["source_sha256"] = {p: digest(ROOT / p) for p in sorted(set(tracked.splitlines())) if (ROOT / p).is_file()}
-        report["native_compiler_provenance"] = prepare_native(run, ["nativeweave_errors_fixture", "nw_error_probe", "nw_error_abort_probe"])
-        native = CPP_FIXTURES / "libnativeweave_errors_fixture.so"
+        report["native_compiler_provenance"] = prepare_native(run, ["korda_errors_fixture", "nw_error_probe", "nw_error_abort_probe"])
+        native = CPP_FIXTURES / "libkorda_errors_fixture.so"
         env["LD_LIBRARY_PATH"] = str(native.parent) + (":" + env["LD_LIBRARY_PATH"] if env.get("LD_LIBRARY_PATH") else "")
         report["artifacts"]["native_fixture"] = {"path": str(native), "sha256": digest(native)}
         probe = CPP_BINARIES / "nw_error_probe"
@@ -67,8 +67,8 @@ def main():
         report["artifacts"]["abort_probe"] = {"path": str(abort_probe), "sha256": digest(abort_probe)}
         common = ["-p:UseSharedCompilation=false", "-nr:false", "-m:1"]
         restore = ["--locked-mode"] + (["--configfile", args.nuget_config] if args.nuget_config else []) + (["-p:NuGetAudit=false"] if args.offline else [])
-        projects = [("managed", "tests/Interop.Errors/Interop.Errors.Tests.csproj", "NativeWeave.Interop.Errors.Tests"),
-                    ("sample", "samples/api/interop-errors/Interop.Errors.Sample.csproj", "NativeWeave.Interop.Errors.Sample"),
+        projects = [("managed", "tests/Interop.Errors/Interop.Errors.Tests.csproj", "Korda.Interop.Errors.Tests"),
+                    ("sample", "samples/api/interop-errors/Interop.Errors.Sample.csproj", "Korda.Interop.Errors.Sample"),
                     ("invalid-uco", "tests/Interop.Errors/InvalidUco/InvalidUco.csproj", "InvalidUco")]
         for label, project, assembly in projects:
             run(label + "-restore", ["dotnet", "restore", project, *restore, *common])
@@ -89,7 +89,7 @@ def main():
         run("api-restore", ["dotnet", "restore", api_project, *restore, *common])
         run("api-build", ["dotnet", "build", api_project, "-c", "Release", "--no-restore", *common])
         sdk = Path(shutil.which("dotnet")).resolve().parent
-        run("api-xml-reference", ["dotnet", "tests/Interop.Errors/ApiCheck/bin/Release/net11.0/NativeWeave.Interop.Errors.ApiCheck.dll", ROOT, sdk, ROOT / "src/NativeWeave.Core/bin/Release/net11.0/NativeWeave.Core.dll"])
+        run("api-xml-reference", ["dotnet", "tests/Interop.Errors/ApiCheck/bin/Release/net11.0/Korda.Interop.Errors.ApiCheck.dll", ROOT, sdk, ROOT / "src/Korda.Core/bin/Release/net11.0/Korda.Core.dll"])
         run("diff-check", ["git", "diff", "--check"])
         for path, expected_hash in report["source_sha256"].items():
             if not (ROOT / path).is_file() or digest(ROOT / path) != expected_hash:

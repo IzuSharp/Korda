@@ -8,7 +8,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "eng/ci"))
 import promote
 
-REPO = "IzuSharp/NativeWeave"
+REPO = "IzuSharp/Korda"
 HEAD = "a" * 40
 MERGE = "b" * 40
 TREE = "c" * 40

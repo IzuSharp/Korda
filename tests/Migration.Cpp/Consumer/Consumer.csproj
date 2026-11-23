@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <AssemblyName>NativeWeave.Migration.Cpp.Consumer</AssemblyName>
-    <NativeWeavePackageVersion Condition="'$(NativeWeavePackageVersion)' == ''">0.1.0-db-scope.1.2</NativeWeavePackageVersion>
+    <AssemblyName>Korda.Migration.Cpp.Consumer</AssemblyName>
+    <KordaPackageVersion Condition="'$(KordaPackageVersion)' == ''">0.1.0-db-scope.1.2</KordaPackageVersion>
     <TargetFramework>net11.0</TargetFramework>
     <LangVersion>15.0</LangVersion>
     <Nullable>enable</Nullable>
@@ -16,7 +16,7 @@
     <NuGetLockFilePath Condition="'$(PublishAot)' == 'true'">$(MSBuildProjectDirectory)/packages.linux-x64.aot.lock.json</NuGetLockFilePath>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="NativeWeave.Database.Sqlite" Version="[$(NativeWeavePackageVersion)]" />
-    <PackageReference Include="NativeWeave.Database.PostgreSql" Version="[$(NativeWeavePackageVersion)]" />
+    <PackageReference Include="Korda.Database.Sqlite" Version="[$(KordaPackageVersion)]" />
+    <PackageReference Include="Korda.Database.PostgreSql" Version="[$(KordaPackageVersion)]" />
   </ItemGroup>
 </Project>

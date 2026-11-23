@@ -1,10 +1,10 @@
-using NativeWeave.Database;
+using Korda.Database;
 #if !REFERENCE_SQLITE_ONLY
-using NativeWeave.Database.PostgreSql;
+using Korda.Database.PostgreSql;
 #endif
-using NativeWeave.Database.Sqlite;
+using Korda.Database.Sqlite;
 
-namespace NativeWeave.Reference.TaskService;
+namespace Korda.Reference.TaskService;
 
 internal sealed record PrincipalConfiguration(string Tenant, string Principal, bool CanWrite = true);
 

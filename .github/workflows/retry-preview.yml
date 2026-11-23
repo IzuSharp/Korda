@@ -11,7 +11,7 @@ permissions:
   actions: read
 jobs:
   resolve:
-    if: github.repository == 'IzuSharp/NativeWeave' && github.ref == 'refs/heads/main' && vars.NUGET_PUBLISH_ENABLED == 'true'
+    if: github.repository == 'IzuSharp/Korda' && github.ref == 'refs/heads/main' && vars.NUGET_PUBLISH_ENABLED == 'true'
     runs-on: ubuntu-24.04
     permissions:
       contents: read

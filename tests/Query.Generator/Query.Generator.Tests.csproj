@@ -1,11 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <OutputType>Exe</OutputType><AssemblyName>NativeWeave.Query.Generator.Tests</AssemblyName><IsAotCompatible>true</IsAotCompatible>
+    <OutputType>Exe</OutputType><AssemblyName>Korda.Query.Generator.Tests</AssemblyName><IsAotCompatible>true</IsAotCompatible>
     <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifier)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifier).aot.lock.json</NuGetLockFilePath>
   </PropertyGroup>
   <ItemGroup>
     <Compile Remove="ApiCheck/**/*.cs" />
-    <ProjectReference Include="../../src/Data.Abstractions/NativeWeave.Data.csproj" />
-    <ProjectReference Include="../../src/Query.Generator/NativeWeave.Query.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../src/Data.Abstractions/Korda.Data.csproj" />
+    <ProjectReference Include="../../src/Query.Generator/Korda.Query.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
 </Project>

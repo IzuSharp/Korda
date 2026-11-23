@@ -53,10 +53,10 @@ class IgnoredEnvironment
     // joined. Its synchronous provider connection is closed before restoration.
     IgnoredEnvironment()
     {
-        for (const auto& [name, value] : std::initializer_list<std::pair<const char*, const char*>>{
-                 {"PGSERVICE", "nativeweave-nonexistent-service"},
-                 {"PGCHANNELBINDING", "require"},
-                 {"PGDATESTYLE", "SQL,DMY"}})
+        for (const auto& [name, value] :
+             std::initializer_list<std::pair<const char*, const char*>>{{"PGSERVICE", "korda-nonexistent-service"},
+                                                                        {"PGCHANNELBINDING", "require"},
+                                                                        {"PGDATESTYLE", "SQL,DMY"}})
         {
             // NOLINTNEXTLINE(concurrency-mt-unsafe) -- isolated serial setup, no active Host.
             const auto* prior = std::getenv(name);
@@ -701,7 +701,7 @@ Json lost_commit()
     const auto port =
         static_cast<std::uint16_t>(std::stoul(plain.provider.connection.substr(colon + 1, slash - colon - 1)));
     CommitLossProxy proxy(port);
-    plain.provider.connection = "postgresql://nativeweave@127.0.0.1:" + std::to_string(proxy.port) + "/postgres";
+    plain.provider.connection = "postgresql://korda@127.0.0.1:" + std::to_string(proxy.port) + "/postgres";
     Scope client_scope(plain);
     auto client = client_scope.open();
     auto tx = begin(client);

@@ -1,4 +1,4 @@
-namespace NativeWeave.Database.Sqlite;
+namespace Korda.Database.Sqlite;
 
 /// <summary>Specifies how the C++ SQLite provider opens the configured database.</summary>
 public enum SqliteOpenMode

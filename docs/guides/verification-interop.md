@@ -4,7 +4,7 @@
 
 This is the A20 internal maintainer profile for Linux x64. It invokes the actual
 accepted Core C/Rust/C# ABI, memory, error, callback and async implementations.
-`NativeWeave.Verification.Interop` contributes no public application types, no
+`Korda.Verification.Interop` contributes no public application types, no
 mandatory Core runtime and no independently distributed package. It does not
 replace the real synchronous/asynchronous engine or pristine package gates.
 
@@ -17,8 +17,8 @@ remain optimized stable-toolchain builds, without sanitizer instrumentation.
 
 ```sh
 python3 tests/Verification.Interop/verify.py --prepare-native --output artifacts/a20-native-preparation
-dotnet build tests/Verification.Interop/NativeWeave.Verification.Interop.Tests.csproj -c Release
-dotnet run --project tests/Verification.Interop/NativeWeave.Verification.Interop.Tests.csproj -c Release --no-build
+dotnet build tests/Verification.Interop/Korda.Verification.Interop.Tests.csproj -c Release
+dotnet run --project tests/Verification.Interop/Korda.Verification.Interop.Tests.csproj -c Release --no-build
 dotnet run --project samples/api/verification-interop/Interop.Sample.csproj -c Release -- --advanced
 python3 tests/Verification.Interop/verify.py --output artifacts/a20-formal
 ```

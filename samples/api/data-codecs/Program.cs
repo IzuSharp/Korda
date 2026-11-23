@@ -1,5 +1,5 @@
 using System.Text.Json.Serialization;
-using NativeWeave.Data;
+using Korda.Data;
 
 // Application-facing declarations are canonical B01 types. B07 supplies their
 // checked native conversion; the complete source/session host belongs to B04.

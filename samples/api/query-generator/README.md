@@ -1,6 +1,6 @@
 # Static generation and explicit manual mapping
 
-Install the single `NativeWeave.Database.Sqlite` facade using the exact version in
+Install the single `Korda.Database.Sqlite` facade using the exact version in
 the project. The default build receives the model generator transitively. There
 are no direct analyzer references, project references, native source inputs or
 runtime reflection configuration in this application.

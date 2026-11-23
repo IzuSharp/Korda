@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
-using NativeWeave.Interop.Memory;
+using Korda.Interop.Memory;
 
-namespace NativeWeave.Interop.Extensibility;
+namespace Korda.Interop.Extensibility;
 
 /// <summary>A trusted engine-maintainer seam for adopting immutable native results.</summary>
 /// <remarks>Ordinary applications receive buffers from typed domain operations. The caller guarantees creator/allocator pairing, one sole SafeHandle owner, stable initialized bytes, a negotiated per-result bound and nonthrowing, nonblocking free-threaded destruction. Shape validation cannot establish accessibility of an arbitrary address. The native module remains resident under the loader contract.</remarks>

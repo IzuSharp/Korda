@@ -1,79 +1,79 @@
 {
-  "assembly": "NativeWeave.Database.PostgreSql, Version=0.1.0.0, Culture=neutral, PublicKeyToken=null",
+  "assembly": "Korda.Database.PostgreSql, Version=0.1.0.0, Culture=neutral, PublicKeyToken=null",
   "symbols": [
     {
-      "id": "F:NativeWeave.Database.PostgreSql.PostgreSqlTlsMode.DisableForLocalDevelopment",
-      "signature": "NativeWeave.Database.PostgreSql.PostgreSqlTlsMode.DisableForLocalDevelopment = 1",
+      "id": "F:Korda.Database.PostgreSql.PostgreSqlTlsMode.DisableForLocalDevelopment",
+      "signature": "Korda.Database.PostgreSql.PostgreSqlTlsMode.DisableForLocalDevelopment = 1",
       "implicit_member": false
     },
     {
-      "id": "F:NativeWeave.Database.PostgreSql.PostgreSqlTlsMode.VerifyFull",
-      "signature": "NativeWeave.Database.PostgreSql.PostgreSqlTlsMode.VerifyFull = 0",
+      "id": "F:Korda.Database.PostgreSql.PostgreSqlTlsMode.VerifyFull",
+      "signature": "Korda.Database.PostgreSql.PostgreSqlTlsMode.VerifyFull = 0",
       "implicit_member": false
     },
     {
-      "id": "M:NativeWeave.Database.PostgreSql.PostgreSqlDataSource.Create(System.String,System.Action{NativeWeave.Database.PostgreSql.PostgreSqlOptions})",
-      "signature": "public static NativeWeave.Database.DataSource NativeWeave.Database.PostgreSql.PostgreSqlDataSource.Create(string connectionString, System.Action\u003CNativeWeave.Database.PostgreSql.PostgreSqlOptions\u003E? configure = null)",
+      "id": "M:Korda.Database.PostgreSql.PostgreSqlDataSource.Create(System.String,System.Action{Korda.Database.PostgreSql.PostgreSqlOptions})",
+      "signature": "public static Korda.Database.DataSource Korda.Database.PostgreSql.PostgreSqlDataSource.Create(string connectionString, System.Action\u003CKorda.Database.PostgreSql.PostgreSqlOptions\u003E? configure = null)",
       "implicit_member": false
     },
     {
-      "id": "M:NativeWeave.Database.PostgreSql.PostgreSqlDataSourceBuilderExtensions.UsePostgreSql(NativeWeave.Database.DataSourceBuilder,System.String,System.Action{NativeWeave.Database.PostgreSql.PostgreSqlOptions})",
-      "signature": "public static NativeWeave.Database.DataSourceBuilder NativeWeave.Database.PostgreSql.PostgreSqlDataSourceBuilderExtensions.UsePostgreSql(this NativeWeave.Database.DataSourceBuilder builder, string connectionString, System.Action\u003CNativeWeave.Database.PostgreSql.PostgreSqlOptions\u003E? configure = null)",
+      "id": "M:Korda.Database.PostgreSql.PostgreSqlDataSourceBuilderExtensions.UsePostgreSql(Korda.Database.DataSourceBuilder,System.String,System.Action{Korda.Database.PostgreSql.PostgreSqlOptions})",
+      "signature": "public static Korda.Database.DataSourceBuilder Korda.Database.PostgreSql.PostgreSqlDataSourceBuilderExtensions.UsePostgreSql(this Korda.Database.DataSourceBuilder builder, string connectionString, System.Action\u003CKorda.Database.PostgreSql.PostgreSqlOptions\u003E? configure = null)",
       "implicit_member": false
     },
     {
-      "id": "M:NativeWeave.Database.PostgreSql.PostgreSqlOptions.#ctor",
-      "signature": "public NativeWeave.Database.PostgreSql.PostgreSqlOptions.PostgreSqlOptions()",
+      "id": "M:Korda.Database.PostgreSql.PostgreSqlOptions.#ctor",
+      "signature": "public Korda.Database.PostgreSql.PostgreSqlOptions.PostgreSqlOptions()",
       "implicit_member": false
     },
     {
-      "id": "M:NativeWeave.Database.PostgreSql.PostgreSqlTlsMode.#ctor",
-      "signature": "public NativeWeave.Database.PostgreSql.PostgreSqlTlsMode.PostgreSqlTlsMode()",
+      "id": "M:Korda.Database.PostgreSql.PostgreSqlTlsMode.#ctor",
+      "signature": "public Korda.Database.PostgreSql.PostgreSqlTlsMode.PostgreSqlTlsMode()",
       "implicit_member": true
     },
     {
-      "id": "P:NativeWeave.Database.PostgreSql.PostgreSqlDataSource.Engine",
-      "signature": "public static NativeWeave.Interop.EngineDescriptor NativeWeave.Database.PostgreSql.PostgreSqlDataSource.Engine { get; }",
+      "id": "P:Korda.Database.PostgreSql.PostgreSqlDataSource.Engine",
+      "signature": "public static Korda.Interop.EngineDescriptor Korda.Database.PostgreSql.PostgreSqlDataSource.Engine { get; }",
       "implicit_member": false
     },
     {
-      "id": "P:NativeWeave.Database.PostgreSql.PostgreSqlOptions.ApplicationName",
-      "signature": "public string NativeWeave.Database.PostgreSql.PostgreSqlOptions.ApplicationName { get; set; }",
+      "id": "P:Korda.Database.PostgreSql.PostgreSqlOptions.ApplicationName",
+      "signature": "public string Korda.Database.PostgreSql.PostgreSqlOptions.ApplicationName { get; set; }",
       "implicit_member": false
     },
     {
-      "id": "P:NativeWeave.Database.PostgreSql.PostgreSqlOptions.ConnectTimeout",
-      "signature": "public System.TimeSpan NativeWeave.Database.PostgreSql.PostgreSqlOptions.ConnectTimeout { get; set; }",
+      "id": "P:Korda.Database.PostgreSql.PostgreSqlOptions.ConnectTimeout",
+      "signature": "public System.TimeSpan Korda.Database.PostgreSql.PostgreSqlOptions.ConnectTimeout { get; set; }",
       "implicit_member": false
     },
     {
-      "id": "P:NativeWeave.Database.PostgreSql.PostgreSqlOptions.RootCertificatePath",
-      "signature": "public string? NativeWeave.Database.PostgreSql.PostgreSqlOptions.RootCertificatePath { get; set; }",
+      "id": "P:Korda.Database.PostgreSql.PostgreSqlOptions.RootCertificatePath",
+      "signature": "public string? Korda.Database.PostgreSql.PostgreSqlOptions.RootCertificatePath { get; set; }",
       "implicit_member": false
     },
     {
-      "id": "P:NativeWeave.Database.PostgreSql.PostgreSqlOptions.TlsMode",
-      "signature": "public NativeWeave.Database.PostgreSql.PostgreSqlTlsMode NativeWeave.Database.PostgreSql.PostgreSqlOptions.TlsMode { get; set; }",
+      "id": "P:Korda.Database.PostgreSql.PostgreSqlOptions.TlsMode",
+      "signature": "public Korda.Database.PostgreSql.PostgreSqlTlsMode Korda.Database.PostgreSql.PostgreSqlOptions.TlsMode { get; set; }",
       "implicit_member": false
     },
     {
-      "id": "T:NativeWeave.Database.PostgreSql.PostgreSqlDataSource",
-      "signature": "public static class NativeWeave.Database.PostgreSql.PostgreSqlDataSource",
+      "id": "T:Korda.Database.PostgreSql.PostgreSqlDataSource",
+      "signature": "public static class Korda.Database.PostgreSql.PostgreSqlDataSource",
       "implicit_member": false
     },
     {
-      "id": "T:NativeWeave.Database.PostgreSql.PostgreSqlDataSourceBuilderExtensions",
-      "signature": "public static class NativeWeave.Database.PostgreSql.PostgreSqlDataSourceBuilderExtensions",
+      "id": "T:Korda.Database.PostgreSql.PostgreSqlDataSourceBuilderExtensions",
+      "signature": "public static class Korda.Database.PostgreSql.PostgreSqlDataSourceBuilderExtensions",
       "implicit_member": false
     },
     {
-      "id": "T:NativeWeave.Database.PostgreSql.PostgreSqlOptions",
-      "signature": "public sealed class NativeWeave.Database.PostgreSql.PostgreSqlOptions",
+      "id": "T:Korda.Database.PostgreSql.PostgreSqlOptions",
+      "signature": "public sealed class Korda.Database.PostgreSql.PostgreSqlOptions",
       "implicit_member": false
     },
     {
-      "id": "T:NativeWeave.Database.PostgreSql.PostgreSqlTlsMode",
-      "signature": "public enum NativeWeave.Database.PostgreSql.PostgreSqlTlsMode : int",
+      "id": "T:Korda.Database.PostgreSql.PostgreSqlTlsMode",
+      "signature": "public enum Korda.Database.PostgreSql.PostgreSqlTlsMode : int",
       "implicit_member": false
     }
   ]

@@ -3,7 +3,7 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 
-namespace NativeWeave.Data;
+namespace Korda.Data;
 
 // Used only by the explicit bounded snapshot path. Ordinary B01 codec encoding
 // stays unchanged. The supplied static JsonTypeInfo remains the sole serializer.

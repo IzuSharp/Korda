@@ -1,28 +1,21 @@
 # Database verification
 
-The current Linux x64 gate is `python3 eng/build.py verify`. It requires committed source, the pinned Clang/.NET toolchains, a disposable real PostgreSQL18 endpoint and PostgreSQL18 server tools. Existing SQLite tests use real SQLite.
+Pull requests run the checks selected by the committed diff and registered module dependencies. Inspect the plan with `python3 eng/ci/impact.py origin/main`. Database tests cover API signatures and XML documentation, parameter binding, transactions, migrations, typed queries, DTO mapping, streaming and resource disposal.
 
-It checks CMake and .NET graphs, locked dependencies, clang-format, clang-tidy, native CTest, compiled APIs/XML and the unchanged database executable suites. Provider component tests include actual PostgreSQL TLS/error cases, SQLite behavior, transactions, codecs, streaming and query binding. Composed suites cover Database Host, migrations and process recovery, Fluent queries, DTO mapping, relations/CRUD, cancellation and deterministic retirement.
+## Run the database checks locally
 
-Mixed reference/end-to-end fixtures directly invoke C# database business methods. Unique nullable/composite relationship, session/stream/transaction lifecycle, lock-conflict and lost-COMMIT-ack assertions remain. These fixtures create no NativeWeave listener or protocol host.
+Use a clean committed checkout, the pinned toolchain in the [native build guide](guides/cpp-native.md), and a disposable PostgreSQL 18 server. Its test account needs permission to create and drop test databases and roles. Set `NW_TEST_POSTGRES` to that server's connection string and `NW_POSTGRES_BIN` to the matching server tools directory.
+
+```sh
+git clone https://github.com/IzuSharp/NativeWeave-Design artifacts/frozen-design
+git -C artifacts/frozen-design checkout c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9
+git clone https://github.com/IzuSharp/Plan artifacts/frozen-plan
+git -C artifacts/frozen-plan checkout 8afa0311f45ab8a8157fc45c51e95a0b17dd09f2
+python3 eng/build.py verify
+```
 
 ## Consumer acceptance
 
-Candidate packages are produced from the clean C++ source. External ordinary PackageReference projects use separate caches and precompiled native assets. All four mandatory cells must execute and validate returned data:
+Linux x64 runners execute compiled Native AOT consumers with the SQLite provider, the PostgreSQL provider and both providers together. The tests check query results, dependency closure, native library identity and actual loaded paths. Clean-image and minimum-CPU checks are available through manual CI. Scheduled native analysis covers clang-tidy and C/C++ CodeQL.
 
-| Database | JIT | Native AOT |
-| --- | --- | --- |
-| PostgreSQL | Required | Required |
-| SQLite | Required | Required |
-
-The package gate also checks provider independence, the combined graph, all nuspec edges, resolved assets, published assemblies and the application's actual mapped native libraries with matching SHA-256. Removed server/protocol/proof/demo products are rejected.
-
-A local Rust invocation trap is recorded as local evidence, not a pristine machine. CI separately consumes the exact candidate in its pinned SDK image without Rust installed, then transfers AOT outputs to the pinned runtime-only image. Retained Core minimum-CPU, native ABI/lifecycle and package/release recovery checks remain required.
-
-## Evidence
-
-`artifacts/verification.json` and `artifacts/db-scope/` hold current source and artifact identities and command results. A failed or partial attempt stays failed; changed source requires a new candidate. Actual batch results, independent review, PR/merge commits and observed head/main CI are recorded in [Plan DB-CPP-01](https://github.com/IzuSharp/Plan/tree/main/ledger/evidence/batches/DB-CPP-01).
-
-Historical acceptance in earlier Plan batches remains tied to its original commits. It does not establish acceptance of this changed candidate. Performance optimization and load testing are outside this batch.
-
-The shared sanitizer preset runs ASan/UBSan with leak scanning in CI. The fresh Linux producer check builds and packages without Rust, in addition to the existing consumer/tool-absence gates. Same-source old/new business runs and historical-data handover use `tests/Migration.Cpp`.
+The [release guide](releasing.md) covers public candidate and signed-package verification. The [DB-CPP-01 record](https://github.com/IzuSharp/Plan/tree/main/ledger/evidence/batches/DB-CPP-01) documents the original Rust-to-C++ migration under its historical package identities.

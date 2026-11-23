@@ -4,7 +4,7 @@ repos:
     hooks:
       - id: clang-format
         files: '^(native/|tests/|src/Verification\.(Interop|EndToEnd)/).*\.(c|cc|cpp|cxx|h|hh|hpp|hxx)$'
-        exclude: '(^|/)(third_party|vendor|generated)/|^native/interop/abi/include/nativeweave_abi_v1\.h$|^native/database/binding/nativeweave_database_binding_v1\.h$|^tests/Interop\.Abi/native/layout\.(c|cpp)$'
+        exclude: '(^|/)(third_party|vendor|generated)/|^native/interop/abi/include/korda_abi_v1\.h$|^native/database/binding/korda_database_binding_v1\.h$|^tests/Interop\.Abi/native/layout\.(c|cpp)$'
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: 9026c9127e153371d7a78dfcb0c45ae2046a3d10 # v0.17.6
     hooks:

@@ -1,7 +1,7 @@
-using NativeWeave.Data;
-using NativeWeave.Database;
-using NativeWeave.Database.Sqlite;
-using NativeWeave.Query;
+using Korda.Data;
+using Korda.Database;
+using Korda.Database.Sqlite;
+using Korda.Query;
 
 if (args.Contains("--require-aot") && System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported)
     throw new InvalidOperationException("This acceptance row requires an actual NativeAOT executable.");

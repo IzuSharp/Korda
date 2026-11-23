@@ -7,7 +7,7 @@ Task A06 implements the internal callback protocol from Design
 It adds no public application type or separately installable package. A domain's
 statically compiled adapter supplies its typed subscription API; application
 handlers do not manage unmanaged pointers or GCHandle cookies. The shared code
-is compiled into `NativeWeave.Core`. The Rust crate is reused by each engine
+is compiled into `Korda.Core`. The Rust crate is reused by each engine
 that needs callbacks; a synchronous engine need not create a coordinator.
 
 ## Ownership and native operations

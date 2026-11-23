@@ -1,7 +1,7 @@
 # DB-CPP-01 package and historical database comparison
 
 `Consumer/` is one versioned business application. It has ordinary references to
-`NativeWeave.Database.Sqlite` and `NativeWeave.Database.PostgreSql`, static entity
+`Korda.Database.Sqlite` and `Korda.Database.PostgreSql`, static entity
 and DTO materializers, and no project reference or product build import. The same
 C# files run against the fixed Rust packages and the candidate C++ packages in
 separate processes. The test adds no public database feature.
@@ -43,7 +43,7 @@ python3 tests/Migration.Cpp/reference_prepare.py \
 ```
 
 ```sh
-# Run from a committed NativeWeave checkout with the pinned .NET/Clang tools on PATH.
+# Run from a committed Korda checkout with the pinned .NET/Clang tools on PATH.
 python3 tests/Migration.Cpp/run.py \
   --phase baseline \
   --feed /absolute/path/baseline/artifacts/rust-packages/candidate/feed \
@@ -64,7 +64,7 @@ python3 tests/Migration.Cpp/run.py \
 `--sdk-cache` supplies existing SDK/runtime/ILCompiler NuGet archives, which are
 copied or linked into an isolated local feed and hash-recorded. Each phase uses
 its own NuGet package cache and CLR home, restores twice including locked mode,
-and cannot resolve a NativeWeave package outside the selected provider feed.
+and cannot resolve a Korda package outside the selected provider feed.
 The Native AOT consumer is published as a real ELF executable and must execute
 with dynamic code disabled. `cargo`, `rustc`, `rustup`, `cmake`, and `ninja` are
 trap executables during consumer builds and runs; invoking any fails the matrix.

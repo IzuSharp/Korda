@@ -1,9 +1,9 @@
 // Maintainer adapters reused from tests/Interop.Memory/Fixture.cs; all tests execute the actual Core/native primitives.
 using System.Runtime.InteropServices;
-using NativeWeave.Interop;
-using NativeWeave.Interop.Extensibility;
+using Korda.Interop;
+using Korda.Interop.Extensibility;
 
-namespace NativeWeave.Verification.Interop;
+namespace Korda.Verification.Interop;
 
 internal sealed class BufferHandle : SafeHandle
 {
@@ -13,13 +13,13 @@ internal sealed class BufferHandle : SafeHandle
 }
 internal static unsafe partial class MemoryNative
 {
-    private const string Library = "nativeweave_interop_memory";
+    private const string Library = "korda_interop_memory";
     // Component metadata fixture only: A02's independently accepted real loader is
     // not reimplemented or re-accepted by these buffer tests. The C++ buffer
     // allocation, views, capacity charges and creator releases below are actual.
-    internal static readonly EngineInfo Engine = new(new EnginePackageManifest("interop.memory.fixture", "NativeWeave.Core", "0.1.0",
+    internal static readonly EngineInfo Engine = new(new EnginePackageManifest("interop.memory.fixture", "Korda.Core", "0.1.0",
         new AbiVersion(1, 0), "nw_memory_fixture_bootstrap_v1", EngineThreadingModel.Synchronous,
-        [new NativeAssetDescriptor("linux-x64", "runtimes/linux-x64/native/libnativeweave_interop_memory.so", new string('0', 64), "x86-64")], []), "linux-x64", new AbiVersion(1, 0), 0);
+        [new NativeAssetDescriptor("linux-x64", "runtimes/linux-x64/native/libkorda_interop_memory.so", new string('0', 64), "x86-64")], []), "linux-x64", new AbiVersion(1, 0), 0);
 
     [LibraryImport(Library, EntryPoint = "nw_memory_fixture_copy_v1")]
     internal static partial uint Copy(byte* data, ulong length, ulong reserve, uint fail, out nint output);

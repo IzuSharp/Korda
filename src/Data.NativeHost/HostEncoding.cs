@@ -1,9 +1,9 @@
 using System.Buffers.Binary;
 using System.Data;
 using System.Text;
-using NativeWeave.Data;
+using Korda.Data;
 
-namespace NativeWeave.Database;
+namespace Korda.Database;
 
 internal static class HostEncoding
 {

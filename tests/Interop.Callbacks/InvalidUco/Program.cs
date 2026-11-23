@@ -5,7 +5,7 @@ using System.Runtime.InteropServices;
 // repair an invalid reverse-P/Invoke ABI, because the body is never entered.
 internal static unsafe partial class Program
 {
-    [LibraryImport("nativeweave_interop_callbacks", EntryPoint = "nw_callbacks_fixture_invalid_uco_v1")]
+    [LibraryImport("korda_interop_callbacks", EntryPoint = "nw_callbacks_fixture_invalid_uco_v1")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
     private static partial uint Invoke(nint callback);
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]

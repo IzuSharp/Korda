@@ -1,8 +1,8 @@
 # Direct database application sample
 
-This sample links the finite internal application fixture in `src/Reference.TaskService`. It invokes strongly typed database business methods directly and creates no server or protocol listener. The default references only `NativeWeave.Database.Sqlite`; set `ReferenceIncludePostgreSql=true` to include the PostgreSQL facade as well.
+This sample links the finite internal application fixture in `src/Reference.TaskService`. It invokes strongly typed database business methods directly and creates no server or protocol listener. The default references only `Korda.Database.Sqlite`; set `ReferenceIncludePostgreSql=true` to include the PostgreSQL facade as well.
 
-The source demonstrates explicit migrations, static models and DTO mapping, typed CRUD and keyset queries, scoped idempotency, optimistic concurrency, transactions with uncertain-commit recovery, a separate durable outbox consumer, and bounded resource disposal. Filesystem attachment logic is internal application code used to verify database-reference safety, not an additional NativeWeave engine.
+The source demonstrates explicit migrations, static models and DTO mapping, typed CRUD and keyset queries, scoped idempotency, optimistic concurrency, transactions with uncertain-commit recovery, a separate durable outbox consumer, and bounded resource disposal. Filesystem attachment logic is internal application code used to verify database-reference safety, not an additional Korda engine.
 
 Use the current candidate version and feed through ordinary NuGet configuration. The following command creates an empty private SQLite fixture directory and writes a random 32-byte cursor-signing key directly into a mode-0600 configuration file. It prints only that file's path; the key is never echoed or committed.
 
@@ -15,7 +15,7 @@ from pathlib import Path
 import secrets
 import tempfile
 
-directory = Path(tempfile.mkdtemp(prefix="nativeweave-database-sample-"))
+directory = Path(tempfile.mkdtemp(prefix="korda-database-sample-"))
 path = directory / "fixture.private.json"
 configuration = {
     "provider": "sqlite",
@@ -33,7 +33,7 @@ print(path)
 PY
 )"
 dotnet run --project samples/api/reference-taskservice \
-  -p:NativeWeavePackageVersion=0.1.0-db-scope.1.2 \
+  -p:KordaPackageVersion=0.1.0-db-scope.1.2 \
   -- --config "$db_scope_reference_config" --verify
 ```
 

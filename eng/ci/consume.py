@@ -27,7 +27,7 @@ def main():
     versions = {
         IDS[p]: v["version"] for p, v in json.loads(args.plan.read_text())["published"].items() if p in IDS
     } | selected
-    with tempfile.TemporaryDirectory(prefix="nativeweave-public-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="korda-public-") as tmp:
         work = Path(tmp)
         conf = ET.parse(ROOT / "NuGet.Config")
         # Keep application packages isolated. NuGet may read SDK tooling from the runner's warm cache.
@@ -99,9 +99,9 @@ def main():
                 "out",
             )
             assets = json.loads((app / "obj/project.assets.json").read_text())
-            actual = {key for key in assets["libraries"] if key.lower().startswith("nativeweave.")}
+            actual = {key for key in assets["libraries"] if key.lower().startswith("korda.")}
             if actual != {name + "/" + versions[name] for name in refs}:
-                raise ValueError("Unexpected NativeWeave dependencies: " + str(actual))
+                raise ValueError("Unexpected Korda dependencies: " + str(actual))
             execute("./out/B24Consumer", "--require-aot")
 
 

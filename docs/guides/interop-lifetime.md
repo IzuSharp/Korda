@@ -3,7 +3,7 @@
 > **DB-CPP-01 implementation update.** The public C# examples, signatures and ownership contracts in this guide remain the compatibility inputs. The current maintained native implementation is C++20; its module mapping, direct libpq/sqlite3 execution, Clang/CMake commands and package production are documented in [C++ native implementation](cpp-native.md). Descriptions below of Rust, SQLx, SeaQuery or Tokio internals are retained as the fixed `465cd0f` behavioral reference, not current build dependencies. The named verification entry points now build the ported C++ fixtures and retain their original managed assertions.
 
 A03 implements the private resource admission used by generated bindings and A04
-buffers in `NativeWeave.Core`. Application code continues to use its domain's
+buffers in `Korda.Core`. Application code continues to use its domain's
 sealed resource owner with `using`; no raw pointer or independent lifetime package
 is part of this task's public surface. See the [compiled internal reference](../../src/Interop.Lifetime/api-reference.md)
 and [maintainer consumers](../../samples/api/interop-lifetime/Program.cs).

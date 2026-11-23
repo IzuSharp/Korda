@@ -1,8 +1,8 @@
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text.Json;
-using NativeWeave.Interop;
-using NativeWeave.Interop.Extensibility;
+using Korda.Interop;
+using Korda.Interop.Extensibility;
 
 // Maintainer assertions only. The private component bootstrap and the public
 // provider's complete Database Host are distinct native assets and contracts.
@@ -22,8 +22,8 @@ internal static class ProviderProfileChecks
         string path = Path.GetFullPath(asset ?? throw new InvalidOperationException("An explicit private component asset is required."));
         (string engine, string bootstrap, string capability) = provider switch
         {
-            "sqlite" => ("nativeweave.database.sqlite", "nw_sqlite_get_abi_v1", "db.sqlite.profile.v1"),
-            "postgresql" => ("nativeweave.postgres.component", "nw_postgres_component_get_abi_v1", "postgres.component.v1"),
+            "sqlite" => ("korda.database.sqlite", "nw_sqlite_get_abi_v1", "db.sqlite.profile.v1"),
+            "postgresql" => ("korda.postgres.component", "nw_postgres_component_get_abi_v1", "postgres.component.v1"),
             _ => throw new ArgumentException("Unknown provider.", nameof(provider))
         };
         // This test-only descriptor preserves the standalone component ABI check;
@@ -44,14 +44,14 @@ internal static class ProviderProfileChecks
     internal static int Host(Func<EngineDescriptor> readDescriptor, string provider, string? overridePath = null)
     {
         string engine = "database." + provider;
-        string package = provider == "sqlite" ? "NativeWeave.Database.Sqlite" : "NativeWeave.Database.PostgreSql";
+        string package = provider == "sqlite" ? "Korda.Database.Sqlite" : "Korda.Database.PostgreSql";
         string file = "libnw_database_" + provider + ".so";
         Require(!Mapped(file) && NoHostThreads(), "fresh process has no Database Host before metadata access");
         var descriptor = readDescriptor();
         Require(descriptor.EngineId == engine && descriptor.PackageId == package
             && descriptor.SupportedRuntimeIdentifiers.SequenceEqual(["linux-x64"]), "exact integrated provider descriptor");
         Require(ReferenceEquals(descriptor, readDescriptor()) && !Mapped(file) && NoHostThreads(), "cached metadata starts no native load or Host executor");
-        using var document = JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "NativeWeave." + engine + ".assets.json")));
+        using var document = JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "Korda." + engine + ".assets.json")));
         var record = document.RootElement;
         string relative = "runtimes/linux-x64/native/" + file;
         Require(record.GetProperty("schemaVersion").GetInt32() == 1 && record.GetProperty("engineId").GetString() == engine

@@ -13,19 +13,19 @@ import inventory
 from model import (CHANGED, COMMON, ENGINES, IDS, LEAVES, MANAGED, REPOSITORY, RID, ROOT, TASK,
                    graph, json_bytes, load_manifest, module, save, sha, subclosure, versions)
 
-TASK_PROJECT = ROOT / "src/Packaging.Release/BuildTasks/NativeWeave.Packaging.Tasks.csproj"
+TASK_PROJECT = ROOT / "src/Packaging.Release/BuildTasks/Korda.Packaging.Tasks.csproj"
 FLAGS = ["-p:UseSharedCompilation=false", "-nr:false", "-m:1"]
 PROJECT_FILES = {
-    "NativeWeave.Interop.Abi": "Interop.Abi.csproj",
-    "NativeWeave.Core": "NativeWeave.Core.csproj",
-    "NativeWeave.Data": "NativeWeave.Data.csproj",
-    "NativeWeave.Database.Transactions": "NativeWeave.Database.Transactions.csproj",
-    "NativeWeave.Data.Streaming": "NativeWeave.Data.Streaming.csproj",
-    "NativeWeave.Query.Binding": "NativeWeave.Query.Binding.csproj",
-    "NativeWeave.Query.Generator": "NativeWeave.Query.Generator.csproj",
-    "NativeWeave.Database": "NativeWeave.Database.csproj",
-    "NativeWeave.Database.Sqlite": "NativeWeave.Database.Sqlite.csproj",
-    "NativeWeave.Database.PostgreSql": "NativeWeave.Database.PostgreSql.csproj",
+    "Korda.Interop.Abi": "Interop.Abi.csproj",
+    "Korda.Core": "Korda.Core.csproj",
+    "Korda.Data": "Korda.Data.csproj",
+    "Korda.Database.Transactions": "Korda.Database.Transactions.csproj",
+    "Korda.Data.Streaming": "Korda.Data.Streaming.csproj",
+    "Korda.Query.Binding": "Korda.Query.Binding.csproj",
+    "Korda.Query.Generator": "Korda.Query.Generator.csproj",
+    "Korda.Database": "Korda.Database.csproj",
+    "Korda.Database.Sqlite": "Korda.Database.Sqlite.csproj",
+    "Korda.Database.PostgreSql": "Korda.Database.PostgreSql.csproj",
 }
 
 
@@ -61,7 +61,7 @@ class Commands:
 def managed_entries(identity):
     directory = ROOT / MANAGED[identity][0]
     result = {"LICENSE": ROOT / "LICENSE"}
-    if identity == "NativeWeave.Query.Generator":
+    if identity == "Korda.Query.Generator":
         result["tools/roslyn/" + identity + ".dll"] = directory / "bin/Release/netstandard2.0" / (identity + ".dll")
         result["buildTransitive/" + identity + ".targets"] = directory / "buildTransitive" / (identity + ".targets")
     else:
@@ -72,7 +72,7 @@ def managed_entries(identity):
 
 def build_managed(commands, version, native, candidate=False):
     asset_flags = ["-p:" + property_name + "=" + str(native[engine]["path"]) for property_name, engine in (
-        ("NativeWeaveSqliteAssetPath", "database.sqlite"), ("NativeWeavePostgresAssetPath", "database.postgresql"))]
+        ("KordaSqliteAssetPath", "database.sqlite"), ("KordaPostgresAssetPath", "database.postgresql"))]
     selected = CHANGED if candidate else tuple(MANAGED)
     label = "candidate" if candidate else "previous"
     for identity in selected:
@@ -82,7 +82,7 @@ def build_managed(commands, version, native, candidate=False):
     # This catches stale hardcoded profile versions before packaging, without
     # substituting the later actual runtime bootstrap/consumer checks.
     for engine, (facade, _, _, _) in ENGINES.items():
-        record_path = ROOT / MANAGED[facade][0] / "obj/Release/net11.0" / ("NativeWeave." + engine + ".assets.json")
+        record_path = ROOT / MANAGED[facade][0] / "obj/Release/net11.0" / ("Korda." + engine + ".assets.json")
         record = json.loads(record_path.read_text())
         if record["packageId"] != facade or record["packageVersion"] != version or record["sha256"] != native[engine]["sha256"]:
             raise ValueError("Generated facade identity is stale: " + facade)
@@ -121,17 +121,17 @@ def compose(output, label, version_map, native_build, native, source_commit, pre
                     "packagingProducerCommit": source_commit, "cpuBaseline": "x86-64",
                     "dependenciesLockSha256": native_build["dependenciesLockSha256"],
                     "nativeImplementation": "C++20", "nativePreset": native_build["preset"],
-                    "dependencyInventorySha256": sha_bytes(entries["nativeweave/dependencies.json"]),
+                    "dependencyInventorySha256": sha_bytes(entries["korda/dependencies.json"]),
                     "scope": "local-only; signer authentication and public release are not asserted"}
-                entries["nativeweave/manifest.json"] = json_bytes(native_manifest)
+                entries["korda/manifest.json"] = json_bytes(native_manifest)
             else:
                 entries = managed_entries(identity)
                 if identity in CHANGED:
-                    target = ROOT / "src/Packaging.Release/buildTransitive/NativeWeave.Packaging.targets"
+                    target = ROOT / "src/Packaging.Release/buildTransitive/Korda.Packaging.targets"
                     entries["buildTransitive/" + identity + ".targets"] = target
-                    entries["nativeweave/closure.json"] = json_bytes(subclosure(closure, identity))
+                    entries["korda/closure.json"] = json_bytes(subclosure(closure, identity))
                     for suffix in (".dll", ".xml"):
-                        entries["tools/net11.0/NativeWeave.Packaging.Tasks" + suffix] = TASK_PROJECT.parent / "bin/Release/net11.0" / ("NativeWeave.Packaging.Tasks" + suffix)
+                        entries["tools/net11.0/Korda.Packaging.Tasks" + suffix] = TASK_PROJECT.parent / "bin/Release/net11.0" / ("Korda.Packaging.Tasks" + suffix)
             archive = packing.pack(feed, identity, version, entries, dependencies, (REPOSITORY, source))
         record = {"id": identity, "version": version, "dependencies": dependencies,
                   "unsigned_entries": compat.package_entries(archive), "upload_archive_sha256": sha(archive),
@@ -146,11 +146,11 @@ def compose(output, label, version_map, native_build, native, source_commit, pre
         records.append(record)
         packages.append(handoff)
     release = {"schema_version": 1, "source_commit": source_commit, "source_dirty": False, "rid": RID,
-               "builder_identity": "nativeweave-local-reviewed-staging", "local_unsigned_only": True, "packages": records}
+               "builder_identity": "korda-local-reviewed-staging", "local_unsigned_only": True, "packages": records}
     compat.validate_closure(release, {item["id"]: output / item["path"] for item in packages})
     save(folder / "closure.json", closure)
     save(folder / "release.json", release)
-    return {"version": version_map["NativeWeave.Database"], "feed": feed.relative_to(output).as_posix(),
+    return {"version": version_map["Korda.Database"], "feed": feed.relative_to(output).as_posix(),
             "buildClosure": (folder / "closure.json").relative_to(output).as_posix(),
             "releaseRecord": (folder / "release.json").relative_to(output).as_posix(), "packages": packages}
 
@@ -222,7 +222,7 @@ def main():
     for engine, value in native.items():
         save(evidence / "native" / (engine + ".json"), value["inventory"])
         for name, data in value["entries"].items():
-            if name.startswith("nativeweave/licenses/"):
+            if name.startswith("korda/licenses/"):
                 path = evidence / "native" / engine / name
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes(data)

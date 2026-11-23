@@ -1,6 +1,6 @@
-using NativeWeave.Data;
+using Korda.Data;
 
-namespace NativeWeave.Database.Internal;
+namespace Korda.Database.Internal;
 
 /// <summary>Internal host seam for one independently owned native batch and its bounded managed copy.</summary>
 /// <remarks>Bytes are managed-owned, immutable, and valid until disposal. The creating transport retains

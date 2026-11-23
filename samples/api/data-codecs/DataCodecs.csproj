@@ -1,10 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <AssemblyName>NativeWeave.Data.Codecs.Sample</AssemblyName>
+    <AssemblyName>Korda.Data.Codecs.Sample</AssemblyName>
     <IsAotCompatible>true</IsAotCompatible>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../../../src/Data.Abstractions/NativeWeave.Data.csproj" />
+    <ProjectReference Include="../../../src/Data.Abstractions/Korda.Data.csproj" />
   </ItemGroup>
 </Project>

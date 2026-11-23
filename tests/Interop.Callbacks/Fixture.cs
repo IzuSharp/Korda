@@ -1,8 +1,8 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using NativeWeave.Interop.Abi;
-using NativeWeave.Interop.Callbacks;
-using NativeWeave.Interop.Lifetime;
+using Korda.Interop.Abi;
+using Korda.Interop.Callbacks;
+using Korda.Interop.Lifetime;
 
 internal sealed class FixtureHandle : SafeHandle
 {
@@ -36,7 +36,7 @@ internal sealed unsafe class FixtureCalls : CallbackNativeCalls
 
 internal static unsafe partial class Fixture
 {
-    private const string Library = "nativeweave_interop_callbacks";
+    private const string Library = "korda_interop_callbacks";
     [ThreadStatic] internal static bool InNativeCall;
 
     [LibraryImport(Library, EntryPoint = "nw_callbacks_fixture_create_v1")]

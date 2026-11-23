@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <AssemblyName>Korda.Core</AssemblyName>
+    <RootNamespace>Korda.Interop</RootNamespace>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <IsAotCompatible>true</IsAotCompatible>
+    <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifiers)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifiers).aot.lock.json</NuGetLockFilePath>
+    <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifier)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifier).aot.lock.json</NuGetLockFilePath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../Interop.Negotiation/**/*.cs;../Interop.Errors/**/*.cs" Exclude="../Interop.Negotiation/**/obj/**/*.cs;../Interop.Negotiation/**/bin/**/*.cs;../Interop.Errors/**/obj/**/*.cs;../Interop.Errors/**/bin/**/*.cs" />
+    <Compile Include="../Interop.Lifetime/**/*.cs;../Interop.Memory/**/*.cs" Exclude="../Interop.Lifetime/**/obj/**/*.cs;../Interop.Lifetime/**/bin/**/*.cs;../Interop.Memory/**/obj/**/*.cs;../Interop.Memory/**/bin/**/*.cs" />
+    <Compile Include="../Interop.Callbacks/**/*.cs" Exclude="../Interop.Callbacks/**/obj/**/*.cs;../Interop.Callbacks/**/bin/**/*.cs" />
+    <Compile Include="../Interop.Async/**/*.cs" Exclude="../Interop.Async/**/obj/**/*.cs;../Interop.Async/**/bin/**/*.cs" />
+    <Compile Include="../Interop.Execution/**/*.cs" Exclude="../Interop.Execution/**/obj/**/*.cs;../Interop.Execution/**/bin/**/*.cs" />
+    <ProjectReference Include="../Interop.Abi/Interop.Abi.csproj" />
+    <InternalsVisibleTo Include="Korda.Interop.Execution.Tests" />
+    <InternalsVisibleTo Include="Korda.Interop.Execution.Sample" />
+    <InternalsVisibleTo Include="Korda.Verification.Interop" />
+    <InternalsVisibleTo Include="Korda.Interop.Async.Tests" />
+    <InternalsVisibleTo Include="Korda.Interop.Async.Sample" />
+    <InternalsVisibleTo Include="Korda.Interop.Callbacks.Tests" />
+    <InternalsVisibleTo Include="Korda.Interop.Callbacks.Sample" />
+    <InternalsVisibleTo Include="Korda.Interop.Negotiation.Tests" />
+    <InternalsVisibleTo Include="Korda.Interop.Errors.Tests" />
+    <InternalsVisibleTo Include="Korda.Interop.Errors.Sample" />
+    <InternalsVisibleTo Include="Korda.Interop.Lifetime.Tests" />
+    <InternalsVisibleTo Include="Korda.Interop.Lifetime.Sample" />
+    <InternalsVisibleTo Include="Korda.Interop.Memory.Tests" />
+    <InternalsVisibleTo Include="Korda.Interop.Memory.Sample" />
+    <InternalsVisibleTo Include="Korda.Database" />
+    <InternalsVisibleTo Include="Korda.Data.NativeHost.Tests" />
+    <InternalsVisibleTo Include="Korda.Data.Migrations.Tests" />
+    <InternalsVisibleTo Include="Korda.Orm.Relations.Tests" />
+    <InternalsVisibleTo Include="Korda.Query.Fluent.Tests" />
+    <InternalsVisibleTo Include="Korda.Data.Materialization.Tests" />
+  </ItemGroup>
+</Project>

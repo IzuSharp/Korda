@@ -10,7 +10,7 @@ if (args.Length < 3) throw new ArgumentException("Usage: ApiCheck <repo-root> <d
 var root = Path.GetFullPath(args[0]); var sdk = Path.GetFullPath(args[1]); var assemblyPath = Path.GetFullPath(args[2]);
 var references = Directory.GetFiles(Path.Combine(sdk, "packs", "Microsoft.NETCore.App.Ref", "11.0.0", "ref", "net11.0"), "*.dll").Select(p => MetadataReference.CreateFromFile(p)).ToList();
 var library = MetadataReference.CreateFromFile(assemblyPath); references.Add(library);
-var compilation = CSharpCompilation.Create("NativeWeave.Data.ApiCheck", references: references, options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, metadataImportOptions: MetadataImportOptions.All));
+var compilation = CSharpCompilation.Create("Korda.Data.ApiCheck", references: references, options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, metadataImportOptions: MetadataImportOptions.All));
 var assembly = (IAssemblySymbol)(compilation.GetAssemblyOrModuleSymbol(library) ?? throw new InvalidOperationException("Cannot import assembly"));
 bool CompilerAttribute(AttributeData a) => a.AttributeClass?.ContainingNamespace.ToDisplayString() is "System.Runtime.CompilerServices" or "System.Diagnostics";
 // A type used in a signature is not a type declaration. In particular, base types,
@@ -227,7 +227,7 @@ foreach (var key in expected.Keys.Intersect(actual.Keys))
 }
 var xml = XDocument.Load(Path.ChangeExtension(assemblyPath, ".xml"));
 var docs = xml.Descendants("member").ToDictionary(e => e.Attribute("name")!.Value, StringComparer.Ordinal);
-var output = new StringBuilder("# NativeWeave.Data API reference\n\nGenerated from the compiled product assembly and its XML comments by `tests/Data.Abstractions/ApiCheck`. Covers data descriptors and transport, static model annotations, and shared ORM errors. Database provider execution remains in the database assemblies. Exact declarations retain the pinned Design identity in `public-api.expected.json`.\n\n");
+var output = new StringBuilder("# Korda.Data API reference\n\nGenerated from the compiled product assembly and its XML comments by `tests/Data.Abstractions/ApiCheck`. Covers data descriptors and transport, static model annotations, and shared ORM errors. Database provider execution remains in the database assemblies. Exact declarations retain the pinned Design identity in `public-api.expected.json`.\n\n");
 foreach (var entry in expected.OrderBy(e => e.Key, StringComparer.Ordinal))
 {
     if (!actual.TryGetValue(entry.Key, out var symbol)) continue;

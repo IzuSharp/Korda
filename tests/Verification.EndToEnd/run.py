@@ -53,7 +53,7 @@ def main():
     parser.add_argument('--filesystem-shim', type=Path)
     args = parser.parse_args()
     artifact = args.artifact_directory.resolve()
-    executable = artifact / 'NativeWeave.Reference.TaskService'
+    executable = artifact / 'Korda.Reference.TaskService'
     require(executable.is_file(), 'The selected actual reference consumer does not exist')
     required = (*POSTGRES, *COMMON) if args.provider == 'postgresql' else (*SQLITE, *COMMON)
     selected = args.cases or list(required)

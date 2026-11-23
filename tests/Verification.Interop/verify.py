@@ -19,7 +19,7 @@ sys.path.insert(0, str(ROOT / "tests"))
 from native_build import prepare as prepare_native, FIXTURES as CPP_FIXTURES, BINARIES as CPP_BINARIES, PRESET as CPP_PRESET, SOURCE_INPUTS as NATIVE_INPUTS
 OWNED = ["src/Verification.Interop", "tests/Verification.Interop",
          "samples/api/verification-interop", "docs/guides/verification-interop.md"]
-INPUTS = OWNED + ["src/NativeWeave.Core", "src/Interop.Abi", "src/Interop.Negotiation",
+INPUTS = OWNED + ["src/Korda.Core", "src/Interop.Abi", "src/Interop.Negotiation",
     "src/Interop.Lifetime", "src/Interop.Memory", "src/Interop.Errors", "src/Interop.Callbacks",
     "src/Interop.Async", "native/interop/abi", "native/interop/lifetime", "native/interop/memory",
     "native/interop/errors", "native/interop/callbacks", "native/interop/async",
@@ -117,16 +117,16 @@ def main():
             executable = shutil.which(name)
             if executable:
                 artifact("tool-" + name, Path(executable).resolve())
-        report["native_compiler_provenance"] = prepare_native(run, ["nativeweave_verification_interop",
-            "nativeweave_verification_interop_c", "nativeweave_interop_memory",
-            "nativeweave_interop_callbacks", "nativeweave_interop_async"])
+        report["native_compiler_provenance"] = prepare_native(run, ["korda_verification_interop",
+            "korda_verification_interop_c", "korda_interop_memory",
+            "korda_interop_callbacks", "korda_interop_async"])
         for name in ["verification_interop", "interop_memory", "interop_callbacks", "interop_async"]:
-            filename = "libnativeweave_" + name + ".so"
+            filename = "libkorda_" + name + ".so"
             shutil.copy2(CPP_FIXTURES / filename, staged / filename)
-        shutil.copy2(CPP_FIXTURES / "libnativeweave_verification_interop_c.so", staged / "libnativeweave_verification_interop_c.so")
+        shutil.copy2(CPP_FIXTURES / "libkorda_verification_interop_c.so", staged / "libkorda_verification_interop_c.so")
         for path in sorted(staged.glob("*.so")):
             artifact(path.name, path)
-        run("native-dependencies", ["readelf", "-d", staged / "libnativeweave_verification_interop.so"])
+        run("native-dependencies", ["readelf", "-d", staged / "libkorda_verification_interop.so"])
         if args.prepare_native:
             report["native_staged"] = True
             return
@@ -135,8 +135,8 @@ def main():
         locked = [] if args.prepare else ["--locked-mode"]
         managed = []
         for label, project, assembly in [
-            ("tests", "tests/Verification.Interop/NativeWeave.Verification.Interop.Tests.csproj", "NativeWeave.Verification.Interop.Tests"),
-            ("sample", "samples/api/verification-interop/Interop.Sample.csproj", "NativeWeave.Verification.Interop.Sample")]:
+            ("tests", "tests/Verification.Interop/Korda.Verification.Interop.Tests.csproj", "Korda.Verification.Interop.Tests"),
+            ("sample", "samples/api/verification-interop/Interop.Sample.csproj", "Korda.Verification.Interop.Sample")]:
             run(label + "-restore", ["dotnet", "restore", project, *locked, *common])
             run(label + "-build", ["dotnet", "build", project, "-c", "Release", "--no-restore", *common])
             dll = ROOT / Path(project).parent / "bin/Release/net11.0" / (assembly + ".dll")
@@ -157,7 +157,7 @@ def main():
         project = "src/Build.Integration/ApiReference/ApiReference.csproj"
         run("api-restore", ["dotnet", "restore", project, "--locked-mode", *common])
         run("api-build", ["dotnet", "build", project, "-c", "Release", "--no-restore", *common])
-        run("api-xml-reference", ["dotnet", ROOT / "src/Build.Integration/ApiReference/bin/Release/net11.0/NativeWeave.Build.ApiReference.dll",
+        run("api-xml-reference", ["dotnet", ROOT / "src/Build.Integration/ApiReference/bin/Release/net11.0/Korda.Build.ApiReference.dll",
             ROOT, Path(shutil.which("dotnet")).resolve().parent, "src/Verification.Interop/api.json", *(["--write"] if args.prepare else [])],
             contains=('"compiled_symbols":0',))
         if args.prepare:
@@ -214,7 +214,7 @@ def main():
             if sha(ROOT / path) != digest:
                 raise RuntimeError("Source changed during formal verification: " + path)
         for name in ["verification_interop", "interop_memory", "interop_callbacks", "interop_async"]:
-            filename = "libnativeweave_" + name + ".so"
+            filename = "libkorda_" + name + ".so"
             if sha(staged / filename) != report["artifacts"][filename]["sha256"]:
                 raise RuntimeError("Managed verification changed a native asset.")
         report["source_unchanged"] = True

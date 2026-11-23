@@ -1,7 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using NativeWeave.Data;
-using NativeWeave.Query.Internal;
+using Korda.Data;
+using Korda.Query.Internal;
 
 // Internal maintainer sample. Its explicitly supplied native fixture is built once
 // before these ordinary managed builds; it is not a production B04 DataSource.

@@ -1,7 +1,7 @@
 using System.Text.Json;
-using NativeWeave.Interop.Extensibility;
+using Korda.Interop.Extensibility;
 
-namespace NativeWeave.Interop;
+namespace Korda.Interop;
 
 internal static class AssetLocation
 {
@@ -9,7 +9,7 @@ internal static class AssetLocation
     {
         if (explicitPath is not null)
             return explicitPath;
-        string locationFile = Path.Combine(AppContext.BaseDirectory, $"NativeWeave.{descriptor.EngineId}.assets.json");
+        string locationFile = Path.Combine(AppContext.BaseDirectory, $"Korda.{descriptor.EngineId}.assets.json");
         try
         {
             using var stream = new FileStream(locationFile, FileMode.Open, FileAccess.Read, FileShare.Read);

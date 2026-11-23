@@ -27,7 +27,7 @@ env = os.environ.copy()
 if a.postgres_bin:
     pg = a.postgres_bin.resolve(); data = out / 'postgres-data'
     with (out / 'postgres-init.log').open('w') as log:
-        subprocess.run([pg / 'initdb', '-D', data, '-U', 'nativeweave', '--auth=trust', '--no-locale', '--encoding=UTF8'], stdout=log, stderr=subprocess.STDOUT, check=True)
+        subprocess.run([pg / 'initdb', '-D', data, '-U', 'korda', '--auth=trust', '--no-locale', '--encoding=UTF8'], stdout=log, stderr=subprocess.STDOUT, check=True)
     with socket.socket() as listener:
         listener.bind(('127.0.0.1', 0)); port = listener.getsockname()[1]
     server_log = (out / 'postgres.log').open('w')
@@ -40,11 +40,11 @@ if a.postgres_bin:
     atexit.register(stop_server)
     import time
     for _ in range(300):
-        if subprocess.run([pg / 'pg_isready', '-h', '127.0.0.1', '-p', str(port), '-U', 'nativeweave'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0: break
+        if subprocess.run([pg / 'pg_isready', '-h', '127.0.0.1', '-p', str(port), '-U', 'korda'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0: break
         if server.poll() is not None: raise RuntimeError('PostgreSQL exited during startup')
         time.sleep(.05)
     else: raise RuntimeError('PostgreSQL readiness deadline')
-    env['NW_TEST_POSTGRES'] = f'postgresql://nativeweave@127.0.0.1:{port}/postgres'
+    env['NW_TEST_POSTGRES'] = f'postgresql://korda@127.0.0.1:{port}/postgres'
 assert env.get('NW_TEST_POSTGRES'), 'Use an explicit isolated PostgreSQL test server.'
 
 def run(label, argv, cwd=ROOT, environment=env):
@@ -62,9 +62,9 @@ names = subprocess.check_output(['git', 'ls-files', '--', 'src', 'tests/Orm.Rela
 inputs = {name: sha(ROOT / name) for name in names}
 native = [a.native_dir.resolve() / ('libnw_database_' + provider + '.so') for provider in ['sqlite', 'postgresql']]
 native_hashes = {file.name: sha(file) for file in native}
-assets = ['-p:NativeWeaveSqliteAssetPath=' + str(native[0]), '-p:NativeWeavePostgresAssetPath=' + str(native[1])]
+assets = ['-p:KordaSqliteAssetPath=' + str(native[0]), '-p:KordaPostgresAssetPath=' + str(native[1])]
 sample = ROOT / 'samples/api/orm-relations'
-run('product-build', ['dotnet', 'build', sample / 'NativeWeave.Orm.Relations.Sample.csproj', '-c', 'Release', '-p:RestoreLockedMode=true', *common, *assets])
+run('product-build', ['dotnet', 'build', sample / 'Korda.Orm.Relations.Sample.csproj', '-c', 'Release', '-p:RestoreLockedMode=true', *common, *assets])
 spec = importlib.util.spec_from_file_location('accepted_package_feed', ROOT / 'tests/Data.Materialization/package_feed.py')
 packer = importlib.util.module_from_spec(spec); spec.loader.exec_module(packer)
 feed = out / 'feed'
@@ -77,11 +77,11 @@ program.write_text('using System.Runtime.CompilerServices;\n' + program.read_tex
 shutil.copy2(ROOT / 'global.json', consumer / 'global.json')
 for name in ['Directory.Build.props', 'Directory.Build.targets']:
     (consumer / name).write_text('<Project />\n')
-(consumer / 'Consumer.csproj').write_text('''<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net11.0</TargetFramework><LangVersion>15.0</LangVersion><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings><IsAotCompatible>true</IsAotCompatible><TreatWarningsAsErrors>true</TreatWarningsAsErrors><RestorePackagesWithLockFile>true</RestorePackagesWithLockFile><NuGetLockFilePath Condition="'$(PublishAot)' == 'true'">$(MSBuildProjectDirectory)/packages.aot.lock.json</NuGetLockFilePath></PropertyGroup><ItemGroup><PackageReference Include="NativeWeave.Database.Sqlite" Version="[0.1.0-preview.1]"/><PackageReference Include="NativeWeave.Database.PostgreSql" Version="[0.1.0-preview.1]"/></ItemGroup></Project>\n''')
+(consumer / 'Consumer.csproj').write_text('''<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net11.0</TargetFramework><LangVersion>15.0</LangVersion><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings><IsAotCompatible>true</IsAotCompatible><TreatWarningsAsErrors>true</TreatWarningsAsErrors><RestorePackagesWithLockFile>true</RestorePackagesWithLockFile><NuGetLockFilePath Condition="'$(PublishAot)' == 'true'">$(MSBuildProjectDirectory)/packages.aot.lock.json</NuGetLockFilePath></PropertyGroup><ItemGroup><PackageReference Include="Korda.Database.Sqlite" Version="[0.1.0-preview.1]"/><PackageReference Include="Korda.Database.PostgreSql" Version="[0.1.0-preview.1]"/></ItemGroup></Project>\n''')
 config = ET.Element('configuration'); sources = ET.SubElement(config, 'packageSources'); ET.SubElement(sources, 'clear')
 ET.SubElement(sources, 'add', key='candidate', value=str(feed)); ET.SubElement(sources, 'add', key='nuget.org', value='https://api.nuget.org/v3/index.json')
 mapping = ET.SubElement(config, 'packageSourceMapping'); ET.SubElement(mapping, 'clear')
-ET.SubElement(ET.SubElement(mapping, 'packageSource', key='candidate'), 'package', pattern='NativeWeave.*')
+ET.SubElement(ET.SubElement(mapping, 'packageSource', key='candidate'), 'package', pattern='Korda.*')
 ET.SubElement(ET.SubElement(mapping, 'packageSource', key='nuget.org'), 'package', pattern='*')
 ET.ElementTree(config).write(consumer / 'NuGet.Config')
 isolated = env.copy(); isolated['NUGET_PACKAGES'] = str(out / 'consumer-cache')
@@ -99,7 +99,7 @@ outputs = {}
 for mode, folder in [('aot', exe.parent)]:
     outputs[mode] = {}
     for provider in ['sqlite', 'postgresql']:
-        manifest = json.loads((folder / ('NativeWeave.database.' + provider + '.assets.json')).read_text())
+        manifest = json.loads((folder / ('Korda.database.' + provider + '.assets.json')).read_text())
         assert manifest['sha256'] == native_hashes[Path(manifest['outputPath']).name] == sha(folder / manifest['outputPath'])
         outputs[mode][provider] = manifest
 assert {name: sha(ROOT / name) for name in names} == inputs

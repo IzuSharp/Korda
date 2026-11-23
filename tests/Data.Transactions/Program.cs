@@ -1,9 +1,9 @@
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using NativeWeave.Data;
-using NativeWeave.Database;
-using NativeWeave.Samples.Transactions;
+using Korda.Data;
+using Korda.Database;
+using Korda.Samples.Transactions;
 
 if (args.Contains("--aot") && RuntimeFeature.IsDynamicCodeSupported) throw new Exception("Actual AOT required.");
 var families = new List<string>();

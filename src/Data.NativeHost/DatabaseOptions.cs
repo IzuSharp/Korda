@@ -1,9 +1,9 @@
 using System.Reflection;
-using NativeWeave.Data;
-using NativeWeave.Interop;
-using NativeWeave.Interop.Extensibility;
+using Korda.Data;
+using Korda.Interop;
+using Korda.Interop.Extensibility;
 
-namespace NativeWeave.Database;
+namespace Korda.Database;
 
 /// <summary>The selected independently packaged C++ database provider.</summary>
 public enum DatabaseProvider

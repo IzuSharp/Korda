@@ -1,4 +1,5 @@
 """Read published provider versions from the official NuGet flat container."""
+
 import io
 import json
 import re
@@ -6,7 +7,6 @@ import time
 import zipfile
 from urllib.error import HTTPError
 from urllib.request import urlopen
-
 
 
 def read(url):
@@ -17,7 +17,7 @@ def read(url):
         except OSError as error:
             if isinstance(error, HTTPError) and error.code == 404 or attempt == 2:
                 raise
-            time.sleep(2 ** attempt)
+            time.sleep(2**attempt)
 
 
 def package(identity, version):
@@ -42,7 +42,10 @@ def public_heads(identities):
             continue
         version = max(releases, key=lambda v: tuple(map(int, re.fullmatch(pattern, v).groups())))
         with zipfile.ZipFile(io.BytesIO(package(identity, version))) as archive:
-            info = (json.loads(archive.read("nativeweave/public.json"))
-                    if "nativeweave/public.json" in archive.namelist() else {})
+            info = (
+                json.loads(archive.read("korda/public.json"))
+                if "korda/public.json" in archive.namelist()
+                else {}
+            )
         heads[provider] = {"version": version, "inputs": info.get("inputs")}
     return heads

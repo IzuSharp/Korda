@@ -6,18 +6,18 @@
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
-    <AssemblyName>NativeWeave.Reference.TaskService</AssemblyName>
-    <RootNamespace>NativeWeave.Reference.TaskService</RootNamespace>
+    <AssemblyName>Korda.Reference.TaskService</AssemblyName>
+    <RootNamespace>Korda.Reference.TaskService</RootNamespace>
     <IsAotCompatible>true</IsAotCompatible>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <NativeWeavePackageVersion Condition="'$(NativeWeavePackageVersion)' == ''">0.1.0-preview.1</NativeWeavePackageVersion>
+    <KordaPackageVersion Condition="'$(KordaPackageVersion)' == ''">0.1.0-preview.1</KordaPackageVersion>
     <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifiers)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifiers).aot.lock.json</NuGetLockFilePath>
     <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifier)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifier).aot.lock.json</NuGetLockFilePath>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="NativeWeave.Database.Sqlite" Version="[$(NativeWeavePackageVersion)]" />
-    <PackageReference Include="NativeWeave.Database.PostgreSql" Version="[$(NativeWeavePackageVersion)]" />
+    <PackageReference Include="Korda.Database.Sqlite" Version="[$(KordaPackageVersion)]" />
+    <PackageReference Include="Korda.Database.PostgreSql" Version="[$(KordaPackageVersion)]" />
     <EmbeddedResource Include="Migrations/*.sql" />
   </ItemGroup>
 </Project>

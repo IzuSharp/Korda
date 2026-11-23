@@ -1,7 +1,7 @@
-using NativeWeave.Data;
-using NativeWeave.Query.Internal;
+using Korda.Data;
+using Korda.Query.Internal;
 
-namespace NativeWeave.Database;
+namespace Korda.Database;
 
 public sealed partial class DataSource
 {
@@ -91,7 +91,7 @@ public sealed class DatabaseAdministration
         uint status;
         fixed (byte* bytes = payload)
             status = _source.Binding.Calls.nw_db_admin_create_v1(owner.Pointer, action, BindingChecks.View(bytes, payload.Length), &result, &error);
-        if (status == NativeWeave.Interop.Abi.NativeStatus.NotSupported && error.Domain == 0x4442 && error.Code == 5)
+        if (status == Korda.Interop.Abi.NativeStatus.NotSupported && error.Domain == 0x4442 && error.Code == 5)
             throw new DatabaseCapabilityException(action == 3 ? "db.schema.read.v1" : "db.migrations.v1", _source.Provider.ToString());
         HostFailure.Check(_source.Binding, status, error);
         return result;

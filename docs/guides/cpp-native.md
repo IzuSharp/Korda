@@ -20,7 +20,7 @@ Linux PostgreSQL configuration prepares a project-private, patched client automa
 
 | Existing responsibility | Current maintained implementation |
 | --- | --- |
-| C ABI layouts, callbacks, errors, retirement, executor | `native/cpp/include/nw/interop.hpp`, `src/interop.cpp`; immutable `native/interop/abi/include/nativeweave_abi_v1.h` |
+| C ABI layouts, callbacks, errors, retirement, executor | `native/cpp/include/nw/interop.hpp`, `src/interop.cpp`; immutable `native/interop/abi/include/korda_abi_v1.h` |
 | Metadata, codecs, schemas, control records, row batches | `contracts.hpp/cpp`, `scalar.hpp/cpp`; generated C++ schema from the unchanged canonical specification |
 | Fluent expressions, aliases, freeze/clone, parameter order, dialect SQL, prepared shape cache | `query.hpp/cpp`; runtime nodes accept business table descriptions without compiled C++ business types |
 | Relations, CRUD, bulk progress, concurrency checks | `mutations.hpp/cpp` |
@@ -35,7 +35,7 @@ All abbreviated source names above are under `native/cpp/include/nw` and `native
 
 ## Query semantics
 
-The fixed NativeWeave validator and SeaQuery 1.0.2 are the semantic sources. C++ owns the mutable arena, generation-bearing expression/alias tokens, candidate-clause validation, immutable clones/plans and provider rendering. The original 52 SQL/ordered-parameter goldens remain exact. The C# driver also executes their fixed independently retained row oracles against both providers.
+The fixed Korda validator and SeaQuery 1.0.2 are the semantic sources. C++ owns the mutable arena, generation-bearing expression/alias tokens, candidate-clause validation, immutable clones/plans and provider rendering. The original 52 SQL/ordered-parameter goldens remain exact. The C# driver also executes their fixed independently retained row oracles against both providers.
 
 Values remain bound parameters. The source-bound prepared cache is bounded by both entries and bytes, excludes ordinary values from shape keys, and never owns a live connection or managed delegate. Every execution supplies its own copied parameter payload. Model/DTO mapping remains C# code generated or compiled against runtime metadata; neither an entity nor a DTO is part of the native build.
 
@@ -45,7 +45,7 @@ The selected PostgreSQL/libpq source is 18.0. A connection uses nonblocking libp
 
 Preserve the original provider's stop semantics: abandon the reader, drain through the final null result within the cleanup budget (five seconds in the product Host), and discard a connection whose protocol cannot be proven clean. Reader disposal does not send a cancel-key request that would newly abort an enclosing transaction. Caller cancellation and deadlines close business admission while the native owner remains responsible for drain/retirement. Transaction outcome and connection cleanup are separate; loss of COMMIT acknowledgment remains Unknown even if a later independent query observes durable data. A failed-transaction probe (`25P02`) followed by explicit rollback is a known rolled-back outcome.
 
-TLS defaults verify identity and certificates. Explicit local-development plaintext remains opt-in. The libpq source has one small versioned configuration patch: it ignores ambient `PG*` defaults inside libpq, matching the SQLx reference. NativeWeave continues to reject the original thirteen forbidden overrides itself. The patch never changes the process environment and does not affect other libraries or concurrent applications. Its source/hash and original PostgreSQL notice are recorded in the dependency lock and producer evidence.
+TLS defaults verify identity and certificates. Explicit local-development plaintext remains opt-in. The libpq source has one small versioned configuration patch: it ignores ambient `PG*` defaults inside libpq, matching the SQLx reference. Korda continues to reject the original thirteen forbidden overrides itself. The patch never changes the process environment and does not affect other libraries or concurrent applications. Its source/hash and original PostgreSQL notice are recorded in the dependency lock and producer evidence.
 
 ## SQLite
 

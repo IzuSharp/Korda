@@ -19,7 +19,7 @@ on:
         type: string
 jobs:
   publish:
-    if: github.repository == 'IzuSharp/NativeWeave' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && fromJSON(inputs.plan).retry_merge != ''))
+    if: github.repository == 'IzuSharp/Korda' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && fromJSON(inputs.plan).retry_merge != ''))
     runs-on: ubuntu-24.04
     timeout-minutes: 55
     environment: nuget
@@ -31,7 +31,7 @@ jobs:
       postgres:
         image: ${{ !inputs.module && contains(fromJSON(inputs.plan).packages, 'postgresql') && 'postgres:18.0@sha256:41fc5342eefba6cc2ccda736aaf034bbbb7c3df0fdb81516eba1ba33f360162c' || '' }}
         env:
-          POSTGRES_USER: nativeweave
+          POSTGRES_USER: korda
           POSTGRES_DB: postgres
           POSTGRES_HOST_AUTH_METHOD: trust
         ports:
@@ -40,7 +40,7 @@ jobs:
     env:
       MODULE: ${{ inputs.module }}
       CANDIDATE: artifacts/publication
-      NW_TEST_POSTGRES: postgresql://nativeweave@127.0.0.1:5432/postgres
+      NW_TEST_POSTGRES: postgresql://korda@127.0.0.1:5432/postgres
       NUGET_SOURCE: https://api.nuget.org/v3/index.json
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

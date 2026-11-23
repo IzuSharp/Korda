@@ -3,9 +3,9 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using NativeWeave.Data;
-using NativeWeave.Interop.Abi;
-using NativeWeave.Query.Internal;
+using Korda.Data;
+using Korda.Interop.Abi;
+using Korda.Query.Internal;
 
 internal static class Program
 {
@@ -237,7 +237,7 @@ internal static class Program
         if (args.Length < 3) throw new ArgumentException("native-module oracle-directory result-directory [--require-aot]");
         if (args.Contains("--require-aot", StringComparer.Ordinal)) Check(!RuntimeFeature.IsDynamicCodeSupported, "Actual Native AOT execution");
         var before = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(args[0])));
-        var url = Environment.GetEnvironmentVariable("NATIVEWEAVE_TEST_POSTGRES_URL") ?? throw new InvalidOperationException("Real PostgreSQL test endpoint is required.");
+        var url = Environment.GetEnvironmentVariable("KORDA_TEST_POSTGRES_URL") ?? throw new InvalidOperationException("Real PostgreSQL test endpoint is required.");
         var retired = 0; var buffers = 0;
         foreach (var profile in new uint[] { 1, 2 })
         {

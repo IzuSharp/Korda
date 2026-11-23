@@ -1,7 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 
-namespace NativeWeave.Reference.TaskService;
+namespace Korda.Reference.TaskService;
 
 /// <summary>Finite database regression scenarios using the ordinary application methods directly.</summary>
 internal static class Program

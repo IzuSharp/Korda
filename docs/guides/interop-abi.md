@@ -9,7 +9,7 @@ package versions do not change its representation.
 
 This component defines the shared fixed wire records and a stateless bootstrap
 writer. It contains no database/server engine, module loader, owner, scheduler or
-default runtime. The compiled `NativeWeave.Interop.Abi` assembly has no public
+default runtime. The compiled `Korda.Interop.Abi` assembly has no public
 types. Application metadata and preflight APIs (`AbiVersion`, `EngineDescriptor`,
 `EngineCatalog` and named capabilities) are owned by A02/A24. See the
 [compiled API reference contribution](../../src/Interop.Abi/api-reference.md).

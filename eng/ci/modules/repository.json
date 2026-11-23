@@ -14,7 +14,7 @@
   "ci": {
     "tests": [
       "eng/ci/",
-      "NativeWeave.slnx",
+      "Korda.slnx",
       ".github/workflows/ci.yml",
       ".github/workflows/retry-preview.yml",
       ".github/workflows/modules.yml",

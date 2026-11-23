@@ -1,4 +1,4 @@
-namespace NativeWeave.Interop;
+namespace Korda.Interop;
 
 /// <summary>A native panic, poisoned engine or interop contract failure with optional native diagnostics.</summary>
 /// <remarks>Construction is a cold error path. Instances own immutable managed diagnostic values and retain no native owner.

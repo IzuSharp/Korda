@@ -1,6 +1,6 @@
 # Generated ABI assembly API reference
 
-Assembly: `NativeWeave.Interop.Abi`.
+Assembly: `Korda.Interop.Abi`.
 
 Compiled public types: **0**. Compiled public members: **0**.
 

@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
-using NativeWeave.Data;
-using NativeWeave.Database;
+using Korda.Data;
+using Korda.Database;
 
 // This is a component test bridge, never a product provider or the B04 host.
 // Blocking fixture entrypoints run on test workers while the product native
@@ -122,7 +122,7 @@ internal struct SnapshotWire
 }
 internal static partial class Native
 {
-    private const string Library = "nativeweave_transactions_fixture";
+    private const string Library = "korda_transactions_fixture";
     [LibraryImport(Library, EntryPoint = "nw_tx_fixture_create")]
     internal static partial FixtureHandle Create(uint mode, ulong commitMs, ulong cleanupMs);
     [LibraryImport(Library, EntryPoint = "nw_tx_fixture_snapshot")]

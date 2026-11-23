@@ -1,19 +1,19 @@
 <Project>
   <ItemGroup>
-    <NativeWeaveProviderBundle Include="@PROVIDER@" Shared="@SHARED@" />
+    <KordaProviderBundle Include="@PROVIDER@" Shared="@SHARED@" />
   </ItemGroup>
   <PropertyGroup>
-    <NativeWeaveSharedAssemblySet Condition="'$(NativeWeaveSharedAssemblySet)' == ''">@SHARED@</NativeWeaveSharedAssemblySet>
+    <KordaSharedAssemblySet Condition="'$(KordaSharedAssemblySet)' == ''">@SHARED@</KordaSharedAssemblySet>
   </PropertyGroup>
-  <Import Project="../tools/NativeWeave.Packaging.targets" />
-  <Import Project="../tools/NativeWeave.Query.Generator.targets" Condition="'$(NativeWeaveProviderGeneratorImported)' != 'true'" />
+  <Import Project="../tools/Korda.Packaging.targets" />
+  <Import Project="../tools/Korda.Query.Generator.targets" Condition="'$(KordaProviderGeneratorImported)' != 'true'" />
   <PropertyGroup>
-    <NativeWeaveProviderGeneratorImported>true</NativeWeaveProviderGeneratorImported>
+    <KordaProviderGeneratorImported>true</KordaProviderGeneratorImported>
   </PropertyGroup>
-  <Target Name="NativeWeaveCheckProviderPair" BeforeTargets="NativeWeaveValidatePackageClosure">
-    <Error Condition="'%(NativeWeaveProviderBundle.Shared)' != '$(NativeWeaveSharedAssemblySet)'"
-           Text="These NativeWeave providers contain different shared assemblies. Restore a compatible provider pair." />
-    <Error Condition="'@(NativeWeaveProviderBundle->Count())' != '@(NativeWeaveClosure->Count())'"
-           Text="Update both NativeWeave providers to the standalone package format and remove direct references to historical component packages." />
+  <Target Name="KordaCheckProviderPair" BeforeTargets="KordaValidatePackageClosure">
+    <Error Condition="'%(KordaProviderBundle.Shared)' != '$(KordaSharedAssemblySet)'"
+           Text="These Korda providers contain different shared assemblies. Restore a compatible provider pair." />
+    <Error Condition="'@(KordaProviderBundle->Count())' != '@(KordaClosure->Count())'"
+           Text="Update both Korda providers to the standalone package format and remove direct references to historical component packages." />
   </Target>
 </Project>

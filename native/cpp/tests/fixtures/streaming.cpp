@@ -180,11 +180,11 @@ std::unique_ptr<Fixture> open(std::uint32_t provider, std::uint32_t scenario, By
     {
         // Isolated fixture setup/reads; environment mutation never overlaps active provider work.
         // NOLINTNEXTLINE(concurrency-mt-unsafe)
-        const auto* url = std::getenv("NATIVEWEAVE_TEST_POSTGRES_URL");
+        const auto* url = std::getenv("KORDA_TEST_POSTGRES_URL");
         if (!url)
             throw Error(NW_DOMAIN_ERROR, 1, "explicit PostgreSQL test URL required");
         config.provider.connection = url;
-        config.provider.application_name = "NativeWeave-B06-fixture";
+        config.provider.application_name = "Korda-B06-fixture";
         config.provider.verify_tls = false;
     }
     fixture->source = Source::create(std::move(config));

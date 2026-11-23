@@ -1,8 +1,8 @@
 # Native C++ query implementation
 
-The retained public `NativeWeave.Query` namespace belongs to `NativeWeave.Database`. The C# Fluent and internal QueryBinding calls enter the unchanged 42-function database C ABI. `native/cpp/src/query.cpp` owns runtime expressions, aliases, clauses, plans, rendering and the prepared shape cache. `host_abi.cpp` admits the call; the Host schedules execution through the selected direct libpq or sqlite3 provider.
+The retained public `Korda.Query` namespace belongs to `Korda.Database`. The C# Fluent and internal QueryBinding calls enter the unchanged 42-function database C ABI. `native/cpp/src/query.cpp` owns runtime expressions, aliases, clauses, plans, rendering and the prepared shape cache. `host_abi.cpp` admits the call; the Host schedules execution through the selected direct libpq or sqlite3 provider.
 
-This is the C++ replacement of the accepted implementation at `465cd0f90e6af05ec50eb581156240377cf0825b`. The fixed NativeWeave validator and SeaQuery 1.0.2 sources define compatibility, including the existing SQL-output goldens. SeaQuery is no longer a linked or built product dependency. See [the native implementation guide](cpp-native.md) for the complete source map, dependencies, ownership and reproduction commands.
+This is the C++ replacement of the accepted implementation at `465cd0f90e6af05ec50eb581156240377cf0825b`. The fixed Korda validator and SeaQuery 1.0.2 sources define compatibility, including the existing SQL-output goldens. SeaQuery is no longer a linked or built product dependency. See [the native implementation guide](cpp-native.md) for the complete source map, dependencies, ownership and reproduction commands.
 
 ## Query and expression ownership
 
@@ -38,7 +38,7 @@ After building the shared Release preset, use the immutable historical Design de
 python3 tests/Query.Native/verify.py \
   --design artifacts/frozen-design \
   --postgres-bin "$NW_POSTGRES_BIN" \
-  --native-module artifacts/cmake/linux-x64-release/libnativeweave_database_host.so \
+  --native-module artifacts/cmake/linux-x64-release/libkorda_database_host.so \
   --host-source "$PWD" \
   --output artifacts/query-native-linux
 ```

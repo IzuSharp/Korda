@@ -1,4 +1,4 @@
-namespace NativeWeave.Build.Conformance;
+namespace Korda.Build.Conformance;
 
 /// <summary>Compiled signature/XML conformance cases, never a distributed application API.</summary>
 /// <remarks>Stateless, thread safe and allocation free; no native owners or cancellation apply.</remarks>

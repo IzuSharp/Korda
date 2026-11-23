@@ -1,7 +1,7 @@
 #ifndef NW_CONTRACTS_HPP
 #define NW_CONTRACTS_HPP
 
-#include "nativeweave_abi_v1.h"
+#include "korda_abi_v1.h"
 
 #include <array>
 #include <cstddef>

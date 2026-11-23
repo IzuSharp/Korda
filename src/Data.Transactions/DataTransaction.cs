@@ -1,6 +1,6 @@
-using NativeWeave.Data;
+using Korda.Data;
 
-namespace NativeWeave.Database;
+namespace Korda.Database;
 
 /// <summary>An exclusive native transaction scope with separately observed outcome and cleanup.</summary>
 /// <remarks>The owning DataSession creates this scope after native BEGIN confirms. Ordinary calls share one

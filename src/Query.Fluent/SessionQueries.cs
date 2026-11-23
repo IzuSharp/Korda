@@ -1,8 +1,8 @@
-using NativeWeave.Data;
-using NativeWeave.Query;
-using NativeWeave.Query.Internal;
+using Korda.Data;
+using Korda.Query;
+using Korda.Query.Internal;
 
-namespace NativeWeave.Database;
+namespace Korda.Database;
 
 public sealed partial class DataSession
 {

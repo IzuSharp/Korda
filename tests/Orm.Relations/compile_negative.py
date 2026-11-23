@@ -16,7 +16,7 @@ reference = sdk / 'packs/Microsoft.NETCore.App.Ref/11.0.0/ref/net11.0'
 product = root / 'src/Data.NativeHost/bin' / args.configuration / 'net11.0'
 output = root / 'artifacts/B14/compile-negative'
 output.mkdir(parents=True, exist_ok=True)
-header = 'using NativeWeave.Data; using NativeWeave.Database; class Parent {} class Child {} static class Consumer { '
+header = 'using Korda.Data; using Korda.Database; class Parent {} class Child {} static class Consumer { '
 cases = [
     ('wrong_key', 'static void Test(DataSession session, Table<Parent> table, EntityKey<Child> key) { _ = session.FindAsync(table, key); }', ['CS0411']),
     ('wrong_changes', 'static void Test(DataSession session, Table<Parent> table, EntityKey<Parent> key, Changes<Child> changes) { _ = session.UpdateAsync(table, key, changes); }', ['CS0411']),
@@ -25,7 +25,7 @@ cases = [
     ('missing_checks', 'static void Test(DataSession session, Table<Parent> table, EntityKey<Parent> key, Changes<Parent> changes) { _ = session.UpdateCheckedAsync(table, key, changes); }', ['CS7036']),
     ('wrong_fk_value', 'static void Test(Column<Child,long?> foreignKey) { _ = new Changes<Child>().Set(foreignKey, "wrong type"); }', ['CS0411']),
 ]
-references = [*reference.glob('*.dll'), *product.glob('NativeWeave.*.dll')]
+references = [*reference.glob('*.dll'), *product.glob('Korda.*.dll')]
 results = []
 for name, body, codes in cases:
     source = output / (name + '.cs')

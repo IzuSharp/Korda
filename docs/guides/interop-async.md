@@ -6,7 +6,7 @@ A07 supplies the internal Task bridge used by a concrete engine's typed Async
 methods. Applications await `Task<TResult>`, pass `CancellationToken` and dispose
 their independently owned results. They do not create a callback cookie, publish
 a CLR generic through the ABI, or construct a global native runtime. These
-internals compile into the existing `NativeWeave.Core` package; A07 introduces
+internals compile into the existing `Korda.Core` package; A07 introduces
 no separate public package or scheduler.
 
 The normative input is Plan's A07 revision 0.4.0 and its `async-runtime` fragment,

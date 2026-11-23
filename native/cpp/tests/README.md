@@ -82,7 +82,7 @@ they do not discard the historical hashes or alter the managed API checks.
 ## PostgreSQL retained provider scenarios
 
 `fixtures/postgres.cpp` retains the two original B02 fixture exports. The private
-`nativeweave_data_postgres` component has only its original bootstrap and capability bit zero;
+`korda_data_postgres` component has only its original bootstrap and capability bit zero;
 it is distinct from the full `nw_database_postgresql` product asset. The original C# provider
 consumer and sample continue to load these separate assets and execute all 11 scenarios in
 both JIT and Native AOT. The standalone `nw_postgres_fixture_tests` runs the same entry point.
@@ -130,7 +130,7 @@ in CTest. The C# old/new JIT and Native AOT cross-pairs, metadata/hash/capabilit
 compiled API evolution cases, and local package-closure controls remain required.
 
 `Verification.Compatibility` emits component manifest schema **2** with `artifacts.native_lock`,
-`native_lock_format: nativeweave-cpp-dependencies-v1`, and a structured C++ language standard
+`native_lock_format: korda-cpp-dependencies-v1`, and a structured C++ language standard
 and Clang version under `upstream.toolchain`. The lock is the actual
 `native/dependencies.lock.json`, bound by its own digest and source inventory. The private
 reader still accepts archived schema **1** records with their original `cargo_lock` and
@@ -160,7 +160,7 @@ controls reject each missing part and a missing ordinary public-member summary. 
 unsigned package-range control uses `zipfile` directly and preserves the `NWPKG012` rejection.
 
 The PostgreSQL TLS scenario also sets test-scoped `PGSERVICE`, `PGCHANNELBINDING` and
-`PGDATESTYLE` values and opens a fresh connection. It verifies that the explicit NativeWeave
+`PGDATESTYLE` values and opens a fresh connection. It verifies that the explicit Korda
 policy and server DateStyle stay unchanged. This exercises the locked libpq configuration
 patch; the product never rewrites process environment, and the old explicit rejection list
 continues to reject the same policy override variables.

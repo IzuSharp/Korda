@@ -4,7 +4,7 @@
 
 A08 implements the internal execution profile required by an asynchronous Rust
 engine. An engine explicitly constructs an `EngineExecutor` instance with its own
-worker and capacity limits. Referencing NativeWeave.Core, inspecting package
+worker and capacity limits. Referencing Korda.Core, inspecting package
 metadata, or using the synchronous A17 codec starts no Tokio runtime. There is no
 public generic scheduler, process-wide executor, new application type, or separate
 executor NuGet package.

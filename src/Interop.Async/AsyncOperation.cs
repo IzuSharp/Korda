@@ -1,10 +1,10 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using NativeWeave.Interop.Abi;
-using NativeWeave.Interop.Callbacks;
-using NativeWeave.Interop.Lifetime;
+using Korda.Interop.Abi;
+using Korda.Interop.Callbacks;
+using Korda.Interop.Lifetime;
 
-namespace NativeWeave.Interop.Async;
+namespace Korda.Interop.Async;
 
 /// <summary>Statically bound operation controls; domain adapters define their exact input/result ABI.</summary>
 internal abstract unsafe class AsyncNativeCalls

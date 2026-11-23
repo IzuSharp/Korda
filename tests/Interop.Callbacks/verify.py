@@ -59,18 +59,18 @@ def main():
                                ("ninja", ["ninja", "--version"]), ("clang", ["clang", "--version"])]:
             run(label, command)
         scopes = ["src/Interop.Callbacks", "tests/Interop.Callbacks", "native/interop/callbacks", "samples/api/interop-callbacks",
-                  "docs/guides/interop-callbacks.md", "src/NativeWeave.Core", "src/Interop.Abi", "src/Interop.Negotiation",
+                  "docs/guides/interop-callbacks.md", "src/Korda.Core", "src/Interop.Abi", "src/Interop.Negotiation",
                   "src/Interop.Lifetime", "src/Interop.Memory", "src/Interop.Errors", "native/interop/abi", "native/interop/errors",
                   "Directory.Build.props", "Directory.Build.targets", "global.json", *NATIVE_INPUTS]
         paths = run("source-files", ["git", "ls-files", "--cached", "--others", "--exclude-standard", "--", *scopes])[0].splitlines()
         report["source_sha256"] = {p: sha(ROOT / p) for p in sorted(set(paths)) if (ROOT / p).is_file()}
-        report["native_compiler_provenance"] = prepare_native(run, ["nativeweave_interop_callbacks"])
-        native = CPP_FIXTURES / "libnativeweave_interop_callbacks.so"
+        report["native_compiler_provenance"] = prepare_native(run, ["korda_interop_callbacks"])
+        native = CPP_FIXTURES / "libkorda_interop_callbacks.so"
         report["artifacts"]["native"] = {"path": str(native), "sha256": sha(native)}
         common = ["-p:UseSharedCompilation=false", "-nr:false", "-m:1"]
         restore = ["--locked-mode"] + (["-p:NuGetAudit=false", "--ignore-failed-sources"] if args.offline else [])
-        projects = [("tests", "tests/Interop.Callbacks/Interop.Callbacks.Tests.csproj", "NativeWeave.Interop.Callbacks.Tests"),
-                    ("sample", "samples/api/interop-callbacks/Interop.Callbacks.Sample.csproj", "NativeWeave.Interop.Callbacks.Sample"),
+        projects = [("tests", "tests/Interop.Callbacks/Interop.Callbacks.Tests.csproj", "Korda.Interop.Callbacks.Tests"),
+                    ("sample", "samples/api/interop-callbacks/Interop.Callbacks.Sample.csproj", "Korda.Interop.Callbacks.Sample"),
                     ("invalid-uco", "tests/Interop.Callbacks/InvalidUco/InvalidUco.csproj", "InvalidUco")]
         for label, project, assembly in projects:
             run(label + "-restore", ["dotnet", "restore", project, *restore, *common])
@@ -100,8 +100,8 @@ def main():
         run("api-restore", ["dotnet", "restore", project, *restore, *common])
         run("api-build", ["dotnet", "build", project, "-c", "Release", "--no-restore", *common])
         sdk = Path(shutil.which("dotnet")).resolve().parent
-        run("api-xml-reference", ["dotnet", ROOT / "tests/Interop.Callbacks/ApiCheck/bin/Release/net11.0/NativeWeave.Interop.Callbacks.ApiCheck.dll",
-                                  ROOT, sdk, ROOT / "src/NativeWeave.Core/bin/Release/net11.0/NativeWeave.Core.dll"])
+        run("api-xml-reference", ["dotnet", ROOT / "tests/Interop.Callbacks/ApiCheck/bin/Release/net11.0/Korda.Interop.Callbacks.ApiCheck.dll",
+                                  ROOT, sdk, ROOT / "src/Korda.Core/bin/Release/net11.0/Korda.Core.dll"])
         run("diff-check", ["git", "diff", "--check"])
         for path, digest in report["source_sha256"].items():
             if sha(ROOT / path) != digest:

@@ -1,5 +1,5 @@
 {
-  "assembly": "tests/Build.Integration/ApiFixture/bin/Release/net11.0/NativeWeave.Build.ApiFixture.dll",
+  "assembly": "tests/Build.Integration/ApiFixture/bin/Release/net11.0/Korda.Build.ApiFixture.dll",
   "sources": [
     "tests/Build.Integration/ApiFixture"
   ],

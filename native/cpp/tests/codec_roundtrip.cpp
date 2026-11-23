@@ -239,9 +239,9 @@ int main(int argc, char** argv)
         const std::filesystem::path directory(argv[1]);
         // The parent supplies a fixed test endpoint; this process never mutates its environment.
         // NOLINTNEXTLINE(concurrency-mt-unsafe)
-        const auto* url = std::getenv("NATIVEWEAVE_TEST_POSTGRES_URL");
+        const auto* url = std::getenv("KORDA_TEST_POSTGRES_URL");
         if (!url)
-            throw std::runtime_error("NATIVEWEAVE_TEST_POSTGRES_URL is required");
+            throw std::runtime_error("KORDA_TEST_POSTGRES_URL is required");
         ProviderOptions pg_options{};
         pg_options.profile = Profile::PostgreSql;
         pg_options.connection = url;

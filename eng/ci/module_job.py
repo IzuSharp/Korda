@@ -1,4 +1,5 @@
 """Execute one registered module on Linux; hand the verified candidate to release.yml."""
+
 import argparse
 import json
 import os
@@ -17,7 +18,7 @@ def command(argv, env):
 
 
 def consume(spec, env):
-    with tempfile.TemporaryDirectory(prefix="nativeweave-consumer-") as cache:
+    with tempfile.TemporaryDirectory(prefix="korda-consumer-") as cache:
         command(spec["consume"], env | {"NUGET_PACKAGES": cache})
 
 
@@ -33,6 +34,7 @@ def execute(action, name, plan, version):
         raise ValueError("Package not selected in the plan: " + name)
 
     from validate_public import compat
+
     identity = spec["package"]
     feed = OUT / "feed"
     feed.mkdir(parents=True)
@@ -43,16 +45,32 @@ def execute(action, name, plan, version):
     if list(feed.iterdir()) != [path]:
         raise ValueError(f"{name}: pack must produce exactly {path.name}")
     with zipfile.ZipFile(path) as archive:
-        if json.loads(archive.read("nativeweave/public.json"))["inputs"] != fingerprint:
+        if json.loads(archive.read("korda/public.json"))["inputs"] != fingerprint:
             raise ValueError("The candidate must embed its module input fingerprint")
     commit = git("rev-parse", "HEAD").decode().strip()
-    record = dict(schema_version=1, source_tree=git("rev-parse", "HEAD^{tree}").decode().strip(),
-                  source_commit=commit, source_dirty=False, inputs=plan["inputs"],
-                  packages=[dict(id=identity, version=version, source_commit=commit, dependencies={},
-                                 upload_archive_sha256=compat.file_hash(path), unsigned_entries=compat.package_entries(path))])
+    record = dict(
+        schema_version=1,
+        source_tree=git("rev-parse", "HEAD^{tree}").decode().strip(),
+        source_commit=commit,
+        source_dirty=False,
+        inputs=plan["inputs"],
+        packages=[
+            dict(
+                id=identity,
+                version=version,
+                source_commit=commit,
+                dependencies={},
+                upload_archive_sha256=compat.file_hash(path),
+                unsigned_entries=compat.package_entries(path),
+            )
+        ],
+    )
     compat.validate_closure(record, {identity: path})
     consume(spec, env)
-    if git("status", "--porcelain").strip() or compat.file_hash(path) != record["packages"][0]["upload_archive_sha256"]:
+    if (
+        git("status", "--porcelain").strip()
+        or compat.file_hash(path) != record["packages"][0]["upload_archive_sha256"]
+    ):
         raise ValueError("Module check changed the candidate or source tree")
     (OUT / "release.json").write_text(json.dumps(record, indent=2) + "\n")
 

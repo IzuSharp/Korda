@@ -1,9 +1,9 @@
-using NativeWeave.Interop;
-namespace NativeWeave.Database.Sqlite;
+using Korda.Interop;
+namespace Korda.Database.Sqlite;
 
 public static partial class SqliteDataSource
 {
-    internal static EngineDescriptor HostEngine { get; } = DatabaseEngineProfile.Create("database.sqlite", "NativeWeave.Database.Sqlite", GeneratedEngineProfile.RuntimeIdentifier, GeneratedEngineProfile.RelativePath, GeneratedEngineProfile.Sha256, typeof(SqliteDataSource).Assembly);
+    internal static EngineDescriptor HostEngine { get; } = DatabaseEngineProfile.Create("database.sqlite", "Korda.Database.Sqlite", GeneratedEngineProfile.RuntimeIdentifier, GeneratedEngineProfile.RelativePath, GeneratedEngineProfile.Sha256, typeof(SqliteDataSource).Assembly);
     /// <summary>Creates one independently owned lazy native SQLite data source.</summary>
     /// <param name="path">The nonempty database path; no connection is opened during construction.</param>
     /// <param name="configure">An optional synchronous options callback whose values are immediately snapshotted.</param>

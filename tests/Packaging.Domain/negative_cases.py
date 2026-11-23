@@ -21,7 +21,7 @@ def run_owned_overrides(c, root, record):
     # C# SDK props explicitly adds NU1605 to WarningsAsErrors, independently of
     # TreatWarningsAsErrors. Clear that property only in these negative fixtures
     # so the unchanged shipped closure task, including NoWarn, must reject them.
-    previous = next(item for item in c.manifest["previous"]["packages"] if item["id"] == "NativeWeave.Database")
+    previous = next(item for item in c.manifest["previous"]["packages"] if item["id"] == "Korda.Database")
     # Only these override fixtures need the previous facade. Ordinary consumers
     # and the missing-leaf test keep the unchanged candidate-only source.
     override_feed = root / "override-feed"
@@ -40,7 +40,7 @@ def run_owned_overrides(c, root, record):
     for suppressed in (False, True):
         name = "override-suppressed" if suppressed else "override-visible"
         negative = root / name
-        c.template("combined", negative, override=("NativeWeave.Database", previous["version"]))
+        c.template("combined", negative, override=("Korda.Database", previous["version"]))
         config(negative / "NuGet.Config", override_feed)
         neg_env = c.environment_for(negative)
         flags = [*FLAGS, "-p:TreatWarningsAsErrors=false", "-p:WarningsAsErrors=",
@@ -74,7 +74,7 @@ def run_negatives(consumer, directory, published):
         raise ValueError("Actual incompatible bootstrap did not precede domain creation")
     record("actual-domain-bootstrap-incompatible-abi", requiredMajor=99, domainOwnerCreated=False,
            mechanism="Real SQLite bootstrap through existing public Core descriptor; exact actual domain bytes, no native fixture or FFI implementation.")
-    asset_file = published / "NativeWeave.database.sqlite.assets.json"
+    asset_file = published / "Korda.database.sqlite.assets.json"
     record_bytes = asset_file.read_bytes()
     native = relative_file(published, json.loads(record_bytes)["outputPath"])
     native_bytes = native.read_bytes()
@@ -100,7 +100,7 @@ def run_negatives(consumer, directory, published):
     from consumer_cases import config
     incomplete_feed = root / "incomplete-feed"
     incomplete_feed.mkdir()
-    excluded = c.packages["NativeWeave.Database.Sqlite.Native"].name
+    excluded = c.packages["Korda.Database.Sqlite.Native"].name
     for source in c.feed.glob("*.nupkg"):
         if source.name != excluded:
             shutil.copyfile(source, incomplete_feed / source.name)
@@ -116,7 +116,7 @@ def run_negatives(consumer, directory, published):
     closure_path = relative_file(c.manifest_path.parent, c.manifest[c.closure]["buildClosure"])
     closure = json.loads(closure_path.read_text())
     assets_path = directory / "obj/project.assets.json"
-    task = directory / "cache/nativeweave.database" / c.items["NativeWeave.Database"]["version"].lower() / "tools/net11.0/NativeWeave.Packaging.Tasks.dll"
+    task = directory / "cache/korda.database" / c.items["Korda.Database"]["version"].lower() / "tools/net11.0/Korda.Packaging.Tasks.dll"
     def msbuild(name, code=None, *, changed=None, raw=None, changed_assets=None,
                 rid="linux-x64", mode="build", omit=None, duplicate=None,
                 destination=None, tamper=False):
@@ -132,7 +132,7 @@ def run_negatives(consumer, directory, published):
             resolved_assets = work / "project.assets.json"
             save(resolved_assets, changed_assets)
         project = ET.Element("Project")
-        ET.SubElement(project, "UsingTask", TaskName="NativeWeave.Packaging.PackageClosure", AssemblyFile=str(task))
+        ET.SubElement(project, "UsingTask", TaskName="Korda.Packaging.PackageClosure", AssemblyFile=str(task))
         items = ET.SubElement(project, "ItemGroup")
         for item in closure["packages"]:
             for asset in item.get("nativeAssets", []):
@@ -159,7 +159,7 @@ def run_negatives(consumer, directory, published):
                actualRestoredAssetsSha256=sha(assets_path), inputClosureSha256=sha(copied),
                inputAssetsSha256=sha(resolved_assets), mode=mode)
     msbuild("valid-domain-task-control")
-    msbuild("missing-selected-domain-native", "NWPKG002", omit="NativeWeave.Database.Sqlite.Native")
+    msbuild("missing-selected-domain-native", "NWPKG002", omit="Korda.Database.Sqlite.Native")
     msbuild("unsupported-domain-rid", "NWPKG003", rid="linux-arm64")
     msbuild("domain-native-hash-before-compile", "NWPKG004", mode="validate", tamper=True)
 
@@ -184,16 +184,16 @@ def run_negatives(consumer, directory, published):
         next(item for item in changed["packages"] if item.get("nativeAssets"))["nativeAssets"][0][field] = value
         msbuild(name, code, changed=changed)
     relaxed_assets = json.loads(assets_path.read_text())
-    identity = "NativeWeave.Database.Sqlite/" + c.items["NativeWeave.Database.Sqlite"]["version"]
+    identity = "Korda.Database.Sqlite/" + c.items["Korda.Database.Sqlite"]["version"]
     altered_targets = 0
     for target in relaxed_assets["targets"].values():
         if identity in target:
-            target[identity]["dependencies"]["NativeWeave.Core"] = c.items["NativeWeave.Core"]["version"]
+            target[identity]["dependencies"]["Korda.Core"] = c.items["Korda.Core"]["version"]
             altered_targets += 1
     if not altered_targets:
         raise ValueError("The negative setup did not find the actual SQLite facade dependency")
     msbuild("nonexact-domain-restored-edge", "NWPKG001", changed_assets=relaxed_assets)
-    msbuild("duplicate-selected-domain-native", "NWPKG002", duplicate="NativeWeave.Database.Sqlite.Native")
+    msbuild("duplicate-selected-domain-native", "NWPKG002", duplicate="Korda.Database.Sqlite.Native")
     msbuild("domain-native-hash-during-build", "NWPKG004", tamper=True)
     msbuild("domain-output-path-traversal", "NWPKG002", destination="../escape.so")
     changed = copy.deepcopy(closure)

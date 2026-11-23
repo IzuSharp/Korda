@@ -1,8 +1,8 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using NativeWeave.Data;
-using NativeWeave.Database.Internal;
-using NativeWeave.Query.Internal;
+using Korda.Data;
+using Korda.Database.Internal;
+using Korda.Query.Internal;
 
 // Handwritten, independent B01 row-lease oracle: it does not encode a db-wire
 // envelope or call the production materializer to calculate expected results.

@@ -1,14 +1,14 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <AssemblyName>NativeWeave.Interop.Execution.Sample</AssemblyName>
+    <AssemblyName>Korda.Interop.Execution.Sample</AssemblyName>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <IsAotCompatible>true</IsAotCompatible>
     <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifiers)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifiers).aot.lock.json</NuGetLockFilePath>
     <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifier)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifier).aot.lock.json</NuGetLockFilePath>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../../../src/NativeWeave.Core/NativeWeave.Core.csproj" />
+    <ProjectReference Include="../../../src/Korda.Core/Korda.Core.csproj" />
     <Compile Include="../../../tests/Interop.Execution/Fixture.cs" Link="Fixture.cs" />
   </ItemGroup>
 </Project>

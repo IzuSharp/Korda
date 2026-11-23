@@ -1,9 +1,9 @@
 using System.Text.Json;
-using NativeWeave.Data;
-using NativeWeave.Database;
-using NativeWeave.Query;
+using Korda.Data;
+using Korda.Database;
+using Korda.Query;
 
-namespace NativeWeave.Reference.TaskService;
+namespace Korda.Reference.TaskService;
 
 /// <summary>Application transaction orchestration over the precompiled C++ DB/ORM engine.</summary>
 internal sealed partial class TaskService(DataSource source, CursorCodec cursors, BlobStore blobs)
@@ -14,7 +14,7 @@ internal sealed partial class TaskService(DataSource source, CursorCodec cursors
 
     internal static async Task MigrateAsync(DataSource database, string name, CancellationToken token = default)
     {
-        using Stream stream = typeof(TaskService).Assembly.GetManifestResourceStream($"NativeWeave.Reference.TaskService.Migrations.{name}.sql")
+        using Stream stream = typeof(TaskService).Assembly.GetManifestResourceStream($"Korda.Reference.TaskService.Migrations.{name}.sql")
             ?? throw new InvalidOperationException("The explicit migration resource is missing.");
         using StreamReader reader = new(stream, Canonical.Utf8);
         var bundle = new MigrationBundle(database.Provider, [new Migration(1, "Reference service v1 " + name, await reader.ReadToEndAsync(token))]);

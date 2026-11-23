@@ -4,8 +4,8 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using NativeWeave.Interop;
-using NativeWeave.Interop.Extensibility;
+using Korda.Interop;
+using Korda.Interop.Extensibility;
 
 if (args.Length < 2)
     throw new ArgumentException("Usage: Interop.Negotiation.Tests <case> <fixture-directory> [--require-aot]");
@@ -200,7 +200,7 @@ internal static class Suite
         string destination = Path.Combine(AppContext.BaseDirectory, "A02-assets");
         Directory.CreateDirectory(destination);
         File.Copy(Fixture("alpha"), Path.Combine(destination, "libnw_a02_alpha.so"), true);
-        string recordPath = Path.Combine(AppContext.BaseDirectory, "NativeWeave.record.assets.json");
+        string recordPath = Path.Combine(AppContext.BaseDirectory, "Korda.record.assets.json");
         File.WriteAllText(recordPath, "{}");
         Failure(() => descriptor.Inspect(), EngineLoadFailure.InvalidManifest);
         File.WriteAllText(recordPath, optional);
@@ -274,7 +274,7 @@ internal static class Suite
     private static EnginePackageManifest Manifest(string id, IReadOnlyList<NativeAssetDescriptor> assets,
         IReadOnlyList<EngineCapabilityDefinition> capabilities, uint major = 1, uint minor = 0,
         string bootstrap = "nw_a02_alpha_get_abi_v1", EngineThreadingModel model = EngineThreadingModel.Synchronous, string version = "0.1.0-preview.1") =>
-        new(id, "NativeWeave.A02.Fixture", version, new(major, minor), bootstrap, model, assets, capabilities);
+        new(id, "Korda.A02.Fixture", version, new(major, minor), bootstrap, model, assets, capabilities);
 
     private static string Record(EngineDescriptor descriptor, string outputPath)
     {

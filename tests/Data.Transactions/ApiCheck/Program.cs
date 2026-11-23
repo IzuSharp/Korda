@@ -9,9 +9,9 @@ using Microsoft.CodeAnalysis.CSharp;
 if (args.Length < 3) throw new ArgumentException("Usage: ApiCheck <repo-root> <dotnet-root> <assembly> [--write]");
 var root = Path.GetFullPath(args[0]); var sdk = Path.GetFullPath(args[1]); var assemblyPath = Path.GetFullPath(args[2]);
 var references = Directory.GetFiles(Path.Combine(sdk, "packs", "Microsoft.NETCore.App.Ref", "11.0.0", "ref", "net11.0"), "*.dll").Select(p => MetadataReference.CreateFromFile(p)).ToList();
-references.Add(MetadataReference.CreateFromFile(Path.Combine(Path.GetDirectoryName(assemblyPath)!, "NativeWeave.Data.dll")));
+references.Add(MetadataReference.CreateFromFile(Path.Combine(Path.GetDirectoryName(assemblyPath)!, "Korda.Data.dll")));
 var library = MetadataReference.CreateFromFile(assemblyPath); references.Add(library);
-var compilation = CSharpCompilation.Create("NativeWeave.Data.ApiCheck", references: references, options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, metadataImportOptions: MetadataImportOptions.All));
+var compilation = CSharpCompilation.Create("Korda.Data.ApiCheck", references: references, options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, metadataImportOptions: MetadataImportOptions.All));
 var assembly = (IAssemblySymbol)(compilation.GetAssemblyOrModuleSymbol(library) ?? throw new InvalidOperationException("Cannot import assembly"));
 bool CompilerAttribute(AttributeData a) => a.AttributeClass?.ContainingNamespace.ToDisplayString() is "System.Runtime.CompilerServices" or "System.Diagnostics";
 // A type used in a signature is not a type declaration. In particular, base types,
@@ -228,7 +228,7 @@ foreach (var key in expected.Keys.Intersect(actual.Keys))
 }
 var xml = XDocument.Load(Path.ChangeExtension(assemblyPath, ".xml"));
 var docs = xml.Descendants("member").ToDictionary(e => e.Attribute("name")!.Value, StringComparer.Ordinal);
-var output = new StringBuilder("# NativeWeave.Database transaction API reference\n\nGenerated from the compiled product assembly and its XML comments by `tests/Data.Transactions/ApiCheck`. B05 transaction scope; native coordinator execution is separate from downstream B04 host composition.\n\n");
+var output = new StringBuilder("# Korda.Database transaction API reference\n\nGenerated from the compiled product assembly and its XML comments by `tests/Data.Transactions/ApiCheck`. B05 transaction scope; native coordinator execution is separate from downstream B04 host composition.\n\n");
 foreach (var entry in expected.OrderBy(e => e.Key, StringComparer.Ordinal))
 {
     if (!actual.TryGetValue(entry.Key, out var symbol)) continue;

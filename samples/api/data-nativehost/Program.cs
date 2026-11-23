@@ -1,7 +1,7 @@
-using NativeWeave.Data;
-using NativeWeave.Database;
-using NativeWeave.Database.Sqlite;
-using NativeWeave.Database.PostgreSql;
+using Korda.Data;
+using Korda.Database;
+using Korda.Database.Sqlite;
+using Korda.Database.PostgreSql;
 
 // Both providers execute the same ordinary application code. PostgreSQL requires
 // NW_TEST_POSTGRES for this local example; production keeps the verified TLS default.
@@ -13,7 +13,7 @@ var builder = new DataSourceBuilder().ConfigureLimits(new DatabaseLimits
     MaxBufferedBytes = 64 * 1024
 }).WithName("host-guide");
 var provider = args.FirstOrDefault() ?? "sqlite";
-var file = Path.Combine(Path.GetTempPath(), "nativeweave-host-" + Guid.NewGuid().ToString("N") + ".db");
+var file = Path.Combine(Path.GetTempPath(), "korda-host-" + Guid.NewGuid().ToString("N") + ".db");
 if (provider == "postgresql")
     builder.UsePostgreSql(Environment.GetEnvironmentVariable("NW_TEST_POSTGRES") ?? throw new InvalidOperationException("Set NW_TEST_POSTGRES for the isolated local PostgreSQL example."), options => options.TlsMode = PostgreSqlTlsMode.DisableForLocalDevelopment);
 else if (provider == "sqlite") builder.UseSqlite(file);

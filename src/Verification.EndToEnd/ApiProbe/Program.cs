@@ -3,12 +3,12 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using NativeWeave.Data;
-using NativeWeave.Database;
-using NativeWeave.Database.PostgreSql;
-using NativeWeave.Database.Sqlite;
+using Korda.Data;
+using Korda.Database;
+using Korda.Database.PostgreSql;
+using Korda.Database.Sqlite;
 
-namespace NativeWeave.Verification.EndToEnd;
+namespace Korda.Verification.EndToEnd;
 
 internal sealed record ProbeConfig(string Provider, string Database, string OutputDirectory,
     bool AllowLocalDatabaseTlsDisable = false);

@@ -1,8 +1,8 @@
 using System.Text.Json.Serialization;
-using NativeWeave.Data;
-using NativeWeave.Database;
+using Korda.Data;
+using Korda.Database;
 
-namespace NativeWeave.Samples.Materialization;
+namespace Korda.Samples.Materialization;
 
 internal sealed record Settings(long Level, string Tag);
 internal sealed record Envelope<T>(T Value);

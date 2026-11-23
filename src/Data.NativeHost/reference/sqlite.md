@@ -1,109 +1,109 @@
-# NativeWeave.Database.Sqlite compiled API
+# Korda.Database.Sqlite compiled API
 
 Generated from the compiled product assembly and XML by `src/Build.Integration/ApiReference`.
 
 Current product declarations compared with Design commit c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9. Ownership, costs and Linux applicability are described in docs/guides/data-nativehost.md.
 
-## `F:NativeWeave.Database.Sqlite.SqliteBeginMode.Deferred`
+## `F:Korda.Database.Sqlite.SqliteBeginMode.Deferred`
 
 ```csharp
-NativeWeave.Database.Sqlite.SqliteBeginMode.Deferred = 0
+Korda.Database.Sqlite.SqliteBeginMode.Deferred = 0
 ```
 
 **summary:** Defers writer admission until the transaction first writes.
 
-## `F:NativeWeave.Database.Sqlite.SqliteBeginMode.Immediate`
+## `F:Korda.Database.Sqlite.SqliteBeginMode.Immediate`
 
 ```csharp
-NativeWeave.Database.Sqlite.SqliteBeginMode.Immediate = 1
+Korda.Database.Sqlite.SqliteBeginMode.Immediate = 1
 ```
 
 **summary:** Acquires SQLite writer admission when the tracked transaction begins.
 
-## `F:NativeWeave.Database.Sqlite.SqliteJournalMode.Delete`
+## `F:Korda.Database.Sqlite.SqliteJournalMode.Delete`
 
 ```csharp
-NativeWeave.Database.Sqlite.SqliteJournalMode.Delete = 1
+Korda.Database.Sqlite.SqliteJournalMode.Delete = 1
 ```
 
 **summary:** Uses a rollback journal deleted after a completed transaction.
 
-## `F:NativeWeave.Database.Sqlite.SqliteJournalMode.Memory`
+## `F:Korda.Database.Sqlite.SqliteJournalMode.Memory`
 
 ```csharp
-NativeWeave.Database.Sqlite.SqliteJournalMode.Memory = 2
+Korda.Database.Sqlite.SqliteJournalMode.Memory = 2
 ```
 
 **summary:** Stores the rollback journal in memory; file-backed crash durability is weaker.
 
-## `F:NativeWeave.Database.Sqlite.SqliteJournalMode.Wal`
+## `F:Korda.Database.Sqlite.SqliteJournalMode.Wal`
 
 ```csharp
-NativeWeave.Database.Sqlite.SqliteJournalMode.Wal = 0
+Korda.Database.Sqlite.SqliteJournalMode.Wal = 0
 ```
 
 **summary:** Uses a write-ahead log for a file-backed database; it does not allow concurrent writers.
 
-## `F:NativeWeave.Database.Sqlite.SqliteOpenMode.Memory`
+## `F:Korda.Database.Sqlite.SqliteOpenMode.Memory`
 
 ```csharp
-NativeWeave.Database.Sqlite.SqliteOpenMode.Memory = 3
+Korda.Database.Sqlite.SqliteOpenMode.Memory = 3
 ```
 
 **summary:** Uses a private in-memory database with Memory journal and one physical connection.
 
-## `F:NativeWeave.Database.Sqlite.SqliteOpenMode.ReadOnly`
+## `F:Korda.Database.Sqlite.SqliteOpenMode.ReadOnly`
 
 ```csharp
-NativeWeave.Database.Sqlite.SqliteOpenMode.ReadOnly = 2
+Korda.Database.Sqlite.SqliteOpenMode.ReadOnly = 2
 ```
 
 **summary:** Opens an existing file without write permission.
 
-## `F:NativeWeave.Database.Sqlite.SqliteOpenMode.ReadWrite`
+## `F:Korda.Database.Sqlite.SqliteOpenMode.ReadWrite`
 
 ```csharp
-NativeWeave.Database.Sqlite.SqliteOpenMode.ReadWrite = 1
+Korda.Database.Sqlite.SqliteOpenMode.ReadWrite = 1
 ```
 
 **summary:** Opens an existing writable file; a missing file fails.
 
-## `F:NativeWeave.Database.Sqlite.SqliteOpenMode.ReadWriteCreate`
+## `F:Korda.Database.Sqlite.SqliteOpenMode.ReadWriteCreate`
 
 ```csharp
-NativeWeave.Database.Sqlite.SqliteOpenMode.ReadWriteCreate = 0
+Korda.Database.Sqlite.SqliteOpenMode.ReadWriteCreate = 0
 ```
 
 **summary:** Opens a writable file and creates it when absent.
 
-## `F:NativeWeave.Database.Sqlite.SqliteSynchronousMode.Full`
+## `F:Korda.Database.Sqlite.SqliteSynchronousMode.Full`
 
 ```csharp
-NativeWeave.Database.Sqlite.SqliteSynchronousMode.Full = 1
+Korda.Database.Sqlite.SqliteSynchronousMode.Full = 1
 ```
 
 **summary:** Uses SQLite's full synchronization policy.
 
-## `F:NativeWeave.Database.Sqlite.SqliteSynchronousMode.Normal`
+## `F:Korda.Database.Sqlite.SqliteSynchronousMode.Normal`
 
 ```csharp
-NativeWeave.Database.Sqlite.SqliteSynchronousMode.Normal = 0
+Korda.Database.Sqlite.SqliteSynchronousMode.Normal = 0
 ```
 
 **summary:** Uses SQLite's normal synchronization policy.
 
-## `M:NativeWeave.Database.Sqlite.SqliteBeginMode.#ctor`
+## `M:Korda.Database.Sqlite.SqliteBeginMode.#ctor`
 
 ```csharp
-public NativeWeave.Database.Sqlite.SqliteBeginMode.SqliteBeginMode()
+public Korda.Database.Sqlite.SqliteBeginMode.SqliteBeginMode()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
-## `M:NativeWeave.Database.Sqlite.SqliteDataSource.Create(System.String,System.Action{NativeWeave.Database.Sqlite.SqliteOptions})`
+## `M:Korda.Database.Sqlite.SqliteDataSource.Create(System.String,System.Action{Korda.Database.Sqlite.SqliteOptions})`
 
 ```csharp
-public static NativeWeave.Database.DataSource NativeWeave.Database.Sqlite.SqliteDataSource.Create(string path, System.Action<NativeWeave.Database.Sqlite.SqliteOptions>? configure = null)
+public static Korda.Database.DataSource Korda.Database.Sqlite.SqliteDataSource.Create(string path, System.Action<Korda.Database.Sqlite.SqliteOptions>? configure = null)
 ```
 
 **summary:** Creates one independently owned lazy native SQLite data source.
@@ -122,10 +122,10 @@ public static NativeWeave.Database.DataSource NativeWeave.Database.Sqlite.Sqlite
 
 **Inherited type policy:** Descriptor access is pure metadata. Inspect verifies the packaged asset without creating a runtime or opening a connection; Create owns the configured runtime and datasource.
 
-## `M:NativeWeave.Database.Sqlite.SqliteDataSourceBuilderExtensions.UseSqlite(NativeWeave.Database.DataSourceBuilder,System.String,System.Action{NativeWeave.Database.Sqlite.SqliteOptions})`
+## `M:Korda.Database.Sqlite.SqliteDataSourceBuilderExtensions.UseSqlite(Korda.Database.DataSourceBuilder,System.String,System.Action{Korda.Database.Sqlite.SqliteOptions})`
 
 ```csharp
-public static NativeWeave.Database.DataSourceBuilder NativeWeave.Database.Sqlite.SqliteDataSourceBuilderExtensions.UseSqlite(this NativeWeave.Database.DataSourceBuilder builder, string path, System.Action<NativeWeave.Database.Sqlite.SqliteOptions>? configure = null)
+public static Korda.Database.DataSourceBuilder Korda.Database.Sqlite.SqliteDataSourceBuilderExtensions.UseSqlite(this Korda.Database.DataSourceBuilder builder, string path, System.Action<Korda.Database.Sqlite.SqliteOptions>? configure = null)
 ```
 
 **summary:** Snapshots SQLite configuration without loading a module or opening a database.
@@ -144,44 +144,44 @@ public static NativeWeave.Database.DataSourceBuilder NativeWeave.Database.Sqlite
 
 **Inherited type policy:** The builder remains single-writer. Configuration snapshots managed values without I/O; Build negotiates the separately packaged native engine and creates the source owner.
 
-## `M:NativeWeave.Database.Sqlite.SqliteJournalMode.#ctor`
+## `M:Korda.Database.Sqlite.SqliteJournalMode.#ctor`
 
 ```csharp
-public NativeWeave.Database.Sqlite.SqliteJournalMode.SqliteJournalMode()
+public Korda.Database.Sqlite.SqliteJournalMode.SqliteJournalMode()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
-## `M:NativeWeave.Database.Sqlite.SqliteOpenMode.#ctor`
+## `M:Korda.Database.Sqlite.SqliteOpenMode.#ctor`
 
 ```csharp
-public NativeWeave.Database.Sqlite.SqliteOpenMode.SqliteOpenMode()
+public Korda.Database.Sqlite.SqliteOpenMode.SqliteOpenMode()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
-## `M:NativeWeave.Database.Sqlite.SqliteOptions.#ctor`
+## `M:Korda.Database.Sqlite.SqliteOptions.#ctor`
 
 ```csharp
-public NativeWeave.Database.Sqlite.SqliteOptions.SqliteOptions()
+public Korda.Database.Sqlite.SqliteOptions.SqliteOptions()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** Configure before source creation. A builder snapshots these mutable values once; concurrent mutation during snapshot is unsupported. Values do not create a connection, worker or runtime. Each physical connection receives this profile. Ordinary SQLite isolation is Serializable; BEGIN mode is independent. Progress cancellation is cooperative and cannot preempt every busy wait or native instruction.
 
-## `M:NativeWeave.Database.Sqlite.SqliteSynchronousMode.#ctor`
+## `M:Korda.Database.Sqlite.SqliteSynchronousMode.#ctor`
 
 ```csharp
-public NativeWeave.Database.Sqlite.SqliteSynchronousMode.SqliteSynchronousMode()
+public Korda.Database.Sqlite.SqliteSynchronousMode.SqliteSynchronousMode()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
-## `P:NativeWeave.Database.Sqlite.SqliteDataSource.Engine`
+## `P:Korda.Database.Sqlite.SqliteDataSource.Engine`
 
 ```csharp
-public static NativeWeave.Interop.EngineDescriptor NativeWeave.Database.Sqlite.SqliteDataSource.Engine { get; }
+public static Korda.Interop.EngineDescriptor Korda.Database.Sqlite.SqliteDataSource.Engine { get; }
 ```
 
 **summary:** Gets the immutable descriptor of the complete SQLite Database Host asset.
@@ -190,20 +190,20 @@ public static NativeWeave.Interop.EngineDescriptor NativeWeave.Database.Sqlite.S
 
 **Inherited type policy:** Descriptor access is pure metadata. Inspect verifies the packaged asset without creating a runtime or opening a connection; Create owns the configured runtime and datasource.
 
-## `P:NativeWeave.Database.Sqlite.SqliteOptions.BeginMode`
+## `P:Korda.Database.Sqlite.SqliteOptions.BeginMode`
 
 ```csharp
-public NativeWeave.Database.Sqlite.SqliteBeginMode NativeWeave.Database.Sqlite.SqliteOptions.BeginMode { get; set; }
+public Korda.Database.Sqlite.SqliteBeginMode Korda.Database.Sqlite.SqliteOptions.BeginMode { get; set; }
 ```
 
 **summary:** Gets or sets Deferred or Immediate writer admission without changing the isolation level.
 
 **Inherited type policy:** Configure before source creation. A builder snapshots these mutable values once; concurrent mutation during snapshot is unsupported. Values do not create a connection, worker or runtime. Each physical connection receives this profile. Ordinary SQLite isolation is Serializable; BEGIN mode is independent. Progress cancellation is cooperative and cannot preempt every busy wait or native instruction.
 
-## `P:NativeWeave.Database.Sqlite.SqliteOptions.BusyTimeout`
+## `P:Korda.Database.Sqlite.SqliteOptions.BusyTimeout`
 
 ```csharp
-public System.TimeSpan NativeWeave.Database.Sqlite.SqliteOptions.BusyTimeout { get; set; }
+public System.TimeSpan Korda.Database.Sqlite.SqliteOptions.BusyTimeout { get; set; }
 ```
 
 **summary:** Gets or sets the native busy timeout, from zero through Int32.MaxValue milliseconds in whole milliseconds.
@@ -212,104 +212,104 @@ public System.TimeSpan NativeWeave.Database.Sqlite.SqliteOptions.BusyTimeout { g
 
 **Inherited type policy:** Configure before source creation. A builder snapshots these mutable values once; concurrent mutation during snapshot is unsupported. Values do not create a connection, worker or runtime. Each physical connection receives this profile. Ordinary SQLite isolation is Serializable; BEGIN mode is independent. Progress cancellation is cooperative and cannot preempt every busy wait or native instruction.
 
-## `P:NativeWeave.Database.Sqlite.SqliteOptions.ForeignKeys`
+## `P:Korda.Database.Sqlite.SqliteOptions.ForeignKeys`
 
 ```csharp
-public bool NativeWeave.Database.Sqlite.SqliteOptions.ForeignKeys { get; set; }
+public bool Korda.Database.Sqlite.SqliteOptions.ForeignKeys { get; set; }
 ```
 
 **summary:** Gets or sets foreign-key enforcement on every physical connection; the default is true.
 
 **Inherited type policy:** Configure before source creation. A builder snapshots these mutable values once; concurrent mutation during snapshot is unsupported. Values do not create a connection, worker or runtime. Each physical connection receives this profile. Ordinary SQLite isolation is Serializable; BEGIN mode is independent. Progress cancellation is cooperative and cannot preempt every busy wait or native instruction.
 
-## `P:NativeWeave.Database.Sqlite.SqliteOptions.JournalMode`
+## `P:Korda.Database.Sqlite.SqliteOptions.JournalMode`
 
 ```csharp
-public NativeWeave.Database.Sqlite.SqliteJournalMode NativeWeave.Database.Sqlite.SqliteOptions.JournalMode { get; set; }
+public Korda.Database.Sqlite.SqliteJournalMode Korda.Database.Sqlite.SqliteOptions.JournalMode { get; set; }
 ```
 
 **summary:** Gets or sets the journal profile. Incompatible private-memory/WAL combinations reject before opening.
 
 **Inherited type policy:** Configure before source creation. A builder snapshots these mutable values once; concurrent mutation during snapshot is unsupported. Values do not create a connection, worker or runtime. Each physical connection receives this profile. Ordinary SQLite isolation is Serializable; BEGIN mode is independent. Progress cancellation is cooperative and cannot preempt every busy wait or native instruction.
 
-## `P:NativeWeave.Database.Sqlite.SqliteOptions.Mode`
+## `P:Korda.Database.Sqlite.SqliteOptions.Mode`
 
 ```csharp
-public NativeWeave.Database.Sqlite.SqliteOpenMode NativeWeave.Database.Sqlite.SqliteOptions.Mode { get; set; }
+public Korda.Database.Sqlite.SqliteOpenMode Korda.Database.Sqlite.SqliteOptions.Mode { get; set; }
 ```
 
 **summary:** Gets or sets file access. Memory requires Memory journal and a host limit of one connection.
 
 **Inherited type policy:** Configure before source creation. A builder snapshots these mutable values once; concurrent mutation during snapshot is unsupported. Values do not create a connection, worker or runtime. Each physical connection receives this profile. Ordinary SQLite isolation is Serializable; BEGIN mode is independent. Progress cancellation is cooperative and cannot preempt every busy wait or native instruction.
 
-## `P:NativeWeave.Database.Sqlite.SqliteOptions.Synchronous`
+## `P:Korda.Database.Sqlite.SqliteOptions.Synchronous`
 
 ```csharp
-public NativeWeave.Database.Sqlite.SqliteSynchronousMode NativeWeave.Database.Sqlite.SqliteOptions.Synchronous { get; set; }
+public Korda.Database.Sqlite.SqliteSynchronousMode Korda.Database.Sqlite.SqliteOptions.Synchronous { get; set; }
 ```
 
 **summary:** Gets or sets the synchronization profile applied to every physical connection.
 
 **Inherited type policy:** Configure before source creation. A builder snapshots these mutable values once; concurrent mutation during snapshot is unsupported. Values do not create a connection, worker or runtime. Each physical connection receives this profile. Ordinary SQLite isolation is Serializable; BEGIN mode is independent. Progress cancellation is cooperative and cannot preempt every busy wait or native instruction.
 
-## `T:NativeWeave.Database.Sqlite.SqliteBeginMode`
+## `T:Korda.Database.Sqlite.SqliteBeginMode`
 
 ```csharp
-public enum NativeWeave.Database.Sqlite.SqliteBeginMode : int
+public enum Korda.Database.Sqlite.SqliteBeginMode : int
 ```
 
 **summary:** Selects writer admission separately from transaction isolation.
 
-## `T:NativeWeave.Database.Sqlite.SqliteDataSource`
+## `T:Korda.Database.Sqlite.SqliteDataSource`
 
 ```csharp
-public static class NativeWeave.Database.Sqlite.SqliteDataSource
+public static class Korda.Database.Sqlite.SqliteDataSource
 ```
 
 **summary:** Creates SQLite datasources backed by the maintainer-built C++ Database Host.
 
 **remarks:** Descriptor access is pure metadata. Inspect verifies the packaged asset without creating a runtime or opening a connection; Create owns the configured runtime and datasource.
 
-## `T:NativeWeave.Database.Sqlite.SqliteDataSourceBuilderExtensions`
+## `T:Korda.Database.Sqlite.SqliteDataSourceBuilderExtensions`
 
 ```csharp
-public static class NativeWeave.Database.Sqlite.SqliteDataSourceBuilderExtensions
+public static class Korda.Database.Sqlite.SqliteDataSourceBuilderExtensions
 ```
 
 **summary:** Configures the explicitly selected independently packaged SQLite engine.
 
 **remarks:** The builder remains single-writer. Configuration snapshots managed values without I/O; Build negotiates the separately packaged native engine and creates the source owner.
 
-## `T:NativeWeave.Database.Sqlite.SqliteJournalMode`
+## `T:Korda.Database.Sqlite.SqliteJournalMode`
 
 ```csharp
-public enum NativeWeave.Database.Sqlite.SqliteJournalMode : int
+public enum Korda.Database.Sqlite.SqliteJournalMode : int
 ```
 
 **summary:** Selects SQLite's explicitly configured journal profile on every physical connection.
 
-## `T:NativeWeave.Database.Sqlite.SqliteOpenMode`
+## `T:Korda.Database.Sqlite.SqliteOpenMode`
 
 ```csharp
-public enum NativeWeave.Database.Sqlite.SqliteOpenMode : int
+public enum Korda.Database.Sqlite.SqliteOpenMode : int
 ```
 
 **summary:** Specifies how the C++ SQLite provider opens the configured database.
 
-## `T:NativeWeave.Database.Sqlite.SqliteOptions`
+## `T:Korda.Database.Sqlite.SqliteOptions`
 
 ```csharp
-public sealed class NativeWeave.Database.Sqlite.SqliteOptions
+public sealed class Korda.Database.Sqlite.SqliteOptions
 ```
 
 **summary:** Configures the precompiled sqlite3 provider.
 
 **remarks:** Configure before source creation. A builder snapshots these mutable values once; concurrent mutation during snapshot is unsupported. Values do not create a connection, worker or runtime. Each physical connection receives this profile. Ordinary SQLite isolation is Serializable; BEGIN mode is independent. Progress cancellation is cooperative and cannot preempt every busy wait or native instruction.
 
-## `T:NativeWeave.Database.Sqlite.SqliteSynchronousMode`
+## `T:Korda.Database.Sqlite.SqliteSynchronousMode`
 
 ```csharp
-public enum NativeWeave.Database.Sqlite.SqliteSynchronousMode : int
+public enum Korda.Database.Sqlite.SqliteSynchronousMode : int
 ```
 
 **summary:** Selects the SQLite synchronization policy without claiming a filesystem durability guarantee.

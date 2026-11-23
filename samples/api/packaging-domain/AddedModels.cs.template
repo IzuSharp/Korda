@@ -1,6 +1,6 @@
-using NativeWeave.Data;
-using NativeWeave.Database;
-using NativeWeave.Query;
+using Korda.Data;
+using Korda.Database;
+using Korda.Query;
 
 // Added after both restores. Ordinary managed entities, DTOs and Fluent queries
 // reuse the existing metadata/native interfaces and unchanged packaged assets.

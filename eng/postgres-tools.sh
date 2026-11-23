@@ -17,12 +17,12 @@ export_paths() {
     echo "$db_scope_pg_root/install/bin" >> "$GITHUB_PATH"
   fi
 }
-if [ -f "$db_scope_pg_root/install/nativeweave-postgresql-build.json" ] &&
+if [ -f "$db_scope_pg_root/install/korda-postgresql-build.json" ] &&
    python3 - "$db_scope_pg_root" "$key" <<'CHECK'
 import hashlib, json, sys
 from pathlib import Path
 root = Path(sys.argv[1])
-record = json.loads((root/'install/nativeweave-postgresql-build.json').read_text())
+record = json.loads((root/'install/korda-postgresql-build.json').read_text())
 if record.get('cacheKey') != sys.argv[2]: sys.exit(1)
 for name, digest in record['files'].items():
     if name.startswith('install/'):
@@ -79,7 +79,7 @@ from pathlib import Path
 root=Path(sys.argv[1]);compiler=Path(sys.argv[2]).resolve()
 def sha(p):
     with p.open('rb') as stream:return hashlib.file_digest(stream,'sha256').hexdigest()
-metadata=root/'install/nativeweave-postgresql-build.json'
+metadata=root/'install/korda-postgresql-build.json'
 files=[root/'postgresql-18.0.tar.bz2',root/'configure.log',root/'build.log',root/'install.log',
        *sorted(p for p in (root/'install').rglob('*') if p.is_file() and p != metadata)]
 record={'cacheKey':sys.argv[4],'version':'18.0','archiveSha256':sha(files[0]),'compiler':str(compiler),'compilerSha256':sha(compiler),

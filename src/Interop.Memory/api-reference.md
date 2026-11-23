@@ -1,11 +1,11 @@
-# NativeWeave.Interop buffers API reference
+# Korda.Interop buffers API reference
 
 Generated from the compiled product assembly and its XML comments by `tests/Interop.Memory/ApiCheck`. A04 immutable ownership, scoped reads and bounded asynchronous copies; native allocation/destruction belongs to the creating module.
 
-## `M:NativeWeave.Interop.Extensibility.NativeBufferFactory.Adopt(NativeWeave.Interop.EngineInfo,System.Runtime.InteropServices.SafeHandle,System.IntPtr,System.Int32)`
+## `M:Korda.Interop.Extensibility.NativeBufferFactory.Adopt(Korda.Interop.EngineInfo,System.Runtime.InteropServices.SafeHandle,System.IntPtr,System.Int32)`
 
 ```csharp
-public static NativeWeave.Interop.NativeBuffer NativeWeave.Interop.Extensibility.NativeBufferFactory.Adopt(NativeWeave.Interop.EngineInfo engine, System.Runtime.InteropServices.SafeHandle owner, nint address, int length)
+public static Korda.Interop.NativeBuffer Korda.Interop.Extensibility.NativeBufferFactory.Adopt(Korda.Interop.EngineInfo engine, System.Runtime.InteropServices.SafeHandle owner, nint address, int length)
 ```
 
 **summary:** Adopts the creating module's sole SafeHandle after all validation and wrapper allocation succeed.
@@ -30,10 +30,10 @@ public static NativeWeave.Interop.NativeBuffer NativeWeave.Interop.Extensibility
 
 **remarks:** No byte copy, native allocation or allocator inference. Caller must not dispose or adopt the supplied SafeHandle again after success. On failure caller must release it. This seam cannot adopt mutable, thread-affine or asynchronously destroyed resources.
 
-## `M:NativeWeave.Interop.NativeBuffer.CopyTo(System.Int32,System.Span{System.Byte})`
+## `M:Korda.Interop.NativeBuffer.CopyTo(System.Int32,System.Span{System.Byte})`
 
 ```csharp
-public void NativeWeave.Interop.NativeBuffer.CopyTo(int sourceOffset, System.Span<byte> destination)
+public void Korda.Interop.NativeBuffer.CopyTo(int sourceOffset, System.Span<byte> destination)
 ```
 
 **summary:** Copies a range whose byte count equals the destination length.
@@ -48,10 +48,10 @@ public void NativeWeave.Interop.NativeBuffer.CopyTo(int sourceOffset, System.Spa
 
 **remarks:** Checks range before admission without overflowing offset+length. O(destination.Length), overlap-safe, no allocation.
 
-## `M:NativeWeave.Interop.NativeBuffer.CopyTo(System.Span{System.Byte})`
+## `M:Korda.Interop.NativeBuffer.CopyTo(System.Span{System.Byte})`
 
 ```csharp
-public void NativeWeave.Interop.NativeBuffer.CopyTo(System.Span<byte> destination)
+public void Korda.Interop.NativeBuffer.CopyTo(System.Span<byte> destination)
 ```
 
 **summary:** Copies all bytes into the beginning of a sufficiently large destination.
@@ -64,10 +64,10 @@ public void NativeWeave.Interop.NativeBuffer.CopyTo(System.Span<byte> destinatio
 
 **remarks:** O(Length) overlap-safe copy, no managed allocation; one synchronous owner lease protects the entire copy.
 
-## `M:NativeWeave.Interop.NativeBuffer.CopyToAsync(System.IO.Stream,System.Threading.CancellationToken)`
+## `M:Korda.Interop.NativeBuffer.CopyToAsync(System.IO.Stream,System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task NativeWeave.Interop.NativeBuffer.CopyToAsync(System.IO.Stream destination, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+public System.Threading.Tasks.Task Korda.Interop.NativeBuffer.CopyToAsync(System.IO.Stream destination, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
 ```
 
 **summary:** Copies through one bounded staging array while retaining the native source until all writes finish.
@@ -88,20 +88,20 @@ public System.Threading.Tasks.Task NativeWeave.Interop.NativeBuffer.CopyToAsync(
 
 **remarks:** Validation is null, CanWrite, then source admission. Pre-cancellation returns a canceled task after admission, including for empty input, with no copy/write/staging allocation. An uncanceled empty input completes without writing. Nonempty work allocates exactly min(Length,65536) bytes once, copies each chunk synchronously, and awaits WriteAsync before reuse. One source lease spans the operation; no call-scoped span crosses await. Stream errors and cancellation can follow partial output and fault/cancel the task.
 
-## `M:NativeWeave.Interop.NativeBuffer.Dispose`
+## `M:Korda.Interop.NativeBuffer.Dispose`
 
 ```csharp
-public void NativeWeave.Interop.NativeBuffer.Dispose()
+public void Korda.Interop.NativeBuffer.Dispose()
 ```
 
 **summary:** Closes new read admission and drops the original creator-owner reference.
 
 **remarks:** Thread-safe, nonblocking and idempotent. Already admitted reads or writes keep native memory alive until their own finally paths finish. The private SafeHandle supplies only a bounded fallback finalizer.
 
-## `M:NativeWeave.Interop.NativeBuffer.Read(NativeWeave.Interop.NativeBufferReader)`
+## `M:Korda.Interop.NativeBuffer.Read(Korda.Interop.NativeBufferReader)`
 
 ```csharp
-public void NativeWeave.Interop.NativeBuffer.Read(NativeWeave.Interop.NativeBufferReader reader)
+public void Korda.Interop.NativeBuffer.Read(Korda.Interop.NativeBufferReader reader)
 ```
 
 **summary:** Invokes a reader synchronously under one native-owner lease.
@@ -114,10 +114,10 @@ public void NativeWeave.Interop.NativeBuffer.Read(NativeWeave.Interop.NativeBuff
 
 **remarks:** No copy or native callback. Runs outside admission locks; the reader may Dispose this buffer and continue its current view. Reader exceptions propagate after release.
 
-## `M:NativeWeave.Interop.NativeBuffer.Read``1(NativeWeave.Interop.NativeBufferReader{``0})`
+## `M:Korda.Interop.NativeBuffer.Read``1(Korda.Interop.NativeBufferReader{``0})`
 
 ```csharp
-public TResult NativeWeave.Interop.NativeBuffer.Read<TResult>(NativeWeave.Interop.NativeBufferReader<TResult> reader)
+public TResult Korda.Interop.NativeBuffer.Read<TResult>(Korda.Interop.NativeBufferReader<TResult> reader)
 ```
 
 **summary:** Projects a synchronous leased read into a scalar or independently owned result.
@@ -134,10 +134,10 @@ public TResult NativeWeave.Interop.NativeBuffer.Read<TResult>(NativeWeave.Intero
 
 **remarks:** No byte copy is imposed. A cached static reader avoids delegate allocation; captured readers may allocate. Exceptions release the lease.
 
-## `M:NativeWeave.Interop.NativeBuffer.ToArray`
+## `M:Korda.Interop.NativeBuffer.ToArray`
 
 ```csharp
-public byte[] NativeWeave.Interop.NativeBuffer.ToArray()
+public byte[] Korda.Interop.NativeBuffer.ToArray()
 ```
 
 **summary:** Copies all native bytes into an independently owned managed array.
@@ -150,10 +150,10 @@ public byte[] NativeWeave.Interop.NativeBuffer.ToArray()
 
 **remarks:** Admission precedes allocation. O(Length), one array allocation for nonempty data and one copy.
 
-## `M:NativeWeave.Interop.NativeBuffer.TryCopyTo(System.Span{System.Byte})`
+## `M:Korda.Interop.NativeBuffer.TryCopyTo(System.Span{System.Byte})`
 
 ```csharp
-public bool NativeWeave.Interop.NativeBuffer.TryCopyTo(System.Span<byte> destination)
+public bool Korda.Interop.NativeBuffer.TryCopyTo(System.Span<byte> destination)
 ```
 
 **summary:** Copies all bytes only when the destination has sufficient capacity.
@@ -166,114 +166,114 @@ public bool NativeWeave.Interop.NativeBuffer.TryCopyTo(System.Span<byte> destina
 
 **remarks:** Always acquires admission before checking capacity. O(Length) on success, no allocation; native or contract faults are not swallowed.
 
-## `M:NativeWeave.Interop.NativeBufferReader.#ctor(System.Object,System.IntPtr)`
+## `M:Korda.Interop.NativeBufferReader.#ctor(System.Object,System.IntPtr)`
 
 ```csharp
-public NativeWeave.Interop.NativeBufferReader.NativeBufferReader(object @object, nint method)
+public Korda.Interop.NativeBufferReader.NativeBufferReader(object @object, nint method)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
-## `M:NativeWeave.Interop.NativeBufferReader.BeginInvoke(System.ReadOnlySpan{System.Byte},System.AsyncCallback,System.Object)`
+## `M:Korda.Interop.NativeBufferReader.BeginInvoke(System.ReadOnlySpan{System.Byte},System.AsyncCallback,System.Object)`
 
 ```csharp
-public virtual System.IAsyncResult NativeWeave.Interop.NativeBufferReader.BeginInvoke(System.ReadOnlySpan<byte> bytes, System.AsyncCallback callback, object @object)
+public virtual System.IAsyncResult Korda.Interop.NativeBufferReader.BeginInvoke(System.ReadOnlySpan<byte> bytes, System.AsyncCallback callback, object @object)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
-## `M:NativeWeave.Interop.NativeBufferReader.EndInvoke(System.IAsyncResult)`
+## `M:Korda.Interop.NativeBufferReader.EndInvoke(System.IAsyncResult)`
 
 ```csharp
-public virtual void NativeWeave.Interop.NativeBufferReader.EndInvoke(System.IAsyncResult result)
+public virtual void Korda.Interop.NativeBufferReader.EndInvoke(System.IAsyncResult result)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
-## `M:NativeWeave.Interop.NativeBufferReader.Invoke(System.ReadOnlySpan{System.Byte})`
+## `M:Korda.Interop.NativeBufferReader.Invoke(System.ReadOnlySpan{System.Byte})`
 
 ```csharp
-public virtual void NativeWeave.Interop.NativeBufferReader.Invoke(System.ReadOnlySpan<byte> bytes)
+public virtual void Korda.Interop.NativeBufferReader.Invoke(System.ReadOnlySpan<byte> bytes)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
-## `M:NativeWeave.Interop.NativeBufferReader`1.#ctor(System.Object,System.IntPtr)`
+## `M:Korda.Interop.NativeBufferReader`1.#ctor(System.Object,System.IntPtr)`
 
 ```csharp
-public NativeWeave.Interop.NativeBufferReader<TResult>.NativeBufferReader(object @object, nint method)
+public Korda.Interop.NativeBufferReader<TResult>.NativeBufferReader(object @object, nint method)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
-## `M:NativeWeave.Interop.NativeBufferReader`1.BeginInvoke(System.ReadOnlySpan{System.Byte},System.AsyncCallback,System.Object)`
+## `M:Korda.Interop.NativeBufferReader`1.BeginInvoke(System.ReadOnlySpan{System.Byte},System.AsyncCallback,System.Object)`
 
 ```csharp
-public virtual System.IAsyncResult NativeWeave.Interop.NativeBufferReader<TResult>.BeginInvoke(System.ReadOnlySpan<byte> bytes, System.AsyncCallback callback, object @object)
+public virtual System.IAsyncResult Korda.Interop.NativeBufferReader<TResult>.BeginInvoke(System.ReadOnlySpan<byte> bytes, System.AsyncCallback callback, object @object)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
-## `M:NativeWeave.Interop.NativeBufferReader`1.EndInvoke(System.IAsyncResult)`
+## `M:Korda.Interop.NativeBufferReader`1.EndInvoke(System.IAsyncResult)`
 
 ```csharp
-public virtual TResult NativeWeave.Interop.NativeBufferReader<TResult>.EndInvoke(System.IAsyncResult result)
+public virtual TResult Korda.Interop.NativeBufferReader<TResult>.EndInvoke(System.IAsyncResult result)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
-## `M:NativeWeave.Interop.NativeBufferReader`1.Invoke(System.ReadOnlySpan{System.Byte})`
+## `M:Korda.Interop.NativeBufferReader`1.Invoke(System.ReadOnlySpan{System.Byte})`
 
 ```csharp
-public virtual TResult NativeWeave.Interop.NativeBufferReader<TResult>.Invoke(System.ReadOnlySpan<byte> bytes)
+public virtual TResult Korda.Interop.NativeBufferReader<TResult>.Invoke(System.ReadOnlySpan<byte> bytes)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
-## `P:NativeWeave.Interop.NativeBuffer.IsDisposed`
+## `P:Korda.Interop.NativeBuffer.IsDisposed`
 
 ```csharp
-public bool NativeWeave.Interop.NativeBuffer.IsDisposed { get; }
+public bool Korda.Interop.NativeBuffer.IsDisposed { get; }
 ```
 
 **summary:** Gets whether new reads are closed; this does not assert physical reclamation.
 
 **remarks:** Thread-safe, O(1), no native call or allocation.
 
-## `P:NativeWeave.Interop.NativeBuffer.Length`
+## `P:Korda.Interop.NativeBuffer.Length`
 
 ```csharp
-public int NativeWeave.Interop.NativeBuffer.Length { get; }
+public int Korda.Interop.NativeBuffer.Length { get; }
 ```
 
 **summary:** Gets the immutable byte length, including after logical disposal.
 
 **remarks:** O(1), no native call or allocation. Length is in [0, Int32.MaxValue].
 
-## `T:NativeWeave.Interop.Extensibility.NativeBufferFactory`
+## `T:Korda.Interop.Extensibility.NativeBufferFactory`
 
 ```csharp
-public static class NativeWeave.Interop.Extensibility.NativeBufferFactory
+public static class Korda.Interop.Extensibility.NativeBufferFactory
 ```
 
 **summary:** A trusted engine-maintainer seam for adopting immutable native results.
 
 **remarks:** Ordinary applications receive buffers from typed domain operations. The caller guarantees creator/allocator pairing, one sole SafeHandle owner, stable initialized bytes, a negotiated per-result bound and nonthrowing, nonblocking free-threaded destruction. Shape validation cannot establish accessibility of an arbitrary address. The native module remains resident under the loader contract.
 
-## `T:NativeWeave.Interop.NativeBuffer`
+## `T:Korda.Interop.NativeBuffer`
 
 ```csharp
-public sealed class NativeWeave.Interop.NativeBuffer : System.IDisposable
+public sealed class Korda.Interop.NativeBuffer : System.IDisposable
 ```
 
 **summary:** Owns immutable, address-stable native bytes through the creating module's destructor.
 
 **remarks:** Concurrent reads are safe; callers synchronize access to shared destinations. Reads use A03 logical admission and SafeHandle references without per-call lease allocation. Disposal closes new admission but existing reads remain valid. No public pointer, escaping span, native-backed Memory or generic allocator is exposed. Native destruction must be nonblocking and safe on any release thread. This BCL-only surface is AOT compatible; domain engines enforce their result limit.
 
-## `T:NativeWeave.Interop.NativeBufferReader`
+## `T:Korda.Interop.NativeBufferReader`
 
 ```csharp
-public delegate void NativeWeave.Interop.NativeBufferReader(System.ReadOnlySpan<byte> bytes)
+public delegate void Korda.Interop.NativeBufferReader(System.ReadOnlySpan<byte> bytes)
 ```
 
 **summary:** Reads immutable native bytes synchronously while their creating owner is leased.
@@ -282,10 +282,10 @@ public delegate void NativeWeave.Interop.NativeBufferReader(System.ReadOnlySpan<
 
 **remarks:** The delegate runs on the calling thread outside admission locks. The span must not escape or cross an await. A cached static delegate avoids closure allocation.
 
-## `T:NativeWeave.Interop.NativeBufferReader`1`
+## `T:Korda.Interop.NativeBufferReader`1`
 
 ```csharp
-public delegate TResult NativeWeave.Interop.NativeBufferReader<TResult>(System.ReadOnlySpan<byte> bytes)
+public delegate TResult Korda.Interop.NativeBufferReader<TResult>(System.ReadOnlySpan<byte> bytes)
 ```
 
 **summary:** Projects a synchronous native read into independently owned managed data.

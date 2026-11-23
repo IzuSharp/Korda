@@ -2,16 +2,16 @@ using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using NativeWeave.Data;
-using NativeWeave.Database;
-using NativeWeave.Interop;
-using NativeWeave.Interop.Extensibility;
-using NativeWeave.Query;
+using Korda.Data;
+using Korda.Database;
+using Korda.Interop;
+using Korda.Interop.Extensibility;
+using Korda.Query;
 #if SQLITE
-using NativeWeave.Database.Sqlite;
+using Korda.Database.Sqlite;
 #endif
 #if POSTGRES
-using NativeWeave.Database.PostgreSql;
+using Korda.Database.PostgreSql;
 #endif
 
 // Ordinary C# application source, compiled against three independently restored
@@ -85,7 +85,7 @@ internal static class Program
             string name = Path.GetFileName(path);
             if (!name.Contains(".so", StringComparison.Ordinal)) continue;
             if (!name.StartsWith("libnw_", StringComparison.Ordinal)
-                && !name.Contains("nativeweave", StringComparison.OrdinalIgnoreCase)) continue;
+                && !name.Contains("korda", StringComparison.OrdinalIgnoreCase)) continue;
             Check("only-selected-database-module", name == expected && File.Exists(path));
             if (mapped.TryGetValue(name, out string? previous))
                 Check("single-database-module-path", previous == path);
@@ -101,7 +101,7 @@ internal static class Program
 
     private static void RejectAbi()
     {
-        string file = Path.Combine(AppContext.BaseDirectory, "NativeWeave.database.sqlite.assets.json");
+        string file = Path.Combine(AppContext.BaseDirectory, "Korda.database.sqlite.assets.json");
         using var json = JsonDocument.Parse(File.ReadAllText(file));
         var record = json.RootElement;
         string native = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, record.GetProperty("outputPath").GetString()!));

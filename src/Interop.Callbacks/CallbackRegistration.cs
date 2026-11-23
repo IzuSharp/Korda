@@ -1,9 +1,9 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using NativeWeave.Interop.Abi;
-using NativeWeave.Interop.Lifetime;
+using Korda.Interop.Abi;
+using Korda.Interop.Lifetime;
 
-namespace NativeWeave.Interop.Callbacks;
+namespace Korda.Interop.Callbacks;
 
 /// <summary>Statically compiled engine operations. Each concrete adapter keeps its owning module alive.</summary>
 internal abstract unsafe class CallbackNativeCalls

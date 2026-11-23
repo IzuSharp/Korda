@@ -1,11 +1,11 @@
 {
   "native-runtime": {
-    "sources": ["native/interop/", "src/NativeWeave.Core/"],
+    "sources": ["native/interop/", "src/Korda.Core/"],
     "checks": ["database.api", "database.regressions"],
     "depends": ["interop-abi", "interop-async", "interop-callbacks", "interop-errors", "interop-execution", "interop-lifetime", "interop-memory", "interop-negotiation"]
   },
   "database-native": {
-    "targets": ["nw_database_common", "nativeweave_database_host"],
+    "targets": ["nw_database_common", "korda_database_host"],
     "sources": ["native/cpp/include/", "native/cpp/src/", "native/cpp/licenses/", "native/cpp/exports.map", "native/cpp/patches/", "native/database/", "native/dependencies.lock.json", "CMakeLists.txt", "CMakePresets.json", "eng/cpp_toolchain.py", "eng/task07_native.py", "eng/postgres-tools.sh"],
     "tests": ["eng/verify-cpp-*.sh"],
     "checks": ["database.dependencies", "database.regressions"],
@@ -23,7 +23,7 @@
     "tests": ["tests/Data.Sqlite/", "samples/api/data-sqlite/", "native/cpp/tests/sqlite_fixture_tests.cpp", "native/cpp/tests/fixtures/sqlite.cpp"],
     "depends": ["database"],
     "checks": ["sqlite.test", "sqlite.api"],
-    "package": "NativeWeave.Database.Sqlite",
+    "package": "Korda.Database.Sqlite",
     "api_checks": ["sqlite.api"]
   },
   "postgresql": {
@@ -32,7 +32,7 @@
     "tests": ["tests/Data.Postgres/", "samples/api/data-postgres/", "native/cpp/tests/postgres_fixture_tests.cpp", "native/cpp/tests/fixtures/postgres*"],
     "depends": ["database"],
     "checks": ["postgresql.test", "postgresql.api"],
-    "package": "NativeWeave.Database.PostgreSql",
+    "package": "Korda.Database.PostgreSql",
     "api_checks": ["postgresql.api"]
   },
   "bundle-composer": {

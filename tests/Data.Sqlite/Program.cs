@@ -2,12 +2,12 @@ using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
-using NativeWeave.Database.Sqlite;
-using NativeWeave.Sqlite.Samples;
+using Korda.Database.Sqlite;
+using Korda.Sqlite.Samples;
 
 if (args.Contains("--aot") && RuntimeFeature.IsDynamicCodeSupported)
     throw new InvalidOperationException("The explicit Native AOT row must execute a native executable.");
-string root = Path.GetFullPath(Environment.GetEnvironmentVariable("NATIVEWEAVE_B03_TEST_ROOT") ?? Path.Combine(Path.GetTempPath(), "nw-b03-" + Guid.NewGuid().ToString("N")));
+string root = Path.GetFullPath(Environment.GetEnvironmentVariable("KORDA_B03_TEST_ROOT") ?? Path.Combine(Path.GetTempPath(), "nw-b03-" + Guid.NewGuid().ToString("N")));
 Directory.CreateDirectory(root);
 int assertions = 0;
 void Check(bool value, string message)
@@ -78,10 +78,10 @@ internal static partial class Native
         byte[] bytes = Encoding.UTF8.GetBytes(path);
         fixed (byte* p = bytes) return Run(p, (uint)bytes.Length);
     }
-    [LibraryImport("nativeweave_sqlite_fixture", EntryPoint = "nw_b03_runtime_count")]
+    [LibraryImport("korda_sqlite_fixture", EntryPoint = "nw_b03_runtime_count")]
     internal static partial uint RuntimeCount();
-    [LibraryImport("nativeweave_sqlite_fixture", EntryPoint = "nw_b03_run_suite")]
+    [LibraryImport("korda_sqlite_fixture", EntryPoint = "nw_b03_run_suite")]
     private static unsafe partial uint Run(byte* path, uint length);
-    [LibraryImport("nativeweave_sqlite_fixture", EntryPoint = "nw_b03_probe_options")]
+    [LibraryImport("korda_sqlite_fixture", EntryPoint = "nw_b03_probe_options")]
     private static unsafe partial uint ProbeOptions(byte* path, uint pathLength, byte* record, uint recordLength, out ulong observed);
 }

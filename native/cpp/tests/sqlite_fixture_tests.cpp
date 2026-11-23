@@ -9,9 +9,8 @@ extern "C" std::uint32_t nw_b03_run_suite(const std::uint8_t* root, std::uint32_
 
 int main()
 {
-    const auto root =
-        std::filesystem::temp_directory_path() /
-        ("nativeweave-b03-cpp-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+    const auto root = std::filesystem::temp_directory_path() /
+                      ("korda-b03-cpp-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     const auto path = root.string();
     const auto status =
         nw_b03_run_suite(reinterpret_cast<const std::uint8_t*>(path.data()), static_cast<std::uint32_t>(path.size()));

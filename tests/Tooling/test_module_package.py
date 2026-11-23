@@ -1,4 +1,5 @@
 """Round-trip a new package registration without an external registry or any credentials."""
+
 import hashlib
 import json
 from pathlib import Path
@@ -27,32 +28,56 @@ class PackageTests(unittest.TestCase):
                 "env=os.environ\nid=env['NW_PACKAGE']\nv=env['NW_VERSION']\n"
                 "with zipfile.ZipFile(Path(env['NW_FEED']) / f'{id}.{v}.nupkg', 'w') as z:\n"
                 " z.writestr(id+'.nuspec', f'<package><metadata><id>{id}</id><version>{v}</version></metadata></package>')\n"
-                " z.writestr('nativeweave/public.json',json.dumps({'inputs': env['NW_INPUTS']}))\n")
+                " z.writestr('korda/public.json',json.dumps({'inputs': env['NW_INPUTS']}))\n"
+            )
             (root / "consume.py").write_text(
                 "from pathlib import Path\nimport os,zipfile\nf=next(Path(os.environ['NW_FEED']).glob('*.nupkg'))\n"
-                "with zipfile.ZipFile(f) as z: assert 'nativeweave/public.json' in z.namelist()\n"
-                "Path('artifacts/consumed').touch()\n")
-            (manifests / "product.json").write_text(json.dumps({
-                "ci": {"tests": ["eng/ci/", ".gitignore"]},
-                "widget": {"sources": ["pack.py"], "tests": ["consume.py"], "package": "NativeWeave.Widget",
-                           "pack": [sys.executable, "pack.py"], "consume": [sys.executable, "consume.py"]}}))
+                "with zipfile.ZipFile(f) as z: assert 'korda/public.json' in z.namelist()\n"
+                "Path('artifacts/consumed').touch()\n"
+            )
+            (manifests / "product.json").write_text(
+                json.dumps(
+                    {
+                        "ci": {"tests": ["eng/ci/", ".gitignore"]},
+                        "widget": {
+                            "sources": ["pack.py"],
+                            "tests": ["consume.py"],
+                            "package": "Korda.Widget",
+                            "pack": [sys.executable, "pack.py"],
+                            "consume": [sys.executable, "consume.py"],
+                        },
+                    }
+                )
+            )
+
             def git(*args):
                 return subprocess.check_output(["git", "-C", temp, *args], text=True).strip()
+
             def commit():
                 git("add", ".")
                 git("-c", "user.name=CI", "-c", "user.email=ci@example.invalid", "commit", "-qm", "fixture")
+
             git("init", "-q")
             commit()
             with (root / "pack.py").open("a") as stream:
                 stream.write("# next candidate\n")
             commit()
             out = root / "artifacts/public"
-            with patch("catalog.ROOT", root), patch.object(module_job, "ROOT", root), patch.object(module_job, "OUT", out):
-                plan = {"module_packages": ["widget"], "packages": [], "candidates": ["widget"], "inputs": inputs("HEAD")}
+            with (
+                patch("catalog.ROOT", root),
+                patch.object(module_job, "ROOT", root),
+                patch.object(module_job, "OUT", out),
+            ):
+                plan = {
+                    "module_packages": ["widget"],
+                    "packages": [],
+                    "candidates": ["widget"],
+                    "inputs": inputs("HEAD"),
+                }
                 version = "0.1.0-preview.1.2"
                 module_job.execute("pack", "widget", plan, version)
                 self.assertTrue((root / "artifacts/consumed").exists())
-                package = validate(out, plan, version, "widget")["NativeWeave.Widget"]
+                package = validate(out, plan, version, "widget")["Korda.Widget"]
                 with package.open("ab") as stream:
                     stream.write(b"changed")
                 with self.assertRaisesRegex(ValueError, "Candidate changed"):

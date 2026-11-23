@@ -16,7 +16,7 @@ Add an entry to a JSON file in this directory. Entries can be grouped by product
     "tests": ["tests/UI/"],
     "includes": ["compiler"],
     "run": ["bash", "tests/UI/check.sh"],
-    "package": "NativeWeave.UI",
+    "package": "Korda.UI",
     "pack": ["python3", "eng/ui-package/pack.py"],
     "consume": ["bash", "tests/UI/consume-aot.sh"]
   }
@@ -35,7 +35,7 @@ Run `python3 eng/ci/impact.py origin/main --output artifacts/plan.json` to see t
 
 **Native targets.** The fast planner uses the registered source roots and module edges. The native build requests a CMake File API reply before configure and verifies target sources, target dependencies and Ninja's observed header dependencies after compiling. New native build scripts can call `eng/ci/native_graph.py query BUILD_DIR` before configure and `verify BUILD_DIR TARGET ...` afterward. Register all supported conditional edges even when a single preset does not exercise them.
 
-**Packaging commands.** CI runs commands from the repository root. The pack command receives `NW_PACKAGE`, `NW_VERSION`, `NW_FEED` (an empty local output directory) and `NW_INPUTS`. Produce exactly one standalone nupkg with that ID and version and include `nativeweave/public.json` containing the `inputs` fingerprint. Pack scripts can reuse selected internal outputs under `artifacts/modules/<module>/` and must obtain unchanged components from their normal build or verified cache. The consumer restores the exact ID/version from `NW_FEED` into an isolated cache and executes a Native AOT application. The same command runs against nuget.org after publication.
+**Packaging commands.** CI runs commands from the repository root. The pack command receives `NW_PACKAGE`, `NW_VERSION`, `NW_FEED` (an empty local output directory) and `NW_INPUTS`. Produce exactly one standalone nupkg with that ID and version and include `korda/public.json` containing the `inputs` fingerprint. Pack scripts can reuse selected internal outputs under `artifacts/modules/<module>/` and must obtain unchanged components from their normal build or verified cache. The consumer restores the exact ID/version from `NW_FEED` into an isolated cache and executes a Native AOT application. The same command runs against nuget.org after publication.
 
 PR jobs carry read-only permissions. Only the trusted merge workflow can publish a verified candidate. Weekly and explicit full checks exercise all registered modules.
 

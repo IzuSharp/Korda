@@ -1,11 +1,11 @@
 // Maintainer adapters reused from tests/Interop.Callbacks/Fixture.cs; all tests execute the actual Core/native primitives.
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using NativeWeave.Interop.Abi;
-using NativeWeave.Interop.Callbacks;
-using NativeWeave.Interop.Lifetime;
+using Korda.Interop.Abi;
+using Korda.Interop.Callbacks;
+using Korda.Interop.Lifetime;
 
-namespace NativeWeave.Verification.Interop;
+namespace Korda.Verification.Interop;
 
 internal sealed class SubscriptionHandle : SafeHandle
 {
@@ -39,7 +39,7 @@ internal sealed unsafe class SubscriptionCalls : CallbackNativeCalls
 
 internal static unsafe partial class CallbacksNative
 {
-    private const string Library = "nativeweave_interop_callbacks";
+    private const string Library = "korda_interop_callbacks";
     [ThreadStatic] internal static bool InNativeCall;
 
     [LibraryImport(Library, EntryPoint = "nw_callbacks_fixture_create_v1")]

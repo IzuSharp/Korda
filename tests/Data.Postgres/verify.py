@@ -40,7 +40,7 @@ def home_files_probe(output,run,build,native_env):
         records.append({'path':str(path.relative_to(output)),'sha256':sha(path)})
     report=output/'native-home-files-report.json'
     artifacts=[{'path':str(path),'sha256':sha(path)} for path in
-        (build/'tests/nw_postgres_fixture_tests',build/'fixtures/libnativeweave_postgres_fixture.so')]
+        (build/'tests/nw_postgres_fixture_tests',build/'fixtures/libkorda_postgres_fixture.so')]
     # Do not mutate os.environ: both the parent and PostgreSQL services retain
     # their original environment. The complete native suite still runs here.
     run('native-home-files',[build/'tests/nw_postgres_fixture_tests'],
@@ -87,14 +87,14 @@ def main():
             if current!=item['sha256'] and Path(item['path']).suffix!='.md':raise RuntimeError('Current public declaration changed: '+item['path'])
             checked.append(item|{'current_sha256':current,'documentation_changed':current!=item['sha256']})
         (output/'design-inputs.json').write_text(json.dumps({'historical_commit':pinned['commit'],'current_commit':actual_commit,'inputs':checked,'note':'Historical declaration locks remain verified. DB-Scope-01/DB-CPP-01 update Markdown guidance; current JSON/C#/C declarations must still match.'},indent=2)+'\n')
-        canonical=json.loads((design/'docs/api/public-api.json').read_text())['symbols']
-        expected=[item for item in canonical if 'NativeWeave.Database.PostgreSql.' in item['id']]
+        canonical=json.loads((design/'docs/api/public-api.json').read_text().replace('NativeWeave.', 'Korda.'))['symbols']
+        expected=[item for item in canonical if 'Korda.Database.PostgreSql.' in item['id']]
         local=json.loads((ROOT/'src/Data.Postgres/public-api.expected.json').read_text())['symbols']
         local_by_id={x['id']:x for x in local}
         if len(local)!=len(expected) or {x['id']:x for x in expected}!=local_by_id:raise RuntimeError('The complete integrated provider API differs from pinned Design.')
         historical=json.loads((ROOT/'src/Data.Postgres/downstream-composition.json').read_text())['symbols']
         if any(item!=local_by_id.get(item['id']) for item in historical):raise RuntimeError('The historical B04 ownership slice differs from the integrated provider API.')
-        prefixes=['src/Data.Postgres/','tests/Data.Postgres/','samples/api/data-postgres/','src/Data.NativeHost/','native/cpp/','native/database/interfaces/','native/interop/abi/','src/Interop.Abi/','src/Interop.Negotiation/','src/Interop.Errors/','src/NativeWeave.Core/','src/Data.Abstractions/']
+        prefixes=['src/Data.Postgres/','tests/Data.Postgres/','samples/api/data-postgres/','src/Data.NativeHost/','native/cpp/','native/database/interfaces/','native/interop/abi/','src/Interop.Abi/','src/Interop.Negotiation/','src/Interop.Errors/','src/Korda.Core/','src/Data.Abstractions/']
         shared={'CMakeLists.txt','CMakePresets.json','native/dependencies.lock.json','THIRD_PARTY_NOTICES.md','Directory.Build.props','global.json','docs/guides/data-postgres.md','tests/ProviderProfileChecks.cs'}
         paths=subprocess.check_output(['git','ls-files','--cached','--others','--exclude-standard','-z'],cwd=ROOT).decode().split('\0')
         inputs=[{'path':p,'sha256':sha(ROOT/p)} for p in paths if p and (ROOT/p).is_file() and (p in shared or any(p.startswith(prefix) for prefix in prefixes))]
@@ -107,11 +107,11 @@ def main():
         run('clang-target',['clang++','-dumpmachine'])
         run('cmake-toolchain',['cmake','--version'])
         run('dotnet-toolchain',['dotnet','--info'])
-        for name in ['tests/nw_postgres_fixture_tests','fixtures/libnativeweave_postgres_fixture.so','fixtures/libnativeweave_data_postgres.so']:
+        for name in ['tests/nw_postgres_fixture_tests','fixtures/libkorda_postgres_fixture.so','fixtures/libkorda_data_postgres.so']:
             if not (build/name).is_file():raise RuntimeError('Build the PostgreSQL fixture CMake targets before verification: '+name)
-        run('native-symbols',['nm','-D','--defined-only',build/'fixtures/libnativeweave_postgres_fixture.so'])
-        run('component-symbols',['nm','-D','--defined-only',build/'fixtures/libnativeweave_data_postgres.so'])
-        run('native-dependencies',['readelf','-d',build/'fixtures/libnativeweave_postgres_fixture.so'])
+        run('native-symbols',['nm','-D','--defined-only',build/'fixtures/libkorda_postgres_fixture.so'])
+        run('component-symbols',['nm','-D','--defined-only',build/'fixtures/libkorda_data_postgres.so'])
+        run('native-dependencies',['readelf','-d',build/'fixtures/libkorda_postgres_fixture.so'])
         (output/'native-dependencies.lock.json').write_bytes((ROOT/'native/dependencies.lock.json').read_bytes())
         if args.api_only:
             run_managed(args,output,run,{})
@@ -120,7 +120,7 @@ def main():
         certs=output/'certificates';(output/'tls-identities.json').write_text(json.dumps(certificates(certs),indent=2)+'\n')
         pg=args.postgres_bin.resolve();urls={}
         for name,tls in [('valid',True),('expired',True),('plain',False)]:
-            data=output/f'pg-{name}';run(f'pg-init-{name}',[pg/'initdb','-D',data,'-U','nativeweave','--auth=trust','--no-locale','--encoding=UTF8'])
+            data=output/f'pg-{name}';run(f'pg-init-{name}',[pg/'initdb','-D',data,'-U','korda','--auth=trust','--no-locale','--encoding=UTF8'])
             with socket.socket() as sock:sock.bind(('127.0.0.1',0));port=sock.getsockname()[1]
             with (data/'postgresql.conf').open('a') as conf:
                 conf.write("\nfsync=on\nssl="+('on' if tls else 'off')+'\n')
@@ -133,7 +133,7 @@ def main():
                 if subprocess.run([str(pg/'pg_isready'),'-h','127.0.0.1','-p',str(port)],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode==0:break
                 time.sleep(.05)
             else:raise RuntimeError(f'{name} server startup timeout')
-            urls[name]=f'postgresql://nativeweave@localhost:{port}/postgres'
+            urls[name]=f'postgresql://korda@localhost:{port}/postgres'
         (output/'server-topology.json').write_text(json.dumps({'endpoints':urls,'postgres_binary_sha256':sha(pg/'postgres'),'postgres_bin':str(pg),'transport':'TCP loopback; actual PostgreSQL18, ephemeral test-only trust authentication'},indent=2)+'\n')
         native_env={'NW_PG_URL':urls['valid'],'NW_PG_EXPIRED_URL':urls['expired'],'NW_PG_PLAIN_URL':urls['plain'],'NW_PG_ROOT':str(certs/'root.pem'),'NW_PG_UNTRUSTED_ROOT':str(certs/'untrusted.pem')}
         run('native-oracles',[build/'tests/nw_postgres_fixture_tests'],native_env|{'NW_PG_REPORT':str(output/'native-report.json')})
@@ -158,17 +158,17 @@ def main():
     return 0 if status=='passed' else 1
 
 def run_managed(args,output,run,native_env):
-    component=args.native_build.resolve()/'fixtures/libnativeweave_data_postgres.so'
+    component=args.native_build.resolve()/'fixtures/libkorda_data_postgres.so'
     asset=args.native_build.resolve()/'libnw_database_postgresql.so'
     if not asset.is_file():raise RuntimeError('Build the actual PostgreSQL Database Host before component/preflight verification.')
-    fixture=args.native_build.resolve()/'fixtures/libnativeweave_postgres_fixture.so'
-    msbuild=['-p:UseSharedCompilation=false','-nr:false','-m:1',f'-p:NativeWeavePostgresAssetPath={asset}']
+    fixture=args.native_build.resolve()/'fixtures/libkorda_postgres_fixture.so'
+    msbuild=['-p:UseSharedCompilation=false','-nr:false','-m:1',f'-p:KordaPostgresAssetPath={asset}']
     restore=(['--configfile',str(args.offline_config.resolve())] if args.offline_config else []) + ([] if args.update_locks else ['--locked-mode'])
-    test='tests/Data.Postgres/NativeWeave.Database.PostgreSql.Tests.csproj'
+    test='tests/Data.Postgres/Korda.Database.PostgreSql.Tests.csproj'
     checker='tests/Data.Postgres/ApiCheck/ApiCheck.csproj'
     sample='samples/api/data-postgres/PostgresExample.csproj'
     if args.api_only:
-        provider='src/Data.Postgres/NativeWeave.Database.PostgreSql.csproj'
+        provider='src/Data.Postgres/Korda.Database.PostgreSql.csproj'
         run('provider-api-build',['dotnet','build',provider,'-c','Release',*msbuild])
     for label,project in [('test',test),('api',checker),('sample',sample)]:
         if (args.api_only and label != 'api') or (args.test_only and label == 'api'):
@@ -178,11 +178,11 @@ def run_managed(args,output,run,native_env):
     run('managed-whitespace',['dotnet','format','whitespace','.', '--folder','--verify-no-changes','--include',
                              'tests/Data.Postgres/Program.cs','tests/ProviderProfileChecks.cs','samples/api/data-postgres/Program.cs','--verbosity','quiet'])
     if not args.test_only:
-        run('exact-api-xml-reference',['dotnet',str(ROOT/'tests/Data.Postgres/ApiCheck/bin/Release/net11.0/ApiCheck.dll'),str(ROOT),os.environ['DOTNET_ROOT'],str(ROOT/'src/Data.Postgres/bin/Release/net11.0/NativeWeave.Database.PostgreSql.dll'),*(['--write'] if args.write_reference else [])])
+        run('exact-api-xml-reference',['dotnet',str(ROOT/'tests/Data.Postgres/ApiCheck/bin/Release/net11.0/ApiCheck.dll'),str(ROOT),os.environ['DOTNET_ROOT'],str(ROOT/'src/Data.Postgres/bin/Release/net11.0/Korda.Database.PostgreSql.dll'),*(['--write'] if args.write_reference else [])])
     if args.api_only:
         return
     native_env=native_env|{'NW_PG_COMPONENT_ASSET':str(component),'NW_PG_HOST_ASSET':str(asset),'LD_LIBRARY_PATH':str(fixture.parent)+':'+os.environ.get('LD_LIBRARY_PATH','')}
-    for label,project,name in [('test',test,'NativeWeave.Database.PostgreSql.Tests'),('sample',sample,'PostgresExample')]:
+    for label,project,name in [('test',test,'Korda.Database.PostgreSql.Tests'),('sample',sample,'PostgresExample')]:
         destination=output/(label+'-aot')
         run(label+'-aot-restore',['dotnet','restore',project,'-r','linux-x64','-p:PublishAot=true',*restore,*msbuild])
         if label=='test':
@@ -191,15 +191,15 @@ def run_managed(args,output,run,native_env):
         run(label+'-aot-run',[destination/name,*(['--require-aot'] if label=='test' else [])],native_env|{'NW_PG_REPORT':str(output/(label+'-aot-report.json')),'NW_PG_OPTION_RECORD':str(output/(label+'-aot-options.bin'))})
     generated=[]
     for path in (ROOT/'src/Data.Postgres/obj').rglob('*'):
-        if path.is_file() and (path.name=='PostgreSqlAssetIdentity.g.cs' or path.name=='NativeWeave.database.postgresql.assets.json'):
+        if path.is_file() and (path.name=='PostgreSqlAssetIdentity.g.cs' or path.name=='Korda.database.postgresql.assets.json'):
             generated.append({'path':str(path.relative_to(ROOT)),'sha256':sha(path),'content':path.read_text()})
     (output/'generated-asset-inputs.json').write_text(json.dumps(generated,indent=2)+'\n')
     for location in [ROOT/'tests/Data.Postgres/bin/Release/net11.0',output/'test-aot',output/'sample-aot']:
-        record=json.loads((location/'NativeWeave.database.postgresql.assets.json').read_text())
-        if (record['engineId']!='database.postgresql' or record['packageId']!='NativeWeave.Database.PostgreSql'
+        record=json.loads((location/'Korda.database.postgresql.assets.json').read_text())
+        if (record['engineId']!='database.postgresql' or record['packageId']!='Korda.Database.PostgreSql'
             or record['sourcePath']!=record['outputPath'] or record['outputPath']!='runtimes/linux-x64/native/libnw_database_postgresql.so'
             or record['sha256']!=sha(asset) or sha(location/record['outputPath'])!=sha(asset)):
             raise RuntimeError('Actual PostgreSQL Host asset record/hash differs from the staged Host.')
-    paths=[component,asset,fixture,ROOT/'src/Data.Postgres/bin/Release/net11.0/NativeWeave.Database.PostgreSql.dll',output/'test-aot/NativeWeave.Database.PostgreSql.Tests',output/'sample-aot/PostgresExample']
+    paths=[component,asset,fixture,ROOT/'src/Data.Postgres/bin/Release/net11.0/Korda.Database.PostgreSql.dll',output/'test-aot/Korda.Database.PostgreSql.Tests',output/'sample-aot/PostgresExample']
     (output/'artifacts.json').write_text(json.dumps([{'path':str(p),'sha256':sha(p),'bytes':p.stat().st_size} for p in paths],indent=2)+'\n')
 if __name__=='__main__':raise SystemExit(main())

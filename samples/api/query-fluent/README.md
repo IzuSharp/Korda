@@ -1,6 +1,6 @@
 # Native Fluent package consumer
 
-This complete ordinary application references `NativeWeave.Database` and the two
+This complete ordinary application references `Korda.Database` and the two
 normal provider NuGets. It uses handwritten typed tables and direct DTO
 constructors; no generator, native source project or Cargo build is required by
 the application. The same application runs as .NET and Linux x64 Native AOT.

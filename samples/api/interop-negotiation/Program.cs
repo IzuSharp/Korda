@@ -1,7 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using NativeWeave.Interop;
-using NativeWeave.Interop.Extensibility;
+using Korda.Interop;
+using Korda.Interop.Extensibility;
 
 // The verifier supplies the hashes from the exact two compiled native fixtures.
 // Real domain packages ship these as generated immutable package constants.
@@ -42,7 +42,7 @@ Console.WriteLine($"{{\"status\":\"passed\",\"sample\":\"minimal-and-advanced\",
 static EngineDescriptor CreateFixtureDescriptor(string suffix, string hash, string capability, int bit)
 {
     var manifest = new EnginePackageManifest(
-        $"sample.{suffix}", "NativeWeave.A02.Sample", "0.1.0-preview.1", new AbiVersion(1, 0),
+        $"sample.{suffix}", "Korda.A02.Sample", "0.1.0-preview.1", new AbiVersion(1, 0),
         $"nw_a02_{suffix}_get_abi_v1", EngineThreadingModel.Synchronous,
         [new NativeAssetDescriptor("linux-x64", $"runtimes/linux-x64/native/libnw_a02_{suffix}.so", hash, "x86-64")],
         [new EngineCapabilityDefinition(new EngineCapability(capability), bit)]);

@@ -2,7 +2,7 @@
 
 > **DB-CPP-01 implementation update.** The public C# examples, signatures and ownership contracts in this guide remain the compatibility inputs. The current maintained native implementation is C++20; its module mapping, direct libpq/sqlite3 execution, Clang/CMake commands and package production are documented in [C++ native implementation](cpp-native.md). Descriptions below of Rust, SQLx, SeaQuery or Tokio internals are retained as the fixed `465cd0f` behavioral reference, not current build dependencies. The named verification entry points now build the ported C++ fixtures and retain their original managed assertions.
 
-Task A02 implements the metadata and loader part of `NativeWeave.Core` for the
+Task A02 implements the metadata and loader part of `Korda.Core` for the
 Task-02 Linux x64 delivery. The [compiled API reference](../../src/Interop.Negotiation/api-reference.md)
 contains the exact 84 A02 public symbols and their XML documentation. The three
 exception types belong to A05 in the same Core assembly. Core has no domain
@@ -23,7 +23,7 @@ Domain factories supply their statically compiled descriptor automatically.
 An application that wants explicit preflight can use the same descriptor:
 
 ```csharp
-using NativeWeave.Interop;
+using Korda.Interop;
 
 EngineInfo info = descriptor.Inspect();
 if (info.Supports(new EngineCapability("db.query.v1")))
@@ -64,7 +64,7 @@ provider or changes SQL semantics.
 
 ## Maintainer descriptor and SDK output record
 
-The separately documented `NativeWeave.Interop.Extensibility` seam constructs an
+The separately documented `Korda.Interop.Extensibility` seam constructs an
 immutable `EnginePackageManifest`, then calls
 `EnginePackage.CreateDescriptor(manifest, typeof(KnownFacadeType).Assembly)`.
 This is a statically rooted assembly reference. Neither call loads native code.
@@ -72,7 +72,7 @@ The manifest's capability map is local to that engine and ABI major; an unknown
 advertised bit does not invent a named feature.
 
 The package-relative source path is not assumed to survive publish. Default
-loading reads the bounded `NativeWeave.<engine_id>.assets.json` record under
+loading reads the bounded `Korda.<engine_id>.assets.json` record under
 `AppContext.BaseDirectory`, compares its package/engine/version/RID/source/hash
 against the immutable descriptor and resolves its canonical `outputPath` beneath
 that directory. This supports both SDK development assets and flattened publish

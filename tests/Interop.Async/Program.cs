@@ -1,9 +1,9 @@
 using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
-using NativeWeave.Interop;
-using NativeWeave.Interop.Abi;
-using NativeWeave.Interop.Async;
-using NativeWeave.Interop.Callbacks;
+using Korda.Interop;
+using Korda.Interop.Abi;
+using Korda.Interop.Async;
+using Korda.Interop.Callbacks;
 
 internal static class Program
 {

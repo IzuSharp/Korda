@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>Korda.Orm.Relations.Sample</AssemblyName>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../src/Data.Sqlite/Korda.Database.Sqlite.csproj" />
+    <ProjectReference Include="../../../src/Data.Postgres/Korda.Database.PostgreSql.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,6 +1,0 @@
-<Project>
-  <ItemGroup Condition="'$(NativeWeaveExcludeGenerators)' != 'true'">
-    <Analyzer Include="$(MSBuildThisFileDirectory)..\tools\roslyn\NativeWeave.Query.Generator.dll" />
-    <CompilerVisibleProperty Include="NativeWeaveEnabledNativeCodecs" />
-  </ItemGroup>
-</Project>

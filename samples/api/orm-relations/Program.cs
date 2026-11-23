@@ -1,12 +1,12 @@
-using NativeWeave.Data;
-using NativeWeave.Database;
-using NativeWeave.Database.PostgreSql;
-using NativeWeave.Database.Sqlite;
+using Korda.Data;
+using Korda.Database;
+using Korda.Database.PostgreSql;
+using Korda.Database.Sqlite;
 
 var postgres = args.FirstOrDefault() == "postgresql";
 var connection = postgres
     ? Environment.GetEnvironmentVariable("NW_TEST_POSTGRES") ?? throw new InvalidOperationException("Provide an explicit PostgreSQL test URI.")
-    : args.ElementAtOrDefault(1) ?? Path.Combine(Path.GetTempPath(), "nativeweave-relations-sample.db");
+    : args.ElementAtOrDefault(1) ?? Path.Combine(Path.GetTempPath(), "korda-relations-sample.db");
 // TLS is disabled only for this explicitly selected local test server.
 var builder = postgres ? new DataSourceBuilder().UsePostgreSql(connection, options => options.TlsMode = PostgreSqlTlsMode.DisableForLocalDevelopment)
     : new DataSourceBuilder().UseSqlite(connection);

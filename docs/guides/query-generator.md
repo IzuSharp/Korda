@@ -2,7 +2,7 @@
 
 > **DB-CPP-01 implementation update.** The public C# examples, signatures and ownership contracts in this guide remain the compatibility inputs. The current maintained native implementation is C++20; its module mapping, direct libpq/sqlite3 execution, Clang/CMake commands and package production are documented in [C++ native implementation](cpp-native.md). Descriptions below of Rust, SQLx, SeaQuery or Tokio internals are retained as the fixed `465cd0f` behavioral reference, not current build dependencies. The named verification entry points now build the ported C++ fixtures and retain their original managed assertions.
 
-The database facade brings `NativeWeave.Query.Generator` transitively. An ordinary
+The database facade brings `Korda.Query.Generator` transitively. An ordinary
 C# model produces immutable `Table<T>`, typed `Column<T,TValue>` fields and a direct
 row constructor/writer. SQL construction and execution remain in the same
 maintainer-built Rust SeaQuery/SQLx assets. Adding or changing a supported model
@@ -12,7 +12,7 @@ native-module operation.
 ## Minimal model
 
 ```csharp
-using NativeWeave.Data;
+using Korda.Data;
 
 [WeaveTable("students", DescriptorName = "Students")]
 public sealed partial record Student(
@@ -75,7 +75,7 @@ writers, and cannot be combined with other mapping annotations.
 
 The historic NWQ0001–NWQ0016 family is not repurposed. Errors point at the relevant
 source symbol or constructor parameter. A maintainer profile can set the comma
-separated `NativeWeaveEnabledNativeCodecs` IDs; runtime native capability admission
+separated `KordaEnabledNativeCodecs` IDs; runtime native capability admission
 is still mandatory. Generated source ordering and names are deterministic. The
 incremental output stage compares resolved source content, reusing it after an
 unrelated file edit and invalidating it after a relevant model edit. Diagnostic
@@ -84,7 +84,7 @@ input symbols directly, without relying on another generator's output.
 
 ## Explicit manual path
 
-Set `<NativeWeaveExcludeGenerators>true</NativeWeaveExcludeGenerators>` in the
+Set `<KordaExcludeGenerators>true</KordaExcludeGenerators>` in the
 consumer project and provide equivalent `TableBuilder` declarations, direct row
 constructors and typed writers. No `rd.xml`, dynamic-code switch, runtime
 reflection, metadata scan or Cargo invocation is required. The sample's

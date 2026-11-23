@@ -20,7 +20,7 @@ sys.path.insert(0, str(ROOT / "tests"))
 from native_build import prepare as prepare_native, FIXTURES as CPP_FIXTURES, BINARIES as CPP_BINARIES, SOURCE_INPUTS as NATIVE_INPUTS
 OWNED = ["src/Interop.Negotiation", "tests/Interop.Negotiation", "native/interop/negotiation",
          "samples/api/interop-negotiation", "docs/guides/interop-negotiation.md"]
-COMMON = ["src/NativeWeave.Core", "src/Interop.Errors", "src/Interop.Abi", "native/interop/abi",
+COMMON = ["src/Korda.Core", "src/Interop.Errors", "src/Interop.Abi", "native/interop/abi",
           "global.json", "Directory.Build.props", "Directory.Build.targets", *NATIVE_INPUTS]
 CASES = ["metadata", "coexist", "concurrent", "output-record", "options", "minor-old", "future-size",
          "bad-major", "bad-size", "bad-pointer", "bad-reserved", "bad-pending", "bad-unknown",
@@ -155,7 +155,7 @@ def main():
         restore("test-restore", test_project); build("test-build", test_project)
         restore("api-restore", check_project); build("api-build", check_project)
         run("api-xml-reference", [dotnet, "tests/Interop.Negotiation/ApiCheck/bin/Release/net11.0/ApiCheck.dll", ROOT, sdk_root,
-                                   "src/NativeWeave.Core/bin/Release/net11.0/NativeWeave.Core.dll"])
+                                   "src/Korda.Core/bin/Release/net11.0/Korda.Core.dll"])
         rows = []
         restore("test-aot-restore", test_project, aot=True)
         aot = out / "aot-tests"
@@ -171,9 +171,9 @@ def main():
         write("toolchain.json", toolchain)
         run("managed-format", [dotnet, "format", "whitespace", ".", "--folder", "--include", "src/Interop.Negotiation",
             "tests/Interop.Negotiation", "samples/api/interop-negotiation", "--verify-no-changes", "--verbosity", "minimal"])
-        run("aot-artifact-comment", ["readelf", "-p", ".comment", aot / "NativeWeave.Interop.Negotiation.Tests"])
+        run("aot-artifact-comment", ["readelf", "-p", ".comment", aot / "Korda.Interop.Negotiation.Tests"])
         for case in CASES:
-            row = json.loads(run("aot-" + case, [aot / "NativeWeave.Interop.Negotiation.Tests", case, fixtures, "--require-aot"]))
+            row = json.loads(run("aot-" + case, [aot / "Korda.Interop.Negotiation.Tests", case, fixtures, "--require-aot"]))
             if row["dynamicCodeSupported"]:
                 raise ValueError("An AOT claim still supports dynamic code.")
             rows.append(row)
@@ -191,10 +191,10 @@ def main():
                     shutil.copy2(fixtures / filename, target)
                 if not target.is_file() or sha(target) != native_hashes[suffix]:
                     raise ValueError("SDK output native bytes differ: " + suffix)
-                record = {"schemaVersion": 1, "engineId": "sample." + suffix, "packageId": "NativeWeave.A02.Sample",
+                record = {"schemaVersion": 1, "engineId": "sample." + suffix, "packageId": "Korda.A02.Sample",
                           "packageVersion": "0.1.0-preview.1", "rid": "linux-x64",
                           "sourcePath": "runtimes/linux-x64/native/" + filename, "outputPath": relative, "sha256": native_hashes[suffix]}
-                (directory / ("NativeWeave.sample." + suffix + ".assets.json")).write_text(json.dumps(record))
+                (directory / ("Korda.sample." + suffix + ".assets.json")).write_text(json.dumps(record))
         hashes = [native_hashes["alpha"], native_hashes["beta"]]
         restore("sample-restore", sample_project); build("sample-build", sample_project)
         sample_bin = ROOT / "samples/api/interop-negotiation/bin/Release/net11.0"
@@ -206,7 +206,7 @@ def main():
         version = "0.1.0-preview.1"
         def package(package_id, files):
             node = ET.Element("package"); metadata = ET.SubElement(node, "metadata")
-            for key, value in {"id": package_id, "version": version, "authors": "NativeWeave A02 verifier",
+            for key, value in {"id": package_id, "version": version, "authors": "Korda A02 verifier",
                                "description": "Local component-verification envelope; not a release package."}.items():
                 ET.SubElement(metadata, key).text = value
             path = feed / (package_id + "." + version + ".nupkg")
@@ -215,12 +215,12 @@ def main():
                 for source, destination in files:
                     archive.write(source, destination)
             return path
-        core_bin = ROOT / "src/NativeWeave.Core/bin/Release/net11.0"
-        core_package = package("NativeWeave.Core.A02.Verification", [(core_bin / name, "lib/net11.0/" + name)
-            for name in ("NativeWeave.Core.dll", "NativeWeave.Core.xml", "NativeWeave.Interop.Abi.dll")])
-        asset_package = package("NativeWeave.A02.NativeFixtures", [(fixtures / ("libnw_a02_" + suffix + ".so"),
+        core_bin = ROOT / "src/Korda.Core/bin/Release/net11.0"
+        core_package = package("Korda.Core.A02.Verification", [(core_bin / name, "lib/net11.0/" + name)
+            for name in ("Korda.Core.dll", "Korda.Core.xml", "Korda.Interop.Abi.dll")])
+        asset_package = package("Korda.A02.NativeFixtures", [(fixtures / ("libnw_a02_" + suffix + ".so"),
             "runtimes/linux-x64/native/libnw_a02_" + suffix + ".so") for suffix in ("alpha", "beta")])
-        consumer = Path(tempfile.mkdtemp(prefix="nativeweave-a02-consumer-"))
+        consumer = Path(tempfile.mkdtemp(prefix="korda-a02-consumer-"))
         (consumer / "Program.cs").write_text((ROOT / "samples/api/interop-negotiation/Program.cs").read_text())
         (consumer / "global.json").write_text((ROOT / "global.json").read_text())
         (consumer / "Consumer.csproj").write_text('''<Project Sdk="Microsoft.NET.Sdk">
@@ -228,8 +228,8 @@ def main():
     <Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings><TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks><IsAotCompatible>true</IsAotCompatible><RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <NuGetLockFilePath Condition="'$(PublishAot)' == 'true'">packages.linux-x64.aot.lock.json</NuGetLockFilePath></PropertyGroup>
-  <ItemGroup><PackageReference Include="NativeWeave.Core.A02.Verification" Version="0.1.0-preview.1" />
-    <PackageReference Include="NativeWeave.A02.NativeFixtures" Version="0.1.0-preview.1" /></ItemGroup>
+  <ItemGroup><PackageReference Include="Korda.Core.A02.Verification" Version="0.1.0-preview.1" />
+    <PackageReference Include="Korda.A02.NativeFixtures" Version="0.1.0-preview.1" /></ItemGroup>
 </Project>''')
         config = ET.Element("configuration"); sources = ET.SubElement(config, "packageSources"); ET.SubElement(sources, "clear")
         ET.SubElement(sources, "add", key="a02-fixtures", value=str(feed))
@@ -288,7 +288,7 @@ def main():
         result.update(passed=True, native_aot_executed=True, aot_cases=len(CASES),
                       assertions_per_mode=sum(r["assertions"] for r in rows), compiled_public_symbols=84,
                       native_artifact_sha256=native_hashes,
-                      aot_test_executable_sha256=sha(aot / "NativeWeave.Interop.Negotiation.Tests"))
+                      aot_test_executable_sha256=sha(aot / "Korda.Interop.Negotiation.Tests"))
         print(json.dumps({k: v for k, v in result.items() if k != "commands"}, indent=2))
     finally:
         write("source-identity-after.json", {"owned": source_files(OWNED), "common_inputs": source_files(COMMON)})

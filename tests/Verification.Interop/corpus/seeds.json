@@ -1,5 +1,5 @@
 {
-  "schema": "nativeweave-a20-fuzz-v1",
+  "schema": "korda-a20-fuzz-v1",
   "generator": "splitmix64-a20-v1",
   "seed": "0a20c0dec0ffee001",
   "maximum_input_bytes": 256,

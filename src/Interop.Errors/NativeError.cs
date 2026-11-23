@@ -1,6 +1,6 @@
-using NativeWeave.Interop.Abi;
+using Korda.Interop.Abi;
 
-namespace NativeWeave.Interop;
+namespace Korda.Interop;
 
 /// <summary>Internal fixed-record mapping; domain adapters own their richer error and outcome types.</summary>
 internal static class NativeError

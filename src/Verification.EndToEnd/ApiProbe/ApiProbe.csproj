@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <AssemblyName>NativeWeave.Verification.EndToEnd.ApiProbe</AssemblyName>
-    <NativeWeavePackageVersion Condition="'$(NativeWeavePackageVersion)' == ''">0.1.0-preview.1</NativeWeavePackageVersion>
+    <AssemblyName>Korda.Verification.EndToEnd.ApiProbe</AssemblyName>
+    <KordaPackageVersion Condition="'$(KordaPackageVersion)' == ''">0.1.0-preview.1</KordaPackageVersion>
     <TargetFramework>net11.0</TargetFramework><LangVersion>15.0</LangVersion>
     <Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors><IsAotCompatible>true</IsAotCompatible>
@@ -12,7 +12,7 @@
     <NuGetLockFilePath Condition="'$(PublishAot)' == 'true'">$(MSBuildProjectDirectory)/packages.linux-x64.aot.lock.json</NuGetLockFilePath>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="NativeWeave.Database.Sqlite" Version="[$(NativeWeavePackageVersion)]" />
-    <PackageReference Include="NativeWeave.Database.PostgreSql" Version="[$(NativeWeavePackageVersion)]" />
+    <PackageReference Include="Korda.Database.Sqlite" Version="[$(KordaPackageVersion)]" />
+    <PackageReference Include="Korda.Database.PostgreSql" Version="[$(KordaPackageVersion)]" />
   </ItemGroup>
 </Project>

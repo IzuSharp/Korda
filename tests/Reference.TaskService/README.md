@@ -1,6 +1,6 @@
 # Direct database application regression
 
-The historical `Reference.TaskService` path now contains a finite console fixture. It calls the existing C# application query methods directly through ordinary `NativeWeave.Database.Sqlite` and `NativeWeave.Database.PostgreSql` package references. It creates no HTTP, gRPC or MCP listener and installs no NativeWeave server package.
+The historical `Reference.TaskService` path now contains a finite console fixture. It calls the existing C# application query methods directly through ordinary `Korda.Database.Sqlite` and `Korda.Database.PostgreSql` package references. It creates no HTTP, gRPC or MCP listener and installs no Korda server package.
 
 The fixture preserves explicit migrations, static entity and DTO metadata, strongly typed CRUD and keyset queries, scoped idempotency, optimistic concurrency, a separate durable outbox consumer, recovery after uncertain commits, cancellation/cleanup, and database references to staged files. The application and filesystem logic are internal regression fixtures, not a new public ORM or server API.
 
@@ -9,7 +9,7 @@ The fixture preserves explicit migrations, static entity and DTO metadata, stron
 From the repository, with .NET, a C compiler and PostgreSQL tools on PATH:
 
 ```bash
-export NW_TEST_POSTGRES='postgresql://nativeweave@127.0.0.1:5432/postgres'
+export NW_TEST_POSTGRES='postgresql://korda@127.0.0.1:5432/postgres'
 python3 tests/Reference.TaskService/package_probe.py \
   --feed /absolute/candidate/feed --version 0.1.0-db-scope.1.2 \
   --output /absolute/outside-source/database-reference
@@ -25,7 +25,7 @@ For an already-built executable, run the direct application checks:
 python3 tests/Reference.TaskService/run.py --provider sqlite \
   --database /absolute/new/application.sqlite --mode jit \
   --output /absolute/new/receipt \
-  -- dotnet /absolute/consumer/NativeWeave.Reference.TaskService.dll
+  -- dotnet /absolute/consumer/Korda.Reference.TaskService.dll
 ```
 
 PostgreSQL rows additionally pass `--postgres-oracles`. The standalone `run.py` tests application behavior; complete candidate acceptance uses `package_probe.py`, which also runs the fault matrix.

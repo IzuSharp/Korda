@@ -1,9 +1,9 @@
-using NativeWeave.Interop;
-using NativeWeave.Interop.Abi;
-using NativeWeave.Interop.Async;
-using NativeWeave.Interop.Callbacks;
+using Korda.Interop;
+using Korda.Interop.Abi;
+using Korda.Interop.Async;
+using Korda.Interop.Callbacks;
 
-namespace NativeWeave.Verification.Interop;
+namespace Korda.Verification.Interop;
 
 /// <summary>Deliberately invalid protocol controls run only in their own bounded child process.</summary>
 internal static class ChildCases

@@ -2,7 +2,7 @@ using System.Collections.Immutable;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using NativeWeave.Query.Generator;
+using Korda.Query.Generator;
 using Microsoft.CodeAnalysis.Diagnostics;
 using System.Text.Json;
 using System.Xml.Linq;
@@ -10,7 +10,7 @@ using System.Xml.Linq;
 string root = Path.GetFullPath(args[0]), design = Path.GetFullPath(args[1]), sdk = Path.GetFullPath(args[2]);
 string output = Path.Combine(root, "src/Data.Abstractions/bin/Release/net11.0");
 var files = Directory.GetFiles(Path.Combine(sdk, "packs/Microsoft.NETCore.App.Ref/11.0.0/ref/net11.0"), "*.dll").ToDictionary(x => Path.GetFileName(x)!, StringComparer.OrdinalIgnoreCase);
-foreach (string path in Directory.GetFiles(Path.Combine(root, "tests/Query.Generator/bin/Release/net11.0"), "*.dll")) if (Path.GetFileName(path) != "NativeWeave.Data.dll") files[Path.GetFileName(path)] = path;
+foreach (string path in Directory.GetFiles(Path.Combine(root, "tests/Query.Generator/bin/Release/net11.0"), "*.dll")) if (Path.GetFileName(path) != "Korda.Data.dll") files[Path.GetFileName(path)] = path;
 
 var references = files.Values.Select(x => MetadataReference.CreateFromFile(x)).ToList();
 var options = new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable, metadataImportOptions: MetadataImportOptions.All);
@@ -19,10 +19,10 @@ var format = new SymbolDisplayFormat(typeQualificationStyle: SymbolDisplayTypeQu
     memberOptions: SymbolDisplayMemberOptions.IncludeAccessibility | SymbolDisplayMemberOptions.IncludeModifiers | SymbolDisplayMemberOptions.IncludeType | SymbolDisplayMemberOptions.IncludeContainingType | SymbolDisplayMemberOptions.IncludeParameters | SymbolDisplayMemberOptions.IncludeConstantValue,
     parameterOptions: SymbolDisplayParameterOptions.IncludeType | SymbolDisplayParameterOptions.IncludeName | SymbolDisplayParameterOptions.IncludeDefaultValue | SymbolDisplayParameterOptions.IncludeOptionalBrackets | SymbolDisplayParameterOptions.IncludeParamsRefOut,
     miscellaneousOptions: SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier | SymbolDisplayMiscellaneousOptions.EscapeKeywordIdentifiers);
-using var policyJson = JsonDocument.Parse(File.ReadAllText(Path.Combine(design, "docs/api/database-symbol-policies.json")));
+using var policyJson = JsonDocument.Parse(File.ReadAllText(Path.Combine(design, "docs/api/database-symbol-policies.json")).Replace("NativeWeave.", "Korda.", StringComparison.Ordinal));
 var policies = policyJson.RootElement.GetProperty("types").EnumerateObject().Where(x => x.Value.GetProperty("tasks").EnumerateArray().Any(t => t.GetString() == "B10")).Where(x => x.Name.EndsWith("Attribute", StringComparison.Ordinal)).ToDictionary(x => x.Name, x => x.Value);
-var expectedCompilation = CSharpCompilation.Create("PinnedDatabaseDeclarations", [CSharpSyntaxTree.ParseText(File.ReadAllText(Path.Combine(design, "experiments/public-api/NativeWeave.Api.Design/Database.cs")))], references, options);
-var productReferences = references.Append(MetadataReference.CreateFromFile(Path.Combine(output, "NativeWeave.Data.dll"))).ToList();
+var expectedCompilation = CSharpCompilation.Create("PinnedDatabaseDeclarations", [CSharpSyntaxTree.ParseText(File.ReadAllText(Path.Combine(design, "experiments/public-api/NativeWeave.Api.Design/Database.cs")).Replace("NativeWeave.", "Korda.", StringComparison.Ordinal))], references, options);
+var productReferences = references.Append(MetadataReference.CreateFromFile(Path.Combine(output, "Korda.Data.dll"))).ToList();
 var productCompilation = CSharpCompilation.Create("ProductServerPublicApi", references: productReferences, options: options);
 static IEnumerable<ISymbol> PublicMembers(INamedTypeSymbol type) => type.GetMembers().Where(s => s.DeclaredAccessibility == Accessibility.Public && s is not IMethodSymbol { MethodKind: MethodKind.PropertyGet or MethodKind.PropertySet or MethodKind.EventAdd or MethodKind.EventRemove }).Prepend(type);
 string Signature(ISymbol s)
@@ -52,7 +52,7 @@ string baseline = JsonSerializer.Serialize(new { design_commit = "c62cdb8aee833b
 if (args.Contains("--write")) File.WriteAllText(baselinePath, baseline);
 else if (File.ReadAllText(baselinePath) != baseline) throw new Exception("Pinned API baseline drift.");
 
-var docs = XDocument.Load(Path.Combine(output, "NativeWeave.Data.xml")).Descendants("member").ToDictionary(x => x.Attribute("name")!.Value);
+var docs = XDocument.Load(Path.Combine(output, "Korda.Data.xml")).Descendants("member").ToDictionary(x => x.Attribute("name")!.Value);
 string? Remarks(XElement doc) => doc.Element("remarks")?.Value ?? (doc.Element("inheritdoc")?.Attribute("cref")?.Value is { } parent && docs.TryGetValue(parent, out var inherited) ? Remarks(inherited) : null);
 var reference = new System.Text.StringBuilder("# Model generation API reference\n\nGenerated from the actual compiled public API and XML; compared against the exact pinned design declarations. B10 owns these source attributes and static generation; B01/B09 descriptor APIs retain their existing ownership.\n\n");
 foreach (var pair in actual.Where(x => documented.Contains(x.Key)))
@@ -74,7 +74,7 @@ string referencePath = Path.Combine(root, "src/Query.Generator/api-reference.md"
 if (args.Contains("--write")) File.WriteAllText(referencePath, reference.ToString());
 else if (File.ReadAllText(referencePath) != reference.ToString()) throw new Exception("Generated reference is stale.");
 
-var prefix = "#nullable enable\nusing System; using NativeWeave.Data;\nnamespace Fixtures;\n";
+var prefix = "#nullable enable\nusing System; using Korda.Data;\nnamespace Fixtures;\n";
 CSharpCompilation Input(params string[] sources) => CSharpCompilation.Create("GeneratedConsumer", sources.Select((s, i) => CSharpSyntaxTree.ParseText(prefix + s, path: $"fixture-{i}.cs")), productReferences, options);
 GeneratorDriver Driver(string? codecs = null) => CSharpGeneratorDriver.Create([new ModelGenerator().AsSourceGenerator()], optionsProvider: new ProfileOptions(codecs), driverOptions: new GeneratorDriverOptions(IncrementalGeneratorOutputKind.None, trackIncrementalGeneratorSteps: true));
 string Output(GeneratorDriver driver) => string.Join("\n", driver.GetRunResult().Results.Single().GeneratedSources.OrderBy(x => x.HintName, StringComparer.Ordinal).Select(x => x.HintName + "\n" + x.SourceText));
@@ -104,7 +104,7 @@ if (steps.Any(x => x.Reason is not (IncrementalStepRunReason.Unchanged or Increm
 var changed = input.ReplaceSyntaxTree(input.SyntaxTrees.First(), CSharpSyntaxTree.ParseText(prefix + first.Replace("int Version", "long Version", StringComparison.Ordinal), path: "fixture-0.cs"));
 if (Output(Compile(changed, cached, true, out _)) == outputText) throw new Exception("Relevant model edit did not invalidate output.");
 Compile(Input("[WeaveTable(\"shadow\",DescriptorName=\"Mappings\")] public sealed record Shadow(long builder,long row,long value);", "[WeaveTable(\"scope\",DescriptorName=\"value\")] public sealed record Scope(long row,long builder);"), Driver(), true, out _);
-var collisionInput = CSharpCompilation.Create("DistinctHints", [CSharpSyntaxTree.ParseText("using NativeWeave.Data; namespace A.B { [WeaveTable(\"first\")] public sealed record C(int Id); } namespace A { [WeaveTable(\"second\")] public sealed record B_C(int Id); }")], productReferences, options);
+var collisionInput = CSharpCompilation.Create("DistinctHints", [CSharpSyntaxTree.ParseText("using Korda.Data; namespace A.B { [WeaveTable(\"first\")] public sealed record C(int Id); } namespace A { [WeaveTable(\"second\")] public sealed record B_C(int Id); }")], productReferences, options);
 var collisionOutput = Compile(collisionInput, Driver(), true, out _).GetRunResult().Results.Single().GeneratedSources;
 if (collisionOutput.Length != 2 || collisionOutput.Select(x => x.HintName).Distinct(StringComparer.Ordinal).Count() != 2) throw new Exception("Distinct metadata names collided in generated hints.");
 var cases = new (string Id, string Source, string Span, string? Profile)[] {
@@ -141,6 +141,6 @@ internal sealed class ProfileOptions(string? codecs) : AnalyzerConfigOptionsProv
     public override AnalyzerConfigOptions GetOptions(AdditionalText textFile) => new Values(null);
     private sealed class Values(string? codecs) : AnalyzerConfigOptions
     {
-        public override bool TryGetValue(string key, out string value) { value = codecs ?? ""; return codecs is not null && key == "build_property.NativeWeaveEnabledNativeCodecs"; }
+        public override bool TryGetValue(string key, out string value) { value = codecs ?? ""; return codecs is not null && key == "build_property.KordaEnabledNativeCodecs"; }
     }
 }

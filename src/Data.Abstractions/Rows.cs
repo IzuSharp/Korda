@@ -1,4 +1,4 @@
-namespace NativeWeave.Data;
+namespace Korda.Data;
 
 /// <summary>Synchronously materializes one validated row into an owned CLR value.</summary>
 /// <typeparam name="T">The result value or entity type.</typeparam>

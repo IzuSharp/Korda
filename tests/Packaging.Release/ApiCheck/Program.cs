@@ -1,7 +1,7 @@
 using System.Reflection;
 using System.Xml.Linq;
 using Microsoft.Build.Framework;
-using NativeWeave.Packaging;
+using Korda.Packaging;
 
 if (args.Length != 1) throw new ArgumentException("Supply the generated reference output path.");
 Type type = typeof(PackageClosure);

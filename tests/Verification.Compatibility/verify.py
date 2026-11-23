@@ -114,7 +114,7 @@ def main():
             output = evidence / "managed" / generation
             run(f"managed-{generation}", ["dotnet", "build", sample, "--no-restore", "-c", "Release", "-o", output,
                 f"-p:CompatibilityGeneration={generation}", *common])
-            managed[generation] = output / "NativeWeave.Compatibility.Sample.dll"
+            managed[generation] = output / "Korda.Compatibility.Sample.dll"
             hashes[f"managed-{generation}"] = record(managed[generation], ROOT)
         def matrix_rows(mode, consumers):
             for generation in ("old", "new"):
@@ -138,7 +138,7 @@ def main():
             output = evidence / "aot" / generation
             run(f"sample-aot-{generation}", ["dotnet", "publish", sample, "--no-restore", "-c", "Release", "-r", "linux-x64",
                 "-p:PublishAot=true", f"-p:CompatibilityGeneration={generation}", "-o", output, *common])
-            aot[generation] = output / "NativeWeave.Compatibility.Sample"
+            aot[generation] = output / "Korda.Compatibility.Sample"
             hashes[f"aot-{generation}"] = record(aot[generation], ROOT)
         matrix_rows("aot", aot)
         matrix_record = {"passed": True, "source_commit": source_commit, "rid": "linux-x64", "rows": matrix,
@@ -168,7 +168,7 @@ def main():
             output = evidence / "api" / generation.lower()
             run(f"api-{generation.lower()}-build", ["dotnet", "build", api_project, "--no-restore", "-c", "Release", "-o", output,
                 f"-p:FixtureGeneration={generation}", *common])
-            dll = output / "NativeWeave.Compatibility.ApiFixture.dll"
+            dll = output / "Korda.Compatibility.ApiFixture.dll"
             fixture_dlls[generation] = dll
             config = write(output / "config.json", {"assembly": str(dll), "sources": [str(api_project.parent)], "baselines": [],
                 "title": "A22 controlled compiled API evolution fixture", "scope": "Unpublished compatibility fixture; not a product API",
@@ -198,12 +198,12 @@ def main():
             run(f"source-{generation.lower()}", ["dotnet", "publish", consumer_project, "--no-restore", "-c", "Release",
                 *aot, "-o", output, *properties, *common])
             changed = generation in ("DEFAULT", "BEHAVIOR")
-            run(f"source-run-{generation.lower()}", [output / "NativeWeave.Compatibility.ApiConsumer"],
+            run(f"source-run-{generation.lower()}", [output / "Korda.Compatibility.ApiConsumer"],
                 expected=None if changed else 0, contains=("compatibility changed",) if changed else ("consumer passed",))
         write(evidence / "api-cases.json", api_results)
 
         # Compile the actual product Core and its existing exact EngineLoadOptions policy.
-        core_dll = managed["new"].parent / "NativeWeave.Core.dll"
+        core_dll = managed["new"].parent / "Korda.Core.dll"
         core_config = write(evidence / "core-api-config.json", {"assembly": str(core_dll),
             "sources": [str(ROOT / ("src/Interop." + name)) for name in ("Negotiation", "Errors", "Lifetime", "Memory", "Callbacks", "Async", "Execution")], "baselines": [],
             "title": "Actual Core API used by A22", "scope": "Product component API; no new A22 runtime surface",
@@ -212,14 +212,14 @@ def main():
         xml_cases = xml_documentation_negatives(run, evidence, core_dll, core_config, api_tool, dotnet_root)
         current = compat.read_json(evidence / "core-reference.json")
         baseline = compat.read_json(ROOT / "src/Interop.Negotiation/public-api.expected.json")
-        select = lambda x: {"symbols": [s for s in x["symbols"] if "NativeWeave.Interop.EngineLoadOptions" in s["id"]
-            and (s["id"].startswith("T:") or s["id"].startswith("P:") or s["id"].startswith("M:NativeWeave.Interop.EngineLoadOptions."))]}
+        select = lambda x: {"symbols": [s for s in x["symbols"] if "Korda.Interop.EngineLoadOptions" in s["id"]
+            and (s["id"].startswith("T:") or s["id"].startswith("P:") or s["id"].startswith("M:Korda.Interop.EngineLoadOptions."))]}
         checked = compat.compare_api(select(baseline), select(current))
         assert checked["retained"] == 4 and not checked["added"]
         write(evidence / "engine-load-options-api.json", checked)
         # Both controlled driver generations use the actual existing Core API.
         # The independent ApiFixture evolution negatives do not describe Core.
-        old_core = managed["old"].parent / "NativeWeave.Core.dll"
+        old_core = managed["old"].parent / "Korda.Core.dll"
         assert compat.file_hash(old_core) == compat.file_hash(core_dll)
         matrix_record["api"] = {"previous_assembly_sha256": compat.file_hash(old_core), "candidate_assembly_sha256": compat.file_hash(core_dll),
             "previous_snapshot_sha256": compat.file_hash(evidence / "core-reference.json"),
@@ -250,14 +250,14 @@ def main():
 
 def xml_documentation_negatives(run, evidence, core_dll, core_config, api_tool, dotnet_root):
     """Synthesized delegate methods inherit docs; declared API remains mandatory."""
-    delegate = "T:NativeWeave.Interop.NativeBufferReader`1"
+    delegate = "T:Korda.Interop.NativeBufferReader`1"
     cases = (
         ("delegate-summary", delegate, "summary", "Missing XML summary: " + delegate),
         ("delegate-parameter", delegate, "param", "XML parameter names differ: " + delegate),
         ("delegate-return", delegate, "returns", "Missing XML returns: " + delegate),
         ("delegate-policy", delegate, "remarks", "Missing member or inherited type lifetime/cost remarks: " + delegate),
-        ("declared-member-summary", "P:NativeWeave.Interop.EngineLoadOptions.NativeAssetPath", "summary",
-         "Missing XML summary: P:NativeWeave.Interop.EngineLoadOptions.NativeAssetPath"),
+        ("declared-member-summary", "P:Korda.Interop.EngineLoadOptions.NativeAssetPath", "summary",
+         "Missing XML summary: P:Korda.Interop.EngineLoadOptions.NativeAssetPath"),
     )
     config = compat.read_json(core_config)
     results = []
@@ -286,15 +286,15 @@ def local_closure(run, evidence, common):
     """Real local NuGet restores, with deliberately unsigned graph-only packages."""
     feed = evidence / "local-feed"; feed.mkdir()
     config = evidence / "local-feed.config"
-    config.write_text(f'<configuration><packageSources><clear/><add key="a22-fixtures" value="{feed}"/></packageSources><packageSourceMapping><clear/><packageSource key="a22-fixtures"><package pattern="NativeWeave.Compatibility.*"/></packageSource></packageSourceMapping></configuration>')
+    config.write_text(f'<configuration><packageSources><clear/><add key="a22-fixtures" value="{feed}"/></packageSources><packageSourceMapping><clear/><packageSource key="a22-fixtures"><package pattern="Korda.Compatibility.*"/></packageSource></packageSourceMapping></configuration>')
     versions = ("1.0.0", "1.1.0")
     closures, paths = {}, {}
     for version in versions:
         entries = []
         packages = {}
         for name in ("Native", "Facade"):
-            identity = f"NativeWeave.Compatibility.{name}"
-            dependencies = {"NativeWeave.Compatibility.Native": version} if name == "Facade" else {}
+            identity = f"Korda.Compatibility.{name}"
+            dependencies = {"Korda.Compatibility.Native": version} if name == "Facade" else {}
             deps = "".join(f'<dependency id="{key}" version="[{value}]" />' for key, value in dependencies.items())
             nuspec = f'<?xml version="1.0"?><package><metadata><id>{identity}</id><version>{version}</version><authors>Conformance</authors><description>Unpublished graph fixture</description><dependencies><group targetFramework="net11.0">{deps}</group></dependencies></metadata></package>'
             package = feed / f"{identity}.{version}.nupkg"
@@ -309,8 +309,8 @@ def local_closure(run, evidence, common):
     (project / "Program.cs").write_text('System.Console.WriteLine("Graph-only fixture");\n')
     cases = []
     def restore(name, version, override=None, expected=0):
-        direct = f'<PackageReference Include="NativeWeave.Compatibility.Native" Version="[{override}]" />' if override else ""
-        (project / "Consumer.csproj").write_text(f'<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net11.0</TargetFramework><OutputType>Exe</OutputType><RestorePackagesWithLockFile>false</RestorePackagesWithLockFile><NoWarn>NU1608</NoWarn></PropertyGroup><ItemGroup><PackageReference Include="NativeWeave.Compatibility.Facade" Version="[{version}]" />{direct}</ItemGroup></Project>')
+        direct = f'<PackageReference Include="Korda.Compatibility.Native" Version="[{override}]" />' if override else ""
+        (project / "Consumer.csproj").write_text(f'<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net11.0</TargetFramework><OutputType>Exe</OutputType><RestorePackagesWithLockFile>false</RestorePackagesWithLockFile><NoWarn>NU1608</NoWarn></PropertyGroup><ItemGroup><PackageReference Include="Korda.Compatibility.Facade" Version="[{version}]" />{direct}</ItemGroup></Project>')
         run(f"closure-{name}-restore", ["dotnet", "restore", project / "Consumer.csproj", "--configfile", config,
             "--packages", project / ("cache-" + name), "--force", "-p:NuGetAudit=false", *common], expected=expected)
         assets = compat.read_json(project / "obj/project.assets.json")
@@ -327,20 +327,20 @@ def local_closure(run, evidence, common):
     restore("direct-override-suppressed", "1.0.0", "1.1.0")
     restore("rollback-old-complete", "1.0.0")
     # Remove the exact native leaf from this local feed; a newer leaf must not be substituted.
-    missing = paths["1.0.0"]["NativeWeave.Compatibility.Native"]
+    missing = paths["1.0.0"]["Korda.Compatibility.Native"]
     held = missing.with_suffix(".held")
     missing.rename(held)
     try:
-        (project / "Consumer.csproj").write_text('<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net11.0</TargetFramework></PropertyGroup><ItemGroup><PackageReference Include="NativeWeave.Compatibility.Facade" Version="[1.0.0]" /></ItemGroup></Project>')
+        (project / "Consumer.csproj").write_text('<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net11.0</TargetFramework></PropertyGroup><ItemGroup><PackageReference Include="Korda.Compatibility.Facade" Version="[1.0.0]" /></ItemGroup></Project>')
         run("closure-partial-set-restore", ["dotnet", "restore", project / "Consumer.csproj", "--configfile", config,
             "--packages", project / "empty-cache", "--force", "-p:NuGetAudit=false", *common], expected=None, contains=("NU1102",))
         cases.append({"name": "partial-set", "hard_rejection": "NU1102"})
     finally:
         held.rename(missing)
     # A bare minimum edge is not an exact owned dependency, independent of NuGet warnings.
-    facade = paths["1.0.0"]["NativeWeave.Compatibility.Facade"]
+    facade = paths["1.0.0"]["Korda.Compatibility.Facade"]
     with zipfile.ZipFile(facade) as archive:
-        name = "NativeWeave.Compatibility.Facade.nuspec"
+        name = "Korda.Compatibility.Facade.nuspec"
         raw = archive.read(name).replace(b"[1.0.0]", b"1.0.0")
     bare = evidence / "bare-range.nupkg"
     with zipfile.ZipFile(facade) as original, zipfile.ZipFile(bare, "w") as candidate:

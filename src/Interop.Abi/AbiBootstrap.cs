@@ -1,6 +1,6 @@
 using System.Runtime.CompilerServices;
 
-namespace NativeWeave.Interop.Abi;
+namespace Korda.Interop.Abi;
 
 /// <summary>Checks the copied common bootstrap before any domain owner is created.</summary>
 /// <remarks>

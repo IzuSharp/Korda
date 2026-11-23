@@ -60,13 +60,13 @@ def main():
                                ("ninja", ["ninja", "--version"]), ("clang", ["clang", "--version"])]:
             run(label, command)
         scopes = ["src/Interop.Async", "tests/Interop.Async", "native/interop/async", "samples/api/interop-async",
-                  "docs/guides/interop-async.md", "src/NativeWeave.Core", "src/Interop.Abi", "src/Interop.Negotiation",
+                  "docs/guides/interop-async.md", "src/Korda.Core", "src/Interop.Abi", "src/Interop.Negotiation",
                   "src/Interop.Lifetime", "src/Interop.Memory", "src/Interop.Errors", "src/Interop.Callbacks",
                   "native/interop/abi", "native/interop/errors", "native/interop/memory", "tests/Interop.Errors/ApiCheck",
                   "Directory.Build.props", "Directory.Build.targets", "global.json", *NATIVE_INPUTS]
         paths = run("source-files", ["git", "ls-files", "--cached", "--others", "--exclude-standard", "--", *scopes])[0].splitlines()
         report["source_sha256"] = {p: sha(ROOT / p) for p in sorted(set(paths)) if (ROOT / p).is_file()}
-        report["native_compiler_provenance"] = prepare_native(run, ["nativeweave_interop_async", "nw_async_downstream"])
+        report["native_compiler_provenance"] = prepare_native(run, ["korda_interop_async", "nw_async_downstream"])
         downstream = CPP_FIXTURES / "libnw_async_downstream.so"
         exported = run("downstream-exports", ["nm", "-D", "--defined-only", downstream])
         exports = exported[0] if isinstance(exported, tuple) else exported
@@ -75,12 +75,12 @@ def main():
             raise RuntimeError("Reusable C++ component leaked fixture/helper exports: " + repr(names))
         report["default_downstream_exports"] = names
         report["artifacts"]["default_downstream"] = {"path": str(downstream), "sha256": sha(downstream)}
-        native = CPP_FIXTURES / "libnativeweave_interop_async.so"
+        native = CPP_FIXTURES / "libkorda_interop_async.so"
         report["artifacts"]["native"] = {"path": str(native), "sha256": sha(native)}
         common = ["-p:UseSharedCompilation=false", "-nr:false", "-m:1"]
         restore = ["--locked-mode"] + (["-p:NuGetAudit=false", "--ignore-failed-sources"] if args.offline else [])
-        projects = [("tests", "tests/Interop.Async/Interop.Async.Tests.csproj", "NativeWeave.Interop.Async.Tests"),
-                    ("sample", "samples/api/interop-async/Interop.Async.Sample.csproj", "NativeWeave.Interop.Async.Sample")]
+        projects = [("tests", "tests/Interop.Async/Interop.Async.Tests.csproj", "Korda.Interop.Async.Tests"),
+                    ("sample", "samples/api/interop-async/Interop.Async.Sample.csproj", "Korda.Interop.Async.Sample")]
         isolated = ["--indeterminate-start", "--callback-then-reject", "--retire-fault"]
         for label, project, assembly in projects:
             run(label + "-restore", ["dotnet", "restore", project, *restore, *common])
@@ -100,12 +100,12 @@ def main():
             report["artifacts"][label + "_aot"] = {"path": str(executable), "sha256": sha(executable)}
         sdk = Path(shutil.which("dotnet")).resolve().parent
         for label, project, assembly in [
-            ("api", "tests/Interop.Async/ApiCheck/ApiCheck.csproj", "NativeWeave.Interop.Async.ApiCheck"),
-            ("existing-error-api-compatibility", "tests/Interop.Errors/ApiCheck/ApiCheck.csproj", "NativeWeave.Interop.Errors.ApiCheck")]:
+            ("api", "tests/Interop.Async/ApiCheck/ApiCheck.csproj", "Korda.Interop.Async.ApiCheck"),
+            ("existing-error-api-compatibility", "tests/Interop.Errors/ApiCheck/ApiCheck.csproj", "Korda.Interop.Errors.ApiCheck")]:
             run(label + "-restore", ["dotnet", "restore", project, *restore, *common])
             run(label + "-build", ["dotnet", "build", project, "-c", "Release", "--no-restore", *common])
             run(label + "-xml-reference", ["dotnet", ROOT / Path(project).parent / "bin/Release/net11.0" / (assembly + ".dll"),
-                                          ROOT, sdk, ROOT / "src/NativeWeave.Core/bin/Release/net11.0/NativeWeave.Core.dll"])
+                                          ROOT, sdk, ROOT / "src/Korda.Core/bin/Release/net11.0/Korda.Core.dll"])
         run("diff-check", ["git", "diff", "--check"])
         for path, digest in report["source_sha256"].items():
             if sha(ROOT / path) != digest:

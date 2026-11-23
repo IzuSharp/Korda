@@ -39,36 +39,36 @@ def run(label, command, cwd=ROOT, environment=None):
     return result.stdout.decode()
 
 common = ['-p:UseSharedCompilation=false', '-nr:false', '-m:1']
-assets = ['-p:NativeWeaveSqliteAssetPath=' + str(args.sqlite.resolve()), '-p:NativeWeavePostgresAssetPath=' + str(args.postgresql.resolve())]
+assets = ['-p:KordaSqliteAssetPath=' + str(args.sqlite.resolve()), '-p:KordaPostgresAssetPath=' + str(args.postgresql.resolve())]
 run('sdk', ['dotnet', '--version'])
 source_commit = run('source-commit', ['git', 'rev-parse', 'HEAD']).strip()
-run('sample-restore', ['dotnet', 'restore', ROOT / 'samples/api/data-nativehost/NativeWeave.Data.NativeHost.Sample.csproj', '--ignore-failed-sources', *common])
-run('sample-build', ['dotnet', 'build', ROOT / 'samples/api/data-nativehost/NativeWeave.Data.NativeHost.Sample.csproj', '-c', 'Release', '--no-restore', *common, *assets])
-run('di-restore', ['dotnet', 'restore', ROOT / 'src/Data.NativeHost/DependencyInjection/NativeWeave.Database.DependencyInjection.csproj', '--ignore-failed-sources', *common])
-run('di-build', ['dotnet', 'build', ROOT / 'src/Data.NativeHost/DependencyInjection/NativeWeave.Database.DependencyInjection.csproj', '-c', 'Release', '--no-restore', *common])
-task_project = ROOT / 'src/Packaging.Release/BuildTasks/NativeWeave.Packaging.Tasks.csproj'
+run('sample-restore', ['dotnet', 'restore', ROOT / 'samples/api/data-nativehost/Korda.Data.NativeHost.Sample.csproj', '--ignore-failed-sources', *common])
+run('sample-build', ['dotnet', 'build', ROOT / 'samples/api/data-nativehost/Korda.Data.NativeHost.Sample.csproj', '-c', 'Release', '--no-restore', *common, *assets])
+run('di-restore', ['dotnet', 'restore', ROOT / 'src/Data.NativeHost/DependencyInjection/Korda.Database.DependencyInjection.csproj', '--ignore-failed-sources', *common])
+run('di-build', ['dotnet', 'build', ROOT / 'src/Data.NativeHost/DependencyInjection/Korda.Database.DependencyInjection.csproj', '-c', 'Release', '--no-restore', *common])
+task_project = ROOT / 'src/Packaging.Release/BuildTasks/Korda.Packaging.Tasks.csproj'
 run('closure-task-restore', ['dotnet', 'restore', task_project, '--locked-mode', '--ignore-failed-sources', *common])
 run('closure-task-build', ['dotnet', 'build', task_project, '-c', 'Release', '--no-restore', *common])
 spec = importlib.util.spec_from_file_location('b04_existing_pack', ROOT / 'src/Packaging.Linux/packages.py')
 packing = importlib.util.module_from_spec(spec); spec.loader.exec_module(packing)
 version = '0.1.0-preview.1'
 registry = {
-    'NativeWeave.Interop.Abi': ('src/Interop.Abi', []),
-    'NativeWeave.Core': ('src/NativeWeave.Core', ['NativeWeave.Interop.Abi']),
-    'NativeWeave.Data': ('src/Data.Abstractions', []),
-    'NativeWeave.Database.Transactions': ('src/Data.Transactions', ['NativeWeave.Data']),
-    'NativeWeave.Data.Streaming': ('src/Data.Streaming', ['NativeWeave.Data']),
-    'NativeWeave.Query.Binding': ('src/Query.Binding', ['NativeWeave.Data', 'NativeWeave.Interop.Abi']),
-    'NativeWeave.Query.Generator': ('src/Query.Generator', []),
-    'NativeWeave.Database': ('src/Data.NativeHost', ['NativeWeave.Core', 'NativeWeave.Data', 'NativeWeave.Database.Transactions', 'NativeWeave.Data.Streaming', 'NativeWeave.Query.Binding']),
-    'NativeWeave.Database.Sqlite': ('src/Data.Sqlite', ['NativeWeave.Core', 'NativeWeave.Data', 'NativeWeave.Database', 'NativeWeave.Query.Generator']),
-    'NativeWeave.Database.PostgreSql': ('src/Data.Postgres', ['NativeWeave.Core', 'NativeWeave.Data', 'NativeWeave.Database', 'NativeWeave.Query.Generator']),
-    'NativeWeave.Database.DependencyInjection': ('src/Data.NativeHost/DependencyInjection', ['NativeWeave.Database']),
+    'Korda.Interop.Abi': ('src/Interop.Abi', []),
+    'Korda.Core': ('src/Korda.Core', ['Korda.Interop.Abi']),
+    'Korda.Data': ('src/Data.Abstractions', []),
+    'Korda.Database.Transactions': ('src/Data.Transactions', ['Korda.Data']),
+    'Korda.Data.Streaming': ('src/Data.Streaming', ['Korda.Data']),
+    'Korda.Query.Binding': ('src/Query.Binding', ['Korda.Data', 'Korda.Interop.Abi']),
+    'Korda.Query.Generator': ('src/Query.Generator', []),
+    'Korda.Database': ('src/Data.NativeHost', ['Korda.Core', 'Korda.Data', 'Korda.Database.Transactions', 'Korda.Data.Streaming', 'Korda.Query.Binding']),
+    'Korda.Database.Sqlite': ('src/Data.Sqlite', ['Korda.Core', 'Korda.Data', 'Korda.Database', 'Korda.Query.Generator']),
+    'Korda.Database.PostgreSql': ('src/Data.Postgres', ['Korda.Core', 'Korda.Data', 'Korda.Database', 'Korda.Query.Generator']),
+    'Korda.Database.DependencyInjection': ('src/Data.NativeHost/DependencyInjection', ['Korda.Database']),
 }
 capabilities = ['db.metadata.v1','db.query.v1','db.transactions.v1','db.savepoints.v1','db.streaming.v1','db.migrations.v1','db.schema.read.v1','db.returning.v1','db.upsert.v1','db.cte.v1','db.window.v1','db.row-lock.v1','db.null-safe-equality.v1','db.json.v1','db.decimal.numeric.v1','db.decimal.text.v1','db.fixed-money.v1','db.relationships.explicit.v1','db.prepared-shape.v1','db.bulk-batches.v1','db.dynamic-fields.v1','db.recursive-cte.v1','db.set-operations.v1','db.scalar-codecs.v1','db.sql.expert.v1']
 provider = {
-    'NativeWeave.Database.Sqlite': ('database.sqlite', args.sqlite.resolve(), 'libnw_database_sqlite.so'),
-    'NativeWeave.Database.PostgreSql': ('database.postgresql', args.postgresql.resolve(), 'libnw_database_postgresql.so'),
+    'Korda.Database.Sqlite': ('database.sqlite', args.sqlite.resolve(), 'libnw_database_sqlite.so'),
+    'Korda.Database.PostgreSql': ('database.postgresql', args.postgresql.resolve(), 'libnw_database_postgresql.so'),
 }
 
 def record(identity):
@@ -94,21 +94,21 @@ packages = {}
 for identity, (folder, dependencies) in registry.items():
     entries = {'LICENSE': ROOT / 'LICENSE'}
     directory = ROOT / folder
-    if identity == 'NativeWeave.Query.Generator':
+    if identity == 'Korda.Query.Generator':
         entries['tools/roslyn/' + identity + '.dll'] = directory / 'bin/Release/netstandard2.0' / (identity + '.dll')
         entries['buildTransitive/' + identity + '.targets'] = directory / 'buildTransitive' / (identity + '.targets')
     else:
         for suffix in ['.dll', '.xml']:
             entries['lib/net11.0/' + identity + suffix] = directory / 'bin/Release/net11.0' / (identity + suffix)
-    if identity in provider or identity == 'NativeWeave.Database':
-        entries['buildTransitive/' + identity + '.targets'] = ROOT / 'src/Packaging.Release/buildTransitive/NativeWeave.Packaging.targets'
-        entries['nativeweave/closure.json'] = json.dumps(closure(identity), sort_keys=True).encode()
+    if identity in provider or identity == 'Korda.Database':
+        entries['buildTransitive/' + identity + '.targets'] = ROOT / 'src/Packaging.Release/buildTransitive/Korda.Packaging.targets'
+        entries['korda/closure.json'] = json.dumps(closure(identity), sort_keys=True).encode()
         for suffix in ['.dll', '.xml']:
-            entries['tools/net11.0/NativeWeave.Packaging.Tasks' + suffix] = task_project.parent / 'bin/Release/net11.0' / ('NativeWeave.Packaging.Tasks' + suffix)
+            entries['tools/net11.0/Korda.Packaging.Tasks' + suffix] = task_project.parent / 'bin/Release/net11.0' / ('Korda.Packaging.Tasks' + suffix)
     if identity in provider:
         _, native, basename = provider[identity]
         entries['runtimes/linux-x64/native/' + basename] = native
-    artifact = packing.pack(feed, identity, version, entries, {name: version for name in dependencies}, ('https://github.com/IzuSharp/NativeWeave', source_commit))
+    artifact = packing.pack(feed, identity, version, entries, {name: version for name in dependencies}, ('https://github.com/IzuSharp/Korda', source_commit))
     packages[identity] = {'path': str(artifact), 'sha256': sha(artifact)}
 (out / 'packages.json').write_text(json.dumps(packages, indent=2) + '\n')
 # Each provider's closure has exactly one native module and no other provider edge.
@@ -118,7 +118,7 @@ for identity in provider:
 consumer = out / 'consumer'; consumer.mkdir()
 shutil.copy2(ROOT / 'global.json', consumer)
 shutil.copy2(ROOT / 'samples/api/data-nativehost/Program.cs', consumer / 'Program.cs')
-(consumer / 'Generated.cs').write_text('''using NativeWeave.Data;
+(consumer / 'Generated.cs').write_text('''using Korda.Data;
 [WeaveTable("generated_host")]
 public sealed class GeneratedHostRow { [WeaveKey] public long Id { get; set; } public string Name { get; set; } = ""; }
 internal static class GeneratedProbe { internal static void Assert() { if (GeneratedHostRowMapping.Table.MetadataHash.Length != 64 || GeneratedHostRowMapping.Row is null) throw new System.InvalidOperationException("Transitive generator mapping failed."); } }
@@ -130,13 +130,13 @@ program = (consumer / 'Program.cs').read_text().replace('var builder =', 'Genera
 <AssemblyName>HostConsumer</AssemblyName><IsAotCompatible>true</IsAotCompatible><TreatWarningsAsErrors>true</TreatWarningsAsErrors><RestorePackagesWithLockFile>true</RestorePackagesWithLockFile><NuGetAudit>true</NuGetAudit>
 <NuGetLockFilePath Condition="'$(PublishAot)' == 'true'">$(MSBuildProjectDirectory)/packages.aot.lock.json</NuGetLockFilePath>
 </PropertyGroup><ItemGroup>
-<PackageReference Include="NativeWeave.Database.Sqlite" Version="[0.1.0-preview.1]" />
-<PackageReference Include="NativeWeave.Database.PostgreSql" Version="[0.1.0-preview.1]" />
+<PackageReference Include="Korda.Database.Sqlite" Version="[0.1.0-preview.1]" />
+<PackageReference Include="Korda.Database.PostgreSql" Version="[0.1.0-preview.1]" />
 </ItemGroup></Project>''')
 configuration = ET.Element('configuration'); sources = ET.SubElement(configuration, 'packageSources'); ET.SubElement(sources, 'clear')
 ET.SubElement(sources, 'add', key='candidate', value=str(feed)); ET.SubElement(sources, 'add', key='nuget.org', value='https://api.nuget.org/v3/index.json')
 mapping = ET.SubElement(configuration, 'packageSourceMapping'); ET.SubElement(mapping, 'clear')
-ET.SubElement(ET.SubElement(mapping, 'packageSource', key='candidate'), 'package', pattern='NativeWeave.*')
+ET.SubElement(ET.SubElement(mapping, 'packageSource', key='candidate'), 'package', pattern='Korda.*')
 ET.SubElement(ET.SubElement(mapping, 'packageSource', key='nuget.org'), 'package', pattern='*')
 ET.ElementTree(configuration).write(consumer / 'NuGet.Config')
 consumer_env = env.copy(); consumer_env['NUGET_PACKAGES'] = str(consumer / 'packages')
@@ -159,7 +159,7 @@ assert not marker.exists(), 'A normal consumer invoked Rust'
 records = {}
 for mode, path in [('aot', consumer / 'publish')]:
     for identity, (engine, native, basename) in provider.items():
-        value = json.loads((path / ('NativeWeave.' + engine + '.assets.json')).read_text())
+        value = json.loads((path / ('Korda.' + engine + '.assets.json')).read_text())
         assert value['sha256'] == sha(native) == sha(path / value['outputPath'])
         records[mode + '-' + engine] = value
 (out / 'summary.json').write_text(json.dumps({'source_commit': source_commit, 'native_dependency_lock_sha256': sha(ROOT / 'native/dependencies.lock.json'), 'packages': packages,

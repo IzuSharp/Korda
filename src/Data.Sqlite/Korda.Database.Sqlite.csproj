@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <AssemblyName>Korda.Database.Sqlite</AssemblyName>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <IsAotCompatible>true</IsAotCompatible>
+    <KordaSqliteRuntimeIdentifier Condition="'$(KordaSqliteRuntimeIdentifier)' == ''">linux-x64</KordaSqliteRuntimeIdentifier>
+    <KordaSqliteAssetName Condition="'$(KordaSqliteAssetName)' == ''">libnw_database_sqlite.so</KordaSqliteAssetName>
+    <KordaSqliteAssetPath Condition="'$(KordaSqliteAssetPath)' == ''">$(MSBuildThisFileDirectory)../../artifacts/native-install/linux-x64-release/lib/$(KordaSqliteAssetName)</KordaSqliteAssetPath>
+    <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifiers)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifiers).aot.lock.json</NuGetLockFilePath>
+    <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifier)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifier).aot.lock.json</NuGetLockFilePath>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Query.Generator/Korda.Query.Generator.csproj" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../Data.Abstractions/Korda.Data.csproj" />
+    <ProjectReference Include="../Korda.Core/Korda.Core.csproj" />
+    <InternalsVisibleTo Include="Korda.Database" />
+    <InternalsVisibleTo Include="Korda.Data.Sqlite.Tests" />
+    <Compile Include="$(IntermediateOutputPath)EngineProfile.g.cs" />
+    <None Include="$(KordaSqliteAssetPath)" Link="runtimes/$(KordaSqliteRuntimeIdentifier)/native/$(KordaSqliteAssetName)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Pack="true" PackagePath="%(Link)" />
+    <None Include="$(IntermediateOutputPath)Korda.database.sqlite.assets.json" Link="Korda.database.sqlite.assets.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Pack="true" PackagePath="%(Link)" />
+    <ProjectReference Include="../Data.NativeHost/Korda.Database.csproj" />
+    <Compile Include="../Data.NativeHost/Providers/Sqlite/**/*.cs" />
+  </ItemGroup>
+  <Target Name="GenerateSqliteEngineProfile" BeforeTargets="CoreCompile">
+    <Error Condition="!Exists('$(KordaSqliteAssetPath)')" Text="Build the maintainer SQLite native Database Host first or supply KordaSqliteAssetPath. Consumer builds use precompiled assets and never invoke a native compiler." />
+    <GetFileHash Files="$(KordaSqliteAssetPath)" Algorithm="SHA256">
+      <Output TaskParameter="Items" ItemName="_SqliteNativeHash" />
+    </GetFileHash>
+    <PropertyGroup>
+      <_SqliteHash>@(_SqliteNativeHash->'%(FileHash)')</_SqliteHash>
+      <_SqliteLowerHash>$(_SqliteHash.ToLowerInvariant())</_SqliteLowerHash>
+    </PropertyGroup>
+    <WriteLinesToFile File="$(IntermediateOutputPath)EngineProfile.g.cs" Overwrite="true" WriteOnlyWhenDifferent="true" Lines="namespace Korda.Database.Sqlite { internal static class GeneratedEngineProfile { internal const string RuntimeIdentifier = &quot;$(KordaSqliteRuntimeIdentifier)&quot;%3B internal const string RelativePath = &quot;runtimes/$(KordaSqliteRuntimeIdentifier)/native/$(KordaSqliteAssetName)&quot;%3B internal const string Sha256 = &quot;%(_SqliteNativeHash.FileHash)&quot;%3B } }" />
+    <WriteLinesToFile File="$(IntermediateOutputPath)Korda.database.sqlite.assets.json" Overwrite="true" WriteOnlyWhenDifferent="true" Lines="{ &quot;schemaVersion&quot;: 1, &quot;engineId&quot;: &quot;database.sqlite&quot;, &quot;packageId&quot;: &quot;Korda.Database.Sqlite&quot;, &quot;packageVersion&quot;: &quot;$(Version)&quot;, &quot;rid&quot;: &quot;$(KordaSqliteRuntimeIdentifier)&quot;, &quot;sourcePath&quot;: &quot;runtimes/$(KordaSqliteRuntimeIdentifier)/native/$(KordaSqliteAssetName)&quot;, &quot;outputPath&quot;: &quot;runtimes/$(KordaSqliteRuntimeIdentifier)/native/$(KordaSqliteAssetName)&quot;, &quot;sha256&quot;: &quot;$(_SqliteLowerHash)&quot; }" />
+  </Target>
+</Project>

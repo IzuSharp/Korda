@@ -24,7 +24,7 @@ def run(name,argv):
     record={'name':name,'argv':[str(a) for a in argv],'exit_code':result.returncode,'seconds':round(time.monotonic()-start,3),'log':log.name};commands.append(record);write('commands.json',commands)
     if result.returncode:raise RuntimeError(f'{name} exited {result.returncode}; retained {log}')
     print(f'PASS {number:02d} {name}',flush=True)
-scopes=['native/cpp','native/database/binding','src/Query.Binding','tests/Query.Binding','samples/api/query-binding','docs/guides/query-binding.md','native/database/interfaces','src/Data.Abstractions','native/interop/abi','src/Interop.Abi','CMakeLists.txt','CMakePresets.json','.clang-format','Directory.Build.props','Directory.Build.targets','global.json','NativeWeave.slnx']
+scopes=['native/cpp','native/database/binding','src/Query.Binding','tests/Query.Binding','samples/api/query-binding','docs/guides/query-binding.md','native/database/interfaces','src/Data.Abstractions','native/interop/abi','src/Interop.Abi','CMakeLists.txt','CMakePresets.json','.clang-format','Directory.Build.props','Directory.Build.targets','global.json','Korda.slnx']
 files=subprocess.check_output(['git','ls-files','--',*scopes],cwd=ROOT,text=True).splitlines()
 before={name:sha(ROOT/name) for name in files}
 source={'commit':subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),'tree':subprocess.check_output(['git','rev-parse','HEAD^{tree}'],cwd=ROOT,text=True).strip(),'dirty':subprocess.check_output(['git','status','--porcelain','--',*scopes],cwd=ROOT,text=True).strip(),'inputs':before}
@@ -32,8 +32,8 @@ write('source-inputs.json',source)
 try:
     if source['dirty']:raise RuntimeError('Formal B09 evidence requires committed source inputs; dirty status is retained.')
     design_commit=subprocess.check_output(['git','-C',str(args.design),'rev-parse','HEAD'],text=True).strip()
-    asset=(args.native_fixture or args.native_build/'fixtures/libnativeweave_query_binding_fixture.so').resolve()
-    if not asset.is_file():raise RuntimeError('Build the C++ nativeweave_query_binding_fixture target before executing the retained consumers.')
+    asset=(args.native_fixture or args.native_build/'fixtures/libkorda_query_binding_fixture.so').resolve()
+    if not asset.is_file():raise RuntimeError('Build the C++ korda_query_binding_fixture target before executing the retained consumers.')
     native_hash=sha(asset)
     write('environment.json',{'utc':datetime.datetime.now(datetime.timezone.utc).isoformat(),'platform':platform.platform(),'machine':platform.machine(),'design_commit':design_commit,'tools':{tool:shutil.which(tool) for tool in ['dotnet','clang','clang++','clang-format','cmake','ctest','ld']},'native_fixture':str(asset),'native_sha256':native_hash,'nuget_config_sha256':sha(args.nuget_config) if args.nuget_config else None})
     run('source-diff-check',['git','diff','--check'])
@@ -44,26 +44,26 @@ try:
     run('managed-format',['dotnet','format','whitespace','.','--folder','--include','src/Query.Binding','tests/Query.Binding','samples/api/query-binding','--verify-no-changes','--verbosity','minimal'])
     common=['-p:UseSharedCompilation=false','-nr:false','-m:1']
     config=['--configfile',args.nuget_config] if args.nuget_config else []
-    tests='tests/Query.Binding/NativeWeave.Query.Binding.Tests.csproj';sample='samples/api/query-binding/QueryBindingSample.csproj';api='tests/Query.Binding/ApiCheck/ApiCheck.csproj'
+    tests='tests/Query.Binding/Korda.Query.Binding.Tests.csproj';sample='samples/api/query-binding/QueryBindingSample.csproj';api='tests/Query.Binding/ApiCheck/ApiCheck.csproj'
     run('restore-tests-managed',['dotnet','restore',tests,'--locked-mode',*config,*common])
     run('build-tests-managed',['dotnet','build',tests,'-c','Release','--no-restore',*common])
-    test_dll=ROOT/'tests/Query.Binding/bin/Release/net11.0/NativeWeave.Query.Binding.Tests.dll'
+    test_dll=ROOT/'tests/Query.Binding/bin/Release/net11.0/Korda.Query.Binding.Tests.dll'
     run('restore-api-check',['dotnet','restore',api,'--locked-mode',*config,*common])
     run('build-api-check',['dotnet','build',api,'-c','Release','--no-restore',*common])
-    run('compiled-api-xml-reference',['dotnet','tests/Query.Binding/ApiCheck/bin/Release/net11.0/ApiCheck.dll','src/Query.Binding/bin/Release/net11.0/NativeWeave.Query.Binding.dll','src/Query.Binding/bin/Release/net11.0/NativeWeave.Query.Binding.xml','native/database/binding/signatures-v1.json','src/Query.Binding/api-reference.md'])
+    run('compiled-api-xml-reference',['dotnet','tests/Query.Binding/ApiCheck/bin/Release/net11.0/ApiCheck.dll','src/Query.Binding/bin/Release/net11.0/Korda.Query.Binding.dll','src/Query.Binding/bin/Release/net11.0/Korda.Query.Binding.xml','native/database/binding/signatures-v1.json','src/Query.Binding/api-reference.md'])
     run('restore-tests-aot',['dotnet','restore',tests,'-r','linux-x64','-p:PublishAot=true','--locked-mode',*config,*common])
     run('publish-tests-aot',['dotnet','publish',tests,'-c','Release','-r','linux-x64','-p:PublishAot=true','-p:IlcTreatWarningsAsErrors=true','--no-restore','-o',out/'aot',*common])
-    if (out/'aot/NativeWeave.Query.Binding.Tests').read_bytes()[:4]!=b'\x7fELF' or (out/'aot/NativeWeave.Query.Binding.Tests.dll').exists():raise RuntimeError('Expected an actual standalone Native AOT test executable.')
-    run('managed-golden',[out/'aot/NativeWeave.Query.Binding.Tests','--emit',out/'golden'])
+    if (out/'aot/Korda.Query.Binding.Tests').read_bytes()[:4]!=b'\x7fELF' or (out/'aot/Korda.Query.Binding.Tests.dll').exists():raise RuntimeError('Expected an actual standalone Native AOT test executable.')
+    run('managed-golden',[out/'aot/Korda.Query.Binding.Tests','--emit',out/'golden'])
     golden={path.name:sha(path) for path in (ROOT/'tests/Query.Binding/golden').iterdir() if path.is_file()}
     actual={path.name:sha(path) for path in (out/'golden').iterdir() if path.is_file()}
     write('golden-comparison.json',{'expected':golden,'actual':actual,'equal':golden==actual})
     if golden!=actual:raise RuntimeError('Cross-language golden inputs drifted.')
-    run('actual-aot',[out/'aot/NativeWeave.Query.Binding.Tests',asset,out/'aot-results','--require-aot'])
+    run('actual-aot',[out/'aot/Korda.Query.Binding.Tests',asset,out/'aot-results','--require-aot'])
     run('restore-sample-aot',['dotnet','restore',sample,'-r','linux-x64','-p:PublishAot=true','--locked-mode',*config,*common])
     run('publish-sample-aot',['dotnet','publish',sample,'-c','Release','-r','linux-x64','-p:PublishAot=true','-p:IlcTreatWarningsAsErrors=true','--no-restore','-o',out/'sample-aot',*common])
-    if (out/'sample-aot/NativeWeave.Query.Binding.Sample').read_bytes()[:4]!=b'\x7fELF' or (out/'sample-aot/NativeWeave.Query.Binding.Sample.dll').exists():raise RuntimeError('Expected an actual standalone Native AOT sample executable.')
-    run('actual-sample-aot',[out/'sample-aot/NativeWeave.Query.Binding.Sample',asset,'--require-aot'])
+    if (out/'sample-aot/Korda.Query.Binding.Sample').read_bytes()[:4]!=b'\x7fELF' or (out/'sample-aot/Korda.Query.Binding.Sample.dll').exists():raise RuntimeError('Expected an actual standalone Native AOT sample executable.')
+    run('actual-sample-aot',[out/'sample-aot/Korda.Query.Binding.Sample',asset,'--require-aot'])
     run('native-dependencies',['readelf','-d',asset])
     run('dotnet-identity',['dotnet','--info'])
     run('cc-identity',['clang++','--version'])
@@ -71,7 +71,7 @@ try:
     run('linker-identity',['ld','--version'])
     after={name:sha(ROOT/name) for name in files};write('source-inputs-after.json',{'inputs':after,'unchanged':before==after})
     if before!=after or native_hash!=sha(asset):raise RuntimeError('Source inputs or the precompiled native fixture changed during acceptance.')
-    artifacts=[asset,test_dll,ROOT/'src/Query.Binding/bin/Release/net11.0/NativeWeave.Query.Binding.dll',ROOT/'src/Query.Binding/bin/Release/net11.0/NativeWeave.Query.Binding.xml',out/'aot/NativeWeave.Query.Binding.Tests',out/'sample-aot/NativeWeave.Query.Binding.Sample']
+    artifacts=[asset,test_dll,ROOT/'src/Query.Binding/bin/Release/net11.0/Korda.Query.Binding.dll',ROOT/'src/Query.Binding/bin/Release/net11.0/Korda.Query.Binding.xml',out/'aot/Korda.Query.Binding.Tests',out/'sample-aot/Korda.Query.Binding.Sample']
     links=[]
     for base in [ROOT/'tests/Query.Binding/obj',ROOT/'samples/api/query-binding/obj']:
         for path in base.rglob('*.rsp'):

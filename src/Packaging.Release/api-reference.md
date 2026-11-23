@@ -2,7 +2,7 @@
 
 Generated from the actual compiled assembly and XML by `tests/Packaging.Release/ApiCheck`. This MSBuild host seam is shipped under `tools/net11.0`; it is absent from application runtime/AOT output. Application APIs remain owned by Core.
 
-## `M:NativeWeave.Packaging.PackageClosure.#ctor`
+## `M:Korda.Packaging.PackageClosure.#ctor`
 
 ```csharp
 public PackageClosure()
@@ -10,7 +10,7 @@ public PackageClosure()
 
 **summary:** Creates an unconfigured, single-invocation compiler-host task.
 
-## `M:NativeWeave.Packaging.PackageClosure.Execute`
+## `M:Korda.Packaging.PackageClosure.Execute`
 
 ```csharp
 public override bool Execute()
@@ -22,7 +22,7 @@ public override bool Execute()
 
 **remarks:** Expected malformed metadata, IO and compatibility failures become hard NWPKG errors even when NuGet warnings are suppressed. No partial result is returned as a successful closure.
 
-## `P:NativeWeave.Packaging.PackageClosure.AssetsFile`
+## `P:Korda.Packaging.PackageClosure.AssetsFile`
 
 ```csharp
 [Required] public string AssetsFile { get; set; }
@@ -32,7 +32,7 @@ public override bool Execute()
 
 **value:** The existing restore output, never a guessed global package cache.
 
-## `P:NativeWeave.Packaging.PackageClosure.ClosureFiles`
+## `P:Korda.Packaging.PackageClosure.ClosureFiles`
 
 ```csharp
 [Required] public Microsoft.Build.Framework.ITaskItem[] ClosureFiles { get; set; }
@@ -42,7 +42,7 @@ public override bool Execute()
 
 **value:** One through 256 bounded JSON closure files.
 
-## `P:NativeWeave.Packaging.PackageClosure.Mode`
+## `P:Korda.Packaging.PackageClosure.Mode`
 
 ```csharp
 public string Mode { get; set; }
@@ -52,7 +52,7 @@ public string Mode { get; set; }
 
 **value:** The validation-only default or an SDK record generation phase.
 
-## `P:NativeWeave.Packaging.PackageClosure.OutputDirectory`
+## `P:Korda.Packaging.PackageClosure.OutputDirectory`
 
 ```csharp
 public string OutputDirectory { get; set; }
@@ -62,7 +62,7 @@ public string OutputDirectory { get; set; }
 
 **value:** The SDK-owned output or intermediate publication directory.
 
-## `P:NativeWeave.Packaging.PackageClosure.Records`
+## `P:Korda.Packaging.PackageClosure.Records`
 
 ```csharp
 [Output] public Microsoft.Build.Framework.ITaskItem[] Records { get; private set; }
@@ -72,7 +72,7 @@ public string OutputDirectory { get; set; }
 
 **value:** Only successfully written records from this invocation; empty initially.
 
-## `P:NativeWeave.Packaging.PackageClosure.ResolvedFiles`
+## `P:Korda.Packaging.PackageClosure.ResolvedFiles`
 
 ```csharp
 public Microsoft.Build.Framework.ITaskItem[] ResolvedFiles { get; set; }
@@ -82,7 +82,7 @@ public Microsoft.Build.Framework.ITaskItem[] ResolvedFiles { get; set; }
 
 **value:** Actual SDK item identities and package/destination metadata.
 
-## `P:NativeWeave.Packaging.PackageClosure.RuntimeIdentifier`
+## `P:Korda.Packaging.PackageClosure.RuntimeIdentifier`
 
 ```csharp
 public string RuntimeIdentifier { get; set; }
@@ -92,10 +92,10 @@ public string RuntimeIdentifier { get; set; }
 
 **value:** A supported exact RID or the empty string.
 
-## `T:NativeWeave.Packaging.PackageClosure`
+## `T:Korda.Packaging.PackageClosure`
 
 ```csharp
-public sealed class NativeWeave.Packaging.PackageClosure : Microsoft.Build.Utilities.Task
+public sealed class Korda.Packaging.PackageClosure : Microsoft.Build.Utilities.Task
 ```
 
 **summary:** Validates a restored owned-package closure and produces SDK-selected native output records.

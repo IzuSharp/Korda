@@ -5,9 +5,9 @@
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifiers)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifiers).aot.lock.json</NuGetLockFilePath>
     <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifier)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifier).aot.lock.json</NuGetLockFilePath>
-    <NativeWeavePackageVersion Condition="'$(NativeWeavePackageVersion)' == ''">0.1.0-preview.1</NativeWeavePackageVersion>
-    <NativeWeaveExcludeGenerators Condition="'$(ManualMappings)' == 'true'">true</NativeWeaveExcludeGenerators>
+    <KordaPackageVersion Condition="'$(KordaPackageVersion)' == ''">0.1.0-preview.1</KordaPackageVersion>
+    <KordaExcludeGenerators Condition="'$(ManualMappings)' == 'true'">true</KordaExcludeGenerators>
     <DefineConstants Condition="'$(ManualMappings)' == 'true'">$(DefineConstants);MANUAL_MAPPING</DefineConstants>
   </PropertyGroup>
-  <ItemGroup><PackageReference Include="NativeWeave.Database.Sqlite" Version="[$(NativeWeavePackageVersion)]" /></ItemGroup>
+  <ItemGroup><PackageReference Include="Korda.Database.Sqlite" Version="[$(KordaPackageVersion)]" /></ItemGroup>
 </Project>

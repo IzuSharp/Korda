@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <AssemblyName>NativeWeave.Interop.Errors.Tests</AssemblyName>
+    <AssemblyName>Korda.Interop.Errors.Tests</AssemblyName>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <IsAotCompatible>true</IsAotCompatible>
@@ -10,6 +10,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Program.cs" />
-    <ProjectReference Include="../../src/NativeWeave.Core/NativeWeave.Core.csproj" />
+    <ProjectReference Include="../../src/Korda.Core/Korda.Core.csproj" />
   </ItemGroup>
 </Project>

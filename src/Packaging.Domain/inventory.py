@@ -96,7 +96,7 @@ def collect(build_manifest_path, provider=None):
             notice_names.add('native/cpp/licenses/zlib-LICENSE.txt')
         entries = {}; notices = []
         for name in sorted(notice_names):
-            target = 'nativeweave/licenses/' + Path(name).name
+            target = 'korda/licenses/' + Path(name).name
             entries[target] = (ROOT / name).read_bytes()
             notices.append({'sourcePath': name, 'packagePath': target, 'sha256': sha(ROOT / name)})
         inventory = {'schemaVersion': 2, 'engineId': engine, 'nativeSha256': asset['sha256'],
@@ -112,13 +112,13 @@ def collect(build_manifest_path, provider=None):
                      'buildRecords': build['records'], 'compilerArtifact': asset['compilerArtifactPath'],
                      'notices': notices, 'elf': audit,
                      'scope': 'Selected C/C++ inputs. System OpenSSL/zlib/glibc are platform-provided. No Rust input, runtime or compiler is used. Local candidate; no public signer assertion.'}
-        entries['nativeweave/dependencies.json'] = json_bytes(inventory)
-        entries['NOTICE'] = ('NativeWeave C++ database native implementation.\n'
+        entries['korda/dependencies.json'] = json_bytes(inventory)
+        entries['NOTICE'] = ('Korda C++ database native implementation.\n'
             'Project sources: MIT; C++ query algorithms adapted from SeaQuery 1.0.2 under MIT.\n'
             'nlohmann/json 3.12.0: MIT. SQLite 3.51.3: public domain (SQLite provider).\n'
             'PostgreSQL/libpq 18.0: PostgreSQL license (PostgreSQL provider).\n'
             'LLVM libc++/libc++abi 23.1.5 are statically linked under Apache-2.0 WITH LLVM-exception.\n'
             'OpenSSL 3 (Apache-2.0) and platform runtime libraries are dynamically provided by the OS; the PostgreSQL leaf also uses zlib 1.x (zlib license).\n'
-            'Original notices and file-bound input/license records are in nativeweave/licenses and dependencies.json.\n').encode()
+            'Original notices and file-bound input/license records are in korda/licenses and dependencies.json.\n').encode()
         result[engine] = {**asset, 'path': binary, 'inventory': inventory, 'entries': entries}
     return build, result

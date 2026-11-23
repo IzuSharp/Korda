@@ -26,6 +26,6 @@
     "managedRoots": "Explicit weak-reference and cleanup witnesses; no claim of a total GCHandle or root counter.",
     "faultMechanism": "Only disposable verification processes and database traffic are faulted; packaged native assets are immutable."
   },
-  "historicalEvidence": "Earlier B21/B22 records remain historical at their original commits. NativeWeave server/protocol checks and timed workloads have no current execution entry.",
+  "historicalEvidence": "Earlier B21/B22 records remain historical at their original commits. Korda server/protocol checks and timed workloads have no current execution entry.",
   "performanceMeasurement": false
 }

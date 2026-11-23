@@ -8,35 +8,35 @@
         "resolved": "11.0.0",
         "contentHash": "gK2aq4XvChj5kvozpPHrkfKkr7zc5Z4xoTrJb4GPZzDEPMlCk0TX632bwY3LsWcX2UVcVRQBBGzsBGC2lq6YhA=="
       },
-      "nativeweave.core": {
+      "korda.core": {
         "type": "Project",
         "dependencies": {
-          "NativeWeave.Interop.Abi": "[0.1.0-preview.1, )"
+          "Korda.Interop.Abi": "[0.1.0-preview.1, )"
         }
       },
-      "nativeweave.data": {
+      "korda.data": {
         "type": "Project"
       },
-      "nativeweave.data.streaming": {
+      "korda.data.streaming": {
         "type": "Project",
         "dependencies": {
-          "NativeWeave.Data": "[0.1.0-preview.1, )"
+          "Korda.Data": "[0.1.0-preview.1, )"
         }
       },
-      "nativeweave.database.transactions": {
+      "korda.database.transactions": {
         "type": "Project",
         "dependencies": {
-          "NativeWeave.Data": "[0.1.0-preview.1, )"
+          "Korda.Data": "[0.1.0-preview.1, )"
         }
       },
-      "NativeWeave.Interop.Abi": {
+      "Korda.Interop.Abi": {
         "type": "Project"
       },
-      "nativeweave.query.binding": {
+      "korda.query.binding": {
         "type": "Project",
         "dependencies": {
-          "NativeWeave.Data": "[0.1.0-preview.1, )",
-          "NativeWeave.Interop.Abi": "[0.1.0-preview.1, )"
+          "Korda.Data": "[0.1.0-preview.1, )",
+          "Korda.Interop.Abi": "[0.1.0-preview.1, )"
         }
       }
     }

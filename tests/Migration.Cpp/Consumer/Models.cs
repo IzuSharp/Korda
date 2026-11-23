@@ -1,5 +1,5 @@
-using NativeWeave.Data;
-using NativeWeave.Database;
+using Korda.Data;
+using Korda.Database;
 
 internal sealed record WorkItem(long Id, string Title, string? Note, decimal Score, DateTimeOffset Occurred, byte[] Payload, long Version);
 internal sealed record Comment(long Id, long? WorkId, string? Body);

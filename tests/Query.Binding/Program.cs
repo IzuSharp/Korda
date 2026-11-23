@@ -4,9 +4,9 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using NativeWeave.Data;
-using NativeWeave.Interop.Abi;
-using NativeWeave.Query.Internal;
+using Korda.Data;
+using Korda.Interop.Abi;
+using Korda.Query.Internal;
 
 internal static unsafe class Program
 {

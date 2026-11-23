@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <AssemblyName>NativeWeave.Build.ApiFixture</AssemblyName>
+    <AssemblyName>Korda.Build.ApiFixture</AssemblyName>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <IsAotCompatible>true</IsAotCompatible>
   </PropertyGroup>

@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
-using NativeWeave.Data;
-using NativeWeave.Database.Internal;
+using Korda.Data;
+using Korda.Database.Internal;
 
 // Test-only ABI bridge. Blocking harness entrypoints run on test workers while
 // real B02/B03 and B06 futures execute on the explicitly created test runtime.
@@ -133,7 +133,7 @@ internal sealed class BatchHandle : SafeHandleZeroOrMinusOneIsInvalid
 }
 internal static partial class Native
 {
-    private const string Library = "nativeweave_streaming_fixture";
+    private const string Library = "korda_streaming_fixture";
     [LibraryImport(Library, EntryPoint = "nw_stream_fixture_open")]
     internal static unsafe partial uint Open(uint provider, uint scenario, byte* projection, nuint length, nuint rows, nuint bytes, out nint output);
     [LibraryImport(Library, EntryPoint = "nw_stream_fixture_fetch")]
