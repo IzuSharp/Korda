@@ -156,8 +156,9 @@ def verify_inputs():
 
 def regressions(design, plan):
     try:
-        run([sys.executable, "eng/database_regressions.py", "--design", design, "--plan", plan,
-             "--output", OUTPUT / "regressions"], "database-regressions")
+        # The driver writes per-check logs and receipts. Forward its progress as each check starts.
+        subprocess.run([sys.executable, "eng/database_regressions.py", "--design", design, "--plan", plan,
+                        "--output", OUTPUT / "regressions"], cwd=ROOT, check=True)
     finally:
         export_fixture_results(OUTPUT / "regressions", OUTPUT / "regression-evidence")
 
