@@ -18,6 +18,7 @@ public sealed class PlannerTests : IDisposable
         Write("eng/ci/modules/project.json", """
             {
               "ci": {"tests":["eng/ci/","tests/CI/","NativeWeave.slnx","AGENTS.md"]},
+              "layout": {"tests":["pack-tests/"],"checks":["db:pack"]},
               "codec-tests": {"tests":["tests/codec/"],"checks":["db:codec-tests"]},
               "database": {"sources":["shared/"],"checks":["db:full"]},
               "sqlite": {"sources":["sqlite/"],"tests":["tests/sqlite/"],"package":"NativeWeave.Database.Sqlite","depends":["database"],"checks":["db:sqlite"]},
@@ -102,6 +103,23 @@ public sealed class PlannerTests : IDisposable
     {
         var plan = Change("tests/sqlite/ApiCheck/Program.cs");
         Assert.Equal(["sqlite.build", "sqlite.api"], plan.Actions["sqlite"]);
+    }
+
+    [Fact]
+    public void ARegistryWithoutBundleMetadataRebuildsComponentsForTheDryRun()
+    {
+        Write("pack-tests/metadata.cs", "// fixture");
+        ctx.Read("git", "add", ".");
+        var catalog = new GitCatalog(ctx);
+        var plan = Planner.Create(catalog.Read("HEAD"), catalog.Read(ctx.Read("git", "write-tree").Trim()),
+            ["pack-tests/metadata.cs"], false, ids =>
+            {
+                Assert.Equal(["postgresql", "sqlite"], ids);
+                return ids.ToDictionary(id => id, _ => new Published("0.1.0-preview.1.2"));
+            });
+        Assert.Equal("full", plan.Scope);
+        Assert.Contains("public.consume-aot", plan.Actions["full"]);
+        Assert.Empty(plan.Candidates);
     }
 
     [Fact]

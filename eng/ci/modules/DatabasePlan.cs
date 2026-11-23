@@ -14,15 +14,20 @@ internal static class DatabasePlan
         plan.Deep = full || flags.Contains("deep");
         bool bootstrap = Planner.Providers.Any(p => plan.Published.TryGetValue(p, out var head) && head.Inputs is null);
         bool recover = plan.Packages.Except(touched).Any();
-        plan.Scope = (plan.Deep || flags.Contains("full") || recover || (bootstrap && (plan.Packages.Length > 0 || flags.Contains("public"))) ||
-            (providers.Length > 0 && pack) || (components.Length > 0 && (pack || providers.Length > 0))) ? "full" : providers.Length switch
-            {
-                2 => touched.Overlaps(Planner.Providers) ? "full" : "provider-tests",
-                1 => providers[0],
-                _ => components.Length > 0 ? "components" : pack ? "pack" : "light"
-            };
+        bool needSourcePackages = bootstrap && (plan.Packages.Length > 0 || pack);
+        bool combinedChecks = providers.Length > 0 && pack || components.Length > 0 && (pack || providers.Length > 0);
+        if (plan.Deep || flags.Contains("full") || recover || needSourcePackages || combinedChecks)
+            plan.Scope = "full";
+        else if (providers.Length == 2)
+            plan.Scope = touched.Overlaps(Planner.Providers) ? "full" : "provider-tests";
+        else if (providers.Length == 1)
+            plan.Scope = providers[0];
+        else if (components.Length > 0)
+            plan.Scope = "components";
+        else if (pack)
+            plan.Scope = "pack";
         plan.RebuildTask = flags.Contains("task");
-        plan.Consume = plan.Packages.Length > 0 || full || flags.Contains("public") || plan.Scope == "pack";
+        plan.Consume = plan.Packages.Length > 0 || full || pack;
         plan.BuildScopes = plan.Scope switch { "provider-tests" => Planner.Providers, "light" => [], _ => [plan.Scope] };
         var checks = flags.Intersect(["generator", "elf-profile", "pack-api"]).ToHashSet();
         if (plan.Scope == "full") checks.ExceptWith(["generator", "pack-api"]);

@@ -114,7 +114,7 @@ internal static class Planner
         string[] active = full ? [.. after.Modules.Keys] : [.. direct];
         var flags = active.SelectMany(id => after.Modules[id].Checks).Select(s => s["db:".Length..]).ToHashSet();
         var lookup = full ? after.Hashes.Keys.ToHashSet() : touched.ToHashSet();
-        if (lookup.Overlaps(db) || flags.Contains("public")) lookup.UnionWith(db);
+        if (lookup.Overlaps(db) || flags.Overlaps(["public", "pack", "task"])) lookup.UnionWith(db);
         var published = after.Hashes.Keys.ToDictionary(n => n, _ => new Published());
         if (lookup.Count > 0)
             foreach (var (id, head) in registry(lookup.Sorted())) published[id] = head;

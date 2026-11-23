@@ -14,9 +14,8 @@ GENERATED = {'native/interop/abi/include/nativeweave_abi_v1.h',
              'tests/Interop.Abi/native/layout.c', 'tests/Interop.Abi/native/layout.cpp'}
 
 
-def files():
-    names = subprocess.check_output(['git', 'ls-files', '--cached', '--others', '--exclude-standard', '-z', '--',
-                                    'native', 'tests', 'src/Verification.Interop', 'src/Verification.EndToEnd'], cwd=ROOT).decode().split('\0')
+def files(*roots):
+    names = subprocess.check_output(['git', 'ls-files', '--cached', '--others', '--exclude-standard', '-z', '--', *roots], cwd=ROOT).decode().split('\0')
     return sorted({name for name in names if name and Path(name).suffix in ('.c','.cc','.cpp','.cxx','.h','.hh','.hpp','.hxx')
                    and name not in GENERATED and not re.search(r'(^|/)(third_party|vendor|generated)/', name)})
 
@@ -34,7 +33,7 @@ def main():
     if not executable or not args.local and sha(Path(executable).resolve()) != lock['toolchain']['llvm']['executables'][name]:
         raise RuntimeError('Use the pinned LLVM ' + lock['toolchain']['llvm']['version'] + ' ' + name)
     if args.mode == 'format':
-        subprocess.run([executable, '--dry-run', '--Werror', *files()], cwd=ROOT, check=True)
+        subprocess.run([executable, '--dry-run', '--Werror', *files('native', 'tests', 'src/Verification.Interop', 'src/Verification.EndToEnd')], cwd=ROOT, check=True)
     else:
         if not (args.build / 'compile_commands.json').is_file():
             raise RuntimeError('Configure a CMake preset with CMAKE_EXPORT_COMPILE_COMMANDS=ON; set NW_CMAKE_BUILD_DIR to its build directory')
@@ -42,11 +41,11 @@ def main():
         commands = json.loads((args.build / 'compile_commands.json').read_text())
         selected = {}
         for row in commands:
-            path = Path(row['file']).resolve()
+            path = (Path(row['directory']) / row['file']).resolve()
             if path not in tracked or path.suffix not in ('.c', '.cc', '.cpp', '.cxx'):
                 continue
             previous = selected.get(path)
-            if previous is None or 'nativeweave_database_host.dir' in row['command']:
+            if previous is None or 'nativeweave_database_host.dir' in row.get('command', ' '.join(row.get('arguments', []))):
                 selected[path] = row
         if not selected:
             raise RuntimeError('No tracked translation units found in the compilation database')
