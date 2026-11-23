@@ -19,7 +19,7 @@ on:
         type: string
 jobs:
   publish:
-    if: github.repository == 'IzuSharp/NativeWeave' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.repository == 'IzuSharp/NativeWeave' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && fromJSON(inputs.plan).retry_merge != ''))
     runs-on: ubuntu-24.04
     timeout-minutes: 55
     environment: nuget
@@ -45,6 +45,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          fetch-depth: ${{ fromJSON(inputs.plan).retry_merge && '0' || '1' }}
           persist-credentials: false
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:

@@ -8,6 +8,8 @@ The public package allowlist contains **NativeWeave.Database.Sqlite** and **Nati
 
 Each candidate uses `0.1.0-preview.<CI run number>.2`. The PR verifies and retains the exact archive for the integration tree. A merge promotes a successful same-repository PR artifact with matching tree, package selection and eligible version. A missing or expired candidate stops publication. The trusted `release.yml` job verifies the allowlist, checks archive hashes before authentication, polls NuGet indexing every two minutes and executes the signed registry package with Native AOT. The combined consumer runs when both provider candidates are selected.
 
+To retry a missed promotion after a CI fix has merged, select **Actions → Retry a merged preview → Run workflow** on `main` and enter the original PR number. This reuses its successful, unexpired candidate and checks the original merged tree and current package inputs before publishing. If the packages are already current, the retry exits without publishing.
+
 GitHub Actions can restore caches from the base branch. PR caches remain scoped to their merge ref. The weekly or manual full run on main also warms the default-branch caches for subsequent PRs.
 
 Manual CI with empty inputs runs full Linux validation. Set `check_paths` to tracked test or documentation files (one per line) to time the same check selection on a hosted runner; these replays are ineligible for promotion. Weekly CI runs compatibility and sanitizer checks on the host. For clean-image, CPU emulation, and runtime transfer checks, enable `verify_images` on a manual full run. The internal twelve-package feed remains available for historical compatibility work.
