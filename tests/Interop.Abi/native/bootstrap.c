@@ -1,7 +1,6 @@
 #include "nativeweave_abi_v1.h"
 #include <assert.h>
 #include <stdio.h>
-#include <string.h>
 
 extern nw_status NW_CDECL nw_abi_conformance_get_abi_v1(uint32_t requested_major, uint32_t out_capacity,
                                                         nw_abi_info_v1* out_info);
@@ -46,9 +45,10 @@ int main(void)
         nw_abi_info_v1 info;
         uint8_t tail[32];
     } output;
-    memset(&output, 0xa5, sizeof(output));
+    uint8_t* bytes = (uint8_t*)&output;
+    for (size_t i = 0; i < sizeof(output); i++)
+        bytes[i] = 0xa5;
     assert(bootstrap(1, 31, &output.info) == NW_BUFFER_TOO_SMALL);
-    const uint8_t* bytes = (const uint8_t*)&output;
     for (size_t i = 0; i < sizeof(output); i++)
         assert(bytes[i] == 0xa5);
     assert(bootstrap(1, sizeof(output), &output.info) == NW_OK);
