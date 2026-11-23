@@ -120,12 +120,6 @@ def recipes():
         resources=("dotnet",),
     )
     add(
-        "database.business-aot",
-        py("eng/build.py", "consumer-probes", "--version", "{version}"),
-        needs=("database.pack",),
-        resources=("pg-server",),
-    )
-    add(
         "database.compatibility",
         py(
             "tests/Verification.Compatibility/verify.py",

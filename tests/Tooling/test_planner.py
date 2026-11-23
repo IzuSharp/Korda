@@ -70,6 +70,16 @@ class RoutingTests(unittest.TestCase):
         self.assertEqual(plan["resources"]["linux"], ["design", "dotnet", "native"])
         self.assertFalse(plan["grouped_pack"])
 
+    def test_single_public_bundle_reuses_components_required_by_another_check(self):
+        plan = self.plan("src/Data.Sqlite/SqliteOptions.cs", "tests/Verification.EndToEnd/api_probe.py")
+        self.assertEqual(plan["packages"], ["sqlite"])
+        self.assertTrue(plan["grouped_pack"])
+        self.assertIn("database.pack", self.actions(plan))
+        from database_plan import catalog_steps
+
+        steps = catalog_steps("linux", plan["public_checks"], True, plan["grouped_pack"])
+        self.assertEqual(steps["public.pack"].needs, ("database.pack",))
+
     def test_independent_api_surfaces(self):
         for path, expected in (
             ("src/Data.Sqlite/api-reference.md", "sqlite.api"),

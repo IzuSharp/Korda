@@ -131,7 +131,7 @@ def plan_actions(catalog, reasons, direct, touched, pending, *, previous, entrie
     # Validation must describe exactly the candidates present in the outgoing feed.
     if pending:
         public = sorted(pending)
-    grouped = len(public) > 1 or ("database.pack" in desired or "database.business-aot" in desired)
+    grouped = len(public) > 1 or "database.pack" in ordered(desired, recipes())
     if public:
         desired.add("public.validate" if pending else "public.consume-aot")
     steps = catalog_steps("linux", public, bool(pending), grouped)

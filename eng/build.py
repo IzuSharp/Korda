@@ -125,12 +125,13 @@ def workspace(destination):
     sys.path.insert(0, str(ROOT / "eng/ci"))
     from catalog import load_catalog
     catalog = load_catalog()
+    database_modules = json.loads((ROOT / "eng/ci/modules/database.json").read_text())
     solution = ET.parse(ROOT / "NativeWeave.slnx")
     for parent in solution.iter():
         for project in list(parent.findall("Project")):
             path = project.attrib["Path"]
             owner, _ = catalog.owner(path)
-            if not catalog.modules[owner].get("checks"):
+            if owner not in database_modules:
                 parent.remove(project)
             else:
                 project.set("Path", os.path.relpath(ROOT / path, destination.parent))
