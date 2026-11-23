@@ -26,10 +26,10 @@ class Catalog:
         for name, spec in modules.items():
             if not re.fullmatch(r"[a-z][a-z0-9-]*", name):
                 raise ValueError(f"Invalid module name: {name}")
-            unknown = spec.keys() - {"sources", "tests", "depends", "checks", "run", "package", "pack", "consume", "artifacts", "resources", "targets", "integration", "includes"}
+            unknown = spec.keys() - {"sources", "tests", "depends", "api_checks", "checks", "run", "package", "pack", "consume", "artifacts", "resources", "targets", "integration", "includes"}
             if unknown:
                 raise ValueError(f"{name}: unknown registration fields {sorted(unknown)}")
-            for field in ("sources", "tests", "depends", "checks", "run", "pack", "consume", "resources", "targets", "integration", "includes"):
+            for field in ("sources", "tests", "depends", "api_checks", "checks", "run", "pack", "consume", "resources", "targets", "integration", "includes"):
                 values = spec.get(field, [])
                 if not isinstance(values, list) or not all(isinstance(v, str) and v for v in values):
                     raise ValueError(f"{name}.{field} must be an array of strings")

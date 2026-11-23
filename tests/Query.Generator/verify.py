@@ -17,16 +17,19 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[2]
 PIN = 'c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9'
 p = argparse.ArgumentParser()
-p.add_argument('--feed', type=Path, required=True)
-p.add_argument('--feed-source', type=Path, required=True)
-p.add_argument('--feed-candidate', required=True)
+p.add_argument('--component-only', action='store_true')
+p.add_argument('--feed', type=Path)
+p.add_argument('--feed-source', type=Path)
+p.add_argument('--feed-candidate')
 p.add_argument('--design', type=Path, required=True)
 p.add_argument('--sdk', type=Path, required=True)
 p.add_argument('--output', type=Path, required=True)
 a = p.parse_args()
 OUT = a.output.resolve()
 OUT.mkdir(parents=True, exist_ok=False)
-FEED = a.feed.resolve()
+if not a.component_only and not all((a.feed, a.feed_source, a.feed_candidate)):
+    p.error('Historical package acceptance requires --feed, --feed-source and --feed-candidate')
+FEED = a.feed.resolve() if a.feed else None
 env = os.environ.copy()
 flags = ['-m:1', '-nr:false', '-p:UseSharedCompilation=false']
 commands = []
@@ -62,6 +65,14 @@ def run(name, command, cwd=ROOT, environment=env):
         raise RuntimeError(f'{name} failed: {log}')
     return log.read_text().strip()
 
+def component_checks():
+    for label, project in [('component', 'tests/Query.Generator/Query.Generator.Tests.csproj'),
+                           ('api', 'tests/Query.Generator/ApiCheck/ApiCheck.csproj')]:
+        run(label + '-restore', ['dotnet', 'restore', project, '--locked-mode', *flags])
+        run(label + '-build', ['dotnet', 'build', project, '-c', 'Release', '--no-restore', *flags])
+    run('component', ['dotnet', ROOT / 'tests/Query.Generator/bin/Release/net11.0/NativeWeave.Query.Generator.Tests.dll'])
+    run('exact-api-diagnostics-incremental', ['dotnet', ROOT / 'tests/Query.Generator/ApiCheck/bin/Release/net11.0/NativeWeave.Query.Generator.ApiCheck.dll', ROOT, a.design, a.sdk])
+
 initial = sources()
 commit = git('rev-parse', 'HEAD')
 save('source-inputs.json', dict(commit=commit, sha256=initial))
@@ -72,6 +83,10 @@ try:
         raise RuntimeError('Commit the candidate before collecting immutable evidence.')
     if git('rev-parse', 'HEAD', root=a.design) != PIN:
         raise RuntimeError('Exact locked Design checkout required.')
+    if a.component_only:
+        component_checks()
+        save('status.json', dict(result='passed', scope='generator-and-api', commit=commit))
+        raise SystemExit(0)
     # Reusing accepted B13 packages does not permit a different generator candidate.
     generator_names = git('ls-files', '--', 'src/Query.Generator').splitlines()
     for name in generator_names:
@@ -87,12 +102,7 @@ try:
          package_sha256=package_hashes, native_sha256=native_sha, reused_acceptance='B13 Linux immutable package feed'))
     run('dotnet-identity', ['dotnet', '--info'])
     run('diff-check', ['git', 'diff', '--check'])
-    for label, project in [('component', 'tests/Query.Generator/Query.Generator.Tests.csproj'),
-                           ('api', 'tests/Query.Generator/ApiCheck/ApiCheck.csproj')]:
-        run(label + '-restore', ['dotnet', 'restore', project, '--locked-mode', *flags])
-        run(label + '-build', ['dotnet', 'build', project, '-c', 'Release', '--no-restore', *flags])
-    run('component', ['dotnet', ROOT / 'tests/Query.Generator/bin/Release/net11.0/NativeWeave.Query.Generator.Tests.dll'])
-    run('exact-api-diagnostics-incremental', ['dotnet', ROOT / 'tests/Query.Generator/ApiCheck/bin/Release/net11.0/NativeWeave.Query.Generator.ApiCheck.dll', ROOT, a.design, a.sdk])
+    component_checks()
     traps = OUT / 'no-rust'; traps.mkdir()
     trap_log = OUT / 'rust-invocations.txt'
     for tool in ['cargo', 'rustc', 'rustup']:

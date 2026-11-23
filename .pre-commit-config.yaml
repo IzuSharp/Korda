@@ -5,13 +5,13 @@ repos:
       - id: clang-format
         files: '^(native/|tests/|src/Verification\.(Interop|EndToEnd)/).*\.(c|cc|cpp|cxx|h|hh|hpp|hxx)$'
         exclude: '(^|/)(third_party|vendor|generated)/|^native/interop/abi/include/nativeweave_abi_v1\.h$|^native/database/binding/nativeweave_database_binding_v1\.h$|^tests/Interop\.Abi/native/layout\.(c|cpp)$'
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: 9026c9127e153371d7a78dfcb0c45ae2046a3d10 # v0.17.6
+    hooks:
+      - id: ruff-format
+        files: '^(eng/ci|tests/Tooling)/.*\.py$'
   - repo: local
     hooks:
-      - id: format-ci-csharp
-        name: Format staged CI C# files
-        language: system
-        entry: bash eng/hooks/format-ci.sh
-        files: '^(eng/ci|tests/CI)/.*\.cs$'
       - id: test-ci
         name: Verify staged ownership and run local CI tests
         language: system

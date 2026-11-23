@@ -2,19 +2,21 @@
   "native-runtime": {
     "sources": [
       "native/interop/",
-      "src/Interop.Abi/",
-      "src/Interop.Async/",
-      "src/Interop.Callbacks/",
-      "src/Interop.Errors/",
-      "src/Interop.Execution/",
-      "src/Interop.Lifetime/",
-      "src/Interop.Memory/",
-      "src/Interop.Negotiation/",
       "src/NativeWeave.Core/"
     ],
     "checks": [
       "database.api",
       "database.regressions"
+    ],
+    "depends": [
+      "interop-abi",
+      "interop-async",
+      "interop-callbacks",
+      "interop-errors",
+      "interop-execution",
+      "interop-lifetime",
+      "interop-memory",
+      "interop-negotiation"
     ]
   },
   "database-native": {
@@ -77,6 +79,9 @@
     "checks": [
       "database.api",
       "database.regressions"
+    ],
+    "api_checks": [
+      "database.api"
     ]
   },
   "sqlite": {
@@ -100,7 +105,10 @@
       "sqlite.test",
       "sqlite.api"
     ],
-    "package": "NativeWeave.Database.Sqlite"
+    "package": "NativeWeave.Database.Sqlite",
+    "api_checks": [
+      "sqlite.api"
+    ]
   },
   "postgresql": {
     "targets": [
@@ -124,7 +132,10 @@
       "postgresql.test",
       "postgresql.api"
     ],
-    "package": "NativeWeave.Database.PostgreSql"
+    "package": "NativeWeave.Database.PostgreSql",
+    "api_checks": [
+      "postgresql.api"
+    ]
   },
   "bundle-composer": {
     "sources": [
@@ -506,13 +517,102 @@
   },
   "api-checks": {
     "tests": [
-      "tests/Query.Fluent/ApiCheck/",
-      "tests/Data.Migrations/api.py",
-      "tests/Orm.Relations/api.py",
       "public-api-standard.json"
     ],
     "checks": [
       "database.api"
+    ]
+  },
+  "migrations-api": {
+    "tests": [
+      "tests/Data.Migrations/api.py",
+      "src/Data.Migrations/reference/"
+    ],
+    "checks": [
+      "migrations.api"
+    ]
+  },
+  "relations-api": {
+    "tests": [
+      "tests/Orm.Relations/api.py",
+      "src/Orm.Relations/reference/"
+    ],
+    "checks": [
+      "relations.api"
+    ]
+  },
+  "fluent-api": {
+    "tests": [
+      "tests/Query.Fluent/ApiCheck/",
+      "src/Query.Fluent/public-api.expected.json",
+      "src/Query.Fluent/api-reference.md"
+    ],
+    "checks": [
+      "fluent.api"
+    ]
+  },
+  "interop-abi": {
+    "sources": [
+      "src/Interop.Abi/"
+    ],
+    "checks": [
+      "interop.abi"
+    ]
+  },
+  "interop-async": {
+    "sources": [
+      "src/Interop.Async/"
+    ],
+    "checks": [
+      "interop.async"
+    ]
+  },
+  "interop-callbacks": {
+    "sources": [
+      "src/Interop.Callbacks/"
+    ],
+    "checks": [
+      "interop.callbacks"
+    ]
+  },
+  "interop-errors": {
+    "sources": [
+      "src/Interop.Errors/"
+    ],
+    "checks": [
+      "interop.errors"
+    ]
+  },
+  "interop-execution": {
+    "sources": [
+      "src/Interop.Execution/"
+    ],
+    "checks": [
+      "interop.execution"
+    ]
+  },
+  "interop-lifetime": {
+    "sources": [
+      "src/Interop.Lifetime/"
+    ],
+    "checks": [
+      "interop.lifetime"
+    ]
+  },
+  "interop-memory": {
+    "sources": [
+      "src/Interop.Memory/"
+    ],
+    "checks": [
+      "interop.memory"
+    ]
+  },
+  "interop-negotiation": {
+    "sources": [
+      "src/Interop.Negotiation/"
+    ],
+    "checks": [
+      "interop.negotiation"
     ]
   }
 }

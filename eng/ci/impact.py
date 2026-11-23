@@ -1,4 +1,5 @@
 """Plan module checks and package candidates from two Git trees."""
+
 import argparse
 import hashlib
 import json
@@ -28,13 +29,17 @@ def solution_projects(path, entry):
     projects = {}
     for parent in root.iter():
         for project in list(parent.findall("Project")):
-            name = posixpath.normpath(posixpath.join(posixpath.dirname(path), project.attrib["Path"]))
+            name = posixpath.normpath(
+                posixpath.join(posixpath.dirname(path), project.attrib["Path"])
+            )
             projects[name] = ET.tostring(project, encoding="unicode").strip()
             parent.remove(project)
     for folder in list(root.findall("Folder")):
         if not len(folder):
             root.remove(folder)
-    return projects, ET.canonicalize(ET.tostring(root, encoding="unicode"), strip_text=True)
+    return projects, ET.canonicalize(
+        ET.tostring(root, encoding="unicode"), strip_text=True
+    )
 
 
 def classify(paths, catalog, entries, previous):
@@ -60,7 +65,10 @@ def classify(paths, catalog, entries, previous):
     if previous is not catalog:
         for name, spec in catalog.modules.items():
             old = previous.modules.get(name, {})
-            if any(spec.get(k) != old.get(k) for k in ("run", "integration", "pack", "consume", "includes")):
+            if any(
+                spec.get(k) != old.get(k)
+                for k in ("run", "integration", "pack", "consume", "includes")
+            ):
                 direct.add(name)
     # An aggregate source edit exercises its own included components. A test-only
     # edit, or an edit in one of its children, does not pull in its siblings.
@@ -89,9 +97,12 @@ def make_plan(catalog, paths, entries, previous, full=False, old_entries=None):
         old_hashes = fingerprints(previous, old_entries)
         for name in catalog.packages:
             if name not in previous.packages or (
-                hashes[name] != old_hashes.get(name) and
-                (catalog.dependencies(name) != previous.dependencies(name) or
-                 catalog.modules[name].get("pack") != previous.modules[name].get("pack"))
+                hashes[name] != old_hashes.get(name)
+                and (
+                    catalog.dependencies(name) != previous.dependencies(name)
+                    or catalog.modules[name].get("pack")
+                    != previous.modules[name].get("pack")
+                )
             ):
                 touched.add(name)
     db = set(PROVIDERS) & catalog.packages.keys()
@@ -101,11 +112,22 @@ def make_plan(catalog, paths, entries, previous, full=False, old_entries=None):
         published.update(public_heads({p: catalog.packages[p] for p in sorted(lookup)}))
     pending = {p for p in touched if published[p].get("inputs") != hashes[p]}
     selected = set(catalog.modules) if full else direct | consumers
-    result = plan_actions(catalog, reasons, direct, touched & db, pending & db, previous=previous, entries=entries, full=full)
+    result = plan_actions(
+        catalog,
+        reasons,
+        direct,
+        touched & db,
+        pending & db,
+        previous=previous,
+        entries=entries,
+        full=full,
+    )
     run_steps = {}
     for name in selected:
         spec = catalog.modules[name]
-        step = "run" if name in direct or full or "package" not in spec else "integration"
+        step = (
+            "run" if name in direct or full or "package" not in spec else "integration"
+        )
         if spec.get(step):
             run_steps[name] = step
     modules = sorted(run_steps)
@@ -113,17 +135,43 @@ def make_plan(catalog, paths, entries, previous, full=False, old_entries=None):
     languages = set(changed_languages) & {"python", "csharp"}
     if full or ".github/workflows/security.yml" in paths:
         languages.update(("python", "csharp"))
-    releases = ([{"module": "", "suffix": ""}] if pending & db else [])
+    releases = [{"module": "", "suffix": ""}] if pending & db else []
     releases.extend({"module": p, "suffix": "-" + p} for p in sorted(pending - db))
-    validate_packages = set(catalog.packages) if full else pending | (direct & catalog.packages.keys())
+    validate_packages = (
+        set(catalog.packages) if full else pending | (direct & catalog.packages.keys())
+    )
     module_packages = sorted(validate_packages - db)
-    return dict(result, changed_languages=changed_languages, inputs=hashes, published=published, packages=sorted(pending & db),
-                candidates=sorted(pending), releases=releases, modules=modules, run_steps=run_steps, languages=sorted(languages),
-                artifacts={n: catalog.modules[n]["artifacts"] for n in modules if "artifacts" in catalog.modules[n]},
-                module_packages=module_packages, reasons=reasons,
-                module_resources={n: catalog.modules[n].get("resources", []) for n in set(modules)|set(module_packages)},
-                compose_from={p: sorted(n for n in catalog.dependencies(p) & set(modules)
-                                        if catalog.modules[n].get("artifacts")) for p in module_packages})
+    return dict(
+        result,
+        changed_languages=changed_languages,
+        inputs=hashes,
+        published=published,
+        packages=sorted(pending & db),
+        candidates=sorted(pending),
+        releases=releases,
+        modules=modules,
+        run_steps=run_steps,
+        languages=sorted(languages),
+        artifacts={
+            n: catalog.modules[n]["artifacts"]
+            for n in modules
+            if "artifacts" in catalog.modules[n]
+        },
+        module_packages=module_packages,
+        reasons=reasons,
+        module_resources={
+            n: catalog.modules[n].get("resources", [])
+            for n in set(modules) | set(module_packages)
+        },
+        compose_from={
+            p: sorted(
+                n
+                for n in catalog.dependencies(p) & set(modules)
+                if catalog.modules[n].get("artifacts")
+            )
+            for p in module_packages
+        },
+    )
 
 
 def plan_tree(base, tree="HEAD", *, replay=None, full=False):
@@ -132,13 +180,17 @@ def plan_tree(base, tree="HEAD", *, replay=None, full=False):
     previous = catalog
     old_files = files(base)
     has_registry = any(p.startswith(DIRECTORY + "/") for p in old_files)
-    if has_registry and any(p.startswith(DIRECTORY + "/") or p.endswith(".csproj") for p in paths):
+    if has_registry and any(
+        p.startswith(DIRECTORY + "/") or p.endswith(".csproj") for p in paths
+    ):
         previous = load_catalog(base)
     entries = files(tree)
     if replay is not None:
         for p in replay:
             if p not in entries or catalog.owner(p)[1] != "tests":
-                raise ValueError("Replay accepts tracked test or documentation paths only: " + p)
+                raise ValueError(
+                    "Replay accepts tracked test or documentation paths only: " + p
+                )
     return make_plan(catalog, paths, entries, previous, full, old_files)
 
 
@@ -149,7 +201,9 @@ def main():
     parser.add_argument("--full", action="store_true")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
-    data = json.dumps(plan_tree(args.base, args.tree, full=args.full), indent=2, sort_keys=True)
+    data = json.dumps(
+        plan_tree(args.base, args.tree, full=args.full), indent=2, sort_keys=True
+    )
     print(data)
     if args.output:
         args.output.parent.mkdir(exist_ok=True, parents=True)
