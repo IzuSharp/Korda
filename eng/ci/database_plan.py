@@ -51,7 +51,9 @@ def catalog_steps(scope):
     return steps
 
 
-def plan_actions(catalog, reasons, direct, touched, package_checks, *, previous, entries, full, images=False):
+def plan_actions(
+    catalog, reasons, direct, touched, package_checks, api_packages, *, previous, entries, full, images=False
+):
     desired = set()
     deferred = set()
     tested_public = set(package_checks)
@@ -59,7 +61,7 @@ def plan_actions(catalog, reasons, direct, touched, package_checks, *, previous,
         actions = set(catalog.modules[module].get("checks", ()))
         paths = reasons.get(module, ())
         roles = {purpose(path, (catalog if path in entries else previous).owner(path)[1]) for path in paths}
-        roles.discard("documentation")
+        roles.difference_update(("documentation", "metadata"))
         if not full and roles == {"api"}:
             actions = set(catalog.modules[module].get("api_checks", actions))
         if module in PROVIDERS and not full and roles == {"tests"}:
@@ -72,6 +74,8 @@ def plan_actions(catalog, reasons, direct, touched, package_checks, *, previous,
         and direct & catalog.dependencies("database-native")
     ):
         desired.update(("database.regressions", "database.dependencies"))
+    if "bundle.check" in desired:
+        api_packages.update(set(PROVIDERS) & catalog.packages.keys())
     if "consumer.check" in desired or "bundle.check" in desired:
         desired.difference_update({"consumer.check", "bundle.check"})
         # Publishing code has local archive contract tests; exercise a checked candidate on the host as well.
@@ -119,7 +123,7 @@ def plan_actions(catalog, reasons, direct, touched, package_checks, *, previous,
             "interop.negotiation",
         }
         for provider in PROVIDERS:
-            desired.update((provider + ".test", provider + ".api"))
+            desired.add(provider + ".test")
     manual = {name for name in desired if name.startswith("manual.")}
     desired -= manual
     deferred |= manual
@@ -131,7 +135,11 @@ def plan_actions(catalog, reasons, direct, touched, package_checks, *, previous,
         )
         lanes.setdefault(scope, set()).add(name)
     for provider in tested_public:
-        lanes.setdefault(provider, set()).add("public.validate")
+        actions = lanes.setdefault(provider, set())
+        actions.add("public.validate")
+        if full or provider in api_packages or provider + ".api" in actions:
+            actions.discard(provider + ".api")
+            actions.add(provider + ".packed-api")
 
     groups, resources = {}, {}
     for scope, selected in sorted(lanes.items()):

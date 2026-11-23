@@ -80,6 +80,44 @@ class RoutingTests(unittest.TestCase):
         self.assertNotIn("database.pack", plan["actions"]["sqlite"])
         self.assertNotIn("pg-server", plan["resources"]["sqlite"])
 
+    def test_provider_metadata_validates_only_its_own_archive(self):
+        for path, providers in (
+            ("packaging/providers/sqlite.txt", {"sqlite"}),
+            ("packaging/providers/postgresql.txt", {"postgresql"}),
+            ("packaging/providers/README.md", {"postgresql", "sqlite"}),
+            ("eng/ci/registry.py", {"postgresql", "sqlite"}),
+        ):
+            with self.subTest(path=path):
+                plan = self.plan(path)
+                self.assertEqual(set(plan["build_scopes"]), providers)
+                for provider in providers:
+                    self.assertEqual(
+                        set(plan["actions"][provider]),
+                        {
+                            provider + ".build",
+                            "public.pack",
+                            "public.consume-aot",
+                            "public.validate",
+                        },
+                    )
+
+    def test_packed_signatures_follow_managed_and_layout_inputs(self):
+        for path, providers in (
+            ("src/Data.Sqlite/SqliteOptions.cs", {"sqlite"}),
+            ("src/Data.Postgres/Korda.Database.PostgreSql.csproj", {"postgresql"}),
+            ("src/Query.Generator/Korda.Query.Generator.csproj", {"sqlite", "postgresql"}),
+            ("eng/ci/bundles.py", {"sqlite", "postgresql"}),
+            ("src/Packaging.Linux/packages.py", {"sqlite", "postgresql"}),
+        ):
+            with self.subTest(path=path):
+                plan = self.plan("packaging/providers/README.md", path)
+                for provider in ("sqlite", "postgresql"):
+                    actions = plan["actions"][provider]
+                    self.assertEqual(provider + ".packed-api" in actions, provider in providers)
+                    self.assertNotIn(provider + ".api", actions)
+                    if provider in providers:
+                        self.assertLess(actions.index("public.pack"), actions.index(provider + ".packed-api"))
+
     def test_independent_api_surfaces(self):
         for path, expected in (
             ("src/Data.Sqlite/api-reference.md", "sqlite.api"),

@@ -35,7 +35,10 @@ def main():
     phase = parser.add_mutually_exclusive_group()
     phase.add_argument("--api-only", action="store_true")
     phase.add_argument("--test-only", action="store_true")
+    parser.add_argument("--assembly-dir", type=Path, help="Directory containing the extracted NuGet API inputs")
     args = parser.parse_args()
+    if args.assembly_dir and not args.api_only:
+        parser.error("--assembly-dir requires --api-only")
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
     env = os.environ.copy()
@@ -100,10 +103,10 @@ def main():
             manifest["designInputs"] = {"commit": revision}
         assert run("sdk", [dotnet, "--version"]).strip() == "11.0.100"
         if args.api_only:
-            for project in (ordinary[0], ordinary[2]):
+            for project in ([ordinary[2]] if args.assembly_dir else [ordinary[0], ordinary[2]]):
                 restore("api-restore-" + Path(project).stem, project)
                 run("api-build-" + Path(project).stem, [dotnet, "build", project, "-c", "Release", "--no-restore", *build_flags])
-            assembly = ROOT / "src/Data.Sqlite/bin/Release/net11.0/Korda.Database.Sqlite.dll"
+            assembly = (args.assembly_dir or ROOT / "src/Data.Sqlite/bin/Release/net11.0") / "Korda.Database.Sqlite.dll"
             api_result = json.loads(run("compiled-api-xml-reference", [dotnet, "tests/Data.Sqlite/ApiCheck/bin/Release/net11.0/Korda.Sqlite.ApiCheck.dll", ROOT, sdk, assembly]))
             manifest.update(status="passed", api=api_result)
             save()

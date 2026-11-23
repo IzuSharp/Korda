@@ -62,7 +62,10 @@ def main():
     phase=parser.add_mutually_exclusive_group()
     phase.add_argument('--api-only',action='store_true')
     phase.add_argument('--test-only',action='store_true')
-    args=parser.parse_args();output=args.output.resolve();output.mkdir(parents=True,exist_ok=False)
+    parser.add_argument('--assembly-dir',type=Path,help='Directory containing the extracted NuGet API inputs')
+    args=parser.parse_args()
+    if args.assembly_dir and not args.api_only:parser.error('--assembly-dir requires --api-only')
+    output=args.output.resolve();output.mkdir(parents=True,exist_ok=False)
     env=os.environ.copy();inputs=[];env.update(DOTNET_CLI_USE_MSBUILD_SERVER='0',MSBUILDUSESERVER='0');records=[];servers=[];status='failed';host_preflight=False
     for name in list(env):
         if name.startswith('PG'): del env[name]
@@ -99,6 +102,10 @@ def main():
         paths=subprocess.check_output(['git','ls-files','--cached','--others','--exclude-standard','-z'],cwd=ROOT).decode().split('\0')
         inputs=[{'path':p,'sha256':sha(ROOT/p)} for p in paths if p and (ROOT/p).is_file() and (p in shared or any(p.startswith(prefix) for prefix in prefixes))]
         (output/'source-inputs.json').write_text(json.dumps({'commit':subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),'git_status':subprocess.check_output(['git','status','--short'],cwd=ROOT,text=True),'inputs':inputs,'preparation':args.write_reference or args.update_locks},indent=2)+'\n')
+        if args.api_only and args.assembly_dir:
+            run_managed(args,output,run,{})
+            status='passed'
+            return 0
         build=args.native_build.resolve()
         provenance=build/'compiler-provenance.txt'
         if not provenance.is_file() or '\nID=Clang\nVERSION=23.1.5\n' not in provenance.read_text():raise RuntimeError('Configure the pinned Clang 23.1.5 CMake preset first.')
@@ -167,7 +174,7 @@ def run_managed(args,output,run,native_env):
     test='tests/Data.Postgres/Korda.Database.PostgreSql.Tests.csproj'
     checker='tests/Data.Postgres/ApiCheck/ApiCheck.csproj'
     sample='samples/api/data-postgres/PostgresExample.csproj'
-    if args.api_only:
+    if args.api_only and not args.assembly_dir:
         provider='src/Data.Postgres/Korda.Database.PostgreSql.csproj'
         run('provider-api-build',['dotnet','build',provider,'-c','Release',*msbuild])
     for label,project in [('test',test),('api',checker),('sample',sample)]:
@@ -178,7 +185,7 @@ def run_managed(args,output,run,native_env):
     run('managed-whitespace',['dotnet','format','whitespace','.', '--folder','--verify-no-changes','--include',
                              'tests/Data.Postgres/Program.cs','tests/ProviderProfileChecks.cs','samples/api/data-postgres/Program.cs','--verbosity','quiet'])
     if not args.test_only:
-        run('exact-api-xml-reference',['dotnet',str(ROOT/'tests/Data.Postgres/ApiCheck/bin/Release/net11.0/ApiCheck.dll'),str(ROOT),os.environ['DOTNET_ROOT'],str(ROOT/'src/Data.Postgres/bin/Release/net11.0/Korda.Database.PostgreSql.dll'),*(['--write'] if args.write_reference else [])])
+        run('exact-api-xml-reference',['dotnet',str(ROOT/'tests/Data.Postgres/ApiCheck/bin/Release/net11.0/ApiCheck.dll'),str(ROOT),os.environ['DOTNET_ROOT'],str((args.assembly_dir or ROOT/'src/Data.Postgres/bin/Release/net11.0')/'Korda.Database.PostgreSql.dll'),*(['--write'] if args.write_reference else [])])
     if args.api_only:
         return
     native_env=native_env|{'NW_PG_COMPONENT_ASSET':str(component),'NW_PG_HOST_ASSET':str(asset),'LD_LIBRARY_PATH':str(fixture.parent)+':'+os.environ.get('LD_LIBRARY_PATH','')}

@@ -25,6 +25,7 @@ Add an entry to a JSON file in this directory. Entries can be grouped by product
 
 | Register | Meaning |
 | --- | --- |
+| `metadata` | Package content such as a NuGet description or README. A change contributes to the public package fingerprint without changing the managed payload fingerprint. |
 | `sources`, `tests` | Repository-relative files or directory prefixes ending in `/`. A more specific rule wins. Changes to tests select their own module check. Changes to sources also select consumers. |
 | `targets`, `depends` | Native CMake target names and additional module dependencies, including generators, linked sources and native libraries loaded at runtime. Literal managed project references between source modules are read from Git. Register conditional or computed dependencies that are invisible there. |
 | `includes` | Modules bundled into an aggregate. Editing the aggregate's own source also exercises its included components. A leaf edit affects consumers and package acceptance without pulling in independent siblings. |

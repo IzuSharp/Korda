@@ -1,0 +1,1 @@
+Strongly typed Fluent ORM for SQLite in C# with Linux x64 Native AOT support.

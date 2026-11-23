@@ -28,7 +28,7 @@ def language(path):
 
 def purpose(path, registered):
     file = PurePosixPath(path)
-    if file.name in {"LICENSE", "THIRD_PARTY_NOTICES.md"}:
+    if registered == "metadata" or file.name in {"LICENSE", "THIRD_PARTY_NOTICES.md"}:
         return registered
     if "/reference/" in path and file.suffix in {".md", ".json"}:
         return "api"

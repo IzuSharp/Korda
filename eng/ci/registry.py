@@ -62,6 +62,8 @@ def public_heads(identities):
                 else {}
             )
         heads[provider] = {"version": version, "inputs": info.get("inputs")}
+        if "payload_inputs" in info:
+            heads[provider]["payload_inputs"] = info["payload_inputs"]
     return heads
 
 

@@ -71,6 +71,38 @@ class PreviewTests(unittest.TestCase):
         self.assertFalse(tests["candidates"])
         self.assertFalse(tests["public_checks"])
 
+    def test_metadata_edit_can_also_promote_unchecked_binary_changes(self):
+        from facts import fingerprints
+
+        payloads = fingerprints(self.catalog, self.entries, include_metadata=False)
+        old = {
+            p: {"version": "0.1.0-preview.1", "inputs": self.inputs[p], "payload_inputs": digest}
+            for p, digest in payloads.items()
+        }
+        old["sqlite"]["inputs"] = "old-package"
+
+        def selected():
+            return self.plan(["packaging/providers/sqlite.txt"], old)["actions"]["sqlite"]
+
+        self.assertNotIn("sqlite.packed-api", selected())
+        old["sqlite"]["payload_inputs"] = "old-implementation"
+        self.assertIn("sqlite.packed-api", selected())
+        del old["sqlite"]["payload_inputs"]
+        self.assertIn("sqlite.packed-api", selected())
+
+    def test_packaged_readme_and_description_participate_in_fingerprints(self):
+        for path, providers in (
+            ("packaging/providers/sqlite.txt", {"sqlite"}),
+            ("packaging/providers/README.md", set(self.inputs)),
+        ):
+            entries = self.entries | {path: b"changed"}
+            changed = fingerprints(self.catalog, entries)
+            self.assertEqual({p for p in self.inputs if changed[p] != self.inputs[p]}, providers)
+            self.assertEqual(
+                fingerprints(self.catalog, entries, include_metadata=False),
+                fingerprints(self.catalog, self.entries, include_metadata=False),
+            )
+
     def test_registry_versions_and_embedded_fingerprint(self):
         stream = io.BytesIO()
         with zipfile.ZipFile(stream, "w") as z:
@@ -94,7 +126,9 @@ class PreviewTests(unittest.TestCase):
             for provider, identity in self.catalog.packages.items():
                 native = {"path": f"runtimes/linux-x64/native/{provider}.so", "sha256": "0" * 64}
                 entries = {"korda/manifest.json": json.dumps({"sourceCommit": commit}).encode()}
-                record = bundles.compose(provider, version, entries, native, commit, self.inputs[provider])
+                record = bundles.compose(
+                    provider, version, entries, native, commit, self.inputs[provider], "payload"
+                )
                 self.assertEqual(record["version"], version)
                 with zipfile.ZipFile(Path(tmp, "feed", f"{identity}.{version}.nupkg")) as archive:
                     metadata = ET.fromstring(archive.read(identity + ".nuspec")).find("{*}metadata")
@@ -106,6 +140,50 @@ class PreviewTests(unittest.TestCase):
                     self.assertEqual(
                         json.loads(archive.read("korda/public.json"))["inputs"], self.inputs[provider]
                     )
+
+    def test_archive_metadata_and_managed_bytes_are_checked(self):
+        from packed_api import stage
+        import provider_metadata
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            name = self.catalog.packages["sqlite"]
+            version = "0.1.0-preview.1"
+            desc, readme = provider_metadata.render("sqlite", name, version)
+            metadata = ET.Element("metadata")
+            ET.SubElement(metadata, "description").text = desc
+            ET.SubElement(metadata, "readme").text = "README.md"
+            outputs = {}
+            for suffix in ("dll", "xml"):
+                output = root / f"{name}.{suffix}"
+                output.write_bytes(suffix.encode())
+                outputs["lib/net11.0/" + output.name] = output
+            contents = {k: v.read_bytes() for k, v in outputs.items()} | {"README.md": readme}
+            package = root / "candidate.nupkg"
+
+            def write(entries):
+                with zipfile.ZipFile(package, "w") as archive:
+                    for entry, data in entries.items():
+                        archive.writestr(entry, data)
+
+            write(contents)
+            stage(package, outputs, root / "good")
+            with zipfile.ZipFile(package) as archive:
+                provider_metadata.verify(archive, metadata, "sqlite", name, version)
+                metadata.find("description").text = "other"
+                with self.assertRaisesRegex(ValueError, "description"):
+                    provider_metadata.verify(archive, metadata, "sqlite", name, version)
+                metadata.find("description").text = desc
+            write(contents | {"README.md": b"wrong"})
+            with zipfile.ZipFile(package) as archive, self.assertRaisesRegex(ValueError, "README"):
+                provider_metadata.verify(archive, metadata, "sqlite", name, version)
+            for entry in outputs:
+                write(contents | {entry: b"wrong output"})
+                with self.assertRaisesRegex(ValueError, "differs from the compiled output"):
+                    stage(package, outputs, root / ("bad-" + outputs[entry].suffix))
+            write({k: v for k, v in contents.items() if not k.endswith(".xml")})
+            with self.assertRaisesRegex(ValueError, "missing managed archive entries"):
+                stage(package, outputs, root / "missing")
 
     def test_recheck_before_publication_and_idempotent_retry(self):
         plan = {

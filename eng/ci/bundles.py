@@ -8,6 +8,7 @@ import subprocess
 import sys
 
 from impact import IDS, PROVIDERS
+from provider_metadata import render
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src/Packaging.Domain"))
@@ -82,7 +83,7 @@ def selected_files(provider, version, manifest):
     return entries, native
 
 
-def compose(provider, version, entries, native, commit, fingerprint):
+def compose(provider, version, entries, native, commit, fingerprint, payload_fingerprint):
     identity = IDS[provider]
     for notice in ("LICENSE", "THIRD_PARTY_NOTICES.md"):
         entries[notice] = (ROOT / notice).read_bytes()
@@ -92,7 +93,7 @@ def compose(provider, version, entries, native, commit, fingerprint):
     entries["tools/" + GENERATOR + ".targets"] = (
         ROOT / f"src/Query.Generator/buildTransitive/{GENERATOR}.targets"
     ).read_bytes()
-    entries["korda/public.json"] = json_bytes({"inputs": fingerprint})
+    entries["korda/public.json"] = json_bytes({"inputs": fingerprint, "payload_inputs": payload_fingerprint})
     descriptor = dict(
         engineId="database." + provider,
         facadePackageId=identity,
@@ -128,14 +129,7 @@ def compose(provider, version, entries, native, commit, fingerprint):
     entries[f"buildTransitive/{identity}.targets"] = (
         wrapper.replace("@PROVIDER@", identity).replace("@SHARED@", digest).encode()
     )
-    display = "SQLite" if provider == "sqlite" else "PostgreSQL"
-    description = f"Strongly typed Fluent ORM for {display} in C# with Linux x64 Native AOT support."
-    entries["README.md"] = (
-        f"# {identity}\n\n{description}\n\n"
-        f"```sh\ndotnet add package {identity} --version {version}\n```\n\n"
-        "Includes the ORM, query generator and precompiled database provider. "
-        "See the [getting started guide](https://github.com/IzuSharp/Korda/blob/main/docs/getting-started.md).\n"
-    ).encode()
+    description, entries["README.md"] = render(provider, identity, version)
     path = packer.pack(
         OUT / "feed",
         identity,
@@ -171,7 +165,17 @@ def main():
     commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
     tree = subprocess.check_output(["git", "rev-parse", "HEAD^{tree}"], text=True).strip()
     entries, native = selected_files(provider, args.version, args.native)
-    records = [compose(provider, args.version, entries, native, commit, plan["inputs"][provider])]
+    records = [
+        compose(
+            provider,
+            args.version,
+            entries,
+            native,
+            commit,
+            plan["inputs"][provider],
+            plan["payload_inputs"][provider],
+        )
+    ]
     record = dict(
         schema_version=1,
         source_commit=commit,

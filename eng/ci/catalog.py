@@ -29,6 +29,7 @@ class Catalog:
                 raise ValueError(f"Invalid module name: {name}")
             unknown = spec.keys() - {
                 "sources",
+                "metadata",
                 "tests",
                 "depends",
                 "api_checks",
@@ -47,6 +48,7 @@ class Catalog:
                 raise ValueError(f"{name}: unknown registration fields {sorted(unknown)}")
             for field in (
                 "sources",
+                "metadata",
                 "tests",
                 "depends",
                 "api_checks",
@@ -92,7 +94,7 @@ class Catalog:
                 and not (name in {"sqlite", "postgresql"} and spec.get("checks"))
             ):
                 raise ValueError(f"{name}: a top-level package requires pack and consume commands")
-            for kind in ("sources", "tests"):
+            for kind in ("sources", "metadata", "tests"):
                 for pattern in spec.get(kind, []):
                     # An exact file overrides a directory, and a nested directory overrides its parent.
                     prefix = pattern.split("*", 1)[0]

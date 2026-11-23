@@ -39,13 +39,16 @@ def solution_projects(path, entry):
 
 def classify(paths, catalog, entries, previous):
     direct, affected_packages, affected_modules, reasons = set(), set(), set(), {}
-    owners = set()
+    owners, payload_changes, product_changes = set(), set(), set()
     for path in paths:
         graph = catalog if path in entries else previous
         module, kind = graph.owner(path)
         role = purpose(path, kind)
         reasons.setdefault(module, []).append(path)
         if role == "documentation":
+            continue
+        if role == "metadata":
+            affected_packages.update(graph.consumers({module}) & catalog.packages.keys())
             continue
         if module in catalog.modules:
             direct.add(module)
@@ -54,7 +57,11 @@ def classify(paths, catalog, entries, previous):
                 owners.add(module)
             consumers = graph.consumers({module})
             affected_modules.update(consumers & catalog.modules.keys())
-            affected_packages.update(consumers & catalog.packages.keys())
+            packages = consumers & catalog.packages.keys()
+            affected_packages.update(packages)
+            payload_changes.update(packages)
+            if "bundle.check" not in graph.modules[module].get("checks", ()):
+                product_changes.update(packages)
     # A manifest is also an input to routing. Test a changed command, and account for
     # added/removed dependencies even if no source file moved in the same commit.
     if previous is not catalog:
@@ -67,7 +74,7 @@ def classify(paths, catalog, entries, previous):
     for owner in owners:
         for child in catalog.modules[owner].get("includes", []):
             affected_modules.update(catalog.dependencies(child))
-    return direct, affected_modules, affected_packages, reasons
+    return direct, affected_modules, affected_packages, payload_changes, product_changes, reasons
 
 
 def make_plan(
@@ -81,7 +88,9 @@ def make_plan(
     images=False,
     reconcile=False,
 ):
-    direct, consumers, touched, reasons = classify(paths, catalog, entries, previous)
+    direct, consumers, touched, payload_changes, product_changes, reasons = classify(
+        paths, catalog, entries, previous
+    )
     if old_entries is not None:
         # The solution is an index shared by otherwise independent products.
         for path in (p for p in paths if p.endswith(".slnx")):
@@ -94,22 +103,28 @@ def make_plan(
                     if owner in catalog.modules:
                         direct.add(owner)
     hashes = fingerprints(catalog, entries)
+    payloads = fingerprints(catalog, entries, include_metadata=False)
     if old_entries is not None and previous is not catalog:
         # Recompute impact when registered dependency edges or packaging recipes changed.
         old_hashes = fingerprints(previous, old_entries)
         touched.update(name for name in catalog.packages if old_hashes.get(name) != hashes[name])
+        old_payloads = fingerprints(previous, old_entries, include_metadata=False)
+        payload_changes.update(p for p in touched if old_payloads.get(p) != payloads[p])
     db = set(PROVIDERS) & catalog.packages.keys()
     # Ordinary diffs select checks. Main also checks each ID for a missing or stale preview.
     published = public_heads(catalog.packages) if reconcile else {}
     pending = {p for p in catalog.packages if published[p]["inputs"] != hashes[p]} if reconcile else set()
+    # A metadata-only merge can also deliver an earlier, unshipped binary change.
+    payload_changes.update(p for p in pending if published[p].get("payload_inputs") != payloads[p])
     package_checks = set(touched) | pending
     selected = set(catalog.modules) if full else direct | consumers
     result = plan_actions(
         catalog,
         reasons,
         direct,
-        touched & db,
+        product_changes & db,
         package_checks & db,
+        payload_changes & db,
         previous=previous,
         entries=entries,
         full=full,
@@ -137,6 +152,7 @@ def make_plan(
         result,
         changed_languages=changed_languages,
         inputs=hashes,
+        payload_inputs={p: payloads[p] for p in sorted(db)},
         packages=sorted(package_checks & db),
         candidates=sorted(pending),
         versions={

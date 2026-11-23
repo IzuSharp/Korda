@@ -4,6 +4,8 @@ Inspect the committed diff with `python3 eng/ci/impact.py origin/main`. The Pyth
 
 Documentation and CI orchestration changes run the tooling checks. An API snapshot runs the owning API check. A changed provider test builds its selected provider and executes on the Linux runner. Shared package inputs can affect both providers. PRs execute product consumers with Native AOT. C# and Python CodeQL follow the changed languages. Weekly native analysis runs C/C++ CodeQL and clang-tidy.
 
+The provider description and package README template under `packaging/providers/` are registered metadata inputs. A metadata-only edit checks the actual nuspec and README and runs the package consumer. Managed source, generator, project-reference and archive-layout changes also check the delivered DLLs and XML against the build outputs and run the provider's signature checker on the extracted assembly. An API baseline alone runs its owning API check. A missing or older preview without a matching non-metadata fingerprint receives the packed API check before release.
+
 The public package allowlist contains **Korda.Database.Sqlite** and **Korda.Database.PostgreSql**. Each package includes the shared managed assemblies, build integration, generator, third-party notices and its selected provider library. The database release bundles internal components in those two packages. The NuGet trusted publisher for this repository grants the `Korda.*` prefix to `release.yml` with environment `nuget`.
 
 PRs and main pushes verify the affected modules using the proposed merge diff or the push's before/after commits. Each selected provider builds on a separate Linux runner, creates a standalone package and runs its own Native AOT consumer. PR and scheduled checks use temporary versions.

@@ -411,6 +411,15 @@ class Provider:
                 build,
                 *options,
             )
+            if operation == "api":
+                identity_dir = f"artifacts/packed-api/{provider}"
+                add(
+                    provider + ".packed-api",
+                    py("eng/ci/packed_api.py", provider, "{version}", identity_dir),
+                    (*cmd, "--assembly-dir", identity_dir),
+                    needs=("public.pack",),
+                    resources=("dotnet", "design"),
+                )
             ctest = (
                 "ctest",
                 "--preset",

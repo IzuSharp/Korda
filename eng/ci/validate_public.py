@@ -6,6 +6,8 @@ from pathlib import Path
 import sys
 from catalog import ROOT, git, load_catalog
 from impact import inputs
+from facts import PROVIDERS
+import provider_metadata
 import xml.etree.ElementTree as ET
 import zipfile
 
@@ -44,11 +46,16 @@ def validate(folder, plan, version, module):
             raise ValueError("Candidate changed after consumption")
         provider = next(p for p, identity in identities.items() if identity == name)
         with zipfile.ZipFile(path) as archive:
-            if json.loads(archive.read("korda/public.json"))["inputs"] != record["inputs"][provider]:
+            package_inputs = json.loads(archive.read("korda/public.json"))
+            if package_inputs["inputs"] != record["inputs"][provider]:
                 raise ValueError("Packaged provider fingerprint differs from the tested inputs")
             metadata = ET.fromstring(archive.read(name + ".nuspec")).find("{*}metadata")
             if metadata.findtext("{*}id") != name or metadata.findtext("{*}version") != version:
                 raise ValueError("Packed NuGet identity differs from the release plan")
+            if module in PROVIDERS:
+                provider_metadata.verify(archive, metadata, module, name, version)
+                if package_inputs.get("payload_inputs") != plan["payload_inputs"][module]:
+                    raise ValueError("Packaged provider has different non-metadata inputs")
             if metadata.find(".//{*}dependency") is not None:
                 raise ValueError("Public provider requires another package")
         paths[name] = path

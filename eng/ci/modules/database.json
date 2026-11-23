@@ -19,6 +19,7 @@
   },
   "sqlite": {
     "targets": ["nw_database_sqlite"],
+    "metadata": ["packaging/providers/sqlite.txt"],
     "sources": ["src/Data.Sqlite/", "src/Data.NativeHost/Providers/Sqlite/"],
     "tests": ["tests/Data.Sqlite/", "samples/api/data-sqlite/", "native/cpp/tests/sqlite_fixture_tests.cpp", "native/cpp/tests/fixtures/sqlite.cpp"],
     "depends": ["database"],
@@ -28,6 +29,7 @@
   },
   "postgresql": {
     "targets": ["nw_database_postgresql"],
+    "metadata": ["packaging/providers/postgresql.txt"],
     "sources": ["src/Data.Postgres/", "src/Data.NativeHost/Providers/PostgreSql/", "native/cpp/patches/libpq-*"],
     "tests": ["tests/Data.Postgres/", "samples/api/data-postgres/", "native/cpp/tests/postgres_fixture_tests.cpp", "native/cpp/tests/fixtures/postgres*"],
     "depends": ["database"],
@@ -36,10 +38,12 @@
     "api_checks": ["postgresql.api"]
   },
   "bundle-composer": {
-    "sources": ["eng/ci/bundles.py"],
+    "sources": ["eng/ci/bundles.py", "eng/ci/provider_metadata.py"],
+    "tests": ["eng/ci/packed_api.py"],
     "checks": ["bundle.check"]
   },
   "bundle-layout": {
+    "metadata": ["packaging/providers/README.md"],
     "sources": ["src/Packaging.Linux/packages.py", "src/Packaging.Release/buildTransitive/", "eng/ci/provider.targets", "LICENSE", "THIRD_PARTY_NOTICES.md"],
     "checks": ["bundle.check"]
   },
