@@ -7,13 +7,13 @@
   "database-native": {
     "targets": ["nw_database_common", "nativeweave_database_host"],
     "sources": ["native/cpp/include/", "native/cpp/src/", "native/cpp/licenses/", "native/cpp/exports.map", "native/cpp/patches/", "native/database/", "native/dependencies.lock.json", "CMakeLists.txt", "CMakePresets.json", "eng/cpp_toolchain.py", "eng/task07_native.py", "eng/postgres-tools.sh"],
-    "tests": ["native/cpp/tests/", "eng/check_native.py", "eng/verify-cpp-*.sh", "eng/postgres-cache-key.py", "tests/native_build.py", "tests/Migration.Cpp/"],
+    "tests": ["native/cpp/tests/", "eng/verify-cpp-*.sh", "eng/postgres-cache-key.py", "tests/native_build.py", "tests/Migration.Cpp/"],
     "checks": ["db:deep"],
     "depends": ["native-runtime"]
   },
   "database": {
     "sources": ["src/Data.Abstractions/", "src/Data.Codecs/", "src/Data.Materialization/", "src/Data.Migrations/", "src/Data.NativeHost/", "src/Data.Streaming/", "src/Data.Transactions/", "src/Query.Binding/", "src/Query.Fluent/", "src/Query.Generator/", "src/Query.Native/", "src/Orm.Relations/", "src/Packaging.Domain/", "src/Packaging.Linux/", "src/Packaging.Release/", "Directory.Build.props", "global.json", "NuGet.Config"],
-    "tests": ["eng/build.py", "src/Build.Integration/", "src/Reference.TaskService/", "src/Verification.EndToEnd/", "src/Verification.Models/", "src/Packaging.Release/release.py", "tests/Data.Abstractions/", "tests/Data.Codecs/", "tests/Data.Materialization/", "tests/Data.Migrations/", "tests/Data.NativeHost/", "tests/Data.Streaming/", "tests/Data.Transactions/", "tests/Query.Binding/", "tests/Query.Fluent/", "tests/Query.Native/", "tests/Orm.Relations/", "tests/Build.Integration/", "tests/Reference.TaskService/", "tests/ProviderProfileChecks.cs", "tests/Verification.EndToEnd/", "tests/Verification.Models/", "samples/api/data-abstractions/", "samples/api/data-codecs/", "samples/api/data-materialization/", "samples/api/data-migrations/", "samples/api/data-nativehost/", "samples/api/data-streaming/", "samples/api/data-transactions/", "samples/api/query-binding/", "samples/api/query-fluent/", "samples/api/query-generator/", "samples/api/query-native/", "samples/api/orm-relations/", "samples/api/packaging-domain/", "samples/api/packaging-linux/", "samples/api/reference-taskservice/", "samples/api/verification-compatibility/", "samples/api/verification-endtoend/", "samples/api/verification-interop/", "samples/api/verification-models/", "eng/database_regressions.py", "eng/consume-linux.sh", "eng/verify_db_scope.py", "eng/verify-task*-linux.sh", "public-api-standard.json", ".editorconfig", ".clang-format", ".clang-tidy"],
+    "tests": ["src/Build.Integration/", "src/Reference.TaskService/", "src/Verification.EndToEnd/", "src/Verification.Models/", "src/Packaging.Release/release.py", "tests/Data.Materialization/", "tests/Data.Migrations/", "tests/Data.NativeHost/", "tests/Query.Fluent/", "tests/Query.Native/", "tests/Orm.Relations/", "tests/Build.Integration/", "tests/Reference.TaskService/", "tests/ProviderProfileChecks.cs", "tests/Verification.EndToEnd/", "tests/Verification.Models/", "samples/api/data-abstractions/", "samples/api/data-codecs/", "samples/api/data-materialization/", "samples/api/data-migrations/", "samples/api/data-nativehost/", "samples/api/data-streaming/", "samples/api/data-transactions/", "samples/api/query-binding/", "samples/api/query-fluent/", "samples/api/query-generator/", "samples/api/query-native/", "samples/api/orm-relations/", "samples/api/packaging-domain/", "samples/api/packaging-linux/", "samples/api/reference-taskservice/", "samples/api/verification-compatibility/", "samples/api/verification-endtoend/", "samples/api/verification-interop/", "samples/api/verification-models/", "eng/database_regressions.py", "eng/consume-linux.sh", "eng/verify_db_scope.py", "eng/verify-task*-linux.sh", "public-api-standard.json", ".editorconfig", ".clang-format"],
     "depends": ["database-native", "bundle-layout", "build-task", "bundle-composer"],
     "checks": ["db:full"]
   },
@@ -66,7 +66,27 @@
     "checks": ["db:public"]
   },
   "database-compatibility": {
-    "tests": ["tests/Verification.Compatibility/", "tests/Verification.Interop/", "tests/Packaging.Domain/", "tests/Packaging.Linux/", "tests/Packaging.Release/", "src/Verification.Compatibility/", "src/Verification.Interop/", "eng/verify-task04-linux.sh", "eng/verify-task07-linux.sh", ".github/workflows/build.yml", ".github/workflows/database-checks.yml"],
+    "tests": ["tests/Verification.Compatibility/", "tests/Verification.Interop/", "tests/Packaging.Domain/", "tests/Packaging.Linux/", "tests/Packaging.Release/", "src/Verification.Compatibility/", "src/Verification.Interop/", "eng/verify-task04-linux.sh", "eng/verify-task07-linux.sh"],
     "checks": ["db:deep"]
+  },
+  "abstraction-tests": {
+    "tests": ["tests/Data.Abstractions/"],
+    "checks": ["db:abstraction-tests"]
+  },
+  "codec-tests": {
+    "tests": ["tests/Data.Codecs/"],
+    "checks": ["db:codec-tests"]
+  },
+  "transaction-tests": {
+    "tests": ["tests/Data.Transactions/"],
+    "checks": ["db:transaction-tests"]
+  },
+  "streaming-tests": {
+    "tests": ["tests/Data.Streaming/"],
+    "checks": ["db:streaming-tests"]
+  },
+  "binding-tests": {
+    "tests": ["tests/Query.Binding/"],
+    "checks": ["db:binding-tests"]
   }
 }

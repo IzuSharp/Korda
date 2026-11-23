@@ -35,7 +35,7 @@ jobs:
         run: |
           mkdir -p artifacts
           echo "$PLAN" > artifacts/plan.json
-          python3 eng/ci/module_job.py check "$MODULE" artifacts/plan.json "$VERSION"
+          NW_VERSION="$VERSION" dotnet run --project eng/ci -c Release -p:RestoreLockedMode=true -- module-check "$MODULE" artifacts/plan.json
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: fromJSON(inputs.plan).artifacts[matrix.module] != ''
         with:

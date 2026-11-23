@@ -29,9 +29,6 @@ def execute(action, name, plan, version):
             raise ValueError("Unexpected public consumer: " + name)
         consume(spec, env | {"NW_PACKAGE": spec["package"], "NW_FEED": "https://api.nuget.org/v3/index.json"})
         return
-    if action == "check":
-        command(spec[plan["run_steps"][name]], env)
-        return
     if name not in plan["module_packages"]:
         raise ValueError("Package not selected in the plan: " + name)
 
@@ -62,7 +59,7 @@ def execute(action, name, plan, version):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=["check", "pack", "public"])
+    parser.add_argument("action", choices=["pack", "public"])
     parser.add_argument("module")
     parser.add_argument("plan", type=Path)
     parser.add_argument("version")

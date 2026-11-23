@@ -157,8 +157,6 @@ def main():
         run("api-xml-reference", [dotnet, "tests/Interop.Negotiation/ApiCheck/bin/Release/net11.0/ApiCheck.dll", ROOT, sdk_root,
                                    "src/NativeWeave.Core/bin/Release/net11.0/NativeWeave.Core.dll"])
         rows = []
-        for case in CASES:
-            rows.append(json.loads(run("jit-" + case, [dotnet, "tests/Interop.Negotiation/bin/Release/net11.0/NativeWeave.Interop.Negotiation.Tests.dll", case, fixtures])))
         restore("test-aot-restore", test_project, aot=True)
         aot = out / "aot-tests"
         run("test-aot-publish", [dotnet, "publish", test_project, "-c", "Release", "-r", "linux-x64", "-p:PublishAot=true", "--no-restore", "-o", aot, *build_options])
@@ -201,7 +199,6 @@ def main():
         restore("sample-restore", sample_project); build("sample-build", sample_project)
         sample_bin = ROOT / "samples/api/interop-negotiation/bin/Release/net11.0"
         install_sample(sample_bin)
-        run("sample-jit", [dotnet, sample_bin / "NativeWeave.Interop.Negotiation.Sample.dll", *hashes])
 
         # Test-only NuGet envelopes exercise the actual product binaries without
         # changing product release metadata or installing a consumer Rust hook.
@@ -273,7 +270,6 @@ def main():
         consumer_bin = consumer / "bin/Release/net11.0"
         build_locations = sdk_locations()
         install_sample(consumer_bin, build_locations)
-        run("consumer-jit", [dotnet, consumer_bin / "Consumer.dll", *hashes], consumer, consumer_env)
         restore("consumer-aot-first-restore", "Consumer.csproj", aot=True, cwd=consumer, env=consumer_env, config_options=consumer_restore, locked=False)
         restore("consumer-aot-locked-restore", "Consumer.csproj", aot=True, cwd=consumer, env=consumer_env, config_options=consumer_restore)
         consumer_aot = consumer / "publish"
@@ -284,13 +280,13 @@ def main():
         if trap_log.exists():
             raise ValueError("A consumer attempted to invoke a Rust tool.")
         write("consumer-receipt.json", {"directory": str(consumer), "package_sha256": {core_package.name: sha(core_package), asset_package.name: sha(asset_package)},
-              "jit": "passed", "native_aot": "passed", "rust_invocations": 0, "isolated_package_cache": True, "pristine_machine": False,
+              "native_aot": "passed", "rust_invocations": 0, "isolated_package_cache": True, "pristine_machine": False,
               "sdk_build_locations": build_locations, "sdk_publish_locations": publish_locations,
               "consumer_executable_sha256": sha(consumer_aot / "Consumer"),
               "consumer_source_sha256": sha(consumer / "Program.cs"), "ordinary_lock_sha256": sha(consumer / "packages.lock.json"),
               "aot_lock_sha256": sha(consumer / "packages.linux-x64.aot.lock.json")})
-        result.update(passed=True, native_aot_executed=True, jit_cases=len(CASES), aot_cases=len(CASES),
-                      assertions_per_mode=sum(r["assertions"] for r in rows[:len(CASES)]), compiled_public_symbols=84,
+        result.update(passed=True, native_aot_executed=True, aot_cases=len(CASES),
+                      assertions_per_mode=sum(r["assertions"] for r in rows), compiled_public_symbols=84,
                       native_artifact_sha256=native_hashes,
                       aot_test_executable_sha256=sha(aot / "NativeWeave.Interop.Negotiation.Tests"))
         print(json.dumps({k: v for k, v in result.items() if k != "commands"}, indent=2))

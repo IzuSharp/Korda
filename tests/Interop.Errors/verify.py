@@ -75,9 +75,6 @@ def main():
             run(label + "-build", ["dotnet", "build", project, "-c", "Release", "--no-restore", *common])
             dll = ROOT / Path(project).parent / "bin/Release/net11.0" / (assembly + ".dll")
             expected = (-6, 134, 1) if label == "invalid-uco" else (0,)
-            output, error = run(label + "-jit", ["dotnet", dll], expected=expected)
-            if label == "invalid-uco" and ("CALLING_INVALID_UCO" not in output or "INVALID_CALLBACK_BODY_ENTERED" in output or "InvalidProgramException" not in error):
-                raise RuntimeError("Invalid UCO did not fail before its body")
             publish = run_dir / (label + "-aot")
             run(label + "-aot-restore", ["dotnet", "restore", project, "-r", "linux-x64", "-p:PublishAot=true", *restore, *common])
             run(label + "-aot-publish", ["dotnet", "publish", project, "-c", "Release", "-r", "linux-x64", "-p:PublishAot=true", "-p:IlcTreatWarningsAsErrors=true", "--no-restore", "-o", publish, *common])

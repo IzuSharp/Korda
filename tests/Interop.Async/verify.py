@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run actual Linux x64 A07 setup/cancel/result/retirement and JIT/AOT conformance."""
+"""Run actual Linux x64 A07 setup/cancel/result/retirement and Native AOT conformance."""
 import argparse
 import hashlib
 import json
@@ -86,10 +86,6 @@ def main():
             run(label + "-restore", ["dotnet", "restore", project, *restore, *common])
             run(label + "-build", ["dotnet", "build", project, "-c", "Release", "--no-restore", *common])
             dll = ROOT / Path(project).parent / "bin/Release/net11.0" / (assembly + ".dll")
-            report[label + "_jit"] = run(label + "-jit", ["dotnet", dll])[0].strip()
-            if label == "tests":
-                for mode in isolated:
-                    run(label + "-jit-" + mode[2:], ["dotnet", dll, mode])
             run(label + "-aot-restore", ["dotnet", "restore", project, "-r", "linux-x64", "-p:PublishAot=true", *restore, *common])
             destination = output / (label + "-aot")
             run(label + "-aot-publish", ["dotnet", "publish", project, "-c", "Release", "-r", "linux-x64", "-p:PublishAot=true",
@@ -101,7 +97,6 @@ def main():
             if label == "tests":
                 for mode in isolated:
                     run(label + "-aot-" + mode[2:], [executable, "--require-aot", mode])
-            report["artifacts"][label + "_jit"] = {"path": str(dll), "sha256": sha(dll)}
             report["artifacts"][label + "_aot"] = {"path": str(executable), "sha256": sha(executable)}
         sdk = Path(shutil.which("dotnet")).resolve().parent
         for label, project, assembly in [

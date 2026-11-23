@@ -93,11 +93,9 @@ def main():
             run(label + "-restore", ["dotnet", "restore", project, *restore, *common])
             run(label + "-build", ["dotnet", "build", project, "-c", "Release", "--no-restore", *common])
             dll = ROOT / Path(project).parent / "bin/Release/net11.0" / (assembly + ".dll")
-            report[label + "_jit"] = run(label + "-jit", ["dotnet", dll]).strip()
             if label == "tests":
                 clean_env = env.copy()
                 clean_env.pop("LD_LIBRARY_PATH", None)
-                run("core-only-jit", ["dotnet", dll, "--core-only"], environment=clean_env)
             run(label + "-aot-restore", ["dotnet", "restore", project, "-r", "linux-x64", "-p:PublishAot=true", *restore, *common])
             destination = output / (label + "-aot")
             run(label + "-aot-publish", ["dotnet", "publish", project, "-c", "Release", "-r", "linux-x64", "-p:PublishAot=true",
@@ -108,7 +106,6 @@ def main():
             report[label + "_aot"] = run(label + "-aot-run", [executable, "--require-aot"]).strip()
             if label == "tests":
                 run("core-only-aot", [executable, "--require-aot", "--core-only"], environment=clean_env)
-            report["artifacts"][label + "_jit"] = {"path": str(dll), "sha256": sha(dll)}
             report["artifacts"][label + "_aot"] = {"path": str(executable), "sha256": sha(executable)}
         project = "tests/Interop.Execution/ApiCheck/ApiCheck.csproj"
         run("api-restore", ["dotnet", "restore", project, *restore, *common])

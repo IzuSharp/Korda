@@ -3,6 +3,7 @@
     <OutputType>Exe</OutputType>
     <AssemblyName>NativeWeave.Data.Streaming.Sample</AssemblyName>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <NuGetLockFilePath Condition="'$(PublishAot)' == 'true'">$(MSBuildProjectDirectory)/packages.linux-x64.aot.lock.json</NuGetLockFilePath>
     <IsAotCompatible>true</IsAotCompatible>
   </PropertyGroup>
   <ItemGroup>

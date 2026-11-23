@@ -47,7 +47,7 @@ Linux CI also runs the retained Core packaging/minimum-CPU checks, ASan/UBSan wi
 
 ## Status and history
 
-After a pull request merges into `main`, [CI](https://github.com/IzuSharp/NativeWeave/actions/workflows/ci.yml) tests the Linux x64 packages and publishes a database preview to nuget.org. The final job installs both providers from the public feed and runs each in JIT and Native AOT. See [release and retry details](docs/releasing.md).
+Pull requests test affected Linux x64 modules. After a merge into `main`, [CI](https://github.com/IzuSharp/NativeWeave/actions/workflows/ci.yml) publishes eligible preview packages and verifies consumption from nuget.org with Native AOT. See [release and retry details](docs/releasing.md).
 
 - [Background](docs/background.md) and [verification](docs/verification.md)
 - [Contributing](CONTRIBUTING.md) and [security policy](SECURITY.md)

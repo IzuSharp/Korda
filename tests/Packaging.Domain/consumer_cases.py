@@ -344,46 +344,44 @@ class Consumer:
         self.template(graph, directory)
         env = self.environment_for(directory)
         csproj = directory / "Consumer.csproj"
-        self.run(graph + "-restore", ["dotnet", "restore", csproj, *FLAGS], cwd=directory, env=env)
+        self.run(graph + "-aot-restore", ["dotnet", "restore", csproj, "-r", RID, "-p:PublishAot=true", *FLAGS], cwd=directory, env=env)
         resolved = self.validate_graph(graph, directory)
-        # Keep the actual JIT output separate from the SDK's later RID/AOT intermediates.
-        jit = directory / "jit-output"
-        self.run(graph + "-build", ["dotnet", "build", csproj, "-c", "Release", "--no-restore", "-o", jit, *FLAGS], cwd=directory, env=env)
-        native_before = self.native_identity(graph, jit)
+        config(directory / "NuGet.Config")
+        published = self.output / "runtime-transfer" / graph
+        publish_env = env.copy()
+        if self.linker_path:
+            publish_env["LD_LIBRARY_PATH"] = self.linker_path
+
+        def publish(label):
+            self.run(graph + "-" + label, ["dotnet", "publish", csproj, "-c", "Release", "-r", RID,
+                "-p:PublishAot=true", "-p:IlcTreatWarningsAsErrors=true", "--no-restore", "-o", published, *FLAGS],
+                cwd=directory, env=publish_env, timeout=900)
+
+        publish("initial-aot-publish")
+        native_before = self.native_identity(graph, published)
         row = {"selectedPackages": resolved, "nativeBefore": native_before,
                "initialProjectSha256": sha(csproj), "initialSourceSha256": sha(directory / "Program.cs"),
-               "initialJit": self.execute(graph, directory, ["dotnet", jit / "B24Consumer.dll"], graph + "-jit")}
+               "initialAot": self.execute(graph, directory, [published / "B24Consumer"], graph + "-initial-aot", aot=True)}
         self.result["graphs"][graph] = row
         self.flush()
         if self.mode == "smoke":
             return
-        self.run(graph + "-aot-restore", ["dotnet", "restore", csproj, "-r", RID, "-p:PublishAot=true", *FLAGS], cwd=directory, env=env)
-        self.validate_graph(graph, directory)
-        config(directory / "NuGet.Config")
         edited = graph == "combined"
         if edited:
             shutil.copyfile(ROOT / "samples/api/packaging-domain/AddedModels.cs.template", directory / "AddedModels.cs")
             refs, symbols, _ = GRAPHS[graph]
             project(csproj, refs, {name: item["version"] for name, item in self.items.items()}, symbols, edited=True)
-            self.run(graph + "-offline-managed-edit-build", ["dotnet", "build", csproj, "-c", "Release", "--no-restore", "-o", jit, *FLAGS], cwd=directory, env=env)
-            row["editedJit"] = self.execute(graph, directory, ["dotnet", jit / "B24Consumer.dll"], graph + "-edited-jit", edited=True)
-        published = self.output / "runtime-transfer" / graph
-        publish_env = env.copy()
-        if self.linker_path:
-            publish_env["LD_LIBRARY_PATH"] = self.linker_path
-        self.run(graph + "-offline-aot-publish", ["dotnet", "publish", csproj, "-c", "Release", "-r", RID,
-            "-p:PublishAot=true", "-p:IlcTreatWarningsAsErrors=true", "--no-restore", "-o", published, *FLAGS], cwd=directory, env=publish_env, timeout=900)
+            publish("edited-aot-publish")
         if (published / "B24Consumer.dll").exists():
             raise ValueError("Published output is not Native AOT")
         aot_audit = profile.inspect(published / "B24Consumer", allowed_dependencies=SYSTEM_DEPENDENCIES,
                                     maximum_glibc="2.39", executable=True)
         native_after = self.native_identity(graph, published)
-        native_jit = self.native_identity(graph, jit)
-        expected_hashes = {engine: value["sha256"] for engine, value in native_before.items()}
-        for after in (native_after, native_jit):
-            if {engine: value["sha256"] for engine, value in after.items()} != expected_hashes:
-                raise ValueError("Ordinary managed edit/AOT publish changed native bytes")
-        row.update(aot=self.execute(graph, directory, [published / "B24Consumer"], graph + "-aot", aot=True, edited=edited),
+        if native_after != native_before:
+            raise ValueError("Ordinary managed edit/AOT publish changed native assets")
+        result = (self.execute(graph, directory, [published / "B24Consumer"], graph + "-edited-aot", aot=True, edited=True)
+                  if edited else row["initialAot"])
+        row.update(aot=result,
             nativeAfter=native_after, executableSha256=sha(published / "B24Consumer"), aotElfAudit=aot_audit,
             offlineAfterRestore=True, addedEntityDto=edited,
             finalProjectSha256=sha(csproj),

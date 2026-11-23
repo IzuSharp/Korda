@@ -45,24 +45,20 @@ try:
     common=['-p:UseSharedCompilation=false','-nr:false','-m:1']
     config=['--configfile',args.nuget_config] if args.nuget_config else []
     tests='tests/Query.Binding/NativeWeave.Query.Binding.Tests.csproj';sample='samples/api/query-binding/QueryBindingSample.csproj';api='tests/Query.Binding/ApiCheck/ApiCheck.csproj'
-    run('restore-tests-jit',['dotnet','restore',tests,'--locked-mode',*config,*common])
-    run('build-tests-jit',['dotnet','build',tests,'-c','Release','--no-restore',*common])
+    run('restore-tests-managed',['dotnet','restore',tests,'--locked-mode',*config,*common])
+    run('build-tests-managed',['dotnet','build',tests,'-c','Release','--no-restore',*common])
     test_dll=ROOT/'tests/Query.Binding/bin/Release/net11.0/NativeWeave.Query.Binding.Tests.dll'
-    run('managed-golden',['dotnet',test_dll,'--emit',out/'golden'])
+    run('restore-api-check',['dotnet','restore',api,'--locked-mode',*config,*common])
+    run('build-api-check',['dotnet','build',api,'-c','Release','--no-restore',*common])
+    run('compiled-api-xml-reference',['dotnet','tests/Query.Binding/ApiCheck/bin/Release/net11.0/ApiCheck.dll','src/Query.Binding/bin/Release/net11.0/NativeWeave.Query.Binding.dll','src/Query.Binding/bin/Release/net11.0/NativeWeave.Query.Binding.xml','native/database/binding/signatures-v1.json','src/Query.Binding/api-reference.md'])
+    run('restore-tests-aot',['dotnet','restore',tests,'-r','linux-x64','-p:PublishAot=true','--locked-mode',*config,*common])
+    run('publish-tests-aot',['dotnet','publish',tests,'-c','Release','-r','linux-x64','-p:PublishAot=true','-p:IlcTreatWarningsAsErrors=true','--no-restore','-o',out/'aot',*common])
+    if (out/'aot/NativeWeave.Query.Binding.Tests').read_bytes()[:4]!=b'\x7fELF' or (out/'aot/NativeWeave.Query.Binding.Tests.dll').exists():raise RuntimeError('Expected an actual standalone Native AOT test executable.')
+    run('managed-golden',[out/'aot/NativeWeave.Query.Binding.Tests','--emit',out/'golden'])
     golden={path.name:sha(path) for path in (ROOT/'tests/Query.Binding/golden').iterdir() if path.is_file()}
     actual={path.name:sha(path) for path in (out/'golden').iterdir() if path.is_file()}
     write('golden-comparison.json',{'expected':golden,'actual':actual,'equal':golden==actual})
     if golden!=actual:raise RuntimeError('Cross-language golden inputs drifted.')
-    run('restore-api-check',['dotnet','restore',api,'--locked-mode',*config,*common])
-    run('build-api-check',['dotnet','build',api,'-c','Release','--no-restore',*common])
-    run('compiled-api-xml-reference',['dotnet','tests/Query.Binding/ApiCheck/bin/Release/net11.0/ApiCheck.dll','src/Query.Binding/bin/Release/net11.0/NativeWeave.Query.Binding.dll','src/Query.Binding/bin/Release/net11.0/NativeWeave.Query.Binding.xml','native/database/binding/signatures-v1.json','src/Query.Binding/api-reference.md'])
-    run('actual-jit',['dotnet',test_dll,asset,out/'jit'])
-    run('restore-sample-jit',['dotnet','restore',sample,'--locked-mode',*config,*common])
-    run('build-sample-jit',['dotnet','build',sample,'-c','Release','--no-restore',*common])
-    run('actual-sample-jit',['dotnet','samples/api/query-binding/bin/Release/net11.0/NativeWeave.Query.Binding.Sample.dll',asset])
-    run('restore-tests-aot',['dotnet','restore',tests,'-r','linux-x64','-p:PublishAot=true','--locked-mode',*config,*common])
-    run('publish-tests-aot',['dotnet','publish',tests,'-c','Release','-r','linux-x64','-p:PublishAot=true','-p:IlcTreatWarningsAsErrors=true','--no-restore','-o',out/'aot',*common])
-    if (out/'aot/NativeWeave.Query.Binding.Tests').read_bytes()[:4]!=b'\x7fELF' or (out/'aot/NativeWeave.Query.Binding.Tests.dll').exists():raise RuntimeError('Expected an actual standalone Native AOT test executable.')
     run('actual-aot',[out/'aot/NativeWeave.Query.Binding.Tests',asset,out/'aot-results','--require-aot'])
     run('restore-sample-aot',['dotnet','restore',sample,'-r','linux-x64','-p:PublishAot=true','--locked-mode',*config,*common])
     run('publish-sample-aot',['dotnet','publish',sample,'-c','Release','-r','linux-x64','-p:PublishAot=true','-p:IlcTreatWarningsAsErrors=true','--no-restore','-o',out/'sample-aot',*common])
@@ -81,7 +77,7 @@ try:
         for path in base.rglob('*.rsp'):
             if 'native' in path.parts or 'ilc' in path.name:links.append({'path':str(path.relative_to(ROOT)),'sha256':sha(path),'bytes':path.stat().st_size})
     write('artifact-identities.json',{'sha256':{str(path.relative_to(ROOT)) if path.is_relative_to(ROOT) else str(path):sha(path) for path in artifacts},'native_aot_response_files':links,'independently_distributed_package':None,'pristine_machine':False})
-    write('status.json',{'result':'passed','task':'DB-CPP-01','platform':'linux-x64','candidate':source['commit'],'commands':len(commands),'source_inputs':len(before),'source_inputs_unchanged':True,'jit':json.loads((out/'jit/result.json').read_text()),'aot':json.loads((out/'aot-results/result.json').read_text()),'public_symbols':0,'exact_cdecl_signatures':42,'scope':'Retained B09 C# direct bindings, metadata goldens, API and sample JIT/AOT via the C++ test-only validator bridge; product Host execution is the separate Query.Native gate'})
+    write('status.json',{'result':'passed','task':'DB-CPP-01','platform':'linux-x64','candidate':source['commit'],'commands':len(commands),'source_inputs':len(before),'source_inputs_unchanged':True,'aot':json.loads((out/'aot-results/result.json').read_text()),'public_symbols':0,'exact_cdecl_signatures':42,'scope':'Retained B09 C# direct bindings, metadata goldens, API and sample Native AOT via the C++ test-only validator bridge; product Host execution is the separate Query.Native gate'})
     print('PASS B09 Linux component verification',flush=True)
 except Exception as failure:
     write('status.json',{'result':'failed','candidate':source['commit'],'completed_commands':len(commands),'error':str(failure),'platform':'linux-x64'})

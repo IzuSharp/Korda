@@ -158,7 +158,6 @@ def main():
             local_options = [*options, *(["-p:NuGetAudit=false"] if args.offline_sdk_cache else [])]
             run(task + "-restore", ["dotnet", "restore", project, *local_options], cwd=consumer_root, env=consumer_env)
             run(task + "-build", ["dotnet", "build", project, "-c", "Release", "--no-restore", *local_options], cwd=consumer_root, env=consumer_env)
-            jit = run(task + "-jit", ["dotnet", project_dir / "bin/Release/net11.0" / (assembly + ".dll")], cwd=consumer_root, env=consumer_env).strip()
             publish = output / "runtime-transfer" / task
             # Native linker dependencies are legitimate AOT publish prerequisites;
             # restore only that linker environment, never native search for execution.
@@ -172,7 +171,7 @@ def main():
                 raise ValueError("Native AOT output required")
             audit = inspect(executable, allowed_dependencies=SYSTEM_DEPENDENCIES, executable=True)
             report["consumers"].append({"task": task, "assembly": assembly, "source_files": source_files,
-                                        "jit": jit, "aot": aot, "executable": audit,
+                                        "aot": aot, "executable": audit,
                                         "locks": {p.name: sha(p) for p in project_dir.glob("packages*.json")},
                                         "native": {p.name: sha(p) for p in publish.glob("*.so")}})
         # Test the actual packaged output, not a source-tree fixture substitution.

@@ -41,9 +41,22 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - run: python3 -m unittest discover -s tests/Tooling -v && git diff --check
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          global-json-file: global.json
+      - name: Build CI tool and check tracked ownership
+        run: |
+          dotnet build eng/ci -c Release -p:RestoreLockedMode=true
+          dotnet run --project eng/ci -c Release --no-build -- check-index
+      - name: Test and format CI tooling
+        run: |
+          dotnet test tests/CI -c Release -p:RestoreLockedMode=true
+          dotnet format eng/ci --no-restore --verify-no-changes
+          dotnet format tests/CI --no-restore --verify-no-changes
+          python3 -m unittest discover -s tests/Tooling -v
+          git diff --check
       - id: plan
-        run: python3 eng/ci/plan_run.py
+        run: dotnet run --project eng/ci -c Release --no-build -- github
       - id: promote
         if: github.event_name == 'push' && steps.plan.outputs.pending == 'true'
         env:
@@ -53,7 +66,7 @@ jobs:
         env:
           MERGED: ${{ steps.promote.outputs.merged }}
           REUSE: ${{ steps.promote.outputs.run }}
-        run: python3 eng/ci/plan_run.py --jobs
+        run: dotnet run --project eng/ci -c Release --no-build -- jobs
   build:
     needs: plan
     if: needs.plan.outputs.build == 'true'

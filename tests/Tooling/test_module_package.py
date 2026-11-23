@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "eng/ci"))
 import module_job
-from impact import plan_tree
+from facts import inputs
 from validate_public import validate
 
 
@@ -43,15 +43,12 @@ class PackageTests(unittest.TestCase):
                 git("-c", "user.name=CI", "-c", "user.email=ci@example.invalid", "commit", "-qm", "fixture")
             git("init", "-q")
             commit()
-            base = git("rev-parse", "HEAD")
             with (root / "pack.py").open("a") as stream:
                 stream.write("# next candidate\n")
             commit()
             out = root / "artifacts/public"
             with patch("catalog.ROOT", root), patch.object(module_job, "ROOT", root), patch.object(module_job, "OUT", out):
-                with patch("impact.public_heads", return_value={"widget": {"version": None, "inputs": None}}):
-                    plan = plan_tree(base)
-                self.assertEqual(([], ["widget"], ["widget"]), (plan["packages"], plan["candidates"], plan["module_packages"]))
+                plan = {"module_packages": ["widget"], "packages": [], "candidates": ["widget"], "inputs": inputs("HEAD")}
                 version = "0.1.0-preview.1.2"
                 module_job.execute("pack", "widget", plan, version)
                 self.assertTrue((root / "artifacts/consumed").exists())

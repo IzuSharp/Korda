@@ -15,7 +15,7 @@ python3 tests/Reference.TaskService/package_probe.py \
   --output /absolute/outside-source/database-reference
 ```
 
-The default executes SQLite and PostgreSQL under JIT and Native AOT. Each row also executes every finite database fault scenario in `tests/Verification.EndToEnd/run.py`. The fault runner creates its own PostgreSQL cluster for restart tests; it never restarts the `NW_TEST_POSTGRES` instance. Both the PostgreSQL binaries and the output directory must be available to an unprivileged user.
+The default executes SQLite and PostgreSQL under Native AOT. Each row also executes every finite database fault scenario in `tests/Verification.EndToEnd/run.py`. The fault runner creates its own PostgreSQL cluster for restart tests; it never restarts the `NW_TEST_POSTGRES` instance. Both the PostgreSQL binaries and the output directory must be available to an unprivileged user.
 
 Consumer builds are outside the source tree with an isolated NuGet cache and an exact local candidate package source. They resolve candidate-bound lock files and immediately verify locked restore. The feed may version shared packages separately from the provider facade specified by `--version`. The complete 12-package database closure and both native hashes are recorded. Cargo, rustc and rustup are replaced by rejecting traps in the consumer environment. Every runtime row checks `RuntimeFeature.IsDynamicCodeSupported` and independent SQLite/psql observations; no source project reference enters the consumer graph.
 

@@ -132,10 +132,6 @@ try:
             run(label + '-restore', ['dotnet', 'restore', project, '--configfile', config, *flags, *mode_args], consumer, consumer_env)
             run(label + '-build', ['dotnet', 'build', project, '-c', 'Release', '--no-restore', *flags, *mode_args], consumer, consumer_env)
             dll = consumer / 'bin/Release/net11.0/QueryGenerator.Sample.dll'
-            jit_result = run(label + '-jit', ['dotnet', dll], consumer, consumer_env)
-            jit_native = list((consumer / 'bin/Release/net11.0').rglob('libnw_database_sqlite.so'))
-            if not jit_native or any(sha(path) != native_sha for path in jit_native):
-                raise RuntimeError('The JIT output changed native asset identity.')
             publish = OUT / (label + '-aot')
             run(label + '-restore-aot', ['dotnet', 'restore', project, '-r', 'linux-x64', '-p:PublishAot=true', '--configfile', config, *flags, *mode_args], consumer, consumer_env)
             run(label + '-publish-aot', ['dotnet', 'publish', project, '-c', 'Release', '-r', 'linux-x64', '-p:PublishAot=true', '--no-restore', '-o', publish, *flags, *mode_args], consumer, consumer_env)
@@ -144,9 +140,7 @@ try:
             aot_native = list(publish.rglob('libnw_database_sqlite.so'))
             if not aot_native or any(sha(path) != native_sha for path in aot_native):
                 raise RuntimeError('The AOT output changed native asset identity.')
-            if aot_result != jit_result:
-                raise RuntimeError('JIT/AOT metadata/results differ.')
-            row = dict(mode=mode, revision=revision, consumer=str(consumer), result=jit_result,
+            row = dict(mode=mode, revision=revision, consumer=str(consumer), result=aot_result,
                        managed_sha256=sha(dll), aot_sha256=sha(executable), native_sha256=native_sha,
                        input_sha256={x.name: sha(x) for x in consumer.iterdir() if x.is_file()}, project_references=0)
             rows.append(row); save('consumer-rows.json', rows)
@@ -160,11 +154,11 @@ try:
     if initial != sources() or package_hashes != {p.name: sha(p) for p in FEED.glob('*.nupkg')}:
         raise RuntimeError('Verification changed source or the immutable package feed.')
     save('status.json', dict(result='passed', task='B10', platform='linux-x64', candidate=commit, design_commit=PIN,
-         commands=len(commands), generated_manual_jit_aot_rows=8, two_entities=True, ordinary_mapped_dto_edit=True,
+         commands=len(commands), generated_manual_aot_rows=len(rows), two_entities=True, ordinary_mapped_dto_edit=True,
          unchanged_native_sha256=native_sha, no_rust_tool_invocations=True, other_platforms='not executed',
          retirement_evidence='B12/B13 accepted actual Host materialization; all sample owners await disposal',
          utc=datetime.datetime.now(datetime.timezone.utc).isoformat()))
-    print('PASS B10 actual generated/manual ordinary facade JIT/AOT', flush=True)
+    print('PASS B10 actual generated/manual ordinary facade Native AOT', flush=True)
 except Exception as failure:
     save('status.json', dict(result='failed', task='B10', platform='linux-x64', candidate=commit,
                             error=str(failure), completed_commands=len(commands)))

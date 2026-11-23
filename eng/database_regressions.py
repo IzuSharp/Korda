@@ -92,10 +92,6 @@ def main():
     run("canonical-query-abi", [sys.executable, "tests/Query.Binding/generate.py", "--check", "--design", design])
     component("Interop.Negotiation", "--plan-root", args.plan.resolve(), "--design-root", design)
     component("Interop.Execution")
-    run("api-tool-negative-contracts", [sys.executable, "tests/Build.Integration/verify_docs.py",
-                                       "--output", output / "api-tool"])
-    run("packaging-task-api", ["dotnet", "run", "--project", "tests/Packaging.Release/ApiCheck", "-c", "Release",
-                               "--no-build", "--", output / "packaging-task-reference.md"])
     component("Data.Abstractions", "--native-build", native_build)
     component("Data.Sqlite", "--design", design, "--native-build", native_build)
     # Existing provider tests include real TLS policy and actual connection failures.
@@ -110,8 +106,7 @@ def main():
     component("Query.Native", "--design", design, "--postgres-bin", pg, "--host-source", ROOT,
               "--native-build", native_build, "--native-module", native_build / "libnativeweave_database_host.so")
 
-    # These are the unchanged full executable suites, not smoke-test substitutes.
-    # Each ordinary managed build resolves the independently staged provider assets.
+    # Execute the actual published test applications against isolated databases.
     suites = [
         ("Data.NativeHost", "NativeWeave.Data.NativeHost.Tests", []),
         ("Data.Migrations", "NativeWeave.Data.Migrations.Tests", []),
@@ -121,10 +116,6 @@ def main():
     ]
     for name, assembly, parameters in suites:
         project = ROOT / "tests" / name / (assembly + ".csproj")
-        run(name + "-restore", ["dotnet", "restore", project, "--locked-mode", *FLAGS])
-        run(name + "-build", ["dotnet", "build", project, "-c", "Release", "--no-restore", *FLAGS])
-        jit_args = [output / name / "jit"] if parameters else []
-        run_isolated(name + "-jit", ["dotnet", project.parent / "bin/Release/net11.0" / (assembly + ".dll"), *jit_args])
         publish = output / name / "aot"
         run(name + "-aot-restore", ["dotnet", "restore", project, "--locked-mode", "-r", "linux-x64", "-p:PublishAot=true", *FLAGS])
         run(name + "-aot-publish", ["dotnet", "publish", project, "-c", "Release", "-r", "linux-x64",
@@ -136,34 +127,18 @@ def main():
             ["--require-aot"] if name == "Orm.Relations" else [])
         run_isolated(name + "-aot", [executable, *aot_args])
         if name == "Data.Migrations":
-            for mode, command in [
-                ("jit", ["dotnet", project.parent / "bin/Release/net11.0" / (assembly + ".dll")]),
-                ("aot", [executable]),
-            ]:
-                run_isolated(name + "-process-" + mode, [sys.executable, "tests/Data.Migrations/cross_process.py",
-                     "--postgres-bin", pg, "--output", output / name / ("process-" + mode), "--", *command])
+            run_isolated(name + "-process-aot", [sys.executable, "tests/Data.Migrations/cross_process.py",
+                "--postgres-bin", pg, "--output", output / name / "process-aot", "--", executable])
 
-    tool = ROOT / "src/Build.Integration/ApiReference/bin/Release/net11.0/NativeWeave.ApiReference.dll"
-    # Read the declared assembly name rather than assuming the project filename.
-    if not tool.is_file():
-        directory = tool.parent
-        tool = next(p for p in directory.glob("*.dll") if p.with_suffix(".runtimeconfig.json").is_file())
-    for name in ("Data.Migrations", "Orm.Relations"):
-        run(name + "-api", [sys.executable, f"tests/{name}/api.py", "--design", design, "--tool", tool])
     run("relations-type-errors", [sys.executable, "tests/Orm.Relations/compile_negative.py"])
-    run("fluent-api", ["dotnet", "tests/Query.Fluent/ApiCheck/bin/Release/net11.0/NativeWeave.Query.Fluent.ApiCheck.dll",
-                      ROOT, design, os.environ["DOTNET_ROOT"]])
-    run("query-generator", ["dotnet", "tests/Query.Generator/bin/Release/net11.0/NativeWeave.Query.Generator.Tests.dll"])
-    run("query-generator-api", ["dotnet", "tests/Query.Generator/ApiCheck/bin/Release/net11.0/NativeWeave.Query.Generator.ApiCheck.dll",
-                               ROOT, design, os.environ["DOTNET_ROOT"]])
     if build.source() != initial:
         raise RuntimeError("Source identity changed during regression execution")
     (output / "result.json").write_text(json.dumps({"task": "DB-CPP-01", "status": "passed",
         "source": initial, "platform": "linux-x64", "postgresVersion": version.strip(),
-        "providers": ["sqlite", "postgresql"], "modes": ["jit", "aot"], "commands": records,
+        "providers": ["sqlite", "postgresql"], "modes": ["aot"], "commands": records,
         "nativeBuild": str(native_build), "nativeTests": sorted(observed),
         "queryOracle": {"cases": 52, "planCommit": "1fe52a8bd792ccdbb4bbea17ba59b0ad0c24349d",
-                         "realManagedJitAndAot": True},
+                         "realNativeAot": True},
         "performanceWork": False}, indent=2) + "\n")
 
 

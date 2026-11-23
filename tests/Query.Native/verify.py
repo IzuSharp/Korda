@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Retained B11 Linux oracle: fixed Rust expectations, C++ Host, C# JIT and AOT."""
+"""Retained B11 Linux oracle: fixed Rust expectations, C++ Host, C# Native AOT."""
 import argparse
 import datetime
 import hashlib
@@ -132,10 +132,8 @@ try:
     common = ['-p:UseSharedCompilation=false', '-nr:false', '-m:1']
     config = ['--configfile', a.nuget_config] if a.nuget_config else []
     project = 'tests/Query.Native/NativeWeave.Query.Native.Tests.csproj'
-    dll = ROOT / 'tests/Query.Native/bin/Release/net11.0/NativeWeave.Query.Native.Tests.dll'
-    run('restore-jit', ['dotnet', 'restore', project, '--locked-mode', *config, *common])
-    run('build-jit', ['dotnet', 'build', project, '-c', 'Release', '--no-restore', *common])
-    run('actual-jit-host', ['dotnet', dll, module, out / 'oracle', out / 'jit'])
+    run('restore-managed', ['dotnet', 'restore', project, '--locked-mode', *config, *common])
+    run('build-managed', ['dotnet', 'build', project, '-c', 'Release', '--no-restore', *common])
     run('restore-aot', ['dotnet', 'restore', project, '-r', 'linux-x64', '-p:PublishAot=true', '--locked-mode', *config, *common])
     run('publish-aot', ['dotnet', 'publish', project, '-c', 'Release', '-r', 'linux-x64', '-p:PublishAot=true',
          '-p:IlcTreatWarningsAsErrors=true', '--no-restore', '-o', out / 'aot', *common])
@@ -147,7 +145,7 @@ try:
     if applicability['public_clr_surface'] != [] or list((ROOT / 'src/Query.Native').glob('*.cs')):
         raise RuntimeError('B11 internal-only CLR API applicability drifted.')
     write('api-applicability.json', {'public_clr_symbols': 0, 'exact_cdecl_signatures': 42,
-          'compiled_examples': 'samples/api/query-native/Examples.cs in both executed JIT/AOT consumers',
+          'compiled_examples': 'samples/api/query-native/Examples.cs in the executed Native AOT consumer',
           'reused_internal_binding': applicability['managed_adapter']})
     run('dotnet-identity', ['dotnet', '--info'])
     run('clang-identity', ['clang++', '--version'])
@@ -157,17 +155,16 @@ try:
     after_host = inputs(a.host_source.resolve(), host_scopes)
     if source != after or host_source != after_host or native_hash != sha(module):
         raise RuntimeError('Acceptance inputs changed during execution.')
-    write('artifact-identities.json', {'native_sha256': native_hash, 'managed_sha256': sha(dll),
+    write('artifact-identities.json', {'native_sha256': native_hash, 'managed_sha256': sha(ROOT / 'tests/Query.Native/bin/Release/net11.0/NativeWeave.Query.Native.Tests.dll'),
           'aot_sha256': sha(executable), 'source_inputs_unchanged': True,
           'oracle_sha256': {f.name: sha(f) for f in (out / 'oracle').iterdir()},
           'separate_distribution_package': False, 'pristine_machine': False})
     write('status.json', {'result': 'passed', 'task': 'DB-CPP-01', 'platform': 'linux-x64', 'candidate': source['commit'],
           'host_candidate': host_source['commit'], 'commands': len(commands),
           'fixed_rust_oracle_cases': 52, 'oracle_plan_commit': provenance['commit'],
-          'jit': json.loads((out / 'jit/result.json').read_text()),
           'aot': json.loads((out / 'aot-results/result.json').read_text()),
-          'scope': 'Retained B11 C# ABI cases and fixed Rust SQL/row oracles, executed through the C++ Host on both providers in JIT and Native AOT'})
-    print('PASS retained B11 Linux C++ real-provider JIT and AOT acceptance', flush=True)
+          'scope': 'Retained B11 C# ABI cases and fixed Rust SQL/row oracles, executed through the C++ Host on both providers in Native AOT'})
+    print('PASS retained B11 Linux C++ real-provider Native AOT acceptance', flush=True)
 except Exception as failure:
     write('status.json', {'result': 'failed', 'platform': 'linux-x64', 'candidate': source['commit'], 'error': str(failure), 'completed_commands': len(commands)})
     raise

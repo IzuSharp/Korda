@@ -5,3 +5,23 @@ repos:
       - id: clang-format
         files: '^(native/|tests/|src/Verification\.(Interop|EndToEnd)/).*\.(c|cc|cpp|cxx|h|hh|hpp|hxx)$'
         exclude: '(^|/)(third_party|vendor|generated)/|^native/interop/abi/include/nativeweave_abi_v1\.h$|^native/database/binding/nativeweave_database_binding_v1\.h$|^tests/Interop\.Abi/native/layout\.(c|cpp)$'
+  - repo: local
+    hooks:
+      - id: format-ci-csharp
+        name: Format staged CI C# files
+        language: system
+        entry: bash eng/hooks/format-ci.sh
+        files: '^(eng/ci|tests/CI)/.*\.cs$'
+      - id: test-ci
+        name: Verify staged ownership and run local CI tests
+        language: system
+        entry: bash eng/hooks/check-ci.sh
+        always_run: true
+        pass_filenames: false
+      - id: clang-tidy
+        name: Analyze the local CMake compilation database
+        language: system
+        entry: python3 eng/check_native.py tidy --local
+        stages: [manual]
+        always_run: true
+        pass_filenames: false

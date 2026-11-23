@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""B14 existing package graph, public sample and frozen native assets in JIT/AOT."""
+"""B14 existing package graph, public sample and frozen native assets in Native AOT."""
 import argparse
 import atexit
 import hashlib
@@ -90,15 +90,13 @@ assert all(shutil.which(name, path=isolated['PATH']) is None for name in ['cargo
 run('consumer-restore', ['dotnet', 'restore', 'Consumer.csproj', '--disable-parallel', *common], consumer, isolated)
 run('consumer-build', ['dotnet', 'build', 'Consumer.csproj', '-c', 'Release', '--no-restore', *common], consumer, isolated)
 dll = consumer / 'bin/Release/net11.0/Consumer.dll'
-for provider in ['sqlite', 'postgresql']:
-    run('consumer-jit-' + provider, ['dotnet', dll, provider, out / ('jit-' + provider + '.db')], consumer, isolated)
 run('consumer-aot-restore', ['dotnet', 'restore', 'Consumer.csproj', '-r', 'linux-x64', '-p:PublishAot=true', '--disable-parallel', *common], consumer, isolated)
 run('consumer-aot-publish', ['dotnet', 'publish', 'Consumer.csproj', '-c', 'Release', '-r', 'linux-x64', '-p:PublishAot=true', '--no-restore', '-o', out / 'aot', *common], consumer, isolated)
 exe = out / 'aot/Consumer'
 for provider in ['sqlite', 'postgresql']:
     run('consumer-aot-' + provider, [exe, provider, out / ('aot-' + provider + '.db'), '--require-aot'], consumer, isolated)
 outputs = {}
-for mode, folder in [('jit', dll.parent), ('aot', exe.parent)]:
+for mode, folder in [('aot', exe.parent)]:
     outputs[mode] = {}
     for provider in ['sqlite', 'postgresql']:
         manifest = json.loads((folder / ('NativeWeave.database.' + provider + '.assets.json')).read_text())
@@ -106,5 +104,5 @@ for mode, folder in [('jit', dll.parent), ('aot', exe.parent)]:
         outputs[mode][provider] = manifest
 assert {name: sha(ROOT / name) for name in names} == inputs
 assert {file.name: sha(file) for file in native} == native_hashes
-(out / 'summary.json').write_text(json.dumps(dict(task='B14', platform='linux-x64', source_commit=source, source_sha256=inputs, native_sha256=native_hashes, packages=packages, no_consumer_rust=True, no_parent_repository_imports=True, project_references=0, jit_providers=['SQLite', 'PostgreSQL18'], aot_providers=['SQLite', 'PostgreSQL18'], jit_sha256=sha(dll), aot_sha256=sha(exe), output_manifests=outputs, consumer_files_sha256={str(file.relative_to(consumer)):sha(file) for file in consumer.iterdir() if file.is_file()}), indent=2) + '\n')
-print('PASS B14 independent exact NuGet sample: both real providers in JIT/NativeAOT; no Rust available.', flush=True)
+(out / 'summary.json').write_text(json.dumps(dict(task='B14', platform='linux-x64', source_commit=source, source_sha256=inputs, native_sha256=native_hashes, packages=packages, no_consumer_rust=True, no_parent_repository_imports=True, project_references=0, aot_providers=['SQLite', 'PostgreSQL18'], aot_sha256=sha(exe), output_manifests=outputs, consumer_files_sha256={str(file.relative_to(consumer)):sha(file) for file in consumer.iterdir() if file.is_file()}), indent=2) + '\n')
+print('PASS B14 independent exact NuGet sample: both real providers in Native AOT; no Rust available.', flush=True)

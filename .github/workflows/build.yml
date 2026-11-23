@@ -41,6 +41,7 @@ jobs:
       DOTNET_NOLOGO: "true"
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
       PACKAGE_VERSION: ${{ inputs.version }}
+      NATIVEWEAVE_TEST_POSTGRES_URL: postgresql://nativeweave@127.0.0.1:5432/postgres
       NW_TEST_POSTGRES: postgresql://nativeweave@127.0.0.1:5432/postgres
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -109,7 +110,7 @@ jobs:
             sccache-linux-x64-v017-${{ hashFiles('native/dependencies.lock.json', 'CMakePresets.json') }}-${{ inputs.scope }}-
             sccache-linux-x64-v017-${{ hashFiles('native/dependencies.lock.json', 'CMakePresets.json') }}-
       - id: pg
-        if: contains(fromJSON('["full","postgresql"]'), inputs.scope)
+        if: contains(fromJSON('["full","postgresql","components"]'), inputs.scope)
         run: echo "key=$(python3 eng/postgres-cache-key.py full)" >> "$GITHUB_OUTPUT"
       - name: Restore exact PostgreSQL installation
         if: steps.pg.outputs.key
@@ -120,64 +121,13 @@ jobs:
       - name: Prepare pinned PostgreSQL tools for real TLS and process fault oracles
         if: steps.pg.outputs.key
         run: bash eng/postgres-tools.sh
-      - name: Request the native target graph
-        if: inputs.scope != 'pack'
+      - name: Execute the selected module actions
         env:
           SCOPE: ${{ inputs.scope }}
-        run: |
-          preset="$SCOPE"
-          if [ "$preset" = full ]; then preset=release; fi
-          python3 eng/ci/native_graph.py query "artifacts/cmake/linux-x64-$preset"
-      - name: Verify database workspaces, API, regressions and actual package JIT/AOT consumers
-        if: inputs.scope == 'full'
-        env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: python3 eng/build.py verify --version "$PACKAGE_VERSION"
-      - name: Run selected provider checks
-        if: contains(fromJSON('["sqlite","postgresql"]'), inputs.scope)
-        env:
-          PROVIDER: ${{ inputs.scope }}
         run: |
-          python3 eng/task07_native.py --output artifacts/provider-native --provider "$PROVIDER"
-          ctest --preset "linux-x64-$PROVIDER" -R '^native\.selected\.abi$'
-          if [ "$PROVIDER" = sqlite ]; then
-            python3 tests/Data.Sqlite/verify.py --output artifacts/provider-tests --design artifacts/frozen-design --native-build artifacts/cmake/linux-x64-sqlite
-          else
-            python3 tests/Data.Postgres/verify.py --output artifacts/provider-tests --design-root artifacts/frozen-design --postgres-bin "$NW_POSTGRES_BIN" --native-build artifacts/cmake/linux-x64-postgresql
-          fi
-      - name: Check native module ownership against configured CMake targets
-        if: inputs.scope != 'pack'
-        env:
-          SCOPE: ${{ inputs.scope }}
-        run: |
-          if [ "$SCOPE" = full ]; then
-            python3 eng/ci/native_graph.py verify artifacts/cmake/linux-x64-release nw_database_sqlite nw_database_postgresql
-          else
-            python3 eng/ci/native_graph.py verify "artifacts/cmake/linux-x64-$SCOPE" "nw_database_$SCOPE"
-          fi
-      - name: Reject generated source or dependency drift
-        run: git diff --exit-code
-      - name: Verify shared ASan and UBSan preset with leak detection enabled
-        if: inputs.scope == 'full' && fromJSON(inputs.plan).deep
-        run: bash eng/verify-cpp-sanitizers.sh
-      - name: Verify retained cross-version compatibility and Core property/fuzz gates
-        if: inputs.scope == 'full' && fromJSON(inputs.plan).deep
-        run: |
-          python3 tests/Verification.Compatibility/verify.py --evidence artifacts/cpp-compatibility --design-root artifacts/scope-design
-          python3 tests/Verification.Interop/verify.py --output artifacts/cpp-interop-properties
-      - name: Verify retained Core package closure and minimum CPU/runtime transfer
-        if: inputs.scope == 'full' && fromJSON(inputs.plan).deep
-        run: bash eng/verify-task04-linux.sh
-      - name: Reject shared packaging source or dependency drift
-        run: git diff --exit-code
-      - name: Verify database release recovery, no-Rust SDK consumption and runtime-only transfer
-        if: inputs.scope == 'full' && fromJSON(inputs.plan).deep
-        run: bash eng/verify-task07-linux.sh
-      - name: Reject database packaging source or dependency drift
-        run: git diff --exit-code
-      - name: Build and package C++ assets in a fresh Linux image without Rust
-        if: inputs.scope == 'full' && fromJSON(inputs.plan).deep
-        run: bash eng/verify-cpp-clean.sh
+          dotnet run --project eng/ci -c Release -- run artifacts/plan.json "$SCOPE"
+          git diff --exit-code
       - name: Restore runner ownership of exported database evidence
         if: always()
         run: |
@@ -200,7 +150,6 @@ jobs:
           path: |
             artifacts/logs/
             artifacts/verification.json
-            artifacts/native-tidy/*.log
             artifacts/cmake/linux-x64-release/Testing/
             artifacts/cmake/linux-x64-asan-ubsan/Testing/
             artifacts/cpp-sanitizers/
@@ -220,8 +169,8 @@ jobs:
             artifacts/db-scope/regressions/result.json
             artifacts/db-scope/regressions/commands.json
             artifacts/db-scope/regressions/logs/
-            artifacts/db-scope/regressions/api-tool/logs/
-            artifacts/db-scope/regressions/api-tool/html/logs/
+            artifacts/db-scope/api-checks/tool/logs/
+            artifacts/db-scope/api-checks/tool/html/logs/
             artifacts/db-scope/regression-evidence/
             artifacts/task04/
             artifacts/db-scope/native-build/manifest.json
@@ -239,21 +188,13 @@ jobs:
             artifacts/db-scope/evidence/
           if-no-files-found: error
           retention-days: 14
-      - name: Compose and consume the public providers
-        if: fromJSON(inputs.plan).consume
-        env:
-          SCOPE: ${{ inputs.scope }}
-        run: |
-          args=()
-          case "$SCOPE" in
-            full) args+=(--components artifacts/db-scope/prepared/candidate) ;;
-            sqlite|postgresql) args+=(--native artifacts/provider-native/manifest.json) ;;
-          esac
-          python3 eng/ci/bundles.py --plan artifacts/plan.json --version "$PACKAGE_VERSION.2" "${args[@]}"
-          python3 eng/ci/consume.py artifacts/public/release.json artifacts/plan.json
-      - name: Verify the publication manifest against the tested integration tree
-        if: fromJSON(inputs.plan).packages[0] != null
-        run: python3 eng/ci/validate_public.py artifacts/public artifacts/plan.json "$PACKAGE_VERSION.2"
+      - name: Collect selected component results
+        if: always() && inputs.scope == 'components'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: component-results-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/component-tests/**/result.json
+          if-no-files-found: ignore
       - name: Compiler cache statistics
         if: always() && inputs.scope != 'pack'
         run: bash eng/ci/sccache.sh stats

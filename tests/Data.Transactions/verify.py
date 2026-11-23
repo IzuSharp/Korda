@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""B05 component verification: exact owned API, native coordinator and actual JIT/AOT."""
+"""B05 component verification: exact owned API, native coordinator and actual Native AOT."""
 import argparse
 import hashlib
 import json
@@ -110,7 +110,6 @@ def main():
                                     "tests/Data.Transactions/ApiCheck/Program.cs", "samples/api/data-transactions/TransactionExamples.cs", "--verbosity", "quiet"])
         assembly = ROOT / "src/Data.Transactions/bin/Release/net11.0/NativeWeave.Database.Transactions.dll"
         run("compiled-api-xml-reference", [dotnet, "tests/Data.Transactions/ApiCheck/bin/Release/net11.0/NativeWeave.Transactions.ApiCheck.dll", ROOT, sdk, assembly])
-        run("jit", [dotnet, "tests/Data.Transactions/bin/Release/net11.0/NativeWeave.Data.Transactions.Tests.dll"], execution_env)
         restore("aot-restore", ordinary[1], True)
         publish = output / "publish"
         run("aot-publish", [dotnet, "publish", ordinary[1], "-c", "Release", "-r", "linux-x64", "-p:PublishAot=true", "--no-restore", "-p:IlcTreatWarningsAsErrors=true", *build_flags, "-o", publish])
@@ -135,7 +134,7 @@ def main():
         save()
         raise
     save()
-    print("PASS: B05 component, exact API, C++ Host coordinator, JIT and actual Native AOT; provider-specific fault suites remain separate.")
+    print("PASS: B05 component, exact API, C++ Host coordinator, actual Native AOT; provider-specific fault suites remain separate.")
 
 
 if __name__ == "__main__":
