@@ -3,7 +3,7 @@ import json
 import os
 import subprocess
 
-from impact import IDS
+from catalog import load_catalog
 
 
 def api(endpoint):
@@ -17,7 +17,7 @@ def main():
     tree = subprocess.check_output(["git", "rev-parse", "HEAD^{tree}"], text=True).strip()
     with open("artifacts/plan.json") as stream:
         plan = json.load(stream)
-    wanted = plan["packages"]
+    wanted = plan["candidates"]
     prs = api(f"{root}/commits/{sha}/pulls")
     pr = next((p for p in prs if p["merged_at"] and p["base"]["ref"] == "main" and p["merge_commit_sha"] == sha), None)
     result = {"merged": "true" if pr else "false", "run": "", "artifact": "", "number": ""}
@@ -30,11 +30,12 @@ def main():
                 continue
             # A long-lived PR can have an older CI sequence than a later public release.
             version = (run["run_number"], 2)
-            if any(version <= tuple(map(int, plan["published"][p]["version"].split(".")[-2:])) for p in wanted):
+            if any(version <= tuple(map(int, plan["published"][p]["version"].split(".")[-2:])) for p in wanted if plan["published"][p].get("version")):
                 continue
             expected = candidate_name(tree, wanted, run["id"], run["run_attempt"])
             artifacts = api(f"{root}/actions/runs/{run['id']}/artifacts")["artifacts"]
-            if any(a["name"] == expected and not a["expired"] for a in artifacts):
+            available = {a["name"] for a in artifacts if not a["expired"]}
+            if all(expected + item["suffix"] in available for item in plan["releases"]):
                 result.update(run=run["id"], artifact=expected, number=run["run_number"])
                 break
     with open(os.environ["GITHUB_OUTPUT"], "a") as out:
@@ -43,7 +44,7 @@ def main():
 
 
 def candidate_name(tree, providers, run, attempt):
-    if not set(providers).issubset(IDS):
+    if not set(providers).issubset(load_catalog().packages):
         raise ValueError("Unknown public package")
     return f"providers-{tree}-{'-'.join(sorted(providers))}-{run}-{attempt}"
 

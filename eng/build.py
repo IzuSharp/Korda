@@ -118,6 +118,26 @@ def migration_comparison(version):
         export_fixture_results(external, OUTPUT / "migration-comparison")
 
 
+def workspace(destination):
+    """Keep future, unrelated projects out of the database solution build."""
+    import xml.etree.ElementTree as ET
+    sys.path.insert(0, str(ROOT / "eng/ci"))
+    from catalog import load_catalog
+    catalog = load_catalog()
+    solution = ET.parse(ROOT / "NativeWeave.slnx")
+    for parent in solution.iter():
+        for project in list(parent.findall("Project")):
+            path = project.attrib["Path"]
+            owner, _ = catalog.owner(path)
+            if not catalog.modules[owner].get("checks"):
+                parent.remove(project)
+            else:
+                project.set("Path", os.path.relpath(ROOT / path, destination.parent))
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    solution.write(destination, encoding="utf-8")
+    return str(destination)
+
+
 def verify(version, design, plan, compare_rust_reference=False):
     if not os.environ.get("NW_TEST_POSTGRES"):
         raise RuntimeError("Set NW_TEST_POSTGRES to a disposable real PostgreSQL 18 test server")
@@ -133,10 +153,11 @@ def verify(version, design, plan, compare_rust_reference=False):
     run([sys.executable, "eng/check_native.py", "format"], "clang-format")
     manifest = native()
     run([sys.executable, "eng/check_native.py", "tidy"], "clang-tidy")
+    solution = workspace(OUTPUT / "database.slnx")
     msbuild = ["-m:1", "-nr:false", "-p:UseSharedCompilation=false"]
-    run(["dotnet", "restore", "NativeWeave.slnx", "--locked-mode", "--disable-parallel", *msbuild], "restore")
-    run(["dotnet", "build", "NativeWeave.slnx", "-c", "Release", "--no-restore", *msbuild], "build")
-    run(["dotnet", "format", "NativeWeave.slnx", "--verify-no-changes", "--no-restore"], "dotnet-format")
+    run(["dotnet", "restore", solution, "--locked-mode", "--disable-parallel", *msbuild], "restore")
+    run(["dotnet", "build", solution, "-c", "Release", "--no-restore", *msbuild], "build")
+    run(["dotnet", "format", solution, "--verify-no-changes", "--no-restore"], "dotnet-format")
     for component in ("core",):
         run([sys.executable, "src/Build.Integration/compose_docs.py", "--config",
              f"src/Build.Integration/api/{component}.json", "--output", f"artifacts/docs/{component}-site"],

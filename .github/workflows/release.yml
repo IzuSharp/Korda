@@ -1,7 +1,10 @@
-name: NuGet database preview
+name: NuGet preview
 on:
   workflow_call:
     inputs:
+      module:
+        type: string
+        default: ""
       artifact:
         required: true
         type: string
@@ -26,7 +29,7 @@ jobs:
       id-token: write
     services:
       postgres:
-        image: postgres:18.0@sha256:41fc5342eefba6cc2ccda736aaf034bbbb7c3df0fdb81516eba1ba33f360162c
+        image: ${{ !inputs.module && 'postgres:18.0@sha256:41fc5342eefba6cc2ccda736aaf034bbbb7c3df0fdb81516eba1ba33f360162c' || '' }}
         env:
           POSTGRES_USER: nativeweave
           POSTGRES_DB: postgres
@@ -35,6 +38,7 @@ jobs:
           - "127.0.0.1:5432:5432"
         options: --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 12
     env:
+      MODULE: ${{ inputs.module }}
       CANDIDATE: artifacts/publication
       NW_TEST_POSTGRES: postgresql://nativeweave@127.0.0.1:5432/postgres
       NUGET_SOURCE: https://api.nuget.org/v3/index.json
@@ -57,7 +61,7 @@ jobs:
           PLAN: ${{ inputs.plan }}
         run: |
           echo "$PLAN" > artifacts/plan.json
-          python3 eng/ci/validate_public.py "$CANDIDATE" artifacts/plan.json "$VERSION" > artifacts/packages.txt
+          python3 eng/ci/validate_public.py "$CANDIDATE" artifacts/plan.json "$VERSION" --module "$MODULE" > artifacts/packages.txt
       - id: login
         uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1
         with:
@@ -104,5 +108,11 @@ jobs:
                   print("Waiting two minutes for NuGet indexing", flush=True)
                   time.sleep(120)
           PY
-      - name: Consume the public packages in JIT and Native AOT
+      - name: Consume the public database packages in Native AOT
+        if: "!inputs.module"
         run: python3 eng/ci/consume.py "$CANDIDATE/release.json" artifacts/plan.json --public
+      - name: Run the registered public package consumer
+        if: inputs.module != ''
+        env:
+          VERSION: ${{ inputs.version }}
+        run: python3 eng/ci/module_job.py public "$MODULE" artifacts/plan.json "$VERSION"

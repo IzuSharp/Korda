@@ -7,7 +7,6 @@ import zipfile
 from urllib.error import HTTPError
 from urllib.request import urlopen
 
-from impact import IDS
 
 
 def read(url):
@@ -26,13 +25,21 @@ def package(identity, version):
     return read(f"https://api.nuget.org/v3-flatcontainer/{name}/{version}/{name}.{version}.nupkg")
 
 
-def public_heads():
+def public_heads(identities):
     heads = {}
-    for provider, identity in IDS.items():
+    for provider, identity in identities.items():
         url = f"https://api.nuget.org/v3-flatcontainer/{identity.lower()}/index.json"
-        versions = json.loads(read(url))["versions"]
+        try:
+            versions = json.loads(read(url))["versions"]
+        except HTTPError as exc:
+            if exc.code != 404:
+                raise
+            versions = []
         pattern = r"0\.1\.0-preview\.(\d+)\.(\d+)"
         releases = [v for v in versions if re.fullmatch(pattern, v)]
+        if not releases:
+            heads[provider] = {"version": None, "inputs": None}
+            continue
         version = max(releases, key=lambda v: tuple(map(int, re.fullmatch(pattern, v).groups())))
         with zipfile.ZipFile(io.BytesIO(package(identity, version))) as archive:
             info = (json.loads(archive.read("nativeweave/public.json"))

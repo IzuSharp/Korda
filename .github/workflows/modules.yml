@@ -1,0 +1,84 @@
+name: Registered module checks and packages
+on:
+  workflow_call:
+    inputs:
+      plan:
+        required: true
+        type: string
+      artifact:
+        required: true
+        type: string
+permissions:
+  contents: read
+  actions: read
+jobs:
+  modules:
+    name: Module (${{ matrix.module }})
+    if: fromJSON(inputs.plan).modules[0] != null
+    strategy:
+      fail-fast: false
+      matrix:
+        module: ${{ fromJSON(inputs.plan).modules }}
+    runs-on: ubuntu-24.04
+    env:
+      MODULE: ${{ matrix.module }}
+      PLAN: ${{ inputs.plan }}
+      VERSION: 0.1.0-preview.${{ github.run_number }}.2
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          global-json-file: global.json
+      - name: Run the selected module
+        run: |
+          mkdir -p artifacts
+          echo "$PLAN" > artifacts/plan.json
+          python3 eng/ci/module_job.py check "$MODULE" artifacts/plan.json "$VERSION"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: fromJSON(inputs.plan).artifacts[matrix.module] != ''
+        with:
+          name: module-${{ matrix.module }}-${{ github.run_id }}
+          overwrite: true
+          path: ${{ fromJSON(inputs.plan).artifacts[matrix.module] }}
+          if-no-files-found: error
+  module-packages:
+    name: Package (${{ matrix.module }})
+    needs: modules
+    if: >-
+      !cancelled() && (needs.modules.result == 'success' || needs.modules.result == 'skipped') &&
+      fromJSON(inputs.plan).module_packages[0] != null
+    strategy:
+      fail-fast: false
+      matrix:
+        module: ${{ fromJSON(inputs.plan).module_packages }}
+    runs-on: ubuntu-24.04
+    env:
+      MODULE: ${{ matrix.module }}
+      PLAN: ${{ inputs.plan }}
+      VERSION: 0.1.0-preview.${{ github.run_number }}.2
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          global-json-file: global.json
+      - name: Restore this package's selected module outputs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p artifacts
+          echo "$PLAN" > artifacts/plan.json
+          for component in $(jq -r --arg m "$MODULE" '.compose_from[$m][]' artifacts/plan.json); do
+            gh run download "$GITHUB_RUN_ID" -n "module-$component-$GITHUB_RUN_ID" -D "artifacts/modules/$component"
+          done
+      - name: Pack and consume from an isolated candidate feed
+        run: python3 eng/ci/module_job.py pack "$MODULE" artifacts/plan.json "$VERSION"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: ${{ inputs.artifact }}-${{ matrix.module }}
+          path: artifacts/public/
+          if-no-files-found: error
+          retention-days: 14

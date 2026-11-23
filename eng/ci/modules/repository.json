@@ -1,0 +1,8 @@
+{
+  "documentation": {
+    "tests": ["docs/", "packaging/README.md", "README.md", "AGENTS.md", "CONTRIBUTING.md", "SECURITY.md", ".github/ISSUE_TEMPLATE/", ".github/pull_request_template.md"]
+  },
+  "ci": {
+    "tests": ["eng/ci/", "NativeWeave.slnx", ".github/workflows/ci.yml", ".github/workflows/modules.yml", ".github/workflows/security.yml", "tests/Tooling/", ".github/dependabot.yml", ".gitignore", ".gitattributes", ".pre-commit-config.yaml", ".gitleaks.toml", ".gitleaksignore"]
+  }
+}

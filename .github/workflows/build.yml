@@ -120,6 +120,14 @@ jobs:
       - name: Prepare pinned PostgreSQL tools for real TLS and process fault oracles
         if: steps.pg.outputs.key
         run: bash eng/postgres-tools.sh
+      - name: Request the native target graph
+        if: inputs.scope != 'pack'
+        env:
+          SCOPE: ${{ inputs.scope }}
+        run: |
+          preset="$SCOPE"
+          if [ "$preset" = full ]; then preset=release; fi
+          python3 eng/ci/native_graph.py query "artifacts/cmake/linux-x64-$preset"
       - name: Verify database workspaces, API, regressions and actual package JIT/AOT consumers
         if: inputs.scope == 'full'
         env:
@@ -136,6 +144,16 @@ jobs:
             python3 tests/Data.Sqlite/verify.py --output artifacts/provider-tests --design artifacts/frozen-design --native-build artifacts/cmake/linux-x64-sqlite
           else
             python3 tests/Data.Postgres/verify.py --output artifacts/provider-tests --design-root artifacts/frozen-design --postgres-bin "$NW_POSTGRES_BIN" --native-build artifacts/cmake/linux-x64-postgresql
+          fi
+      - name: Check native module ownership against configured CMake targets
+        if: inputs.scope != 'pack'
+        env:
+          SCOPE: ${{ inputs.scope }}
+        run: |
+          if [ "$SCOPE" = full ]; then
+            python3 eng/ci/native_graph.py verify artifacts/cmake/linux-x64-release nw_database_sqlite nw_database_postgresql
+          else
+            python3 eng/ci/native_graph.py verify "artifacts/cmake/linux-x64-$SCOPE" "nw_database_$SCOPE"
           fi
       - name: Reject generated source or dependency drift
         run: git diff --exit-code

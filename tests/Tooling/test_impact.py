@@ -4,83 +4,111 @@ from pathlib import Path
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "eng/ci"))
-from impact import PROVIDERS, plan, plan_tree, rule
+from catalog import Catalog, load_catalog
+from impact import files, fingerprints, make_plan
 
 
 class ImpactTests(unittest.TestCase):
-    def test_component_ownership(self):
-        for path, packages in {
-            "src/Data.NativeHost/Providers/Sqlite/Adapter.cs": ("sqlite",),
-            "native/cpp/patches/libpq-explicit-configuration.patch": ("postgresql",),
-            "src/Query.Fluent/Select.cs": PROVIDERS, "native/cpp/src/provider.cpp": PROVIDERS,
-            "src/Query.Generator/Runtime/Row.cs": PROVIDERS, "LICENSE": PROVIDERS,
-            "README.md": (), "tests/Data.Sqlite/Program.cs": (), ".github/workflows/ci.yml": (),
-            "src/Reference.TaskService/Program.cs": (), "src/Verification.Models/verify.py": (),
-            "src/Packaging.Release/release.py": (), "src/Build.Integration/ApiReference/Program.cs": (),
+    def setUp(self):
+        self.catalog = load_catalog()
+
+        mock = patch("impact.public_heads")
+        self.registry = mock.start()
+        self.addCleanup(mock.stop)
+
+    def plan(self, paths, *, previous=None, stale=(), full=False):
+        entries = {p: p.encode() for p in paths}
+        hashes = fingerprints(self.catalog, entries)
+        self.registry.side_effect = lambda ids: {p: {"version": "0.1.0-preview.1.2",
+            "inputs": "old" if p in stale else hashes[p]} for p in ids}
+        return make_plan(self.catalog, paths, entries, previous or self.catalog, full)
+
+    def test_every_tracked_file_has_one_owner(self):
+        for path in files("HEAD"):
+            with self.subTest(path=path):
+                self.catalog.owner(path)
+
+    def test_docs_and_planner_have_no_release_or_database_work(self):
+        for paths in (["AGENTS.md"], ["eng/ci/impact.py", ".github/workflows/ci.yml", "tests/Tooling/test_impact.py"]):
+            result = self.plan(paths, stale=("postgresql", "sqlite"))
+            self.assertEqual(("light", False, [], [], []),
+                             (result["scope"], result["deep"], result["modules"], result["candidates"], result["checks"]))
+        self.registry.assert_not_called()
+
+    def test_public_consumer_edit_executes_candidate_without_releasing(self):
+        result = self.plan(["eng/ci/consume.py"])
+        self.assertEqual(("pack", True, []), (result["scope"], result["consume"], result["candidates"]))
+        self.registry.assert_called_once()
+
+    def test_native_package_ownership_and_unclassified_paths(self):
+        for path, expected in {
+            "src/Data.NativeHost/Providers/Sqlite/Adapter.cs": {"sqlite"},
+            "native/cpp/patches/libpq-explicit-configuration.patch": {"postgresql"},
+            "native/cpp/src/provider.cpp": {"sqlite", "postgresql"},
+            "src/Query.Fluent/Select.cs": {"sqlite", "postgresql"},
+            "eng/ci/bundles.py": {"sqlite", "postgresql"},
+            "LICENSE": {"sqlite", "postgresql"},
         }.items():
             with self.subTest(path=path):
-                self.assertEqual(packages, rule(path)[1])
+                self.assertEqual(expected, set(self.plan([path], stale=expected)["packages"]))
+        with self.assertRaisesRegex(ValueError, "Unregistered CI path: src/Unknown"):
+            self.plan(["src/Unknown/Entry.cs"])
 
-    def test_unpublished_change_is_not_lost(self):
-        hashes = dict.fromkeys(PROVIDERS, "current")
-        published = {p: {"inputs": value} for p, value in hashes.items()}
-        published["postgresql"]["inputs"] = "previous"
-        result = plan(["src/Data.Sqlite/Provider.cs"], hashes, published)
-        self.assertEqual((result["scope"], result["packages"]), ("full", ["postgresql"]))
-
-    def test_docs_merge_skips_registry_even_when_legacy_packages_have_no_fingerprint(self):
-        hashes = dict.fromkeys(PROVIDERS, "current")
-        legacy = {p: {"version": "0.1.0-preview.163.2", "inputs": None} for p in PROVIDERS}
-        with patch("registry.public_heads", return_value=legacy) as registry:
-            for result in (plan_tree(["AGENTS.md"], "HEAD"), plan(["AGENTS.md"], hashes, legacy)):
-                self.assertEqual(("light", [], [], False),
-                                 (result["scope"], result["checks"], result["packages"], result["consume"]))
-            registry.assert_not_called()
-
-    def test_explicit_full_validation_still_consumes_published_packages(self):
-        published = {p: {"inputs": "previous"} for p in PROVIDERS}
-        with patch("registry.public_heads", return_value=published) as registry:
-            result = plan_tree(["AGENTS.md"], "HEAD", full=True)
-            registry.assert_called_once_with()
-        self.assertEqual(("full", True, [], published),
-                         (result["scope"], result["consume"], result["packages"], result["published"]))
-
-    def test_test_only_changes_do_not_recover_a_pending_release(self):
-        hashes = dict.fromkeys(PROVIDERS, "current")
-        old = {p: {"inputs": "previous"} for p in PROVIDERS}
-        cases = {
-            "README.md": ("light", []),
-            "tests/Data.Sqlite/Program.cs": ("sqlite", []),
-            "tests/Data.Postgres/Program.cs": ("postgresql", []),
-            "tests/Packaging.Release/ApiCheck/Program.cs": ("light", ["pack-api"]),
-            "tests/Packaging.Linux/test_profile.py": ("light", ["elf-profile"]),
-            "tests/Query.Generator/ApiCheck/Program.cs": ("light", ["generator"]),
-        }
-        for path, (scope, checks) in cases.items():
+    def test_test_edits_keep_independent_checks(self):
+        for path, scope, checks in [
+            ("tests/Data.Sqlite/Program.cs", "sqlite", []),
+            ("tests/Data.Postgres/Program.cs", "postgresql", []),
+            ("tests/Packaging.Release/ApiCheck/Program.cs", "light", ["pack-api"]),
+            ("tests/Packaging.Linux/test_profile.py", "light", ["elf-profile"]),
+            ("tests/Query.Generator/Program.cs", "light", ["generator"]),
+        ]:
             with self.subTest(path=path):
-                actual = plan([path], hashes, old)
-                self.assertEqual((scope, checks, []), (actual["scope"], actual["checks"], actual["packages"]))
-        actual = plan(list(cases)[3:], hashes, old)
-        self.assertEqual((actual["scope"], actual["checks"]), ("light", ["elf-profile", "generator", "pack-api"]))
+                result = self.plan([path])
+                self.assertEqual((scope, checks, []), (result["scope"], result["checks"], result["packages"]))
+        both = self.plan(["tests/Data.Sqlite/Program.cs", "tests/Data.Postgres/Program.cs"])
+        self.assertEqual(["sqlite", "postgresql"], both["build_scopes"])
+        self.registry.assert_not_called()
 
-    def test_public_candidates_and_internal_checks_have_independent_inputs(self):
-        hashes = dict.fromkeys(PROVIDERS, "current")
-        previous = {p: {"inputs": "current"} for p in PROVIDERS}
-        previous["sqlite"]["inputs"] = "old"
-        actual = plan(["src/Data.Sqlite/Provider.cs", "tests/Query.Generator/Program.cs"], hashes, previous)
-        self.assertEqual((actual["scope"], actual["checks"], actual["packages"]),
-                         ("sqlite", ["generator"], ["sqlite"]))
-        self.assertEqual("full", rule("eng/ci/bundles.py")[0])
-        previous["postgresql"]["inputs"] = "old"
-        packaging = plan(["src/Packaging.Release/BuildTasks/PackageClosure.cs"], hashes, previous)
-        self.assertEqual((packaging["scope"], packaging["checks"], packaging["packages"]),
-                         ("pack", ["pack-api", "pack-metadata"], ["postgresql", "sqlite"]))
+    def test_recovery_and_packaging(self):
+        paths = ["src/Data.Sqlite/Provider.cs"]
+        peer = self.plan(paths, stale={"postgresql"})
+        self.assertEqual(("full", ["postgresql"]), (peer["scope"], peer["packages"]))
+        single = self.plan(paths, stale={"sqlite"})
+        self.assertEqual(("sqlite", ["sqlite"]), (single["scope"], single["packages"]))
+        packaging = self.plan(["src/Packaging.Release/BuildTasks/Task.cs"], stale={"sqlite", "postgresql"})
+        self.assertEqual(("pack", True, ["pack-api", "pack-metadata"]),
+                         (packaging["scope"], packaging["rebuild_task"], packaging["checks"]))
+        full = self.plan(["AGENTS.md"], full=True)
+        self.assertEqual(("full", True, []), (full["scope"], full["consume"], full["packages"]))
 
-    def test_two_provider_regression_edits_run_two_independent_jobs(self):
-        hashes = dict.fromkeys(PROVIDERS, "same")
-        published = {p: {"inputs": "same"} for p in PROVIDERS}
-        paths = ["tests/Data.Postgres/Program.cs", "tests/Data.Sqlite/Program.cs", "tests/Query.Generator/Program.cs"]
-        result = plan(paths, hashes, published)
-        self.assertEqual((list(PROVIDERS), ["generator"], [], False),
-                         (result["build_scopes"], result["checks"], result["packages"], result["consume"]))
-        self.assertEqual(["full"], plan(paths + ["src/Data.NativeHost/Session.cs"], hashes, published)["build_scopes"])
+    def test_independent_module_and_top_level_delivery(self):
+        self.catalog = Catalog({"compiler": {"sources": ["compiler/"], "tests": ["test-compiler/"], "run": ["compiler-check"]},
+                                "gpu": {"sources": ["gpu/"], "run": ["gpu-check"]},
+                                "qt": {"sources": ["qt/"], "includes": ["compiler", "gpu"], "package": "NativeWeave.Qt",
+                                       "run": ["qt-suite"], "pack": ["pack"], "consume": ["consume"]},
+                                **self.catalog.modules})
+        tests = self.plan(["test-compiler/new.cpp"])
+        self.assertEqual((["compiler"], []), (tests["modules"], tests["candidates"]))
+        self.registry.assert_not_called()
+        change = self.plan(["compiler/new.cpp"], stale={"qt", "sqlite", "postgresql"})
+        self.assertEqual(("light", ["compiler"], ["qt"], []),
+                         (change["scope"], change["modules"], change["candidates"], change["packages"]))
+        self.assertEqual({"compiler": "run"}, change["run_steps"])
+        self.registry.assert_called_with({"qt": "NativeWeave.Qt"})
+        top = self.plan(["qt/api.cs"], stale={"qt"})
+        self.assertEqual((["compiler", "gpu", "qt"], {"compiler": "run", "gpu": "run", "qt": "run"}), (top["modules"], top["run_steps"]))
+        self.catalog.add_project_references([("gpu/gpu.csproj", '<Project><ItemGroup><ProjectReference Include="../compiler/tool.csproj"/></ItemGroup></Project>')])
+        self.assertEqual(["compiler", "gpu"], self.plan(["compiler/source.cpp"], stale={"qt"})["modules"])
+
+    def test_removal_with_new_registry_and_invalid_registrations(self):
+        before = Catalog({"lib": {"sources": ["old/"]}, "api": {"depends": ["lib"], "run": ["verify"]}})
+        after = Catalog({"api": {"tests": ["eng/ci/modules/"], "run": ["verify"]}})
+        result = make_plan(after, ["old/source.cpp", "eng/ci/modules/product.json"],
+                           {"eng/ci/modules/product.json": b"data"}, before)
+        self.assertEqual(["api"], result["modules"])
+        with self.assertRaisesRegex(ValueError, "Invalid module dependency"):
+            Catalog({"a": {"depends": ["b"]}, "b": {"depends": ["a"]}})
+        with self.assertRaisesRegex(ValueError, "Ambiguous ownership"):
+            Catalog({"a": {"sources": ["src/"]}, "b": {"tests": ["src/"]}}).owner("src/file")
+        with self.assertRaisesRegex(ValueError, "Invalid or duplicate public package"):
+            Catalog({"x": {"package": "Other.Name", "pack": ["pack"], "consume": ["run"]}})

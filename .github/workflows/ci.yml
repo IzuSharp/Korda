@@ -26,10 +26,11 @@ jobs:
       actions: read
       pull-requests: read
     outputs:
-      scope: ${{ steps.plan.outputs.scope }}
+      build: ${{ steps.jobs.outputs.build }}
+      modules: ${{ steps.jobs.outputs.modules }}
+      focused: ${{ steps.jobs.outputs.focused }}
       plan: ${{ steps.plan.outputs.plan }}
       pending: ${{ steps.plan.outputs.pending }}
-      deep: ${{ steps.plan.outputs.deep }}
       artifact: ${{ steps.plan.outputs.artifact }}
       merged: ${{ steps.promote.outputs.merged }}
       reuse: ${{ steps.promote.outputs.run }}
@@ -48,9 +49,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 eng/ci/promote.py
+      - id: jobs
+        env:
+          MERGED: ${{ steps.promote.outputs.merged }}
+          REUSE: ${{ steps.promote.outputs.run }}
+        run: python3 eng/ci/plan_run.py --jobs
   build:
     needs: plan
-    if: needs.plan.outputs.scope != 'light' && !needs.plan.outputs.reuse && (github.event_name != 'push' || (needs.plan.outputs.merged == 'true' && needs.plan.outputs.pending == 'true'))
+    if: needs.plan.outputs.build == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -61,50 +67,19 @@ jobs:
       scope: ${{ matrix.scope }}
       plan: ${{ needs.plan.outputs.plan }}
       artifact: ${{ needs.plan.outputs.artifact }}
+  modules:
+    needs: plan
+    if: needs.plan.outputs.modules == 'true'
+    uses: ./.github/workflows/modules.yml
+    with:
+      plan: ${{ needs.plan.outputs.plan }}
+      artifact: ${{ needs.plan.outputs.artifact }}
   focused:
     needs: plan
-    if: fromJSON(needs.plan.outputs.plan).checks[0] != null && github.event_name != 'push'
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
-        if: contains(fromJSON(needs.plan.outputs.plan).checks, 'generator') || contains(fromJSON(needs.plan.outputs.plan).checks, 'pack-api')
-        with:
-          global-json-file: global.json
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        if: contains(fromJSON(needs.plan.outputs.plan).checks, 'generator')
-        with:
-          repository: IzuSharp/NativeWeave-Design
-          ref: c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9
-          path: artifacts/frozen-design
-          persist-credentials: false
-      - name: Test generated C# and its public API
-        if: contains(fromJSON(needs.plan.outputs.plan).checks, 'generator')
-        run: |
-          dotnet run --project tests/Query.Generator/Query.Generator.Tests.csproj -c Release -p:RestoreLockedMode=true
-          dotnet run --project tests/Query.Generator/ApiCheck -c Release -p:RestoreLockedMode=true -- "$PWD" "$PWD/artifacts/frozen-design" "$DOTNET_ROOT"
-      - name: Test the MSBuild packaging task API
-        if: contains(fromJSON(needs.plan.outputs.plan).checks, 'pack-api')
-        run: dotnet run --project tests/Packaging.Release/ApiCheck -c Release -p:RestoreLockedMode=true -- "$RUNNER_TEMP/packaging-api.md"
-      - name: Test archive metadata and immutability
-        if: contains(fromJSON(needs.plan.outputs.plan).checks, 'pack-metadata') && !contains(fromJSON(needs.plan.outputs.plan).checks, 'elf-profile')
-        working-directory: tests/Packaging.Linux
-        run: python3 -m unittest test_profile.ProfileTests.test_pack_exact_edges_identity_and_immutability -v
-      - uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25
-        if: contains(fromJSON(needs.plan.outputs.plan).checks, 'elf-profile')
-        with:
-          key: linux-x64-tools-${{ hashFiles('native/dependencies.lock.json') }}
-          path: |
-            artifacts/toolchain/downloads
-            artifacts/dependencies/downloads
-      - name: Provision pinned compiler for ELF checks
-        if: contains(fromJSON(needs.plan.outputs.plan).checks, 'elf-profile')
-        run: python3 eng/cpp_toolchain.py
-      - name: Test ELF and package profiles
-        if: contains(fromJSON(needs.plan.outputs.plan).checks, 'elf-profile')
-        run: python3 -m unittest discover -s tests/Packaging.Linux -p test_profile.py -v
+    if: needs.plan.outputs.focused == 'true'
+    uses: ./.github/workflows/database-checks.yml
+    with:
+      plan: ${{ needs.plan.outputs.plan }}
   security:
     needs: plan
     if: github.event_name != 'push'
@@ -117,7 +92,7 @@ jobs:
       security-events: write
   verify:
     name: Verify
-    needs: [plan, build, focused, security]
+    needs: [plan, build, focused, modules, security]
     if: always()
     runs-on: ubuntu-24.04
     steps:
@@ -125,25 +100,33 @@ jobs:
         env:
           PLAN: ${{ needs.plan.result }}
           BUILD: ${{ needs.build.result }}
+          MODULES: ${{ needs.modules.result }}
           FOCUSED: ${{ needs.focused.result }}
-          NEED_FOCUSED: ${{ github.event_name != 'push' && fromJSON(needs.plan.outputs.plan || '{}').checks[0] != null }}
+          NEED_MODULES: ${{ needs.plan.outputs.modules }}
+          NEED_FOCUSED: ${{ needs.plan.outputs.focused }}
           SECURITY: ${{ needs.security.result }}
-          REQUIRED: ${{ needs.plan.outputs.scope != 'light' && !needs.plan.outputs.reuse && (github.event_name != 'push' || (needs.plan.outputs.merged == 'true' && needs.plan.outputs.pending == 'true')) }}
+          REQUIRED: ${{ needs.plan.outputs.build }}
         run: |
           test "$PLAN" = success
           if [ "$REQUIRED" = true ]; then test "$BUILD" = success; else test "$BUILD" = skipped; fi
+          if [ "$NEED_MODULES" = true ]; then test "$MODULES" = success; else test "$MODULES" = skipped; fi
           if [ "$NEED_FOCUSED" = true ]; then test "$FOCUSED" = success; else test "$FOCUSED" = skipped; fi
           if [ "$GITHUB_EVENT_NAME" = push ]; then test "$SECURITY" = skipped; else test "$SECURITY" = success; fi
   publish:
     needs: [plan, verify]
     if: github.repository == 'IzuSharp/NativeWeave' && needs.plan.outputs.merged == 'true' && needs.plan.outputs.pending == 'true' && vars.NUGET_PUBLISH_ENABLED == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.plan.outputs.plan).releases }}
     uses: ./.github/workflows/release.yml
     permissions:
       contents: read
       actions: read
       id-token: write
     with:
-      artifact: ${{ needs.plan.outputs.from-artifact || needs.plan.outputs.artifact }}
+      module: ${{ matrix.module }}
+      artifact: ${{ needs.plan.outputs.from-artifact || needs.plan.outputs.artifact }}${{ matrix.suffix }}
       run: ${{ needs.plan.outputs.reuse || github.run_id }}
       version: 0.1.0-preview.${{ needs.plan.outputs.number || github.run_number }}.2
       plan: ${{ needs.plan.outputs.plan }}
