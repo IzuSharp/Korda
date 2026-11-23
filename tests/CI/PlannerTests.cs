@@ -89,6 +89,55 @@ public sealed class PlannerTests : IDisposable
         Assert.Empty(plan.Candidates);
     }
 
+    [Theory]
+    [InlineData("tests/Interop.Abi/native/bootstrap.c", "focused.abi-bootstrap")]
+    [InlineData("tests/Verification.Interop/fuzz/interop.c", "focused.interop-corpus")]
+    public void RealFixtureRegistrationOnlyReplaysThatFixture(string path, string action)
+    {
+        string directory = Path.Combine(AppContext.BaseDirectory, "registrations");
+        foreach (var file in Directory.GetFiles(directory, "*.json"))
+            File.Copy(file, Path.Combine(root, "eng/ci/modules", Path.GetFileName(file)), true);
+        File.Delete(Path.Combine(root, "eng/ci/modules/project.json"));
+        // Exercise the production catalog with a minimal tree, including its overlapping parent rules.
+        foreach (string mock in new[] { "sqlite", "shared", "tests/sqlite", "tests/pg" })
+            Directory.Delete(Path.Combine(root, mock), true);
+        Write("NativeWeave.slnx", "<Solution/>");
+        Write(path, "/* fixture */");
+        Commit();
+        var plan = Change(path, "/* changed fixture */");
+        Assert.Equal([action], plan.Actions["focused"]);
+        Assert.Single(plan.Actions);
+        Assert.Empty(plan.BuildScopes);
+        Assert.Empty(plan.Candidates);
+    }
+
+    [Fact]
+    public void EditingOwnershipRulesAloneDoesNotExerciseProductCode()
+    {
+        string path = "eng/ci/modules/project.json";
+        var original = File.ReadAllText(Path.Combine(root, path));
+        var plan = Change(path, original.Replace("""["shared/"]""", """["shared/","another-shared/"]"""));
+        Assert.Empty(plan.BuildScopes);
+        Assert.Empty(plan.Candidates);
+    }
+
+    [Fact]
+    public void CombinedTestChangesSelectTheUnionWithoutFullDatabaseValidation()
+    {
+        Write("eng/ci/modules/suites.json", """
+            {"regressions":{"tests":["regressions/"],"checks":["db:database.regressions"]},
+             "abi":{"tests":["fixture/"],"checks":["db:abi-bootstrap"]}}
+            """);
+        Commit();
+        Write("regressions/driver.py", "# updated");
+        var plan = Change("fixture/test.c");
+        Assert.Equal(["selected"], plan.BuildScopes);
+        Assert.Equal(["focused.abi-bootstrap"], plan.Actions["focused"]);
+        Assert.Equal(["database.inputs", "database.native", "database.build", "database.regressions"], plan.Actions["selected"]);
+        Assert.False(plan.Deep);
+        Assert.Empty(plan.Candidates);
+    }
+
     [Fact]
     public void SqliteRegressionNeedsItsOwnBuildOnly()
     {
@@ -117,8 +166,8 @@ public sealed class PlannerTests : IDisposable
                 Assert.Equal(["postgresql", "sqlite"], ids);
                 return ids.ToDictionary(id => id, _ => new Published("0.1.0-preview.1.2"));
             });
-        Assert.Equal("full", plan.Scope);
-        Assert.Contains("public.consume-aot", plan.Actions["full"]);
+        Assert.Equal("selected", plan.Scope);
+        Assert.Equal(["database.inputs", "database.native", "database.pack", "public.pack", "public.consume-aot"], plan.Actions["selected"]);
         Assert.Empty(plan.Candidates);
     }
 

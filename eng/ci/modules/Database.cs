@@ -18,11 +18,10 @@ internal sealed class Database() : Module("database")
         yield return Action("pack", Pack, "database.native");
         yield return Action("consume-aot", ConsumeAot, "database.pack");
         yield return Action("sanitizers", ctx => ctx.Run("bash", "eng/verify-cpp-sanitizers.sh"));
-        yield return Action("compatibility", ctx =>
-        {
-            ctx.Python("tests/Verification.Compatibility/verify.py", "--evidence", "artifacts/cpp-compatibility", "--design-root", "artifacts/scope-design");
-            ctx.Python("tests/Verification.Interop/verify.py", "--output", "artifacts/cpp-interop-properties");
-        }, "database.native");
+        yield return Action("compatibility", ctx => ctx.Python("tests/Verification.Compatibility/verify.py",
+            "--evidence", "artifacts/cpp-compatibility", "--design-root", "artifacts/scope-design"), "database.native");
+        yield return Action("interop-properties", ctx => ctx.Python("tests/Verification.Interop/verify.py",
+            "--output", "artifacts/cpp-interop-properties"), "database.native");
         yield return Action("runtime", ctx => ctx.Run("bash", "eng/verify-task04-linux.sh"), "database.native");
         yield return Action("transfer", ctx => ctx.Run("bash", "eng/verify-task07-linux.sh"), "database.pack");
         yield return Action("clean-build", ctx => ctx.Run("bash", "eng/verify-cpp-clean.sh"), "database.native");
@@ -41,7 +40,7 @@ internal sealed class PublicPackages() : Module("public")
         {
             string[] source = ctx.Scope switch
             {
-                "full" => ["--components", "artifacts/db-scope/prepared/candidate"],
+                "full" or "selected" => ["--components", "artifacts/db-scope/prepared/candidate"],
                 "pack" => [],
                 _ => ["--native", "artifacts/provider-native/manifest.json"]
             };

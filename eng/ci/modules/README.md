@@ -46,6 +46,8 @@ The SDK builds the CI executable and its tests in the main solution. Product con
 
 For a new C# workflow copy a provider or test class from this directory. Override the methods the module supports (`Build`, `Api`, `Test`, `Pack`, `ConsumeAot`). Its `Workflow()` registers each action and the action names it needs. Add that class to `Recipes.All`. A registration can invoke the class with `"run": ["dotnet", "run", "--project", "eng/ci", "--", "action", "compiler.test"]`. Give product and test directories explicit owners. Declare implicit native or bundle dependencies and expose only the top-level package. The executor orders prerequisites once, prints each action and elapsed time, and stops on failure.
 
+Register a test fixture with its narrowest owning path when its parent suite has wider prerequisites. The ABI bootstrap and checked-in interop corpus each run their own native check. An edit to module ownership alone validates the catalog. Changed package inputs still use the package dependency graph. The plan compares the entire PR with its base.
+
 From the repository root:
 
 ```sh

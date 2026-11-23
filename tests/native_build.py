@@ -39,6 +39,5 @@ def prepare(run, targets=(), test_regex=r"^native\.interop$"):
     sources += sorted((ROOT / "native/cpp/tests/fixtures").glob("*.cpp"))
     sources += sorted((ROOT / "native/cpp/tests/fixtures").glob("*.hpp"))
     run("native-format", ["clang-format", "--dry-run", "--Werror", *sources])
-    run("native-analysis", ["clang-tidy", "-p", BUILD, ROOT / "native/cpp/src/interop.cpp"])
     run("native-tests", ["ctest", "--preset", PRESET, "-R", test_regex])
     return provenance

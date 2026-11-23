@@ -8,4 +8,7 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" PrivateAssets="all" />
     <ProjectReference Include="../../eng/ci/NativeWeave.CI.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="../../eng/ci/modules/*.json" Link="registrations/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

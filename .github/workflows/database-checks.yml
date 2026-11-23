@@ -25,14 +25,14 @@ jobs:
           path: artifacts/frozen-design
           persist-credentials: false
       - uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25
-        if: contains(fromJSON(inputs.plan).checks, 'elf-profile')
+        if: contains(fromJSON(inputs.plan).checks, 'elf-profile') || contains(fromJSON(inputs.plan).checks, 'abi-bootstrap') || contains(fromJSON(inputs.plan).checks, 'interop-corpus')
         with:
           key: linux-x64-tools-${{ hashFiles('native/dependencies.lock.json') }}
           path: |
             artifacts/toolchain/downloads
             artifacts/dependencies/downloads
-      - name: Provision pinned compiler for ELF checks
-        if: contains(fromJSON(inputs.plan).checks, 'elf-profile')
+      - name: Prepare the pinned compiler for selected native checks
+        if: contains(fromJSON(inputs.plan).checks, 'elf-profile') || contains(fromJSON(inputs.plan).checks, 'abi-bootstrap') || contains(fromJSON(inputs.plan).checks, 'interop-corpus')
         run: python3 eng/cpp_toolchain.py
       - name: Execute the selected checks
         env:

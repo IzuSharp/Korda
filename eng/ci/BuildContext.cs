@@ -10,7 +10,7 @@ internal sealed class BuildContext(string root, string version, string scope, st
     public string Version { get; } = version;
     public string PlanFile { get; } = Path.GetFullPath(planFile, Path.GetFullPath(root));
     public string Scope { get; } = scope;
-    public string Preset => "linux-x64-" + (Scope is "full" or "components" ? "release" : Scope);
+    public string Preset => "linux-x64-" + (Scope is "full" or "components" or "selected" ? "release" : Scope);
     public string NativeDir => "artifacts/cmake/" + Preset;
 
     public void Run(string tool, params string[] args) => Invoke(Root, tool, args, false);

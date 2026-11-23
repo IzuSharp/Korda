@@ -7,6 +7,8 @@ internal sealed class FocusedChecks() : Module("focused")
 
     public override IEnumerable<Step> Workflow()
     {
+        yield return Action("abi-bootstrap", ctx => InteropFixtures.Run(ctx, false));
+        yield return Action("interop-corpus", ctx => InteropFixtures.Run(ctx, true));
         yield return Action("generator", ctx =>
         {
             DotnetTool(ctx, "tests/Query.Generator/Query.Generator.Tests.csproj");

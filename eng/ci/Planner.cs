@@ -104,7 +104,8 @@ internal static class Planner
         }
         foreach (var (id, spec) in after.Modules)
         {
-            if (!before.Modules.TryGetValue(id, out var old) || JsonSerializer.Serialize(old) != JsonSerializer.Serialize(spec))
+            if ((spec.Run.Length != 0 || spec.Pack.Length != 0) &&
+                (!before.Modules.TryGetValue(id, out var old) || JsonSerializer.Serialize(old) != JsonSerializer.Serialize(spec)))
                 direct.Add(id);
             if (sourceOwners.Contains(id))
                 foreach (var child in spec.Includes) selected.UnionWith(after.Dependencies(child));

@@ -19,7 +19,7 @@ permissions:
   actions: read
 jobs:
   build:
-    name: Build, package and Native AOT
+    name: Run ${{ inputs.scope }} actions
     runs-on: ubuntu-24.04
     timeout-minutes: 120
     services:
@@ -62,7 +62,7 @@ jobs:
           path: artifacts/frozen-design
           persist-credentials: false
       - name: Read immutable historical Core API acceptance inputs
-        if: inputs.scope == 'full'
+        if: contains(fromJSON(inputs.plan).actions[inputs.scope], 'database.regressions') || contains(fromJSON(inputs.plan).actions[inputs.scope], 'interop-negotiation-tests.test')
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: IzuSharp/Plan
@@ -70,7 +70,7 @@ jobs:
           path: artifacts/frozen-plan
           persist-credentials: false
       - name: Read fixed database-scope compatibility inputs
-        if: inputs.scope == 'full'
+        if: contains(fromJSON(inputs.plan).actions[inputs.scope], 'database.compatibility') || contains(fromJSON(inputs.plan).actions[inputs.scope], 'database.api') || contains(fromJSON(inputs.plan).actions[inputs.scope], 'database.clean-build')
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: IzuSharp/NativeWeave-Design
@@ -110,7 +110,7 @@ jobs:
             sccache-linux-x64-v017-${{ hashFiles('native/dependencies.lock.json', 'CMakePresets.json') }}-${{ inputs.scope }}-
             sccache-linux-x64-v017-${{ hashFiles('native/dependencies.lock.json', 'CMakePresets.json') }}-
       - id: pg
-        if: contains(fromJSON('["full","postgresql","components"]'), inputs.scope)
+        if: contains(fromJSON('["full","selected","postgresql","components"]'), inputs.scope)
         run: echo "key=$(python3 eng/postgres-cache-key.py full)" >> "$GITHUB_OUTPUT"
       - name: Restore exact PostgreSQL installation
         if: steps.pg.outputs.key
@@ -126,7 +126,9 @@ jobs:
           SCOPE: ${{ inputs.scope }}
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          dotnet run --project eng/ci -c Release -- run artifacts/plan.json "$SCOPE"
+          jq -r --arg group "$SCOPE" '.actions[$group][]' artifacts/plan.json
+          dotnet build eng/ci -c Release -p:RestoreLockedMode=true
+          dotnet eng/ci/bin/Release/net11.0/NativeWeave.CI.dll run artifacts/plan.json "$SCOPE"
           git diff --exit-code
       - name: Restore runner ownership of exported database evidence
         if: always()
@@ -143,7 +145,7 @@ jobs:
             fi
           done
       - name: Retain verification logs and evidence
-        if: always() && inputs.scope == 'full'
+        if: always() && (inputs.scope == 'full' || inputs.scope == 'selected')
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: nativeweave-evidence-${{ github.run_id }}-${{ github.run_attempt }}
@@ -186,7 +188,7 @@ jobs:
             artifacts/db-scope/release/evidence/
             artifacts/db-scope/runtime/evidence/
             artifacts/db-scope/evidence/
-          if-no-files-found: error
+          if-no-files-found: ${{ inputs.scope == 'full' && 'error' || 'warn' }}
           retention-days: 14
       - name: Collect selected component results
         if: always() && inputs.scope == 'components'
