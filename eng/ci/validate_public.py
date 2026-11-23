@@ -1,6 +1,8 @@
 """Validate the public allowlist, provenance and exact package payload before NuGet login."""
+
 import argparse
 import json
+import re
 from pathlib import Path
 import sys
 from catalog import ROOT, git, load_catalog
@@ -14,20 +16,33 @@ import compatibility as compat
 
 
 def validate(folder, plan, version, module=""):
-    tree = git("rev-parse", "HEAD^{tree}").decode().strip()
+    source = plan.get("retry_merge", "HEAD")
+    if source != "HEAD":
+        if not re.fullmatch(r"[0-9a-f]{40}", source):
+            raise ValueError("Invalid recovery merge commit")
+        git("merge-base", "--is-ancestor", source, "HEAD")
+    tree = git("rev-parse", source + "^{tree}").decode().strip()
     record = compat.read_json(folder / "release.json")
     identities = load_catalog().packages
     if module and module not in plan["candidates"]:
         raise ValueError("Module is outside the release plan")
     expected = {identities[name] for name in ([module] if module else plan["packages"])}
-    if record["source_tree"] != tree or record["inputs"] != inputs("HEAD") or record["source_dirty"] is not False:
+    if (
+        record["source_tree"] != tree
+        or record["inputs"] != inputs("HEAD")
+        or record["source_dirty"] is not False
+    ):
         raise ValueError("Provider artifact is for a different source tree")
     packages = {p["id"]: p for p in record["packages"]}
     if not expected or set(packages) != expected or len(packages) != len(record["packages"]):
         raise ValueError("Provider selection differs from the main release plan")
     paths = {}
     for name, item in packages.items():
-        if item["dependencies"] or item["version"] != version or item["source_commit"] != record["source_commit"]:
+        if (
+            item["dependencies"]
+            or item["version"] != version
+            or item["source_commit"] != record["source_commit"]
+        ):
             raise ValueError("Unexpected version, source or external component dependencies")
         path = folder / "feed" / f"{name}.{version}.nupkg"
         if compat.file_hash(path) != item["upload_archive_sha256"]:
@@ -52,5 +67,7 @@ if __name__ == "__main__":
     parser.add_argument("version")
     parser.add_argument("--module", default="")
     args = parser.parse_args()
-    for path in validate(args.directory, json.loads(args.plan.read_text()), args.version, args.module).values():
+    for path in validate(
+        args.directory, json.loads(args.plan.read_text()), args.version, args.module
+    ).values():
         print(path)
