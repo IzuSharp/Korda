@@ -107,7 +107,7 @@ Bytes snapshot_record(std::uint32_t state, std::uint32_t outcome, bool attempted
 }
 std::uint64_t capability_mask()
 {
-    std::uint64_t result = (1ULL << 25) - 1;
+    std::uint64_t result = (1ULL << 26) - 1;
 #if !NW_ENABLE_POSTGRES
     result &= ~((1ULL << 11) | (1ULL << 14));
 #endif

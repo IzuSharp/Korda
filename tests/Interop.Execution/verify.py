@@ -90,9 +90,6 @@ def main():
         for label, project, assembly in [
             ("tests", "tests/Interop.Execution/Interop.Execution.Tests.csproj", "Korda.Interop.Execution.Tests"),
             ("sample", "samples/api/interop-execution/Interop.Execution.Sample.csproj", "Korda.Interop.Execution.Sample")]:
-            run(label + "-restore", ["dotnet", "restore", project, *restore, *common])
-            run(label + "-build", ["dotnet", "build", project, "-c", "Release", "--no-restore", *common])
-            dll = ROOT / Path(project).parent / "bin/Release/net11.0" / (assembly + ".dll")
             if label == "tests":
                 clean_env = env.copy()
                 clean_env.pop("LD_LIBRARY_PATH", None)

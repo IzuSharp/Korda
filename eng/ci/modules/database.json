@@ -12,8 +12,8 @@
     "depends": ["native-runtime"]
   },
   "database": {
-    "sources": ["src/Data.Abstractions/", "src/Data.Codecs/", "src/Data.Materialization/", "src/Data.Migrations/", "src/Data.NativeHost/", "src/Data.Streaming/", "src/Data.Transactions/", "src/Query.Binding/", "src/Query.Fluent/", "src/Query.Generator/", "src/Query.Native/", "src/Orm.Relations/", "src/Packaging.Domain/", "src/Packaging.Linux/", "src/Packaging.Release/", "Directory.Build.props", "global.json", "NuGet.Config"],
-    "depends": ["database-native", "bundle-layout", "build-task", "bundle-composer"],
+    "sources": ["src/Data.Abstractions/", "src/Data.Codecs/", "src/Data.Materialization/", "src/Data.Migrations/", "src/Data.NativeHost/", "src/Data.Streaming/", "src/Data.Transactions/", "src/Query.Binding/", "src/Query.Fluent/", "src/Query.Native/", "src/Orm.Relations/", "src/Packaging.Domain/", "src/Packaging.Linux/", "src/Packaging.Release/", "Directory.Build.props", "global.json", "NuGet.Config"],
+    "depends": ["database-native", "model-generation", "bundle-layout", "build-task", "bundle-composer"],
     "checks": ["database.api", "database.regressions"],
     "api_checks": ["database.api"]
   },
@@ -55,6 +55,14 @@
     "tests": ["tests/Query.Generator/"],
     "checks": ["generator.test"]
   },
+  "model-generation": {
+    "sources": ["src/Query.Generator/"],
+    "checks": ["generator.test"]
+  },
+  "additive-api-contract": {
+    "tests": ["eng/ci/api_contract.py"],
+    "checks": ["database.api"]
+  },
   "generator-driver": {
     "tests": ["tests/Query.Generator/verify.py"],
     "checks": ["generator.test"]
@@ -68,7 +76,7 @@
     "checks": ["pack.api"]
   },
   "public-consumers": {
-    "tests": ["eng/ci/consume.py", "eng/ci/registry.py", ".github/workflows/release.yml"],
+    "tests": ["eng/ci/consume.py", "eng/ci/orm_experience.py", "samples/api/orm-experience/", "eng/ci/registry.py", ".github/workflows/release.yml"],
     "checks": ["consumer.check"]
   },
   "abstraction-tests": {
@@ -194,6 +202,10 @@
   "migrations-api": {
     "tests": ["tests/Data.Migrations/api.py", "src/Data.Migrations/reference/"],
     "checks": ["migrations.api"]
+  },
+  "nativehost-api": {
+    "tests": ["tests/Data.NativeHost/api.py", "src/Data.NativeHost/reference/"],
+    "checks": ["database.api"]
   },
   "relations-api": {
     "tests": ["tests/Orm.Relations/api.py", "src/Orm.Relations/reference/"],

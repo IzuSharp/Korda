@@ -20,7 +20,10 @@ header = 'using Korda.Data; using Korda.Database; class Parent {} class Child {}
 cases = [
     ('wrong_key', 'static void Test(DataSession session, Table<Parent> table, EntityKey<Child> key) { _ = session.FindAsync(table, key); }', ['CS0411']),
     ('wrong_changes', 'static void Test(DataSession session, Table<Parent> table, EntityKey<Parent> key, Changes<Child> changes) { _ = session.UpdateAsync(table, key, changes); }', ['CS0411']),
-    ('wrong_relation', 'static void Test(DataSession session, EntityKey<Child> key, Relation<Parent,Child> relation) { _ = session.LoadRelatedAsync(key, relation); }', ['CS0411']),
+    # The batch overload gives overload resolution a concrete parent-key-list
+    # candidate; both the scalar and batch misuse must still be rejected.
+    ('wrong_relation', 'static void Test(DataSession session, EntityKey<Child> key, Relation<Parent,Child> relation) { _ = session.LoadRelatedAsync(key, relation); }', ['CS1503']),
+    ('wrong_batch_relation', 'static void Test(DataSession session, System.Collections.Generic.IReadOnlyList<EntityKey<Child>> keys, Relation<Parent,Child> relation) { _ = session.LoadRelatedAsync(keys, relation); }', ['CS1503']),
     ('wrong_conflict', 'static void Test(DataSession session, Table<Parent> table, Parent value, ConflictTarget<Child> target, Changes<Parent> changes) { _ = session.UpsertAsync(table, value, target, changes); }', ['CS0411']),
     ('missing_checks', 'static void Test(DataSession session, Table<Parent> table, EntityKey<Parent> key, Changes<Parent> changes) { _ = session.UpdateCheckedAsync(table, key, changes); }', ['CS7036']),
     ('wrong_fk_value', 'static void Test(Column<Child,long?> foreignKey) { _ = new Changes<Child>().Set(foreignKey, "wrong type"); }', ['CS0411']),

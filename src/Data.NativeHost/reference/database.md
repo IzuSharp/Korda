@@ -36,6 +36,38 @@ Korda.Database.DatabaseProvider.Sqlite = 1
 
 **summary:** The serialized sqlite3 provider.
 
+## `F:Korda.Database.MigrationChangeKind.AddColumn`
+
+```csharp
+Korda.Database.MigrationChangeKind.AddColumn = 1
+```
+
+**summary:** Adds one nullable, nongenerated, nonkey column.
+
+## `F:Korda.Database.MigrationChangeKind.CreateTable`
+
+```csharp
+Korda.Database.MigrationChangeKind.CreateTable = 0
+```
+
+**summary:** Creates a new table with explicit columns and primary key.
+
+## `F:Korda.Database.MigrationChangeKind.DropColumn`
+
+```csharp
+Korda.Database.MigrationChangeKind.DropColumn = 2
+```
+
+**summary:** Drops a nonkey column and requires individual developer approval.
+
+## `F:Korda.Database.MigrationChangeKind.DropTable`
+
+```csharp
+Korda.Database.MigrationChangeKind.DropTable = 3
+```
+
+**summary:** Drops a table and requires individual developer approval.
+
 ## `F:Korda.Database.MigrationTransactionMode.NonTransactional`
 
 ```csharp
@@ -834,6 +866,68 @@ public Korda.Query.Query<TEntity> Korda.Database.DataSession.From<TEntity>(Korda
 
 **Inherited type policy:** A cursor and transaction control retain the same session gate. A session is not a concurrent command queue. Every query maps synchronously into owned CLR values and joins cleanup before its public Task completes.
 
+## `M:Korda.Database.DataSession.InTransactionAsync(System.Func{Korda.Database.DataSession,System.Threading.CancellationToken,System.Threading.Tasks.Task},Korda.Database.TransactionOptions,System.Threading.CancellationToken)`
+
+```csharp
+public System.Threading.Tasks.Task Korda.Database.DataSession.InTransactionAsync(System.Func<Korda.Database.DataSession, System.Threading.CancellationToken, System.Threading.Tasks.Task> action, Korda.Database.TransactionOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+```
+
+**summary:** Runs one awaited callback in a new transaction with confirmed commit and independent cleanup.
+
+**param action:** The asynchronous callback, invoked once after BEGIN confirmation.
+
+**param options:** Explicit isolation, recovery identity and independent deadlines; null selects defaults.
+
+**param cancellationToken:** Controls BEGIN, callback operations and pre-dispatch commit admission.
+
+**returns:** A task completing after confirmed commit and local retirement.
+
+**exception:** is null.
+
+**exception:** The session already has an active transaction.
+
+**exception:** Cancellation prevents admission or is observed by the callback.
+
+**exception:** Commit may have happened without trustworthy confirmation.
+
+**exception:** Native admission, execution, commit or cleanup fails.
+
+**remarks:** Ownership, cancellation and original-error preservation are identical to the result-returning overload. The callback awaits all operations and leaves transaction completion to this method.
+
+**Inherited type policy:** A cursor and transaction control retain the same session gate. A session is not a concurrent command queue. Every query maps synchronously into owned CLR values and joins cleanup before its public Task completes.
+
+## `M:Korda.Database.DataSession.InTransactionAsync``1(System.Func{Korda.Database.DataSession,System.Threading.CancellationToken,System.Threading.Tasks.Task{``0}},Korda.Database.TransactionOptions,System.Threading.CancellationToken)`
+
+```csharp
+public System.Threading.Tasks.Task<T> Korda.Database.DataSession.InTransactionAsync<T>(System.Func<Korda.Database.DataSession, System.Threading.CancellationToken, System.Threading.Tasks.Task<T>> action, Korda.Database.TransactionOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+```
+
+**summary:** Runs one awaited callback in a new transaction and returns only after a confirmed commit and cleanup.
+
+**typeparam T:** The owned callback result type.
+
+**param action:** The asynchronous callback, invoked once after BEGIN confirmation.
+
+**param options:** Explicit isolation, recovery identity and independent deadlines; null selects defaults.
+
+**param cancellationToken:** Controls BEGIN, callback operations and pre-dispatch commit admission.
+
+**returns:** The callback result after confirmed commit and local retirement.
+
+**exception:** is null.
+
+**exception:** The session already has an active transaction.
+
+**exception:** Cancellation prevents admission or the callback observes cancellation.
+
+**exception:** Commit may have happened without trustworthy confirmation.
+
+**exception:** Native admission, execution, commit or cleanup fails.
+
+**remarks:** The callback must await its operations and must not commit, roll back or dispose this session's transaction. The session retains its single-command concurrency policy. Callback failure requests rollback through independent native cleanup and preserves the original exception, with a TransactionFailure snapshot. Cancellation after commit admission cannot become a false rollback or cancellation receipt. No callback replay, ambient transaction, nested transaction or savepoint is introduced.
+
+**Inherited type policy:** A cursor and transaction control retain the same session gate. A session is not a concurrent command queue. Every query maps synchronously into owned CLR values and joins cleanup before its public Task completes.
+
 ## `M:Korda.Database.DataSession.InsertAsync``1(Korda.Data.Table{``0},``0,System.Threading.CancellationToken)`
 
 ```csharp
@@ -953,6 +1047,38 @@ public System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<TChi
 **exception:** Cancellation is confirmed after native cleanup.
 
 **remarks:** NULL foreign-key components match no parent. Additional tenant filtering must be explicit in a Fluent query.
+
+**Inherited type policy:** A cursor and transaction control retain the same session gate. A session is not a concurrent command queue. Every query maps synchronously into owned CLR values and joins cleanup before its public Task completes.
+
+## `M:Korda.Database.DataSession.LoadRelatedAsync``2(System.Collections.Generic.IReadOnlyList{Korda.Data.EntityKey{``0}},Korda.Data.Relation{``0,``1},System.Threading.CancellationToken)`
+
+```csharp
+public System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<System.Collections.Generic.IReadOnlyList<TChild>>> Korda.Database.DataSession.LoadRelatedAsync<TParent, TChild>(System.Collections.Generic.IReadOnlyList<Korda.Data.EntityKey<TParent>> parentKeys, Korda.Data.Relation<TParent, TChild> relation, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) where TParent : class where TChild : class
+```
+
+**summary:** Loads one bounded parent batch in one native SQL execution and returns index-aligned child groups.
+
+**typeparam TParent:** The declared parent entity class.
+
+**typeparam TChild:** The statically materialized child class.
+
+**param parentKeys:** Complete immutable keys in page order; repeated keys retain separate result positions.
+
+**param relation:** The complete immutable primary-key/foreign-key mapping.
+
+**param cancellationToken:** Requests cancellation and waits for actual cursor retirement.
+
+**returns:** One owned child list per input key, including empty lists; no child order is implied.
+
+**exception:** An argument or key is null.
+
+**exception:** A key is incomplete, foreign or incompatible with the relation.
+
+**exception:** The input batch, total result, native query or provider exceeds its admitted limits.
+
+**exception:** Cancellation is observed with cursor cleanup.
+
+**remarks:** The collection is snapshotted before dispatch and may contain at most MaxBatchRows keys. Empty input executes no SQL. Each nonempty input becomes one parameterized native UNION ALL statement; provider preparation and protocol exchanges are separate from SQL execution count. Native predicates preserve composite-key and collation semantics. One result stream bounds all groups together, including duplicate keys; there is no hidden query per parent, parent-existence check, retry or automatic split.
 
 **Inherited type policy:** A cursor and transaction control retain the same session gate. A session is not a concurrent command queue. Every query maps synchronously into owned CLR values and joins cleanup before its public Task completes.
 
@@ -1272,6 +1398,34 @@ public Korda.Database.DataSourceBuilder Korda.Database.DataSourceBuilder.WithNam
 
 **Inherited type policy:** Configuration snapshots values. Build negotiates the packaged module and creates a lazy native pool; it opens no database connection. Independent builds create independent source generations.
 
+## `M:Korda.Database.DatabaseAdministration.DraftMigrationAsync(Korda.Database.DatabaseModel,Korda.Database.DatabaseModel,System.Threading.CancellationToken)`
+
+```csharp
+public System.Threading.Tasks.Task<Korda.Database.MigrationDraft> Korda.Database.DatabaseAdministration.DraftMigrationAsync(Korda.Database.DatabaseModel previous, Korda.Database.DatabaseModel current, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+```
+
+**summary:** Compiles an explicit snapshot difference to a reviewable native SQL draft without opening a connection.
+
+**param previous:** The versioned previously applied model snapshot; use Empty for a new database.
+
+**param current:** The desired explicitly declared model snapshot.
+
+**param cancellationToken:** Requests cancellation while bounded native compilation retires.
+
+**returns:** A detached draft; no SQL is executed and no migration history is read.
+
+**exception:** A model is null.
+
+**exception:** A model or difference is unsupported, ambiguous or exceeds source limits.
+
+**exception:** The loaded native module lacks schema draft support.
+
+**exception:** Cancellation is confirmed after native retirement.
+
+**remarks:** Supports table creation, nullable column addition and explicitly approved drops. Type, key, nullability and other existing-column alterations reject with the offending table/column; use reviewed explicit SQL for backfills, conversions, defaults and provider-specific rebuilds. Source creation never calls this method.
+
+**Inherited type policy:** Migration and catalog operations use one independent administrative connection at a time per source, with bounded waiting and closure before task retirement. Draft compilation opens no connection. None uses a request session or transaction. Result counts, strings and nested columns share source buffering and field limits.
+
 ## `M:Korda.Database.DatabaseAdministration.GetMigrationStatusAsync(Korda.Database.MigrationBundle,System.Threading.CancellationToken)`
 
 ```csharp
@@ -1292,7 +1446,7 @@ public System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Kord
 
 **exception:** Cancellation is confirmed after cleanup.
 
-**Inherited type policy:** One independent administrative connection executes at a time per source, with bounded waiting. Every outcome closes that connection before task retirement. It never uses a request session or request transaction. Result counts, strings and nested columns are charged to source buffering and field limits.
+**Inherited type policy:** Migration and catalog operations use one independent administrative connection at a time per source, with bounded waiting and closure before task retirement. Draft compilation opens no connection. None uses a request session or transaction. Result counts, strings and nested columns share source buffering and field limits.
 
 ## `M:Korda.Database.DatabaseAdministration.GetTablesAsync(System.String,System.Threading.CancellationToken)`
 
@@ -1316,7 +1470,7 @@ public System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Kord
 
 **remarks:** This reads catalog metadata only. It performs no schema difference inference or automatic model creation.
 
-**Inherited type policy:** One independent administrative connection executes at a time per source, with bounded waiting. Every outcome closes that connection before task retirement. It never uses a request session or request transaction. Result counts, strings and nested columns are charged to source buffering and field limits.
+**Inherited type policy:** Migration and catalog operations use one independent administrative connection at a time per source, with bounded waiting and closure before task retirement. Draft compilation opens no connection. None uses a request session or transaction. Result counts, strings and nested columns share source buffering and field limits.
 
 ## `M:Korda.Database.DatabaseAdministration.MigrateAsync(Korda.Database.MigrationBundle,Korda.Database.MigrationOptions,System.Threading.CancellationToken)`
 
@@ -1344,7 +1498,7 @@ public System.Threading.Tasks.Task<Korda.Database.MigrationReport> Korda.Databas
 
 **remarks:** PostgreSQL commits each transactional entry independently. SQLite commits the entire selected batch in one tracked IMMEDIATE transaction. Nontransactional PostgreSQL preserves partial effects and an applying phase; only a new explicit identical call may resume a replay-safe script. Cancellation or connection closure never proves that a previously dispatched business commit did not happen.
 
-**Inherited type policy:** One independent administrative connection executes at a time per source, with bounded waiting. Every outcome closes that connection before task retirement. It never uses a request session or request transaction. Result counts, strings and nested columns are charged to source buffering and field limits.
+**Inherited type policy:** Migration and catalog operations use one independent administrative connection at a time per source, with bounded waiting and closure before task retirement. Draft compilation opens no connection. None uses a request session or transaction. Result counts, strings and nested columns share source buffering and field limits.
 
 ## `M:Korda.Database.DatabaseAdministration.ValidateMigrationsAsync(Korda.Database.MigrationBundle,System.Threading.CancellationToken)`
 
@@ -1366,7 +1520,7 @@ public System.Threading.Tasks.Task Korda.Database.DatabaseAdministration.Validat
 
 **exception:** Cancellation is confirmed after cleanup.
 
-**Inherited type policy:** One independent administrative connection executes at a time per source, with bounded waiting. Every outcome closes that connection before task retirement. It never uses a request session or request transaction. Result counts, strings and nested columns are charged to source buffering and field limits.
+**Inherited type policy:** Migration and catalog operations use one independent administrative connection at a time per source, with bounded waiting and closure before task retirement. Draft compilation opens no connection. None uses a request session or transaction. Result counts, strings and nested columns share source buffering and field limits.
 
 ## `M:Korda.Database.DatabaseCapabilities.Supports(System.String)`
 
@@ -1463,6 +1617,58 @@ public Korda.Database.DatabaseLimits Korda.Database.DatabaseLimits.<Clone>$()
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** These are admission and encoded-byte budgets, not measurements of CLR heap or process memory. Provider hard limits also apply. Increasing a value never selects an unbounded fallback.
+
+## `M:Korda.Database.DatabaseModel.Add``1(Korda.Data.Table{``0})`
+
+```csharp
+public Korda.Database.DatabaseModel Korda.Database.DatabaseModel.Add<TEntity>(Korda.Data.Table<TEntity> table) where TEntity : class
+```
+
+**summary:** Returns a new snapshot containing one additional immutable table.
+
+**typeparam TEntity:** The ordinary application entity type.
+
+**param table:** A generated or manually declared table.
+
+**returns:** A snapshot independent of this instance and future builder changes.
+
+**exception:** is null.
+
+**exception:** The exact store name repeats or the finite snapshot budget is exceeded.
+
+**Inherited type policy:** Construction and persistence perform no native load or database I/O. The snapshot contains store names, codec policies and declared key/generated flags, but no inferred indexes, foreign keys, defaults or backfills. Provider validation occurs when a draft is requested. Keep the previously applied snapshot in source control.
+
+## `M:Korda.Database.DatabaseModel.Parse(System.String)`
+
+```csharp
+public static Korda.Database.DatabaseModel Korda.Database.DatabaseModel.Parse(string json)
+```
+
+**summary:** Reads a persisted version-one snapshot without provider access or reflection.
+
+**param json:** A complete snapshot previously produced by .
+
+**returns:** An immutable copy of its embedded table metadata.
+
+**exception:** is null.
+
+**exception:** The JSON, version, names or finite byte/table limits are invalid.
+
+**remarks:** Provider-specific type checks and complete native model validation occur before draft execution. Formatting whitespace is normalized; reordering canonical table properties is not supported.
+
+**Inherited type policy:** Construction and persistence perform no native load or database I/O. The snapshot contains store names, codec policies and declared key/generated flags, but no inferred indexes, foreign keys, defaults or backfills. Provider validation occurs when a draft is requested. Keep the previously applied snapshot in source control.
+
+## `M:Korda.Database.DatabaseModel.ToJson`
+
+```csharp
+public string Korda.Database.DatabaseModel.ToJson()
+```
+
+**summary:** Serializes this snapshot as version-one JSON with canonical embedded table records.
+
+**returns:** Persistable Unicode JSON; this operation does not inspect the database.
+
+**Inherited type policy:** Construction and persistence perform no native load or database I/O. The snapshot contains store names, codec policies and declared key/generated flags, but no inferred indexes, foreign keys, defaults or backfills. Provider validation occurs when a draft is requested. Keep the previously applied snapshot in source control.
 
 ## `M:Korda.Database.DatabaseProvider.#ctor`
 
@@ -1591,6 +1797,144 @@ public Korda.Database.MigrationBundle.MigrationBundle(Korda.Database.DatabasePro
 **remarks:** The input collection may be changed after return; this instance retains its own snapshot.
 
 **Inherited type policy:** Construction performs no native load or database I/O. Its SHA-256 identity covers the canonical kind12 provider and entry sequence before the hash field is added. Each entry separately contains SQL SHA-256; the native ledger preserves the existing SQLx-compatible SHA-384 checksum. Scripts must be trusted deployment artifacts.
+
+## `M:Korda.Database.MigrationChange.#ctor(System.String,Korda.Database.MigrationChangeKind,System.String,System.String,System.String,System.String,System.Boolean)`
+
+```csharp
+public Korda.Database.MigrationChange.MigrationChange(string Id, Korda.Database.MigrationChangeKind Kind, string? Schema, string Table, string? Column, string Sql, bool IsDestructive)
+```
+
+**summary:** One detached, immutable, reviewable native schema change.
+
+**remarks:** This record retains bounded managed strings and no native resource. Its SQL has not executed; the owning draft enforces explicit per-change destructive approval before conversion to a migration.
+
+**param Id:** A stable digest of this exact provider-specific operation.
+
+**param Kind:** The explicitly supported change kind.
+
+**param Schema:** The exact schema, or null for the default schema.
+
+**param Table:** The exact table name.
+
+**param Column:** The exact column, or null for a table operation.
+
+**param Sql:** Provider SQL for review, with identifiers safely quoted by the native dialect.
+
+**param IsDestructive:** Whether converting the draft requires this exact change ID's approval.
+
+**Inherited type policy:** This record retains bounded managed strings and no native resource. Its SQL has not executed; the owning draft enforces explicit per-change destructive approval before conversion to a migration.
+
+## `M:Korda.Database.MigrationChange.Deconstruct(System.String@,Korda.Database.MigrationChangeKind@,System.String@,System.String@,System.String@,System.String@,System.Boolean@)`
+
+```csharp
+public void Korda.Database.MigrationChange.Deconstruct(out string Id, out Korda.Database.MigrationChangeKind Kind, out string? Schema, out string Table, out string? Column, out string Sql, out bool IsDestructive)
+```
+
+Compiler-generated record/delegate member; inherits the documented type semantics.
+
+**Inherited type policy:** This record retains bounded managed strings and no native resource. Its SQL has not executed; the owning draft enforces explicit per-change destructive approval before conversion to a migration.
+
+## `M:Korda.Database.MigrationChange.Equals(Korda.Database.MigrationChange)`
+
+```csharp
+public bool Korda.Database.MigrationChange.Equals(Korda.Database.MigrationChange? other)
+```
+
+Compiler-generated record/delegate member; inherits the documented type semantics.
+
+**Inherited type policy:** This record retains bounded managed strings and no native resource. Its SQL has not executed; the owning draft enforces explicit per-change destructive approval before conversion to a migration.
+
+## `M:Korda.Database.MigrationChange.Equals(System.Object)`
+
+```csharp
+public override bool Korda.Database.MigrationChange.Equals(object? obj)
+```
+
+Compiler-generated record/delegate member; inherits the documented type semantics.
+
+**Inherited type policy:** This record retains bounded managed strings and no native resource. Its SQL has not executed; the owning draft enforces explicit per-change destructive approval before conversion to a migration.
+
+## `M:Korda.Database.MigrationChange.GetHashCode`
+
+```csharp
+public override int Korda.Database.MigrationChange.GetHashCode()
+```
+
+Compiler-generated record/delegate member; inherits the documented type semantics.
+
+**Inherited type policy:** This record retains bounded managed strings and no native resource. Its SQL has not executed; the owning draft enforces explicit per-change destructive approval before conversion to a migration.
+
+## `M:Korda.Database.MigrationChange.ToString`
+
+```csharp
+public override string Korda.Database.MigrationChange.ToString()
+```
+
+Compiler-generated record/delegate member; inherits the documented type semantics.
+
+**Inherited type policy:** This record retains bounded managed strings and no native resource. Its SQL has not executed; the owning draft enforces explicit per-change destructive approval before conversion to a migration.
+
+## `M:Korda.Database.MigrationChange.op_Equality(Korda.Database.MigrationChange,Korda.Database.MigrationChange)`
+
+```csharp
+public static bool Korda.Database.MigrationChange.operator ==(Korda.Database.MigrationChange? left, Korda.Database.MigrationChange? right)
+```
+
+Compiler-generated record/delegate member; inherits the documented type semantics.
+
+**Inherited type policy:** This record retains bounded managed strings and no native resource. Its SQL has not executed; the owning draft enforces explicit per-change destructive approval before conversion to a migration.
+
+## `M:Korda.Database.MigrationChange.op_Inequality(Korda.Database.MigrationChange,Korda.Database.MigrationChange)`
+
+```csharp
+public static bool Korda.Database.MigrationChange.operator !=(Korda.Database.MigrationChange? left, Korda.Database.MigrationChange? right)
+```
+
+Compiler-generated record/delegate member; inherits the documented type semantics.
+
+**Inherited type policy:** This record retains bounded managed strings and no native resource. Its SQL has not executed; the owning draft enforces explicit per-change destructive approval before conversion to a migration.
+
+## `M:Korda.Database.MigrationChange.{Clone}$`
+
+```csharp
+public Korda.Database.MigrationChange Korda.Database.MigrationChange.<Clone>$()
+```
+
+Compiler-generated record/delegate member; inherits the documented type semantics.
+
+**Inherited type policy:** This record retains bounded managed strings and no native resource. Its SQL has not executed; the owning draft enforces explicit per-change destructive approval before conversion to a migration.
+
+## `M:Korda.Database.MigrationChangeKind.#ctor`
+
+```csharp
+public Korda.Database.MigrationChangeKind.MigrationChangeKind()
+```
+
+Compiler-generated record/delegate member; inherits the documented type semantics.
+
+## `M:Korda.Database.MigrationDraft.ToMigration(System.Int64,System.String,System.Collections.Generic.IReadOnlyCollection{System.String})`
+
+```csharp
+public Korda.Database.Migration Korda.Database.MigrationDraft.ToMigration(long version, string description, System.Collections.Generic.IReadOnlyCollection<string>? approvedDestructiveChanges = null)
+```
+
+**summary:** Converts reviewed SQL to an explicit transactional migration after per-change approvals.
+
+**param version:** A positive deployment version; bundle ordering is checked by MigrationBundle.
+
+**param description:** A nonempty diagnostic description.
+
+**param approvedDestructiveChanges:** Every destructive change ID chosen by the developer; null approves none.
+
+**returns:** A trusted migration for this draft's provider, ready for explicit bundle construction.
+
+**exception:** An approval is unknown or repeated, or version/description is invalid.
+
+**exception:** The draft is empty or a destructive change lacks explicit approval.
+
+**remarks:** All supported changes are included. To omit one, revise the desired model and generate another draft. Unsupported alteration/default/backfill semantics require an independently reviewed handwritten migration.
+
+**Inherited type policy:** The draft owns read-only managed values and no native lease. Review SQL and approve every destructive change ID before converting it to a trusted migration. Applying the resulting migration is a separate explicit call.
 
 ## `M:Korda.Database.MigrationOptions.#ctor`
 
@@ -1978,6 +2322,228 @@ Compiler-generated record/delegate member; inherits the documented type semantic
 
 **Inherited type policy:** This detached immutable record retains its names and type strings. Each column counts toward the same source result-row and encoded-byte limits as its parent table.
 
+## `M:Korda.Database.SchemaColumnHint.#ctor(System.String,System.String,System.String,System.String,System.String)`
+
+```csharp
+public Korda.Database.SchemaColumnHint.SchemaColumnHint(string ColumnName, string ClrType, string? CodecDeclaringType = null, string? CodecMember = null, string? PropertyName = null)
+```
+
+**summary:** An explicit CLR/codec interpretation for one catalog column.
+
+**param ColumnName:** The exact catalog column to map.
+
+**param ClrType:** An unqualified built-in or qualified CLR type name, without nullability syntax.
+
+**param CodecDeclaringType:** The optional qualified type exposing the configured nonnullable ValueCodec.
+
+**param CodecMember:** Its accessible static field/property; required together with CodecDeclaringType.
+
+**param PropertyName:** An optional valid C# member name; null retains a valid column name or a deterministic fallback.
+
+**remarks:** Configured decimal, JSON, custom IDs and ambiguous provider types need an explicit codec member. The consuming compiler checks its exact type and accessibility. Nullability comes from the catalog.
+
+**Inherited type policy:** Configured decimal, JSON, custom IDs and ambiguous provider types need an explicit codec member. The consuming compiler checks its exact type and accessibility. Nullability comes from the catalog.
+
+## `M:Korda.Database.SchemaColumnHint.Deconstruct(System.String@,System.String@,System.String@,System.String@,System.String@)`
+
+```csharp
+public void Korda.Database.SchemaColumnHint.Deconstruct(out string ColumnName, out string ClrType, out string? CodecDeclaringType, out string? CodecMember, out string? PropertyName)
+```
+
+Compiler-generated record/delegate member; inherits the documented type semantics.
+
+**Inherited type policy:** Configured decimal, JSON, custom IDs and ambiguous provider types need an explicit codec member. The consuming compiler checks its exact type and accessibility. Nullability comes from the catalog.
+
+## `M:Korda.Database.SchemaColumnHint.Equals(Korda.Database.SchemaColumnHint)`
+
+```csharp
+public bool Korda.Database.SchemaColumnHint.Equals(Korda.Database.SchemaColumnHint? other)
+```
+
+Compiler-generated record/delegate member; inherits the documented type semantics.
+
+**Inherited type policy:** Configured decimal, JSON, custom IDs and ambiguous provider types need an explicit codec member. The consuming compiler checks its exact type and accessibility. Nullability comes from the catalog.
+
+## `M:Korda.Database.SchemaColumnHint.Equals(System.Object)`
+
+```csharp
+public override bool Korda.Database.SchemaColumnHint.Equals(object? obj)
+```
+
+Compiler-generated record/delegate member; inherits the documented type semantics.
+
+**Inherited type policy:** Configured decimal, JSON, custom IDs and ambiguous provider types need an explicit codec member. The consuming compiler checks its exact type and accessibility. Nullability comes from the catalog.
+
+## `M:Korda.Database.SchemaColumnHint.GetHashCode`
+
+```csharp
+public override int Korda.Database.SchemaColumnHint.GetHashCode()
+```
+
+Compiler-generated record/delegate member; inherits the documented type semantics.
+
+**Inherited type policy:** Configured decimal, JSON, custom IDs and ambiguous provider types need an explicit codec member. The consuming compiler checks its exact type and accessibility. Nullability comes from the catalog.
+
+## `M:Korda.Database.SchemaColumnHint.ToString`
+
+```csharp
+public override string Korda.Database.SchemaColumnHint.ToString()
+```
+
+Compiler-generated record/delegate member; inherits the documented type semantics.
+
+**Inherited type policy:** Configured decimal, JSON, custom IDs and ambiguous provider types need an explicit codec member. The consuming compiler checks its exact type and accessibility. Nullability comes from the catalog.
+
+## `M:Korda.Database.SchemaColumnHint.op_Equality(Korda.Database.SchemaColumnHint,Korda.Database.SchemaColumnHint)`
+
+```csharp
+public static bool Korda.Database.SchemaColumnHint.operator ==(Korda.Database.SchemaColumnHint? left, Korda.Database.SchemaColumnHint? right)
+```
+
+Compiler-generated record/delegate member; inherits the documented type semantics.
+
+**Inherited type policy:** Configured decimal, JSON, custom IDs and ambiguous provider types need an explicit codec member. The consuming compiler checks its exact type and accessibility. Nullability comes from the catalog.
+
+## `M:Korda.Database.SchemaColumnHint.op_Inequality(Korda.Database.SchemaColumnHint,Korda.Database.SchemaColumnHint)`
+
+```csharp
+public static bool Korda.Database.SchemaColumnHint.operator !=(Korda.Database.SchemaColumnHint? left, Korda.Database.SchemaColumnHint? right)
+```
+
+Compiler-generated record/delegate member; inherits the documented type semantics.
+
+**Inherited type policy:** Configured decimal, JSON, custom IDs and ambiguous provider types need an explicit codec member. The consuming compiler checks its exact type and accessibility. Nullability comes from the catalog.
+
+## `M:Korda.Database.SchemaColumnHint.{Clone}$`
+
+```csharp
+public Korda.Database.SchemaColumnHint Korda.Database.SchemaColumnHint.<Clone>$()
+```
+
+Compiler-generated record/delegate member; inherits the documented type semantics.
+
+**Inherited type policy:** Configured decimal, JSON, custom IDs and ambiguous provider types need an explicit codec member. The consuming compiler checks its exact type and accessibility. Nullability comes from the catalog.
+
+## `M:Korda.Database.SchemaScaffoldOptions.#ctor(System.String,System.String)`
+
+```csharp
+public Korda.Database.SchemaScaffoldOptions.SchemaScaffoldOptions(string Namespace, string TypeName)
+```
+
+**summary:** Explicit decisions for generating one ordinary C# entity from catalog v1.
+
+**param Namespace:** The namespace for emitted source, using ordinary identifier segments.
+
+**param TypeName:** The entity class name.
+
+**remarks:** Catalog v1 omits ordered composite keys, generated flags and defaults. Supply the exact generated column list, including an explicit empty list when none are generated, and a complete composite-key order.
+
+**Inherited type policy:** Catalog v1 omits ordered composite keys, generated flags and defaults. Supply the exact generated column list, including an explicit empty list when none are generated, and a complete composite-key order.
+
+## `M:Korda.Database.SchemaScaffoldOptions.Deconstruct(System.String@,System.String@)`
+
+```csharp
+public void Korda.Database.SchemaScaffoldOptions.Deconstruct(out string Namespace, out string TypeName)
+```
+
+Compiler-generated record/delegate member; inherits the documented type semantics.
+
+**Inherited type policy:** Catalog v1 omits ordered composite keys, generated flags and defaults. Supply the exact generated column list, including an explicit empty list when none are generated, and a complete composite-key order.
+
+## `M:Korda.Database.SchemaScaffoldOptions.Equals(Korda.Database.SchemaScaffoldOptions)`
+
+```csharp
+public bool Korda.Database.SchemaScaffoldOptions.Equals(Korda.Database.SchemaScaffoldOptions? other)
+```
+
+Compiler-generated record/delegate member; inherits the documented type semantics.
+
+**Inherited type policy:** Catalog v1 omits ordered composite keys, generated flags and defaults. Supply the exact generated column list, including an explicit empty list when none are generated, and a complete composite-key order.
+
+## `M:Korda.Database.SchemaScaffoldOptions.Equals(System.Object)`
+
+```csharp
+public override bool Korda.Database.SchemaScaffoldOptions.Equals(object? obj)
+```
+
+Compiler-generated record/delegate member; inherits the documented type semantics.
+
+**Inherited type policy:** Catalog v1 omits ordered composite keys, generated flags and defaults. Supply the exact generated column list, including an explicit empty list when none are generated, and a complete composite-key order.
+
+## `M:Korda.Database.SchemaScaffoldOptions.GetHashCode`
+
+```csharp
+public override int Korda.Database.SchemaScaffoldOptions.GetHashCode()
+```
+
+Compiler-generated record/delegate member; inherits the documented type semantics.
+
+**Inherited type policy:** Catalog v1 omits ordered composite keys, generated flags and defaults. Supply the exact generated column list, including an explicit empty list when none are generated, and a complete composite-key order.
+
+## `M:Korda.Database.SchemaScaffoldOptions.ToString`
+
+```csharp
+public override string Korda.Database.SchemaScaffoldOptions.ToString()
+```
+
+Compiler-generated record/delegate member; inherits the documented type semantics.
+
+**Inherited type policy:** Catalog v1 omits ordered composite keys, generated flags and defaults. Supply the exact generated column list, including an explicit empty list when none are generated, and a complete composite-key order.
+
+## `M:Korda.Database.SchemaScaffoldOptions.op_Equality(Korda.Database.SchemaScaffoldOptions,Korda.Database.SchemaScaffoldOptions)`
+
+```csharp
+public static bool Korda.Database.SchemaScaffoldOptions.operator ==(Korda.Database.SchemaScaffoldOptions? left, Korda.Database.SchemaScaffoldOptions? right)
+```
+
+Compiler-generated record/delegate member; inherits the documented type semantics.
+
+**Inherited type policy:** Catalog v1 omits ordered composite keys, generated flags and defaults. Supply the exact generated column list, including an explicit empty list when none are generated, and a complete composite-key order.
+
+## `M:Korda.Database.SchemaScaffoldOptions.op_Inequality(Korda.Database.SchemaScaffoldOptions,Korda.Database.SchemaScaffoldOptions)`
+
+```csharp
+public static bool Korda.Database.SchemaScaffoldOptions.operator !=(Korda.Database.SchemaScaffoldOptions? left, Korda.Database.SchemaScaffoldOptions? right)
+```
+
+Compiler-generated record/delegate member; inherits the documented type semantics.
+
+**Inherited type policy:** Catalog v1 omits ordered composite keys, generated flags and defaults. Supply the exact generated column list, including an explicit empty list when none are generated, and a complete composite-key order.
+
+## `M:Korda.Database.SchemaScaffoldOptions.{Clone}$`
+
+```csharp
+public Korda.Database.SchemaScaffoldOptions Korda.Database.SchemaScaffoldOptions.<Clone>$()
+```
+
+Compiler-generated record/delegate member; inherits the documented type semantics.
+
+**Inherited type policy:** Catalog v1 omits ordered composite keys, generated flags and defaults. Supply the exact generated column list, including an explicit empty list when none are generated, and a complete composite-key order.
+
+## `M:Korda.Database.SchemaScaffolder.Generate(Korda.Database.DatabaseProvider,Korda.Database.SchemaTable,Korda.Database.SchemaScaffoldOptions)`
+
+```csharp
+public static Korda.Database.SchemaScaffoldResult Korda.Database.SchemaScaffolder.Generate(Korda.Database.DatabaseProvider provider, Korda.Database.SchemaTable table, Korda.Database.SchemaScaffoldOptions options)
+```
+
+**summary:** Generates one ordinary class using the public static-mapping attributes.
+
+**param provider:** The provider that produced the catalog record.
+
+**param table:** The detached catalog table, including its exact columns.
+
+**param options:** Explicit names, generated flags, key order and type/codec hints.
+
+**returns:** Compilable source after supplied custom symbols are resolved, plus explicit catalog limitations.
+
+**exception:** A required argument or collection is null.
+
+**exception:** Names, keys, hints, missing generated decisions or finite budgets are invalid.
+
+**remarks:** Nullable primary keys reject because the static model contract cannot represent them. SQLite storage classes map to their literal CLR storage types by default; JSON, dates, custom IDs and money require hints.
+
+**Inherited type policy:** This synchronous pure tool performs no database I/O, compilation, native loading or schema alteration. It does not reconstruct migrations or infer absent catalog metadata. Generated source must be reviewed and compiled.
+
 ## `M:Korda.Database.SchemaTable.#ctor(System.String,System.String,System.Collections.Generic.IReadOnlyList{Korda.Database.SchemaColumn})`
 
 ```csharp
@@ -2075,6 +2641,124 @@ public Korda.Database.SchemaTable Korda.Database.SchemaTable.<Clone>$()
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** Administration returns a detached read-only column list with no native lease. Table names and all nested columns share the source buffering budget; no further database access is lazy.
+
+## `M:Korda.Database.TransactionFailure.#ctor(Korda.Database.TransactionOutcome,System.Boolean,Korda.Database.DatabaseCloseResult,System.String)`
+
+```csharp
+public Korda.Database.TransactionFailure.TransactionFailure(Korda.Database.TransactionOutcome Outcome, bool CommitAttempted, Korda.Database.DatabaseCloseResult Cleanup, string? RecoveryKey)
+```
+
+**summary:** An immutable transaction callback failure observation, retained after native cleanup.
+
+**param Outcome:** Observed durable-effect knowledge; Unknown never implies rollback.
+
+**param CommitAttempted:** Whether commit crossed the conservative native dispatch boundary.
+
+**param Cleanup:** The native cleanup observation, independent from transaction effects.
+
+**param RecoveryKey:** The optional application recovery identity.
+
+**remarks:** The original exception retains this snapshot without replacement or automatic retry. It owns no native resource and remains usable after the source and session have been disposed. Snapshot retrieval also works when a custom exception's Data dictionary rejects optional enrichment.
+
+**Inherited type policy:** The original exception retains this snapshot without replacement or automatic retry. It owns no native resource and remains usable after the source and session have been disposed. Snapshot retrieval also works when a custom exception's Data dictionary rejects optional enrichment.
+
+## `M:Korda.Database.TransactionFailure.Deconstruct(Korda.Database.TransactionOutcome@,System.Boolean@,Korda.Database.DatabaseCloseResult@,System.String@)`
+
+```csharp
+public void Korda.Database.TransactionFailure.Deconstruct(out Korda.Database.TransactionOutcome Outcome, out bool CommitAttempted, out Korda.Database.DatabaseCloseResult Cleanup, out string? RecoveryKey)
+```
+
+Compiler-generated record/delegate member; inherits the documented type semantics.
+
+**Inherited type policy:** The original exception retains this snapshot without replacement or automatic retry. It owns no native resource and remains usable after the source and session have been disposed. Snapshot retrieval also works when a custom exception's Data dictionary rejects optional enrichment.
+
+## `M:Korda.Database.TransactionFailure.Equals(Korda.Database.TransactionFailure)`
+
+```csharp
+public bool Korda.Database.TransactionFailure.Equals(Korda.Database.TransactionFailure? other)
+```
+
+Compiler-generated record/delegate member; inherits the documented type semantics.
+
+**Inherited type policy:** The original exception retains this snapshot without replacement or automatic retry. It owns no native resource and remains usable after the source and session have been disposed. Snapshot retrieval also works when a custom exception's Data dictionary rejects optional enrichment.
+
+## `M:Korda.Database.TransactionFailure.Equals(System.Object)`
+
+```csharp
+public override bool Korda.Database.TransactionFailure.Equals(object? obj)
+```
+
+Compiler-generated record/delegate member; inherits the documented type semantics.
+
+**Inherited type policy:** The original exception retains this snapshot without replacement or automatic retry. It owns no native resource and remains usable after the source and session have been disposed. Snapshot retrieval also works when a custom exception's Data dictionary rejects optional enrichment.
+
+## `M:Korda.Database.TransactionFailure.GetHashCode`
+
+```csharp
+public override int Korda.Database.TransactionFailure.GetHashCode()
+```
+
+Compiler-generated record/delegate member; inherits the documented type semantics.
+
+**Inherited type policy:** The original exception retains this snapshot without replacement or automatic retry. It owns no native resource and remains usable after the source and session have been disposed. Snapshot retrieval also works when a custom exception's Data dictionary rejects optional enrichment.
+
+## `M:Korda.Database.TransactionFailure.ToString`
+
+```csharp
+public override string Korda.Database.TransactionFailure.ToString()
+```
+
+Compiler-generated record/delegate member; inherits the documented type semantics.
+
+**Inherited type policy:** The original exception retains this snapshot without replacement or automatic retry. It owns no native resource and remains usable after the source and session have been disposed. Snapshot retrieval also works when a custom exception's Data dictionary rejects optional enrichment.
+
+## `M:Korda.Database.TransactionFailure.TryGet(System.Exception,Korda.Database.TransactionFailure@)`
+
+```csharp
+public static bool Korda.Database.TransactionFailure.TryGet(System.Exception exception, [System.Diagnostics.CodeAnalysis.NotNullWhenAttribute(true)] out Korda.Database.TransactionFailure? failure)
+```
+
+**summary:** Reads only the exact callback-failure observation on the supplied exception.
+
+**param exception:** The original exception; inner exceptions are not traversed.
+
+**param failure:** The retained snapshot when present, otherwise null.
+
+**returns:** True when this exception carries a transaction callback snapshot.
+
+**exception:** is null.
+
+**Inherited type policy:** The original exception retains this snapshot without replacement or automatic retry. It owns no native resource and remains usable after the source and session have been disposed. Snapshot retrieval also works when a custom exception's Data dictionary rejects optional enrichment.
+
+## `M:Korda.Database.TransactionFailure.op_Equality(Korda.Database.TransactionFailure,Korda.Database.TransactionFailure)`
+
+```csharp
+public static bool Korda.Database.TransactionFailure.operator ==(Korda.Database.TransactionFailure? left, Korda.Database.TransactionFailure? right)
+```
+
+Compiler-generated record/delegate member; inherits the documented type semantics.
+
+**Inherited type policy:** The original exception retains this snapshot without replacement or automatic retry. It owns no native resource and remains usable after the source and session have been disposed. Snapshot retrieval also works when a custom exception's Data dictionary rejects optional enrichment.
+
+## `M:Korda.Database.TransactionFailure.op_Inequality(Korda.Database.TransactionFailure,Korda.Database.TransactionFailure)`
+
+```csharp
+public static bool Korda.Database.TransactionFailure.operator !=(Korda.Database.TransactionFailure? left, Korda.Database.TransactionFailure? right)
+```
+
+Compiler-generated record/delegate member; inherits the documented type semantics.
+
+**Inherited type policy:** The original exception retains this snapshot without replacement or automatic retry. It owns no native resource and remains usable after the source and session have been disposed. Snapshot retrieval also works when a custom exception's Data dictionary rejects optional enrichment.
+
+## `M:Korda.Database.TransactionFailure.{Clone}$`
+
+```csharp
+public Korda.Database.TransactionFailure Korda.Database.TransactionFailure.<Clone>$()
+```
+
+Compiler-generated record/delegate member; inherits the documented type semantics.
+
+**Inherited type policy:** The original exception retains this snapshot without replacement or automatic retry. It owns no native resource and remains usable after the source and session have been disposed. Snapshot retrieval also works when a custom exception's Data dictionary rejects optional enrichment.
 
 ## `M:Korda.Query.CommonTable`1.Create(Korda.Data.Table{`0},Korda.Query.QuerySelection{`0},System.Boolean)`
 
@@ -2332,6 +3016,38 @@ public Korda.Data.ResultColumn<TValue> Korda.Query.ProjectionBuilder<T>.Add<TVal
 
 **Inherited type policy:** Fields must come from its exact live query. Build freezes field order, unique names, codec/nullability and the direct materializer; later Add or Build rejects. RowReader validates the full shape before the callback, and escaping DTO values own their data.
 
+## `M:Korda.Query.ProjectionBuilder`1.Add``1(Korda.Query.SqlExpression{``0},System.String,Korda.Data.ValueCodec{``0})`
+
+```csharp
+public Korda.Data.ResultColumn<TValue> Korda.Query.ProjectionBuilder<T>.Add<TValue>(Korda.Query.SqlExpression<TValue> expression, string alias, Korda.Data.ValueCodec<TValue> codec)
+```
+
+**summary:** Adds a same-query scalar after checking its exact declared DTO codec policy.
+
+**inheritdoc:**
+
+**param expression:** The compatible native scalar owned by the same live query.
+
+**param alias:** The unique exact SQL/result alias.
+
+**param codec:** The expected logical codec, configuration and SQL nullability used by the DTO reader.
+
+**typeparam TValue:** The statically known property type.
+
+**returns:** The result token associated with this projection builder and explicit reader policy.
+
+**exception:** The expected codec is null.
+
+**exception:** The expression belongs elsewhere or differs in codec, configuration or nullability.
+
+**exception:** The owner or builder is in an invalid state.
+
+**exception:** The native query owner has closed admission.
+
+**exception:** Native capability or finite resource limits reject the operation.
+
+**Inherited type policy:** Fields must come from its exact live query. Build freezes field order, unique names, codec/nullability and the direct materializer; later Add or Build rejects. RowReader validates the full shape before the callback, and escaping DTO values own their data.
+
 ## `M:Korda.Query.ProjectionBuilder`1.Build(Korda.Data.RowMaterializer{`0})`
 
 ```csharp
@@ -2355,6 +3071,50 @@ public Korda.Data.Projection<T> Korda.Query.ProjectionBuilder<T>.Build(Korda.Dat
 **exception:** Native capability, finite resource limits or provider execution rejects the operation.
 
 **Inherited type policy:** Fields must come from its exact live query. Build freezes field order, unique names, codec/nullability and the direct materializer; later Add or Build rejects. RowReader validates the full shape before the callback, and escaping DTO values own their data.
+
+## `M:Korda.Query.QueryCursor`1.Create``1(Korda.Data.Column{`0,``0},``0)`
+
+```csharp
+public static Korda.Query.QueryCursor<TEntity> Korda.Query.QueryCursor<TEntity>.Create<T>(Korda.Data.Column<TEntity, T> column, T value)
+```
+
+**summary:** Copies the first non-null ordering value from a built table.
+
+**typeparam T:** The exact column value type.
+
+**param column:** The first root-table ordering column.
+
+**param value:** The non-null value to snapshot.
+
+**returns:** A new immutable cursor prefix.
+
+**exception:** The column or a required value is null.
+
+**exception:** The column is unbuilt, nullable or the value is invalid.
+
+**Inherited type policy:** Values are copied when added. The cursor owns no native resource and can be reused with the same table metadata. Applying it requires an exact non-null column ordering containing the complete primary key; the query supplies each column's ascending or descending direction.
+
+## `M:Korda.Query.QueryCursor`1.Then``1(Korda.Data.Column{`0,``0},``0)`
+
+```csharp
+public Korda.Query.QueryCursor<TEntity> Korda.Query.QueryCursor<TEntity>.Then<T>(Korda.Data.Column<TEntity, T> column, T value)
+```
+
+**summary:** Copies the next ordering value and returns a new cursor without changing this instance.
+
+**typeparam T:** The exact next column value type.
+
+**param column:** The next distinct non-null column from the same table.
+
+**param value:** The non-null value to snapshot.
+
+**returns:** A new immutable cursor with the next component appended.
+
+**exception:** The column or a required value is null.
+
+**exception:** The column is foreign, repeated, nullable or the value is invalid.
+
+**Inherited type policy:** Values are copied when added. The cursor owns no native resource and can be reused with the same table metadata. Applying it requires an exact non-null column ordering containing the complete primary key; the query supplies each column's ascending or descending direction.
 
 ## `M:Korda.Query.QueryParameter`1.#ctor`
 
@@ -3457,6 +4217,32 @@ public Korda.Query.ProjectionBuilder<T> Korda.Query.Query<TEntity>.Projection<T>
 **exception:** The required native owner or its parent has closed admission.
 
 **exception:** Native capability, finite resource limits or provider execution rejects the operation.
+
+**Inherited type policy:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
+
+## `M:Korda.Query.Query`1.SeekAfter(Korda.Query.QueryCursor{`0})`
+
+```csharp
+public Korda.Query.Query<TEntity> Korda.Query.Query<TEntity>.SeekAfter(Korda.Query.QueryCursor<TEntity> cursor)
+```
+
+**summary:** Appends a strict lexicographic cursor predicate using the exact current root-column ordering.
+
+**param cursor:** Every non-null ordering column and its snapshotted value, including the complete primary key.
+
+**returns:** This mutable query with a native cursor predicate and unchanged row limit.
+
+**exception:** is null.
+
+**exception:** The cursor differs from the exact ordering, omits key columns or conflicts with an offset.
+
+**exception:** A composite cursor was already applied or the query is sealed.
+
+**exception:** The query or session has closed.
+
+**exception:** The native query capability or finite capacity rejects composition.
+
+**remarks:** Mixed ascending and descending columns are supported. SQL comparisons, parameters and dialect rendering remain native. Later ordering changes and offsets reject. A unique root key does not remove duplicate rows introduced by a one-to-many join or provide a cross-request database snapshot.
 
 **Inherited type policy:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
@@ -6462,7 +7248,7 @@ public Korda.Database.DatabaseAdministration Korda.Database.DataSource.Administr
 
 **summary:** Gets the explicit administration facade without opening a database connection.
 
-**remarks:** Each operation owns a separate, bounded administrative connection. Source creation and DI activation never apply migrations. Private in-memory SQLite cannot expose a separate administrative connection.
+**remarks:** Migration and catalog operations own a separate, bounded administrative connection; drafting uses static metadata without opening one. Source creation and DI activation never apply migrations. Private in-memory SQLite cannot expose a separate administrative connection.
 
 **exception:** Source admission is closed.
 
@@ -6698,6 +7484,16 @@ public int Korda.Database.DatabaseLimits.MaxWaiters { get; init; }
 
 **Inherited type policy:** These are admission and encoded-byte budgets, not measurements of CLR heap or process memory. Provider hard limits also apply. Increasing a value never selects an unbounded fallback.
 
+## `P:Korda.Database.DatabaseModel.Empty`
+
+```csharp
+public static Korda.Database.DatabaseModel Korda.Database.DatabaseModel.Empty { get; }
+```
+
+**summary:** Gets the empty schema snapshot.
+
+**Inherited type policy:** Construction and persistence perform no native load or database I/O. The snapshot contains store names, codec policies and declared key/generated flags, but no inferred indexes, foreign keys, defaults or backfills. Provider validation occurs when a draft is requested. Keep the previously applied snapshot in source control.
+
 ## `P:Korda.Database.Migration.Description`
 
 ```csharp
@@ -6747,6 +7543,96 @@ public string Korda.Database.MigrationBundle.ContentHash { get; }
 **summary:** Gets the lowercase SHA-256 of the canonical provider and immutable entry sequence.
 
 **Inherited type policy:** Construction performs no native load or database I/O. Its SHA-256 identity covers the canonical kind12 provider and entry sequence before the hash field is added. Each entry separately contains SQL SHA-256; the native ledger preserves the existing SQLx-compatible SHA-384 checksum. Scripts must be trusted deployment artifacts.
+
+## `P:Korda.Database.MigrationChange.Column`
+
+```csharp
+public string? Korda.Database.MigrationChange.Column { get; init; }
+```
+
+**summary:** The exact column, or null for a table operation.
+
+**Inherited type policy:** This record retains bounded managed strings and no native resource. Its SQL has not executed; the owning draft enforces explicit per-change destructive approval before conversion to a migration.
+
+## `P:Korda.Database.MigrationChange.Id`
+
+```csharp
+public string Korda.Database.MigrationChange.Id { get; init; }
+```
+
+**summary:** A stable digest of this exact provider-specific operation.
+
+**Inherited type policy:** This record retains bounded managed strings and no native resource. Its SQL has not executed; the owning draft enforces explicit per-change destructive approval before conversion to a migration.
+
+## `P:Korda.Database.MigrationChange.IsDestructive`
+
+```csharp
+public bool Korda.Database.MigrationChange.IsDestructive { get; init; }
+```
+
+**summary:** Whether converting the draft requires this exact change ID's approval.
+
+**Inherited type policy:** This record retains bounded managed strings and no native resource. Its SQL has not executed; the owning draft enforces explicit per-change destructive approval before conversion to a migration.
+
+## `P:Korda.Database.MigrationChange.Kind`
+
+```csharp
+public Korda.Database.MigrationChangeKind Korda.Database.MigrationChange.Kind { get; init; }
+```
+
+**summary:** The explicitly supported change kind.
+
+**Inherited type policy:** This record retains bounded managed strings and no native resource. Its SQL has not executed; the owning draft enforces explicit per-change destructive approval before conversion to a migration.
+
+## `P:Korda.Database.MigrationChange.Schema`
+
+```csharp
+public string? Korda.Database.MigrationChange.Schema { get; init; }
+```
+
+**summary:** The exact schema, or null for the default schema.
+
+**Inherited type policy:** This record retains bounded managed strings and no native resource. Its SQL has not executed; the owning draft enforces explicit per-change destructive approval before conversion to a migration.
+
+## `P:Korda.Database.MigrationChange.Sql`
+
+```csharp
+public string Korda.Database.MigrationChange.Sql { get; init; }
+```
+
+**summary:** Provider SQL for review, with identifiers safely quoted by the native dialect.
+
+**Inherited type policy:** This record retains bounded managed strings and no native resource. Its SQL has not executed; the owning draft enforces explicit per-change destructive approval before conversion to a migration.
+
+## `P:Korda.Database.MigrationChange.Table`
+
+```csharp
+public string Korda.Database.MigrationChange.Table { get; init; }
+```
+
+**summary:** The exact table name.
+
+**Inherited type policy:** This record retains bounded managed strings and no native resource. Its SQL has not executed; the owning draft enforces explicit per-change destructive approval before conversion to a migration.
+
+## `P:Korda.Database.MigrationDraft.Changes`
+
+```csharp
+public System.Collections.Generic.IReadOnlyList<Korda.Database.MigrationChange> Korda.Database.MigrationDraft.Changes { get; }
+```
+
+**summary:** Gets the immutable ordered list of changes; an empty list means no supported difference.
+
+**Inherited type policy:** The draft owns read-only managed values and no native lease. Review SQL and approve every destructive change ID before converting it to a trusted migration. Applying the resulting migration is a separate explicit call.
+
+## `P:Korda.Database.MigrationDraft.Provider`
+
+```csharp
+public Korda.Database.DatabaseProvider Korda.Database.MigrationDraft.Provider { get; }
+```
+
+**summary:** Gets the provider that compiled this draft.
+
+**Inherited type policy:** The draft owns read-only managed values and no native lease. Review SQL and approve every destructive change ID before converting it to a trusted migration. Applying the resulting migration is a separate explicit call.
 
 ## `P:Korda.Database.MigrationOptions.AllowNonTransactional`
 
@@ -6892,6 +7778,126 @@ public string Korda.Database.SchemaColumn.StoreType { get; init; }
 
 **Inherited type policy:** This detached immutable record retains its names and type strings. Each column counts toward the same source result-row and encoded-byte limits as its parent table.
 
+## `P:Korda.Database.SchemaColumnHint.ClrType`
+
+```csharp
+public string Korda.Database.SchemaColumnHint.ClrType { get; init; }
+```
+
+**summary:** An unqualified built-in or qualified CLR type name, without nullability syntax.
+
+**Inherited type policy:** Configured decimal, JSON, custom IDs and ambiguous provider types need an explicit codec member. The consuming compiler checks its exact type and accessibility. Nullability comes from the catalog.
+
+## `P:Korda.Database.SchemaColumnHint.CodecDeclaringType`
+
+```csharp
+public string? Korda.Database.SchemaColumnHint.CodecDeclaringType { get; init; }
+```
+
+**summary:** The optional qualified type exposing the configured nonnullable ValueCodec.
+
+**Inherited type policy:** Configured decimal, JSON, custom IDs and ambiguous provider types need an explicit codec member. The consuming compiler checks its exact type and accessibility. Nullability comes from the catalog.
+
+## `P:Korda.Database.SchemaColumnHint.CodecMember`
+
+```csharp
+public string? Korda.Database.SchemaColumnHint.CodecMember { get; init; }
+```
+
+**summary:** Its accessible static field/property; required together with CodecDeclaringType.
+
+**Inherited type policy:** Configured decimal, JSON, custom IDs and ambiguous provider types need an explicit codec member. The consuming compiler checks its exact type and accessibility. Nullability comes from the catalog.
+
+## `P:Korda.Database.SchemaColumnHint.ColumnName`
+
+```csharp
+public string Korda.Database.SchemaColumnHint.ColumnName { get; init; }
+```
+
+**summary:** The exact catalog column to map.
+
+**Inherited type policy:** Configured decimal, JSON, custom IDs and ambiguous provider types need an explicit codec member. The consuming compiler checks its exact type and accessibility. Nullability comes from the catalog.
+
+## `P:Korda.Database.SchemaColumnHint.PropertyName`
+
+```csharp
+public string? Korda.Database.SchemaColumnHint.PropertyName { get; init; }
+```
+
+**summary:** An optional valid C# member name; null retains a valid column name or a deterministic fallback.
+
+**Inherited type policy:** Configured decimal, JSON, custom IDs and ambiguous provider types need an explicit codec member. The consuming compiler checks its exact type and accessibility. Nullability comes from the catalog.
+
+## `P:Korda.Database.SchemaScaffoldOptions.ColumnHints`
+
+```csharp
+public System.Collections.Generic.IReadOnlyList<Korda.Database.SchemaColumnHint> Korda.Database.SchemaScaffoldOptions.ColumnHints { get; init; }
+```
+
+**summary:** Gets explicit overrides for ambiguous CLR/codec interpretations; defaults to an empty list.
+
+**Inherited type policy:** Catalog v1 omits ordered composite keys, generated flags and defaults. Supply the exact generated column list, including an explicit empty list when none are generated, and a complete composite-key order.
+
+## `P:Korda.Database.SchemaScaffoldOptions.GeneratedColumns`
+
+```csharp
+public System.Collections.Generic.IReadOnlyList<string>? Korda.Database.SchemaScaffoldOptions.GeneratedColumns { get; init; }
+```
+
+**summary:** Gets the explicitly reviewed generated column names; null is rejected because catalog v1 cannot infer them.
+
+**Inherited type policy:** Catalog v1 omits ordered composite keys, generated flags and defaults. Supply the exact generated column list, including an explicit empty list when none are generated, and a complete composite-key order.
+
+## `P:Korda.Database.SchemaScaffoldOptions.Namespace`
+
+```csharp
+public string Korda.Database.SchemaScaffoldOptions.Namespace { get; init; }
+```
+
+**summary:** The namespace for emitted source, using ordinary identifier segments.
+
+**Inherited type policy:** Catalog v1 omits ordered composite keys, generated flags and defaults. Supply the exact generated column list, including an explicit empty list when none are generated, and a complete composite-key order.
+
+## `P:Korda.Database.SchemaScaffoldOptions.PrimaryKeyOrder`
+
+```csharp
+public System.Collections.Generic.IReadOnlyList<string>? Korda.Database.SchemaScaffoldOptions.PrimaryKeyOrder { get; init; }
+```
+
+**summary:** Gets the complete ordered primary-key names; required for a composite key.
+
+**Inherited type policy:** Catalog v1 omits ordered composite keys, generated flags and defaults. Supply the exact generated column list, including an explicit empty list when none are generated, and a complete composite-key order.
+
+## `P:Korda.Database.SchemaScaffoldOptions.TypeName`
+
+```csharp
+public string Korda.Database.SchemaScaffoldOptions.TypeName { get; init; }
+```
+
+**summary:** The entity class name.
+
+**Inherited type policy:** Catalog v1 omits ordered composite keys, generated flags and defaults. Supply the exact generated column list, including an explicit empty list when none are generated, and a complete composite-key order.
+
+## `P:Korda.Database.SchemaScaffoldResult.Notes`
+
+```csharp
+public System.Collections.Generic.IReadOnlyList<string> Korda.Database.SchemaScaffoldResult.Notes { get; }
+```
+
+**summary:** Gets immutable limitations about defaults, relationships, indexes and catalog ambiguity.
+
+**Inherited type policy:** Source is ready to include in a project with the provider's bundled generator. A successful consuming compilation remains the authority for user-supplied custom type/codec members.
+
+## `P:Korda.Database.SchemaScaffoldResult.Source`
+
+```csharp
+public string Korda.Database.SchemaScaffoldResult.Source { get; }
+```
+
+**summary:** Gets the ordinary attributed entity source with explicit store names.
+
+**Inherited type policy:** Source is ready to include in a project with the provider's bundled generator. A successful consuming compilation remains the authority for user-supplied custom type/codec members.
+
 ## `P:Korda.Database.SchemaTable.Columns`
 
 ```csharp
@@ -6921,6 +7927,46 @@ public string? Korda.Database.SchemaTable.Schema { get; init; }
 **summary:** The admitted provider schema; SQLite reports main.
 
 **Inherited type policy:** Administration returns a detached read-only column list with no native lease. Table names and all nested columns share the source buffering budget; no further database access is lazy.
+
+## `P:Korda.Database.TransactionFailure.Cleanup`
+
+```csharp
+public Korda.Database.DatabaseCloseResult Korda.Database.TransactionFailure.Cleanup { get; init; }
+```
+
+**summary:** The native cleanup observation, independent from transaction effects.
+
+**Inherited type policy:** The original exception retains this snapshot without replacement or automatic retry. It owns no native resource and remains usable after the source and session have been disposed. Snapshot retrieval also works when a custom exception's Data dictionary rejects optional enrichment.
+
+## `P:Korda.Database.TransactionFailure.CommitAttempted`
+
+```csharp
+public bool Korda.Database.TransactionFailure.CommitAttempted { get; init; }
+```
+
+**summary:** Whether commit crossed the conservative native dispatch boundary.
+
+**Inherited type policy:** The original exception retains this snapshot without replacement or automatic retry. It owns no native resource and remains usable after the source and session have been disposed. Snapshot retrieval also works when a custom exception's Data dictionary rejects optional enrichment.
+
+## `P:Korda.Database.TransactionFailure.Outcome`
+
+```csharp
+public Korda.Database.TransactionOutcome Korda.Database.TransactionFailure.Outcome { get; init; }
+```
+
+**summary:** Observed durable-effect knowledge; Unknown never implies rollback.
+
+**Inherited type policy:** The original exception retains this snapshot without replacement or automatic retry. It owns no native resource and remains usable after the source and session have been disposed. Snapshot retrieval also works when a custom exception's Data dictionary rejects optional enrichment.
+
+## `P:Korda.Database.TransactionFailure.RecoveryKey`
+
+```csharp
+public string? Korda.Database.TransactionFailure.RecoveryKey { get; init; }
+```
+
+**summary:** The optional application recovery identity.
+
+**Inherited type policy:** The original exception retains this snapshot without replacement or automatic retry. It owns no native resource and remains usable after the source and session have been disposed. Snapshot retrieval also works when a custom exception's Data dictionary rejects optional enrichment.
 
 ## `P:Korda.Query.Query`1.Row`
 
@@ -7046,7 +8092,7 @@ public sealed class Korda.Database.DatabaseAdministration
 
 **summary:** Runs explicit trusted migration and catalog operations through the native provider.
 
-**remarks:** One independent administrative connection executes at a time per source, with bounded waiting. Every outcome closes that connection before task retirement. It never uses a request session or request transaction. Result counts, strings and nested columns are charged to source buffering and field limits.
+**remarks:** Migration and catalog operations use one independent administrative connection at a time per source, with bounded waiting and closure before task retirement. Draft compilation opens no connection. None uses a request session or transaction. Result counts, strings and nested columns share source buffering and field limits.
 
 ## `T:Korda.Database.DatabaseCapabilities`
 
@@ -7067,6 +8113,16 @@ public sealed record class Korda.Database.DatabaseLimits : System.IEquatable<Kor
 **summary:** Immutable finite limits snapshotted by a data source before native creation.
 
 **remarks:** These are admission and encoded-byte budgets, not measurements of CLR heap or process memory. Provider hard limits also apply. Increasing a value never selects an unbounded fallback.
+
+## `T:Korda.Database.DatabaseModel`
+
+```csharp
+public sealed class Korda.Database.DatabaseModel
+```
+
+**summary:** An immutable versioned snapshot of explicit static table metadata for migration review.
+
+**remarks:** Construction and persistence perform no native load or database I/O. The snapshot contains store names, codec policies and declared key/generated flags, but no inferred indexes, foreign keys, defaults or backfills. Provider validation occurs when a draft is requested. Keep the previously applied snapshot in source control.
 
 ## `T:Korda.Database.DatabaseProvider`
 
@@ -7103,6 +8159,48 @@ public sealed class Korda.Database.MigrationBundle
 **summary:** Snapshots a strictly ordered, provider-bound set of explicit SQL scripts.
 
 **remarks:** Construction performs no native load or database I/O. Its SHA-256 identity covers the canonical kind12 provider and entry sequence before the hash field is added. Each entry separately contains SQL SHA-256; the native ledger preserves the existing SQLx-compatible SHA-384 checksum. Scripts must be trusted deployment artifacts.
+
+## `T:Korda.Database.MigrationChange`
+
+```csharp
+public sealed record class Korda.Database.MigrationChange : System.IEquatable<Korda.Database.MigrationChange>
+```
+
+**summary:** One detached, immutable, reviewable native schema change.
+
+**remarks:** This record retains bounded managed strings and no native resource. Its SQL has not executed; the owning draft enforces explicit per-change destructive approval before conversion to a migration.
+
+**param Id:** A stable digest of this exact provider-specific operation.
+
+**param Kind:** The explicitly supported change kind.
+
+**param Schema:** The exact schema, or null for the default schema.
+
+**param Table:** The exact table name.
+
+**param Column:** The exact column, or null for a table operation.
+
+**param Sql:** Provider SQL for review, with identifiers safely quoted by the native dialect.
+
+**param IsDestructive:** Whether converting the draft requires this exact change ID's approval.
+
+## `T:Korda.Database.MigrationChangeKind`
+
+```csharp
+public enum Korda.Database.MigrationChangeKind : int
+```
+
+**summary:** The supported explicit changes in a native migration draft.
+
+## `T:Korda.Database.MigrationDraft`
+
+```csharp
+public sealed class Korda.Database.MigrationDraft
+```
+
+**summary:** A bounded provider-specific migration draft that has not changed the database.
+
+**remarks:** The draft owns read-only managed values and no native lease. Review SQL and approve every destructive change ID before converting it to a trusted migration. Applying the resulting migration is a separate explicit call.
 
 ## `T:Korda.Database.MigrationOptions`
 
@@ -7174,6 +8272,60 @@ public sealed record class Korda.Database.SchemaColumn : System.IEquatable<Korda
 
 **param IsPrimaryKey:** Whether the column participates in a primary key.
 
+## `T:Korda.Database.SchemaColumnHint`
+
+```csharp
+public sealed record class Korda.Database.SchemaColumnHint : System.IEquatable<Korda.Database.SchemaColumnHint>
+```
+
+**summary:** An explicit CLR/codec interpretation for one catalog column.
+
+**param ColumnName:** The exact catalog column to map.
+
+**param ClrType:** An unqualified built-in or qualified CLR type name, without nullability syntax.
+
+**param CodecDeclaringType:** The optional qualified type exposing the configured nonnullable ValueCodec.
+
+**param CodecMember:** Its accessible static field/property; required together with CodecDeclaringType.
+
+**param PropertyName:** An optional valid C# member name; null retains a valid column name or a deterministic fallback.
+
+**remarks:** Configured decimal, JSON, custom IDs and ambiguous provider types need an explicit codec member. The consuming compiler checks its exact type and accessibility. Nullability comes from the catalog.
+
+## `T:Korda.Database.SchemaScaffoldOptions`
+
+```csharp
+public sealed record class Korda.Database.SchemaScaffoldOptions : System.IEquatable<Korda.Database.SchemaScaffoldOptions>
+```
+
+**summary:** Explicit decisions for generating one ordinary C# entity from catalog v1.
+
+**param Namespace:** The namespace for emitted source, using ordinary identifier segments.
+
+**param TypeName:** The entity class name.
+
+**remarks:** Catalog v1 omits ordered composite keys, generated flags and defaults. Supply the exact generated column list, including an explicit empty list when none are generated, and a complete composite-key order.
+
+## `T:Korda.Database.SchemaScaffoldResult`
+
+```csharp
+public sealed class Korda.Database.SchemaScaffoldResult
+```
+
+**summary:** Detached generated C# source and the catalog information it intentionally cannot recover.
+
+**remarks:** Source is ready to include in a project with the provider's bundled generator. A successful consuming compilation remains the authority for user-supplied custom type/codec members.
+
+## `T:Korda.Database.SchemaScaffolder`
+
+```csharp
+public static class Korda.Database.SchemaScaffolder
+```
+
+**summary:** Emits AOT-visible entity source from explicit provider catalog data and developer decisions.
+
+**remarks:** This synchronous pure tool performs no database I/O, compilation, native loading or schema alteration. It does not reconstruct migrations or infer absent catalog metadata. Generated source must be reviewed and compiled.
+
 ## `T:Korda.Database.SchemaTable`
 
 ```csharp
@@ -7189,6 +8341,24 @@ public sealed record class Korda.Database.SchemaTable : System.IEquatable<Korda.
 **param Name:** The exact table name.
 
 **param Columns:** The bounded columns in native catalog ordinal order.
+
+## `T:Korda.Database.TransactionFailure`
+
+```csharp
+public sealed record class Korda.Database.TransactionFailure : System.IEquatable<Korda.Database.TransactionFailure>
+```
+
+**summary:** An immutable transaction callback failure observation, retained after native cleanup.
+
+**param Outcome:** Observed durable-effect knowledge; Unknown never implies rollback.
+
+**param CommitAttempted:** Whether commit crossed the conservative native dispatch boundary.
+
+**param Cleanup:** The native cleanup observation, independent from transaction effects.
+
+**param RecoveryKey:** The optional application recovery identity.
+
+**remarks:** The original exception retains this snapshot without replacement or automatic retry. It owns no native resource and remains usable after the source and session have been disposed. Snapshot retrieval also works when a custom exception's Data dictionary rejects optional enrichment.
 
 ## `T:Korda.Query.CommonTable`1`
 
@@ -7293,6 +8463,18 @@ public sealed class Korda.Query.ProjectionBuilder<T>
 **typeparam T:** The statically known owned result type.
 
 **remarks:** Fields must come from its exact live query. Build freezes field order, unique names, codec/nullability and the direct materializer; later Add or Build rejects. RowReader validates the full shape before the callback, and escaping DTO values own their data.
+
+## `T:Korda.Query.QueryCursor`1`
+
+```csharp
+public sealed class Korda.Query.QueryCursor<TEntity> where TEntity : class
+```
+
+**summary:** An immutable typed snapshot of all values in one root-table cursor ordering.
+
+**typeparam TEntity:** The statically mapped root entity class.
+
+**remarks:** Values are copied when added. The cursor owns no native resource and can be reused with the same table metadata. Applying it requires an exact non-null column ordering containing the complete primary key; the query supplies each column's ascending or descending direction.
 
 ## `T:Korda.Query.QueryParameter`1`
 

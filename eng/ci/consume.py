@@ -13,6 +13,7 @@ import xml.etree.ElementTree as ET
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tests/Packaging.Domain"))
 from consumer_cases import GRAPHS, project
+from orm_experience import exercise
 
 
 def main():
@@ -99,6 +100,8 @@ def main():
             if actual != {name + "/" + selected[name] for name in refs}:
                 raise ValueError("Unexpected Korda dependencies: " + str(actual))
             execute("./out/B24Consumer", "--require-aot")
+        exercise(work, selected, env, args.record.resolve().parent / "consumer-evidence" /
+                 ("public" if args.public else "candidate"))
 
 
 if __name__ == "__main__":

@@ -890,6 +890,14 @@ NW_DATABASE_API nw_status NW_CDECL nw_db_admin_create_v1(nw_db_ref raw, std::uin
             source->admit();
             auto limits = source->config.limits.administration();
             auto request = parse_administration(source->config.provider.profile, action, borrow(payload), limits);
+            if (action == 4)
+            {
+                output_operation(
+                    output, DbOperation::create(
+                                source, 101, false, [source, request, limits](auto cancel) -> Value
+                                { return std::make_shared<Buffer>(source, draft_schema(request, limits, {cancel})); }));
+                return;
+            }
             if (source->config.provider.profile == Profile::Sqlite &&
                 (source->config.provider.sqlite_mode == 3 || source->config.provider.connection == ":memory:"))
                 throw Error::unsupported();
@@ -1042,6 +1050,10 @@ NW_DATABASE_API std::uint64_t NW_CDECL nw_db_diagnostic_count_v1(std::uint32_t k
             std::lock_guard lock(handles_mutex);
             return handles.size();
         }
+        case 6:
+            return provider_dispatch_count();
+        case 7:
+            return provider_protocol_count();
         default:
             return 0;
     }

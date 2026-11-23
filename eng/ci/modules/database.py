@@ -235,7 +235,7 @@ def recipes():
             "--output",
             "artifacts/generator-checks",
         ),
-        resources=("design", "dotnet"),
+        resources=("design", "dotnet", "native"),
     )
     add(
         "pack.api",

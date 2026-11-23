@@ -36,6 +36,7 @@ def purpose(path, registered):
         "api-reference.md",
         "public-api.expected.json",
         "public-api-standard.json",
+        "db-api-01.api.json",
         "api.py",
     }:
         return "api"

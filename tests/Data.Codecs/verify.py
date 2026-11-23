@@ -63,9 +63,10 @@ def main() -> int:
     common = ['-p:UseSharedCompilation=false', '-nr:false', '-m:1']
     restore = ['--locked-mode'] + (['--configfile', str(args.offline_config.resolve()), '-p:NuGetAudit=false'] if args.offline_config else [])
     project = 'tests/Data.Codecs/Korda.Data.Codecs.Tests.csproj'
+    library = 'src/Data.Codecs/Korda.Data.Codecs.csproj'
     api = 'tests/Data.Codecs/ApiCheck/ApiCheck.csproj'
     sample = 'samples/api/data-codecs/DataCodecs.csproj'
-    assembly = ROOT / 'tests/Data.Codecs/bin/Release/net11.0/Korda.Data.Codecs.Tests.dll'
+    assembly = ROOT / 'tests/Data.Codecs/bin/Release/net11.0/linux-x64/Korda.Data.Codecs.Tests.dll'
     server = None
     server_log = None
     status = 'failed'
@@ -75,7 +76,7 @@ def main() -> int:
                              r"^native\.scalar$", [ROOT / "native/cpp/src/scalar.cpp", ROOT / "native/cpp/tests/scalar_tests.cpp",
                                                     ROOT / "native/cpp/tests/codec_roundtrip.cpp"])
         (output / "compiler-provenance.txt").write_text(provenance)
-        for label, p in [('consumer', project), ('api-check', api), ('sample', sample)]:
+        for label, p in [('library', library), ('api-check', api)]:
             run(label + '-restore', ['dotnet', 'restore', p, *restore, *common])
             run(label + '-build', ['dotnet', 'build', p, '-c', 'Release', '--no-restore', *common])
         aot = output / 'aot-vectors'
@@ -84,7 +85,14 @@ def main() -> int:
         executable = publish / 'Korda.Data.Codecs.Tests'
         run('aot-encode', [str(executable), str(aot), '--require-aot'])
         run('compiled-api-reference', ['dotnet', str(ROOT / 'tests/Data.Codecs/ApiCheck/bin/Release/net11.0/Korda.Data.Codecs.ApiCheck.dll'), str(ROOT / 'src/Data.Codecs/bin/Release/net11.0/Korda.Data.Codecs.dll'), str(ROOT / 'src/Data.Codecs/bin/Release/net11.0/Korda.Data.Codecs.xml'), str(ROOT / 'src/Data.Codecs/api-reference.md')])
-        run('sample-execution', ['dotnet', str(ROOT / 'samples/api/data-codecs/bin/Release/net11.0/Korda.Data.Codecs.Sample.dll')])
+        sample_publish = output / 'sample-aot'
+        run('sample-aot-publish', ['dotnet', 'publish', sample, '-c', 'Release', '-r', 'linux-x64',
+            '-p:PublishAot=true', '-p:RestoreLockedMode=true', '-p:IlcTreatWarningsAsErrors=true',
+            *restore[1:], *common, '-o', str(sample_publish)])
+        sample_executable = sample_publish / 'Korda.Data.Codecs.Sample'
+        if sample_executable.read_bytes()[:4] != b'\x7fELF' or sample_executable.with_suffix('.dll').exists():
+            raise RuntimeError('Expected an actual standalone Native AOT sample executable.')
+        run('sample-execution', [str(sample_executable)])
         native_env = dict(env)
         if args.postgres_bin:
             pg = args.postgres_bin.resolve()
@@ -105,7 +113,7 @@ def main() -> int:
         fixture = args.native_build.resolve() / 'tests/nw_codec_roundtrip'
         run('aot-providers', [str(fixture), str(aot)], native_env)
         run('aot-returned-values', [str(executable), str(aot), '--require-aot'])
-        artifact_paths = [assembly, executable, fixture, ROOT / 'src/Data.Codecs/bin/Release/net11.0/Korda.Data.Codecs.dll']
+        artifact_paths = [assembly, executable, fixture, sample_executable, ROOT / 'src/Data.Codecs/bin/Release/net11.0/Korda.Data.Codecs.dll']
         (output / 'artifacts.json').write_text(json.dumps([{'path': str(p.relative_to(ROOT)) if p.is_relative_to(ROOT) else str(p), 'sha256': sha(p), 'size': p.stat().st_size} for p in artifact_paths], indent=2) + '\n')
         # Source binding must still match the bytes at verification start.
         for item in inputs:

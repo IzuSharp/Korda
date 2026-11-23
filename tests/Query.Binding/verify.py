@@ -45,9 +45,10 @@ try:
     common=['-p:UseSharedCompilation=false','-nr:false','-m:1']
     config=['--configfile',args.nuget_config] if args.nuget_config else []
     tests='tests/Query.Binding/Korda.Query.Binding.Tests.csproj';sample='samples/api/query-binding/QueryBindingSample.csproj';api='tests/Query.Binding/ApiCheck/ApiCheck.csproj'
-    run('restore-tests-managed',['dotnet','restore',tests,'--locked-mode',*config,*common])
-    run('build-tests-managed',['dotnet','build',tests,'-c','Release','--no-restore',*common])
-    test_dll=ROOT/'tests/Query.Binding/bin/Release/net11.0/Korda.Query.Binding.Tests.dll'
+    library='src/Query.Binding/Korda.Query.Binding.csproj'
+    run('restore-library',['dotnet','restore',library,'--locked-mode',*config,*common])
+    run('build-library',['dotnet','build',library,'-c','Release','--no-restore',*common])
+    test_dll=ROOT/'tests/Query.Binding/bin/Release/net11.0/linux-x64/Korda.Query.Binding.Tests.dll'
     run('restore-api-check',['dotnet','restore',api,'--locked-mode',*config,*common])
     run('build-api-check',['dotnet','build',api,'-c','Release','--no-restore',*common])
     run('compiled-api-xml-reference',['dotnet','tests/Query.Binding/ApiCheck/bin/Release/net11.0/ApiCheck.dll','src/Query.Binding/bin/Release/net11.0/Korda.Query.Binding.dll','src/Query.Binding/bin/Release/net11.0/Korda.Query.Binding.xml','native/database/binding/signatures-v1.json','src/Query.Binding/api-reference.md'])

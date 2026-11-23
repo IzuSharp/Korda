@@ -203,6 +203,12 @@ string Declaration(ISymbol symbol)
 
 using var baseline = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "src/Data.Abstractions/public-api.expected.json")));
 var expected = baseline.RootElement.GetProperty("symbols").EnumerateArray().ToDictionary(x => x.GetProperty("id").GetString()!, x => x.Clone(), StringComparer.Ordinal);
+using var currentContract = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "src/Data.NativeHost/db-api-01.api.json")));
+foreach (var entry in currentContract.RootElement.GetProperty("assemblies").GetProperty("Korda.Data").EnumerateArray())
+{
+    var id = entry.GetProperty("id").GetString()!;
+    if (!expected.TryAdd(id, entry.Clone())) throw new InvalidOperationException("Additive contract shadows a frozen member: " + id);
+}
 var actual = new Dictionary<string, ISymbol>(StringComparer.Ordinal);
 void Add(ISymbol symbol)
 {

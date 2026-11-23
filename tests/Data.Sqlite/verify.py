@@ -129,7 +129,9 @@ def main():
         execution_env["LD_LIBRARY_PATH"] = str(native.parent) + os.pathsep + env.get("LD_LIBRARY_PATH", "")
         execution_env["NW_SQLITE_COMPONENT_ASSET"] = str(component_native)
         for index, project in enumerate(ordinary):
-            if args.test_only and project == ordinary[2]:
+            # Executable consumers are restored and compiled only for Native AOT.
+            # The SQLite example is a library, so its ordinary build remains.
+            if project == ordinary[1] or (args.test_only and project == ordinary[2]):
                 continue
             restore("ordinary-restore-" + str(index), project)
             run("ordinary-build-" + str(index), [dotnet, "build", project, "-c", "Release", "--no-restore", *build_flags])
@@ -155,7 +157,7 @@ def main():
         generated += list((ROOT / "src/Data.Sqlite/obj").rglob("Korda.database.sqlite.assets.json"))
         for artifact in generated:
             manifest.setdefault("generatedMaintainerProfileSha256", {})[str(artifact)] = sha(artifact)
-        for location in [ROOT / "tests/Data.Sqlite/bin/Release/net11.0", publish]:
+        for location in [ROOT / "tests/Data.Sqlite/bin/Release/net11.0/linux-x64", publish]:
             record_path = location / "Korda.database.sqlite.assets.json"
             record = json.loads(record_path.read_text())
             assert record["engineId"] == "database.sqlite" and record["packageId"] == "Korda.Database.Sqlite"

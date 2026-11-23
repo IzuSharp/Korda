@@ -99,8 +99,8 @@ toolchain['ninja'] = run('ninja', ['ninja', '--version'])
 run('schema', ['python3', 'native/database/interfaces/generate_schema.py', '--check'])
 managed = 'tests/Data.Abstractions/Korda.Data.Tests.csproj'
 api = 'tests/Data.Abstractions/ApiCheck/ApiCheck.csproj'
-sample = 'samples/api/data-abstractions/DataAbstractions.csproj'
-for label, project in [('managed', managed), ('api', api), ('sample', sample)]:
+library = 'src/Data.Abstractions/Korda.Data.csproj'
+for label, project in [('library', library), ('api', api)]:
     run(label + '-restore', [DOTNET, 'restore', project, '--locked-mode', '--disable-build-servers', *restore_options])
     run(label + '-build', [DOTNET, 'build', project, '-c', 'Release', '--no-restore', '--disable-build-servers'])
 api_result = json.loads(run('api-exact-xml-reference', [DOTNET, ROOT / 'tests/Data.Abstractions/ApiCheck/bin/Release/net11.0/ApiCheck.dll', ROOT, SDK, ROOT / 'src/Data.Abstractions/bin/Release/net11.0/Korda.Data.dll', *(['--write'] if a.write_reference else [])]))
@@ -166,8 +166,6 @@ with tempfile.TemporaryDirectory(prefix='korda-b01-consumer-') as temporary:
         trap.chmod(0o755)
     consumer_env = {'PATH': str(traps) + os.pathsep + str(SDK) + os.pathsep + env['PATH'], 'B01_RUST_TRAP_LOG': str(trap_log), 'NUGET_PACKAGES': str(consumer / 'packages')}
     offline = ['-p:NuGetAudit=false'] if a.offline_packages else []
-    run('package-consumer-restore', [DOTNET, 'restore', '--configfile', consumer_config, *offline, '--disable-build-servers'], consumer, consumer_env)
-    run('package-consumer-build', [DOTNET, 'build', '-c', 'Release', '--no-restore', '--disable-build-servers'], consumer, consumer_env)
     run('package-consumer-aot-restore', [DOTNET, 'restore', '-r', 'linux-x64', '-p:PublishAot=true', '--configfile', consumer_config, *offline, '--disable-build-servers'], consumer, consumer_env)
     selection = json.loads(run('aot-linker-selection', [DOTNET, 'msbuild', 'Consumer.csproj', '-nologo', '-t:ResolveReferences,SetupOSSpecificProps', '-p:RuntimeIdentifier=linux-x64', '-p:PublishAot=true', '-getProperty:CppCompilerAndLinker,CppLinker,LinkerFlavor'], consumer, consumer_env))['Properties']
     driver = Path(shutil.which(selection['CppLinker']) or selection['CppLinker']).resolve()
@@ -186,7 +184,9 @@ with tempfile.TemporaryDirectory(prefix='korda-b01-consumer-') as temporary:
     negatives = json.loads((ROOT / 'tests/Data.Abstractions/negative/cases.json').read_text())
     for filename, codes in negatives.items():
         (consumer / 'Program.cs').write_text((ROOT / 'tests/Data.Abstractions/negative' / filename).read_text())
-        text = run('negative-' + filename.removesuffix('.cs.txt'), [DOTNET, 'build', '-c', 'Release', '--no-restore', '--disable-build-servers'], consumer, consumer_env, fail=True)
+        # These are compiler-negative API probes, not executable consumer builds.
+        text = run('negative-' + filename.removesuffix('.cs.txt'), [DOTNET, 'msbuild', 'Consumer.csproj', '-t:Compile',
+            '-p:Configuration=Release', '-p:UseSharedCompilation=false', '-nr:false', '-m:1'], consumer, consumer_env, fail=True)
         if not any(code in text for code in codes):
             raise RuntimeError('Negative compilation failed for an unrelated reason: ' + filename)
 

@@ -66,11 +66,15 @@ def run(name, command, cwd=ROOT, environment=env):
     return log.read_text().strip()
 
 def component_checks():
-    for label, project in [('component', 'tests/Query.Generator/Query.Generator.Tests.csproj'),
-                           ('api', 'tests/Query.Generator/ApiCheck/ApiCheck.csproj')]:
-        run(label + '-restore', ['dotnet', 'restore', project, '--locked-mode', *flags])
-        run(label + '-build', ['dotnet', 'build', project, '-c', 'Release', '--no-restore', *flags])
-    run('component', ['dotnet', ROOT / 'tests/Query.Generator/bin/Release/net11.0/Korda.Query.Generator.Tests.dll'])
+    component = 'tests/Query.Generator/Query.Generator.Tests.csproj'
+    publish = OUT / 'component-aot'
+    run('component-restore-aot', ['dotnet', 'restore', component, '-r', 'linux-x64', '-p:PublishAot=true', '--locked-mode', *flags])
+    run('component-publish-aot', ['dotnet', 'publish', component, '-c', 'Release', '-r', 'linux-x64', '-p:PublishAot=true', '--no-restore', '-o', publish, *flags])
+    run('component-aot', [publish / 'Korda.Query.Generator.Tests', '--require-aot'])
+    # Roslyn runs as compiler tooling; the product consumer above is executed only as Native AOT.
+    api = 'tests/Query.Generator/ApiCheck/ApiCheck.csproj'
+    run('api-restore', ['dotnet', 'restore', api, '--locked-mode', *flags])
+    run('api-build', ['dotnet', 'build', api, '-c', 'Release', '--no-restore', *flags])
     run('exact-api-diagnostics-incremental', ['dotnet', ROOT / 'tests/Query.Generator/ApiCheck/bin/Release/net11.0/Korda.Query.Generator.ApiCheck.dll', ROOT, a.design, a.sdk])
 
 initial = sources()
@@ -139,9 +143,7 @@ try:
                     text = text.replace(old, new)
                 program.write_text(text)
             label = mode + '-' + revision
-            run(label + '-restore', ['dotnet', 'restore', project, '--configfile', config, *flags, *mode_args], consumer, consumer_env)
-            run(label + '-build', ['dotnet', 'build', project, '-c', 'Release', '--no-restore', *flags, *mode_args], consumer, consumer_env)
-            dll = consumer / 'bin/Release/net11.0/QueryGenerator.Sample.dll'
+            dll = consumer / 'bin/Release/net11.0/linux-x64/QueryGenerator.Sample.dll'
             publish = OUT / (label + '-aot')
             run(label + '-restore-aot', ['dotnet', 'restore', project, '-r', 'linux-x64', '-p:PublishAot=true', '--configfile', config, *flags, *mode_args], consumer, consumer_env)
             run(label + '-publish-aot', ['dotnet', 'publish', project, '-c', 'Release', '-r', 'linux-x64', '-p:PublishAot=true', '--no-restore', '-o', publish, *flags, *mode_args], consumer, consumer_env)

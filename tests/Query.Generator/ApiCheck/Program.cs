@@ -10,7 +10,7 @@ using System.Xml.Linq;
 string root = Path.GetFullPath(args[0]), design = Path.GetFullPath(args[1]), sdk = Path.GetFullPath(args[2]);
 string output = Path.Combine(root, "src/Data.Abstractions/bin/Release/net11.0");
 var files = Directory.GetFiles(Path.Combine(sdk, "packs/Microsoft.NETCore.App.Ref/11.0.0/ref/net11.0"), "*.dll").ToDictionary(x => Path.GetFileName(x)!, StringComparer.OrdinalIgnoreCase);
-foreach (string path in Directory.GetFiles(Path.Combine(root, "tests/Query.Generator/bin/Release/net11.0"), "*.dll")) if (Path.GetFileName(path) != "Korda.Data.dll") files[Path.GetFileName(path)] = path;
+foreach (string path in Directory.GetFiles(Path.Combine(root, "src/Data.NativeHost/bin/Release/net11.0"), "*.dll")) if (Path.GetFileName(path) != "Korda.Data.dll") files[Path.GetFileName(path)] = path;
 
 var references = files.Values.Select(x => MetadataReference.CreateFromFile(x)).ToList();
 var options = new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable, metadataImportOptions: MetadataImportOptions.All);
@@ -44,8 +44,12 @@ foreach (string name in policies.Keys.Order(StringComparer.Ordinal))
     foreach (var s in PublicMembers(declared)) { expected.Add(s.GetDocumentationCommentId()!, Signature(s)); if (!s.IsImplicitlyDeclared) documented.Add(s.GetDocumentationCommentId()!); }
     foreach (var s in PublicMembers(implemented)) actual.Add(s.GetDocumentationCommentId()!, Signature(s));
 }
+using var currentContract = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "src/Data.NativeHost/db-api-01.api.json")));
+var currentAdditions = currentContract.RootElement.GetProperty("assemblies").GetProperty("Korda.Data").EnumerateArray().Select(x => x.GetProperty("id").GetString()!).ToHashSet(StringComparer.Ordinal);
+// The shared compiled-assembly gate checks exact additive signatures and XML.
+// This historical gate still rejects every removed or changed frozen member.
 var errors = expected.Where(x => !actual.TryGetValue(x.Key, out var got) || got != x.Value).Select(x => $"{x.Key}\n  design: {x.Value}\n  actual: {(actual.TryGetValue(x.Key, out var got) ? got : "<missing>")}")
-    .Concat(actual.Keys.Except(expected.Keys).Select(x => "Unexpected product member: " + x)).ToArray();
+    .Concat(actual.Keys.Except(expected.Keys).Where(x => !currentAdditions.Contains(x)).Select(x => "Unexpected product member: " + x)).ToArray();
 if (errors.Length != 0) throw new Exception(string.Join("\n", errors));
 string baselinePath = Path.Combine(root, "src/Query.Generator/public-api.expected.json");
 string baseline = JsonSerializer.Serialize(new { design_commit = "c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9", symbols = expected }, new JsonSerializerOptions { WriteIndented = true }) + "\n";
@@ -131,6 +135,8 @@ foreach (var test in cases)
     if (!diagnostic.Location.IsInSource || diagnostic.Location.SourceTree!.GetText().ToString(diagnostic.Location.SourceSpan) != test.Span) throw new Exception("Incorrect source span: " + diagnostic);
     if (diagnostics.Any(x => x.Id.StartsWith("NWQ00", StringComparison.Ordinal))) throw new Exception("Historical diagnostic family was repurposed.");
 }
+ProjectionExperienceChecks.Run(productReferences, options);
+ScaffoldCompilerChecks.Run(productReferences, options);
 Console.WriteLine($"B10: {actual.Count} exact public symbols; XML/reference and golden checked; compiled partial/nullable/version mappings; {cases.Length} negative cases across all 7 diagnostic IDs; fresh-driver determinism, unrelated cache reuse and relevant invalidation passed.");
 
 internal sealed class ProfileOptions(string? codecs) : AnalyzerConfigOptionsProvider

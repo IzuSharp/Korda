@@ -7,8 +7,9 @@ public sealed partial class DataSource
 {
     private DatabaseAdministration? _administration;
     /// <summary>Gets the explicit administration facade without opening a database connection.</summary>
-    /// <remarks>Each operation owns a separate, bounded administrative connection. Source creation and DI
-    /// activation never apply migrations. Private in-memory SQLite cannot expose a separate administrative connection.</remarks>
+    /// <remarks>Migration and catalog operations own a separate, bounded administrative connection; drafting
+    /// uses static metadata without opening one. Source creation and DI activation never apply migrations.
+    /// Private in-memory SQLite cannot expose a separate administrative connection.</remarks>
     /// <exception cref="ObjectDisposedException">Source admission is closed.</exception>
     public DatabaseAdministration Administration
     {
@@ -17,10 +18,10 @@ public sealed partial class DataSource
 }
 
 /// <summary>Runs explicit trusted migration and catalog operations through the native provider.</summary>
-/// <remarks>One independent administrative connection executes at a time per source, with bounded waiting.
-/// Every outcome closes that connection before task retirement. It never uses a request session or request
-/// transaction. Result counts, strings and nested columns are charged to source buffering and field limits.</remarks>
-public sealed class DatabaseAdministration
+/// <remarks>Migration and catalog operations use one independent administrative connection at a time per source,
+/// with bounded waiting and closure before task retirement. Draft compilation opens no connection. None uses a
+/// request session or transaction. Result counts, strings and nested columns share source buffering and field limits.</remarks>
+public sealed partial class DatabaseAdministration
 {
     private readonly DataSource _source;
     internal DatabaseAdministration(DataSource source) => _source = source;
@@ -92,7 +93,7 @@ public sealed class DatabaseAdministration
         fixed (byte* bytes = payload)
             status = _source.Binding.Calls.nw_db_admin_create_v1(owner.Pointer, action, BindingChecks.View(bytes, payload.Length), &result, &error);
         if (status == Korda.Interop.Abi.NativeStatus.NotSupported && error.Domain == 0x4442 && error.Code == 5)
-            throw new DatabaseCapabilityException(action == 3 ? "db.schema.read.v1" : "db.migrations.v1", _source.Provider.ToString());
+            throw new DatabaseCapabilityException(action == 4 ? "db.schema.draft.v1" : action == 3 ? "db.schema.read.v1" : "db.migrations.v1", _source.Provider.ToString());
         HostFailure.Check(_source.Binding, status, error);
         return result;
     }

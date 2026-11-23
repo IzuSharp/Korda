@@ -132,8 +132,6 @@ try:
     common = ['-p:UseSharedCompilation=false', '-nr:false', '-m:1']
     config = ['--configfile', a.nuget_config] if a.nuget_config else []
     project = 'tests/Query.Native/Korda.Query.Native.Tests.csproj'
-    run('restore-managed', ['dotnet', 'restore', project, '--locked-mode', *config, *common])
-    run('build-managed', ['dotnet', 'build', project, '-c', 'Release', '--no-restore', *common])
     run('restore-aot', ['dotnet', 'restore', project, '-r', 'linux-x64', '-p:PublishAot=true', '--locked-mode', *config, *common])
     run('publish-aot', ['dotnet', 'publish', project, '-c', 'Release', '-r', 'linux-x64', '-p:PublishAot=true',
          '-p:IlcTreatWarningsAsErrors=true', '--no-restore', '-o', out / 'aot', *common])
@@ -155,7 +153,7 @@ try:
     after_host = inputs(a.host_source.resolve(), host_scopes)
     if source != after or host_source != after_host or native_hash != sha(module):
         raise RuntimeError('Acceptance inputs changed during execution.')
-    write('artifact-identities.json', {'native_sha256': native_hash, 'managed_sha256': sha(ROOT / 'tests/Query.Native/bin/Release/net11.0/Korda.Query.Native.Tests.dll'),
+    write('artifact-identities.json', {'native_sha256': native_hash, 'managed_sha256': sha(ROOT / 'tests/Query.Native/bin/Release/net11.0/linux-x64/Korda.Query.Native.Tests.dll'),
           'aot_sha256': sha(executable), 'source_inputs_unchanged': True,
           'oracle_sha256': {f.name: sha(f) for f in (out / 'oracle').iterdir()},
           'separate_distribution_package': False, 'pristine_machine': False})

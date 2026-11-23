@@ -42,11 +42,17 @@ struct AdministrationRequest
     std::uint64_t lock_timeout_ns = 30'000'000'000;
     bool allow_non_transactional = false;
     std::optional<std::string> schema;
+    std::vector<Model> previous_models;
+    std::vector<Model> current_models;
 };
 
 // Parsing owns every byte before the asynchronous operation is published.
 [[nodiscard]] AdministrationRequest parse_administration(Profile profile, std::uint32_t action, ByteView bytes,
                                                          const AdministrationLimits& limits);
+
+// Draft compilation is pure: no provider connection, database metadata read or SQL execution.
+[[nodiscard]] Bytes draft_schema(const AdministrationRequest& request, const AdministrationLimits& limits,
+                                 const CallContext& context);
 
 // Host grants a dedicated administrative connection (with SQLite busy timeout
 // equal to request.lock_timeout_ns) and always closes it after this call,

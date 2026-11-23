@@ -131,7 +131,12 @@ def workspace(destination):
         for project in list(parent.findall("Project")):
             path = project.attrib["Path"]
             owner, _ = catalog.owner(path)
-            if owner not in database_modules:
+            is_consumer = path.startswith("samples/") or (
+                path.startswith("tests/") and "/ApiCheck/" not in path and "/ApiFixture/" not in path
+            )
+            # Consumers have their own publish/run checks. The shared managed
+            # build produces libraries and compiler/API tooling only.
+            if owner not in database_modules or is_consumer:
                 parent.remove(project)
             else:
                 project.set("Path", os.path.relpath(ROOT / path, destination.parent))
@@ -179,11 +184,11 @@ def api_docs(design):
     if not tool.is_file():
         directory = tool.parent
         tool = next(p for p in directory.glob("*.dll") if p.with_suffix(".runtimeconfig.json").is_file())
-    for name in ("Data.Migrations", "Orm.Relations"):
-        run([sys.executable, f"tests/{name}/api.py", "--design", design, "--tool", tool], name + "-api")
+    for name in ("Data.Migrations", "Orm.Relations", "Data.NativeHost"):
+        run([sys.executable, f"tests/{name}/api.py", "--design", design, "--tool", tool,
+             "--configuration", "Release"], name + "-api")
     run(["dotnet", "tests/Query.Fluent/ApiCheck/bin/Release/net11.0/Korda.Query.Fluent.ApiCheck.dll",
          ROOT, design, os.environ["DOTNET_ROOT"]], "fluent-api")
-    run(["dotnet", "tests/Query.Generator/bin/Release/net11.0/Korda.Query.Generator.Tests.dll"], "query-generator")
     run(["dotnet", "tests/Query.Generator/ApiCheck/bin/Release/net11.0/Korda.Query.Generator.ApiCheck.dll",
          ROOT, design, os.environ["DOTNET_ROOT"]], "query-generator-api")
 

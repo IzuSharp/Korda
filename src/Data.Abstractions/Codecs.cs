@@ -140,6 +140,23 @@ public static class Codecs
         if (scale > 18) throw new ArgumentOutOfRangeException(nameof(scale));
         return Make<decimal>(15, "FixedScaleMoney", v => Int64.Encode(checked((long)DecimalBytes.Scaled(v, scale)))!, b => BinaryInt64(b) / DecimalBytes.Power10(scale), $"{{\"scale\":{scale}}}");
     }
+    /// <summary>Maps a business value through an existing nonnullable store codec without adding a native scalar type.</summary>
+    /// <typeparam name="T">The closed business value type, such as an application identifier.</typeparam>
+    /// <typeparam name="TStore">The selected store codec's CLR value type.</typeparam>
+    /// <param name="storage">The nonnullable codec whose identity, configuration and encoding bounds are preserved.</param>
+    /// <param name="toStore">A direct synchronous conversion used before native admission.</param>
+    /// <param name="fromStore">A direct synchronous conversion used while materializing an owned value.</param>
+    /// <returns>An immutable codec retaining the supplied delegates and the original native scalar identity.</returns>
+    /// <exception cref="ArgumentNullException">A required argument is null.</exception>
+    /// <exception cref="ArgumentException">The storage codec already permits SQL NULL.</exception>
+    /// <remarks>Nullable and NullableReference can wrap the result. Bounded writes delegate to the storage codec before byte allocation, preserving string, binary and JSON limits. User conversions are managed application code; their failures follow normal snapshot or materialization cleanup and never cross a native callback boundary.</remarks>
+    public static ValueCodec<T> Convert<T, TStore>(ValueCodec<TStore> storage, Func<T, TStore> toStore, Func<TStore, T> fromStore)
+    {
+        ArgumentNullException.ThrowIfNull(storage); ArgumentNullException.ThrowIfNull(toStore); ArgumentNullException.ThrowIfNull(fromStore);
+        if (storage.Descriptor.Nullable) throw new ArgumentException("Convert requires a nonnullable storage codec; wrap the converted codec to allow SQL NULL.", nameof(storage));
+        return new(storage.Descriptor, value => storage.Encode(toStore(value))!, bytes => fromStore(storage.DecodeScalar(bytes)),
+            (value, maximum) => storage.EncodeBounded(toStore(value), maximum)!);
+    }
     /// <summary>Adds SQL NULL support to a value codec without changing its logical scalar identity.</summary>
     /// <typeparam name="T">A non-nullable value type.</typeparam>
     /// <param name="codec">The selected non-null scalar codec.</param>

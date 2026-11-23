@@ -3,7 +3,7 @@ using Korda.Data;
 
 namespace Korda.Database;
 
-internal static class AdministrationEncoding
+internal static partial class AdministrationEncoding
 {
     internal static byte[] Request(DataSource source, uint action, MigrationBundle? bundle, MigrationOptions? options, string? schema)
     {
@@ -46,8 +46,9 @@ internal static class AdministrationEncoding
     private static Dictionary<ushort, byte[]> Result(byte[] bytes, uint action, DatabaseLimits limits)
     {
         if (bytes.LongLength > limits.MaxBufferedBytes) throw new DatabaseException("Administrative bytes exceed the source limit.", DatabaseErrorKind.ResourceLimit);
-        var fields = Record(bytes, 19, (1, 1, true), (2, 5, false), (3, 1, false), (4, 2, false), (5, 1, false));
-        if (U32(fields[1]) != action || action is 1 or 3 && (fields.Count != 2 || !fields.ContainsKey(2)) || action == 2 && fields.Count != 1 || action == 0 && (!fields.ContainsKey(3) || !fields.ContainsKey(5) || fields.ContainsKey(2))) throw Invalid();
+        var fields = Record(bytes, 19, (1, 1, true), (2, 5, false), (3, 1, false), (4, 2, false), (5, 1, false), (6, 4, false));
+        if (U32(fields[1]) != action || action is 1 or 3 && (fields.Count != 2 || !fields.ContainsKey(2)) || action == 2 && fields.Count != 1 || action == 0 && (!fields.ContainsKey(3) || !fields.ContainsKey(5) || fields.ContainsKey(2)) ||
+            action != 4 && fields.ContainsKey(6) || action == 4 && (fields.Count != 2 || fields.ContainsKey(2) == fields.ContainsKey(6))) throw Invalid();
         return fields;
     }
     private static uint U32(byte[] value) => value.Length == 4 ? BinaryPrimitives.ReadUInt32LittleEndian(value) : throw Invalid();

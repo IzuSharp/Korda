@@ -224,7 +224,7 @@ void QueryLimits::validate() const
 }
 Capabilities Capabilities::from_mask(std::uint64_t mask, Profile profile)
 {
-    if ((mask >> 25) != 0)
+    if ((mask >> 26) != 0)
         invalid("reserved database capability bits");
     auto has = [mask](unsigned bit) { return (mask & (std::uint64_t{1} << bit)) != 0; };
     return {has(0), has(23), has(17), has(21), has(22),

@@ -15,6 +15,11 @@ namespace nw
 
 using Clock = std::chrono::steady_clock;
 
+// Monotonic module-local diagnostics. These count provider dispatches and
+// libpq protocol submissions, not rows, TCP packets, or elapsed round trips.
+[[nodiscard]] std::uint64_t provider_dispatch_count() noexcept;
+[[nodiscard]] std::uint64_t provider_protocol_count() noexcept;
+
 class Cancel
 {
   public:

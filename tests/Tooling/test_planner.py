@@ -124,7 +124,10 @@ class RoutingTests(unittest.TestCase):
             ("src/Data.Sqlite/public-api.expected.json", "sqlite.api"),
             ("tests/Query.Fluent/ApiCheck/Program.cs", "fluent.api"),
             ("tests/Data.Migrations/api.py", "migrations.api"),
+            ("tests/Data.NativeHost/api.py", "database.api"),
             ("tests/Orm.Relations/api.py", "relations.api"),
+            ("eng/ci/api_contract.py", "database.api"),
+            ("src/Data.NativeHost/db-api-01.api.json", "database.api"),
             ("public-api-standard.json", "database.api"),
         ):
             with self.subTest(path=path):
@@ -139,6 +142,20 @@ class RoutingTests(unittest.TestCase):
         self.assertIn("public.consume-aot", self.actions(plan))
         self.assertNotIn("database.native-tests", self.actions(plan))
         self.assertFalse(any(a.startswith("weekly.") for a in self.actions(plan)))
+
+    def test_business_sample_runs_each_provider_package_without_unrelated_suites(self):
+        plan = self.plan("samples/api/orm-experience/Program.cs", "eng/ci/orm_experience.py")
+        self.assertEqual(set(plan["build_scopes"]), {"postgresql", "sqlite"})
+        self.assertEqual(plan["public_checks"], ["postgresql", "sqlite"])
+        for provider in plan["build_scopes"]:
+            self.assertIn("public.consume-aot", plan["actions"][provider])
+        self.assertNotIn("database.regressions", self.actions(plan))
+
+    def test_generator_source_selects_component_aot_and_both_packages(self):
+        plan = self.plan("src/Query.Generator/ModelGenerator.cs")
+        self.assertIn("generator.test", self.actions(plan))
+        self.assertEqual(plan["public_checks"], ["postgresql", "sqlite"])
+        self.assertNotIn("qemu", set().union(*plan["resources"].values()))
 
     def test_scoped_migration_tests_only_execute_their_consumer(self):
         result = self.plan("tests/Data.Migrations/cross_process.py")
