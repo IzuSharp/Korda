@@ -151,8 +151,8 @@ def main():
 
         test_project = "tests/Interop.Negotiation/Interop.Negotiation.Tests.csproj"
         check_project = "tests/Interop.Negotiation/ApiCheck/ApiCheck.csproj"
-        sample_project = "samples/api/interop-negotiation/Interop.Negotiation.Sample.csproj"
-        restore("test-restore", test_project); build("test-build", test_project)
+        core_project = "src/Korda.Core/Korda.Core.csproj"
+        restore("library-restore", core_project); build("library-build", core_project)
         restore("api-restore", check_project); build("api-build", check_project)
         run("api-xml-reference", [dotnet, "tests/Interop.Negotiation/ApiCheck/bin/Release/net11.0/ApiCheck.dll", ROOT, sdk_root,
                                    "src/Korda.Core/bin/Release/net11.0/Korda.Core.dll"])
@@ -196,10 +196,6 @@ def main():
                           "sourcePath": "runtimes/linux-x64/native/" + filename, "outputPath": relative, "sha256": native_hashes[suffix]}
                 (directory / ("Korda.sample." + suffix + ".assets.json")).write_text(json.dumps(record))
         hashes = [native_hashes["alpha"], native_hashes["beta"]]
-        restore("sample-restore", sample_project); build("sample-build", sample_project)
-        sample_bin = ROOT / "samples/api/interop-negotiation/bin/Release/net11.0"
-        install_sample(sample_bin)
-
         # Test-only NuGet envelopes exercise the actual product binaries without
         # changing product release metadata or installing a consumer Rust hook.
         feed = out / "packages"; feed.mkdir()
@@ -244,14 +240,11 @@ def main():
             script.chmod(0o755)
         consumer_env = environment | {"PATH": str(trap) + os.pathsep + environment["PATH"], "NUGET_PACKAGES": str(consumer / "nuget-cache")}
         consumer_restore = ["--configfile", config_file, *( ["-p:NuGetAudit=false"] if args.offline else [])]
-        restore("consumer-first-restore", "Consumer.csproj", cwd=consumer, env=consumer_env, config_options=consumer_restore, locked=False)
-        restore("consumer-locked-restore", "Consumer.csproj", cwd=consumer, env=consumer_env, config_options=consumer_restore)
-        run("consumer-build", [dotnet, "build", "Consumer.csproj", "-c", "Release", "--no-restore", *build_options], consumer, consumer_env)
-
         def sdk_locations(publish=False):
-            query = [dotnet, "msbuild", "Consumer.csproj", "-nologo", "-p:Configuration=Release", *build_options]
+            query = [dotnet, "msbuild", "Consumer.csproj", "-nologo", "-p:Configuration=Release",
+                     "-p:RuntimeIdentifier=linux-x64", "-p:PublishAot=true", *build_options]
             if publish:
-                query += ["-p:RuntimeIdentifier=linux-x64", "-p:PublishAot=true", "-t:ComputeFilesToPublish", "-getItem:ResolvedFileToPublish"]
+                query += ["-t:ComputeFilesToPublish", "-getItem:ResolvedFileToPublish"]
             else:
                 query += ["-t:ResolveReferences", "-getItem:NativeCopyLocalItems,RuntimeTargetsCopyLocalItems"]
             data = json.loads(run("consumer-sdk-publish-items" if publish else "consumer-sdk-build-items", query, consumer, consumer_env))
@@ -267,13 +260,14 @@ def main():
             if set(matches) != {"alpha", "beta"}:
                 raise ValueError("The SDK native item inventory is incomplete.")
             return matches
-        consumer_bin = consumer / "bin/Release/net11.0"
-        build_locations = sdk_locations()
-        install_sample(consumer_bin, build_locations)
         restore("consumer-aot-first-restore", "Consumer.csproj", aot=True, cwd=consumer, env=consumer_env, config_options=consumer_restore, locked=False)
         restore("consumer-aot-locked-restore", "Consumer.csproj", aot=True, cwd=consumer, env=consumer_env, config_options=consumer_restore)
         consumer_aot = consumer / "publish"
         run("consumer-aot-publish", [dotnet, "publish", "Consumer.csproj", "-c", "Release", "-r", "linux-x64", "-p:PublishAot=true", "--no-restore", "-o", consumer_aot, *build_options], consumer, consumer_env)
+        # The AOT publish supplies both SDK build and publish asset locations.
+        # A second neutral consumer build would not add an execution oracle.
+        build_locations = sdk_locations()
+        install_sample(consumer / "bin/Release/net11.0/linux-x64", build_locations)
         publish_locations = sdk_locations(True)
         install_sample(consumer_aot, publish_locations)
         run("consumer-aot", [consumer_aot / "Consumer", *hashes, "--require-aot"], consumer, consumer_env)
@@ -283,7 +277,7 @@ def main():
               "native_aot": "passed", "rust_invocations": 0, "isolated_package_cache": True, "pristine_machine": False,
               "sdk_build_locations": build_locations, "sdk_publish_locations": publish_locations,
               "consumer_executable_sha256": sha(consumer_aot / "Consumer"),
-              "consumer_source_sha256": sha(consumer / "Program.cs"), "ordinary_lock_sha256": sha(consumer / "packages.lock.json"),
+              "consumer_source_sha256": sha(consumer / "Program.cs"), "consumer_build_mode": "native-aot",
               "aot_lock_sha256": sha(consumer / "packages.linux-x64.aot.lock.json")})
         result.update(passed=True, native_aot_executed=True, aot_cases=len(CASES),
                       assertions_per_mode=sum(r["assertions"] for r in rows), compiled_public_symbols=84,

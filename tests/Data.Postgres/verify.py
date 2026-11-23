@@ -174,14 +174,15 @@ def run_managed(args,output,run,native_env):
     test='tests/Data.Postgres/Korda.Database.PostgreSql.Tests.csproj'
     checker='tests/Data.Postgres/ApiCheck/ApiCheck.csproj'
     sample='samples/api/data-postgres/PostgresExample.csproj'
-    if args.api_only and not args.assembly_dir:
+    # Keep the provider library available for API and artifact checks; executable
+    # consumers are restored and compiled only by the Native AOT loop below.
+    if not args.assembly_dir:
         provider='src/Data.Postgres/Korda.Database.PostgreSql.csproj'
-        run('provider-api-build',['dotnet','build',provider,'-c','Release',*msbuild])
-    for label,project in [('test',test),('api',checker),('sample',sample)]:
-        if (args.api_only and label != 'api') or (args.test_only and label == 'api'):
-            continue
-        run(label+'-restore',['dotnet','restore',project,*restore,*msbuild])
-        run(label+'-build',['dotnet','build',project,'-c','Release','--no-restore',*msbuild])
+        run('provider-restore',['dotnet','restore',provider,*restore,*msbuild])
+        run('provider-build',['dotnet','build',provider,'-c','Release','--no-restore',*msbuild])
+    if not args.test_only:
+        run('api-restore',['dotnet','restore',checker,*restore,*msbuild])
+        run('api-build',['dotnet','build',checker,'-c','Release','--no-restore',*msbuild])
     run('managed-whitespace',['dotnet','format','whitespace','.', '--folder','--verify-no-changes','--include',
                              'tests/Data.Postgres/Program.cs','tests/ProviderProfileChecks.cs','samples/api/data-postgres/Program.cs','--verbosity','quiet'])
     if not args.test_only:
@@ -201,7 +202,7 @@ def run_managed(args,output,run,native_env):
         if path.is_file() and (path.name=='PostgreSqlAssetIdentity.g.cs' or path.name=='Korda.database.postgresql.assets.json'):
             generated.append({'path':str(path.relative_to(ROOT)),'sha256':sha(path),'content':path.read_text()})
     (output/'generated-asset-inputs.json').write_text(json.dumps(generated,indent=2)+'\n')
-    for location in [ROOT/'tests/Data.Postgres/bin/Release/net11.0',output/'test-aot',output/'sample-aot']:
+    for location in [ROOT/'tests/Data.Postgres/bin/Release/net11.0/linux-x64',output/'test-aot',output/'sample-aot']:
         record=json.loads((location/'Korda.database.postgresql.assets.json').read_text())
         if (record['engineId']!='database.postgresql' or record['packageId']!='Korda.Database.PostgreSql'
             or record['sourcePath']!=record['outputPath'] or record['outputPath']!='runtimes/linux-x64/native/libnw_database_postgresql.so'

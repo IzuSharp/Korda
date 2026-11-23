@@ -70,8 +70,8 @@ def main():
     dotnet = shutil.which(args.dotnet) or str(Path(args.dotnet).resolve())
     sdk = Path(dotnet).resolve().parent
     build_flags = ["-p:UseSharedCompilation=false", "-nr:false", "-m:1"]
+    consumer = "tests/Data.Transactions/Korda.Data.Transactions.Tests.csproj"
     ordinary = ["src/Data.Transactions/Korda.Database.Transactions.csproj",
-                "tests/Data.Transactions/Korda.Data.Transactions.Tests.csproj",
                 "tests/Data.Transactions/ApiCheck/ApiCheck.csproj",
                 "samples/api/data-transactions/Data.Transactions.Sample.csproj"]
 
@@ -110,9 +110,9 @@ def main():
                                     "tests/Data.Transactions/ApiCheck/Program.cs", "samples/api/data-transactions/TransactionExamples.cs", "--verbosity", "quiet"])
         assembly = ROOT / "src/Data.Transactions/bin/Release/net11.0/Korda.Database.Transactions.dll"
         run("compiled-api-xml-reference", [dotnet, "tests/Data.Transactions/ApiCheck/bin/Release/net11.0/Korda.Transactions.ApiCheck.dll", ROOT, sdk, assembly])
-        restore("aot-restore", ordinary[1], True)
+        restore("aot-restore", consumer, True)
         publish = output / "publish"
-        run("aot-publish", [dotnet, "publish", ordinary[1], "-c", "Release", "-r", "linux-x64", "-p:PublishAot=true", "--no-restore", "-p:IlcTreatWarningsAsErrors=true", *build_flags, "-o", publish])
+        run("aot-publish", [dotnet, "publish", consumer, "-c", "Release", "-r", "linux-x64", "-p:PublishAot=true", "--no-restore", "-p:IlcTreatWarningsAsErrors=true", *build_flags, "-o", publish])
         executable = publish / "Korda.Data.Transactions.Tests"
         run("aot-execution", [executable, "--aot"], execution_env)
         run("aot-elf-linker", ["readelf", "-p", ".comment", executable])

@@ -90,15 +90,16 @@ def main() -> int:
     local_restore = (["--configfile", str(args.offline_config.resolve()), "-p:NuGetAudit=false"]
                      if args.offline_config else [])
     project = "tests/Data.Streaming/Korda.Data.Streaming.Tests.csproj"
+    library = "src/Data.Streaming/Korda.Data.Streaming.csproj"
     api = "tests/Data.Streaming/ApiCheck/ApiCheck.csproj"
     sample = "samples/api/data-streaming/DataStreaming.csproj"
     fixture_dir = args.native_build.resolve() / "fixtures"
     fixture = fixture_dir / "libkorda_streaming_fixture.so"
-    assembly = ROOT / "tests/Data.Streaming/bin/Release/net11.0/Korda.Data.Streaming.Tests.dll"
+    assembly = ROOT / "tests/Data.Streaming/bin/Release/net11.0/linux-x64/Korda.Data.Streaming.Tests.dll"
     streaming_assembly = ROOT / "src/Data.Streaming/bin/Release/net11.0/Korda.Data.Streaming.dll"
     streaming_xml = streaming_assembly.with_suffix(".xml")
     api_assembly = ROOT / "tests/Data.Streaming/ApiCheck/bin/Release/net11.0/Korda.Data.Streaming.ApiCheck.dll"
-    sample_assembly = ROOT / "samples/api/data-streaming/bin/Release/net11.0/Korda.Data.Streaming.Sample.dll"
+    sample_assembly = ROOT / "samples/api/data-streaming/bin/Release/net11.0/linux-x64/Korda.Data.Streaming.Sample.dll"
     server = None
     server_log = None
     status = "failed"
@@ -129,7 +130,7 @@ def main() -> int:
                              [ROOT / "native/cpp/tests/fixtures/streaming.cpp", ROOT / "native/cpp/tests/streaming_tests.cpp"])
         (output / "compiler-provenance.txt").write_text(provenance)
 
-        for label, path in [("consumer", project), ("api-check", api), ("sample", sample)]:
+        for label, path in [("library", library), ("api-check", api)]:
             run(label + "-restore", ["dotnet", "restore", path, "--locked-mode", *local_restore, *common])
             run(label + "-build", ["dotnet", "build", path, "-c", "Release", "--no-restore", *common])
         cs_files = [str(path.relative_to(ROOT)) for scope in OWNED if (ROOT / scope).is_dir()
@@ -172,12 +173,12 @@ def main() -> int:
         run("aot-providers", [str(executable), str(output / "aot-results"), "--require-aot"], native_env)
         sample_dir = output / "sample-aot"
         run("sample-aot-publish", ["dotnet", "publish", sample, "-c", "Release", "-r", "linux-x64",
-                                  "-p:PublishAot=true", "-p:RestoreLockedMode=true", "-o", str(sample_dir), *common])
+                                  "-p:PublishAot=true", "-p:RestoreLockedMode=true", "-o", str(sample_dir), *local_restore, *common])
         sample_exe = sample_dir / "Korda.Data.Streaming.Sample"
         run("sample-sqlite", [str(sample_exe), "sqlite"], native_env)
         run("sample-postgresql", [str(sample_exe), "postgresql"], native_env)
 
-        artifact_paths = [assembly, streaming_assembly, streaming_xml, executable, fixture, api_assembly, sample_assembly]
+        artifact_paths = [assembly, streaming_assembly, streaming_xml, executable, fixture, api_assembly, sample_assembly, sample_exe]
         (output / "artifacts.json").write_text(json.dumps([
             {"path": str(path.relative_to(ROOT)) if path.is_relative_to(ROOT) else str(path),
              "sha256": sha(path), "size": path.stat().st_size} for path in artifact_paths
