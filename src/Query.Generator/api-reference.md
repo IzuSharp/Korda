@@ -91,7 +91,7 @@ Korda.Data.WeaveKeyAttribute | kind=Class;static=False;sealed=True;abstract=Fals
 
 Marks a non-null primary-key property in deterministic projection order.
 
-Nullable keys are rejected at compilation and again by the static descriptor builder; there is no inferred key convention.
+Nullable keys are rejected at compilation and again by the static descriptor builder. Explicit keys take precedence over the opt-in Id convention.
 
 
 ## `T:Korda.Data.WeaveTableAttribute`

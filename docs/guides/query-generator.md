@@ -1,105 +1,222 @@
-# Static model generation
+# Static models, DTOs and reusable codecs
 
-> **DB-CPP-01 implementation update.** The public C# examples, signatures and ownership contracts in this guide remain the compatibility inputs. The current maintained native implementation is C++20; its module mapping, direct libpq/sqlite3 execution, Clang/CMake commands and package production are documented in [C++ native implementation](cpp-native.md). Descriptions below of Rust, SQLx, SeaQuery or Tokio internals are retained as the fixed `465cd0f` behavioral reference, not current build dependencies. The named verification entry points now build the ported C++ fixtures and retain their original managed assertions.
+Each independent database provider package includes the C# source generator. It
+turns ordinary classes and records into static table metadata, typed column
+tokens and direct row constructors. SQL composition and execution remain in the
+existing C++20 engine, with libpq for PostgreSQL and sqlite3 for SQLite. Changing
+an entity or DTO rebuilds C# only; the generator performs no database, network or
+native compiler operation.
 
-The database facade brings `Korda.Query.Generator` transitively. An ordinary
-C# model produces immutable `Table<T>`, typed `Column<T,TValue>` fields and a direct
-row constructor/writer. SQL construction and execution remain in the same
-maintainer-built Rust SeaQuery/SQLx assets. Adding or changing a supported model
-requires only a C# rebuild; generation performs no network, database, Cargo or
-native-module operation.
+The [order business sample](../../samples/api/orm-experience/) combines these
+features with joins, cursor paging, batched relations and checked writes. The
+[earlier generator sample](../../samples/api/query-generator/) retains the
+equivalent handwritten mapping path.
 
-## Minimal model
-
-```csharp
-using Korda.Data;
-
-[WeaveTable("students", DescriptorName = "Students")]
-public sealed partial record Student(
-    [property: WeaveKey, WeaveColumn("id")] long Id,
-    string Name,
-    [property: WeaveColumn("email")] string? Email,
-    [property: WeaveVersion, WeaveColumn("version")] long Version);
-```
-
-The store names are exactly `id`, `Name`, `email`, and `version`. CLR casing is
-preserved when `WeaveColumn` is absent. `Students.Table` is immutable and
-`Students.Row` is the same static projection contract used by handwritten
-`TableBuilder<Student>`. `Students.Id`, `Students.Name`, `Students.Email` and
-`Students.Version` retain their property spelling and generic value types.
-A table has no native owner until a datasource consumes its descriptor.
-
-Use the generated descriptors with the normal Fluent surface:
+## Conventions are explicit
 
 ```csharp
-using var query = session.From(Students.Table);
-var rows = await query.WhereEqual(Students.Id, 7L).SelectAll().ToListAsync(token);
+[WeaveTable]
+public sealed record Customer(long Id, string Name, string? Email);
 ```
 
-See [the executable generated/manual consumer](../../samples/api/query-generator/)
-for actual database setup, source/session disposal and a second model.
+This generates `CustomerMapping.Table` for the exact table name `Customer`, the
+three typed columns and `CustomerMapping.Row`. The parameterless attribute
+infers a unique nonnullable `Id` property as the primary key. It does not
+pluralize names, change casing or infer generated values. Explicit `WeaveKey`
+properties take precedence and support composite keys. Use
+`[WeaveTable(InferPrimaryKey = false)]` for a keyless model.
 
-## Constructor and codec policy
+Existing named-table declarations preserve their behavior. To opt a named table
+into key inference, write:
 
-Top-level, concrete, closed classes and records can use one accessible constructor
-covering their ordinary public properties, plus accessible set/init assignment for
-remaining members. Public and internal accessibility are supported; ambiguous
-constructors fail at compilation. Partial declarations are resolved as one symbol.
-Constructor parameter order comes first; other properties follow ordinal CLR name
-order. Required ignored members cannot be silently left unset.
+```csharp
+[WeaveTable("customers", DescriptorName = "Customers", InferPrimaryKey = true)]
+public sealed class Customer
+{
+    public long Id { get; init; }
+    public string Name { get; init; } = "";
+    public string? Email { get; init; }
+}
+```
 
-Automatic scalar mappings cover Int16/Int32/Int64, Boolean, UTF-8 strings, byte
-arrays, Guid, DateOnly, TimeOnly, UTC DateTime/DateTimeOffset, Single, Double,
-Int32 enum codecs and their supported nullable forms. Decimal/JSON configurations
-that need an explicit scale or static `JsonTypeInfo` use the handwritten codec
-path; there is no implicit representation choice. UTC and enum-range validation
-remain the existing codec's responsibility. A nullable key or nullable property
-bound to a non-null constructor parameter fails at compilation.
+`WeaveColumn("store_name")` supplies an exact column name;
+`WeaveColumn("id", Generated = true)` declares an insert-generated column.
+`WeaveVersion` marks an optimistic concurrency token without incrementing it.
+`WeaveIgnore` excludes a property from both reader and writer. No attribute
+requires the entity to inherit a framework base class or be partial.
 
-`WeaveColumn(Generated = true)` records a database-generated column.
-`WeaveVersion` records an optimistic-concurrency token; it does not increment a
-value or enable tracking. `WeaveIgnore` excludes a property from both readers and
-writers, and cannot be combined with other mapping annotations.
+## Select only the DTO's columns
 
-## Diagnostics and incremental behavior
+Use `WeaveProjection` when a DTO has no table identity. Its generated descriptor
+exposes `Row` for parameterized SQL and `Bind` for Fluent expressions. A binder's
+arguments have the exact types and names of the DTO's mapped properties.
+
+```csharp
+[WeaveProjection(DescriptorName = "OrderRows")]
+public sealed record OrderRow(
+    [property: WeaveColumn("order_id")] OrderId Id,
+    [property: WeaveColumn("customer_name")] string? Customer,
+    decimal Total);
+
+using var query = session.From(Orders.Table);
+var customer = query.LeftJoin(Customers.Table, "customer",
+    on => on.Left(Orders.CustomerId).Equal(on.Right(Customers.Id).AsNullable()));
+var projection = OrderRows.Bind(query,
+    Id: query.Column(Orders.Id),
+    Customer: query.NullableReference(customer, Customers.Name),
+    Total: query.Column(Orders.Total));
+var rows = await query.OrderBy(Orders.TenantId).OrderBy(Orders.Id).Take(20)
+    .Select(projection).ToListAsync(cancellationToken);
+```
+
+The query selects those three expressions. Other entity fields, including large
+JSON values or private application notes, are not selected. A computed or joined
+expression can fill any compatible argument. Repeated store column names are
+disambiguated by the DTO's explicit output aliases. Duplicate aliases are
+compilation errors. Expression type errors are C# compilation errors;
+cross-query ownership and configured codec differences reject during binding.
+
+The same DTO and codec policy work with parameterized SQL. The SQL must return
+the exact declared aliases in constructor order:
+
+```csharp
+var parameters = new SqlParameters().Add("id", orderId, OrderCodecs.Id);
+var command = SqlCommand.Create("""
+    SELECT o."Id" AS order_id, c."Name" AS customer_name, o."Total" AS "Total"
+    FROM orders AS o LEFT JOIN customers AS c ON c."Id" = o."CustomerId"
+    WHERE o."Id" = @id
+    """, parameters);
+var fromSql = await session.QueryAsync(command, OrderRows.Row, cancellationToken);
+```
+
+Projection fields follow the chosen constructor's parameter order, then ordinal
+CLR property-name order for remaining writable properties. SQL NULL requires a
+nullable member. Left joins use `NullableValue` or `NullableReference`; a missing
+row is not replaced with a default scalar sentinel. `Bind` retains the existing
+query ownership rules, so keep the query alive until execution and disposal end.
+
+## Choose a constructor or parameter association
+
+Classes and records can use one accessible constructor covering their mapped
+properties, plus accessible set/init assignment for remaining members. When
+several constructors qualify, select one explicitly:
+
+```csharp
+[WeaveProjection]
+public sealed class OrderLabel
+{
+    public long Id { get; init; }
+    public string? Label { get; init; }
+
+    public OrderLabel() { }
+
+    [WeaveConstructor]
+    public OrderLabel([WeaveParameter(nameof(Id))] long key, string? label)
+    {
+        Id = key;
+        Label = label;
+    }
+}
+```
+
+`WeaveParameter` names the CLR property, while `WeaveColumn` names the database
+column or result alias. Duplicate constructor inputs, missing associations,
+inaccessible constructors and nullable-to-nonnullable assignments fail at
+compilation. Models must be concrete, closed top-level classes or records without
+a model base class. Ignored required members and required fields cannot be
+silently left unset.
+
+## Declare custom ID, decimal and JSON policies once
+
+Assembly-level defaults apply to every generated model and DTO in that
+compilation. A default supplies an accessible static field or getter of exactly
+`ValueCodec<T>` for the nonnullable base type. Generated descriptors capture the
+value on static initialization; keep policy members stable and share their
+immutable codec instances.
+
+```csharp
+[assembly: WeaveCodec(typeof(OrderId), typeof(OrderCodecs), nameof(OrderCodecs.Id))]
+[assembly: WeaveCodec(typeof(decimal), typeof(OrderCodecs), nameof(OrderCodecs.Money))]
+[assembly: WeaveCodec(typeof(OrderSettings), typeof(OrderCodecs), nameof(OrderCodecs.Settings))]
+
+public readonly record struct OrderId(long Value);
+public sealed record OrderSettings(string Channel, bool Gift);
+
+public static class OrderCodecs
+{
+    public static ValueCodec<OrderId> Id { get; } =
+        Codecs.Convert<OrderId, long>(Codecs.Int64,
+            static id => id.Value, static value => new(value));
+    public static ValueCodec<decimal> Money { get; } = Codecs.FixedScaleMoney(2);
+    public static ValueCodec<OrderSettings> Settings { get; } =
+        Codecs.Json(OrderJson.Default.OrderSettings);
+}
+
+[JsonSerializable(typeof(OrderSettings))]
+internal partial class OrderJson : JsonSerializerContext { }
+```
+
+JSON requires the shown static `System.Text.Json` metadata. The generator reads
+the declared codec member's type, so it does not need to discover another source
+generator's output. Nullable value/reference members automatically wrap the base
+policy, preserving SQL NULL separately from a JSON `null` value.
+
+`Codecs.Convert` preserves the underlying native codec ID, configuration and
+bounded encoder. It is suitable for strongly typed identifiers and other direct
+application conversions. It requires a nonnullable storage codec; apply
+`Codecs.Nullable` or `Codecs.NullableReference` to the result when needed.
+Conversion delegates remain ordinary managed application code. Exceptions occur
+during the existing snapshot/materialization stages, with their normal cleanup.
+
+`Codecs.Decimal(18, 2)` selects exact PostgreSQL numeric precision and scale;
+ordinary SQLite rejects that provider capability. `FixedScaleMoney(2)` uses an
+explicit signed-Int64 representation with no rounding. `DecimalText` preserves
+decimal values as text without promising numeric ordering or aggregation. Choose
+a representation supported by the intended provider; no fallback silently
+changes the representation. The order sample builds each provider's explicit
+money policy separately.
+
+A property can override its compilation default:
+
+```csharp
+[property: WeaveUseCodec(typeof(OtherCodecs), nameof(OtherCodecs.Tax))]
+```
+
+The override member follows the same nonnullable `ValueCodec<T>` rule. Reused
+profiles apply to table writers, raw SQL projections and Fluent bindings.
+`ProjectionBuilder.Add(expression, alias, expectedCodec)` validates the exact
+scalar configuration and SQL nullability before creating a typed DTO field.
+
+## Diagnostics, compatibility and costs
 
 | Diagnostic | Cause and action |
 | --- | --- |
-| NWQ0101 | No automatic enabled codec; select a supported scalar or an explicit handwritten mapping. |
-| NWQ0102 | Nullable storage conflicts with a non-null constructor/key; make the static policy consistent. |
-| NWQ0103 | Constructor/member assignment is ambiguous or incomplete; provide one accessible construction path. |
-| NWQ0104 | Invalid, duplicate or conflicting table/column/key/descriptor metadata; use distinct exact names. |
-| NWQ0105 | Selected compile-time native codec profile omits a required codec; select a compatible package/profile. |
-| NWQ0106 | Unsupported source/dependency shape, including open generic/nested/inherited models; use an explicit closed static descriptor. |
-| NWQ0107 | Mapping would require dynamic code or unbounded discovery, including object/dynamic/runtime Type; supply statically known members. |
+| NWQ0101 | No automatic/static codec; declare a supported scalar or exact reusable policy. |
+| NWQ0102 | Nullable storage conflicts with a nonnullable constructor or key. |
+| NWQ0103 | Constructor selection or parameter/member mapping is ambiguous, inaccessible or incomplete. |
+| NWQ0104 | Conflicting aliases, key convention, descriptor names, codec defaults or policy member types. |
+| NWQ0105 | An automatic codec is absent from the explicit compile-time native codec profile. |
+| NWQ0106 | Unsupported declaration shape, including open generic, nested or inherited models. |
+| NWQ0107 | Mapping would require dynamic code or runtime type discovery. |
 
-The historic NWQ0001–NWQ0016 family is not repurposed. Errors point at the relevant
-source symbol or constructor parameter. A maintainer profile can set the comma
-separated `KordaEnabledNativeCodecs` IDs; runtime native capability admission
-is still mandatory. Generated source ordering and names are deterministic. The
-incremental output stage compares resolved source content, reusing it after an
-unrelated file edit and invalidating it after a relevant model edit. Diagnostic
-locations are refreshed with their source trees. The generator reads declared
-input symbols directly, without relying on another generator's output.
+The historic NWQ0001–NWQ0016 diagnostic family is not repurposed. User-supplied
+codec initializers are not interpreted to guess native capabilities; runtime
+profile admission remains required. Generated source is deterministic. Unrelated
+file edits reuse unchanged semantic output; relevant model or policy-symbol
+changes invalidate it. Static mapping ambiguities have source diagnostics before
+native code is loaded.
 
-## Explicit manual path
+Static descriptors allocate managed metadata once per generated class. Each
+query-bound projection allocates its finite metadata and retains native
+expression references; DTO objects and owned strings/arrays have normal C#
+allocation costs. Direct constructors and codec delegates require no reflection,
+dynamic compilation or runtime model scan. Ordinary model and DTO changes reuse
+the provider's existing native asset.
 
-Set `<KordaExcludeGenerators>true</KordaExcludeGenerators>` in the
-consumer project and provide equivalent `TableBuilder` declarations, direct row
-constructors and typed writers. No `rd.xml`, dynamic-code switch, runtime
-reflection, metadata scan or Cargo invocation is required. The sample's
-`ManualMappings=true` configuration selects this path and compares the same
-canonical table and projection hashes/results. Both paths use the same bounded
-B12 materializer and B13 native query execution.
-
-Static descriptor construction allocates managed metadata once per generated
-class. Each DTO has the normal owned CLR strings/arrays/object allocation; this is
-not a zero-copy mapping claim. Constructor failures use the existing stream/batch
-cleanup path, which joins native cursor retirement separately from caller task
-completion. NativeAOT evidence applies to the produced application; the Roslyn
-compiler plugin itself targets netstandard2.0 and runs in the compiler host.
-
-The exact attribute API and XML reference are checked in
-[the generated API reference](../../src/Query.Generator/api-reference.md). Linux
-x64 acceptance and package/native hashes are recorded by Task-05; other platforms
-are separate acceptance rows.
+Set `<KordaExcludeGenerators>true</KordaExcludeGenerators>` to use equivalent
+handwritten `TableBuilder` and `Projection` declarations. The generator remains
+a compiler-host tool; actual product consumers are verified as Linux x64 Native
+AOT executables. Compiler diagnostics, runtime mapping assertions and the exact
+API/XML reference checks live in [the generator tests](../../tests/Query.Generator/).
+The [DB-API-01 Plan record](https://github.com/IzuSharp/Plan/tree/main/ledger/evidence/batches/DB-API-01)
+owns source-bound execution and package/native-reuse evidence.

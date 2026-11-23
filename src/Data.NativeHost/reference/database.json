@@ -22,6 +22,26 @@
       "implicit_member": false
     },
     {
+      "id": "F:Korda.Database.MigrationChangeKind.AddColumn",
+      "signature": "Korda.Database.MigrationChangeKind.AddColumn = 1",
+      "implicit_member": false
+    },
+    {
+      "id": "F:Korda.Database.MigrationChangeKind.CreateTable",
+      "signature": "Korda.Database.MigrationChangeKind.CreateTable = 0",
+      "implicit_member": false
+    },
+    {
+      "id": "F:Korda.Database.MigrationChangeKind.DropColumn",
+      "signature": "Korda.Database.MigrationChangeKind.DropColumn = 2",
+      "implicit_member": false
+    },
+    {
+      "id": "F:Korda.Database.MigrationChangeKind.DropTable",
+      "signature": "Korda.Database.MigrationChangeKind.DropTable = 3",
+      "implicit_member": false
+    },
+    {
       "id": "F:Korda.Database.MigrationTransactionMode.NonTransactional",
       "signature": "Korda.Database.MigrationTransactionMode.NonTransactional = 1",
       "implicit_member": false
@@ -327,6 +347,16 @@
       "implicit_member": false
     },
     {
+      "id": "M:Korda.Database.DataSession.InTransactionAsync(System.Func{Korda.Database.DataSession,System.Threading.CancellationToken,System.Threading.Tasks.Task},Korda.Database.TransactionOptions,System.Threading.CancellationToken)",
+      "signature": "public System.Threading.Tasks.Task Korda.Database.DataSession.InTransactionAsync(System.Func\u003CKorda.Database.DataSession, System.Threading.CancellationToken, System.Threading.Tasks.Task\u003E action, Korda.Database.TransactionOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))",
+      "implicit_member": false
+    },
+    {
+      "id": "M:Korda.Database.DataSession.InTransactionAsync\u0060\u00601(System.Func{Korda.Database.DataSession,System.Threading.CancellationToken,System.Threading.Tasks.Task{\u0060\u00600}},Korda.Database.TransactionOptions,System.Threading.CancellationToken)",
+      "signature": "public System.Threading.Tasks.Task\u003CT\u003E Korda.Database.DataSession.InTransactionAsync\u003CT\u003E(System.Func\u003CKorda.Database.DataSession, System.Threading.CancellationToken, System.Threading.Tasks.Task\u003CT\u003E\u003E action, Korda.Database.TransactionOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))",
+      "implicit_member": false
+    },
+    {
       "id": "M:Korda.Database.DataSession.InsertAsync\u0060\u00601(Korda.Data.Table{\u0060\u00600},\u0060\u00600,System.Threading.CancellationToken)",
       "signature": "public System.Threading.Tasks.Task\u003Clong\u003E Korda.Database.DataSession.InsertAsync\u003CTEntity\u003E(Korda.Data.Table\u003CTEntity\u003E table, TEntity entity, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) where TEntity : class",
       "implicit_member": false
@@ -344,6 +374,11 @@
     {
       "id": "M:Korda.Database.DataSession.LoadRelatedAsync\u0060\u00602(Korda.Data.EntityKey{\u0060\u00600},Korda.Data.Relation{\u0060\u00600,\u0060\u00601},System.Threading.CancellationToken)",
       "signature": "public System.Threading.Tasks.Task\u003CSystem.Collections.Generic.IReadOnlyList\u003CTChild\u003E\u003E Korda.Database.DataSession.LoadRelatedAsync\u003CTParent, TChild\u003E(Korda.Data.EntityKey\u003CTParent\u003E parentKey, Korda.Data.Relation\u003CTParent, TChild\u003E relation, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) where TParent : class where TChild : class",
+      "implicit_member": false
+    },
+    {
+      "id": "M:Korda.Database.DataSession.LoadRelatedAsync\u0060\u00602(System.Collections.Generic.IReadOnlyList{Korda.Data.EntityKey{\u0060\u00600}},Korda.Data.Relation{\u0060\u00600,\u0060\u00601},System.Threading.CancellationToken)",
+      "signature": "public System.Threading.Tasks.Task\u003CSystem.Collections.Generic.IReadOnlyList\u003CSystem.Collections.Generic.IReadOnlyList\u003CTChild\u003E\u003E\u003E Korda.Database.DataSession.LoadRelatedAsync\u003CTParent, TChild\u003E(System.Collections.Generic.IReadOnlyList\u003CKorda.Data.EntityKey\u003CTParent\u003E\u003E parentKeys, Korda.Data.Relation\u003CTParent, TChild\u003E relation, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) where TParent : class where TChild : class",
       "implicit_member": false
     },
     {
@@ -422,6 +457,11 @@
       "implicit_member": false
     },
     {
+      "id": "M:Korda.Database.DatabaseAdministration.DraftMigrationAsync(Korda.Database.DatabaseModel,Korda.Database.DatabaseModel,System.Threading.CancellationToken)",
+      "signature": "public System.Threading.Tasks.Task\u003CKorda.Database.MigrationDraft\u003E Korda.Database.DatabaseAdministration.DraftMigrationAsync(Korda.Database.DatabaseModel previous, Korda.Database.DatabaseModel current, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))",
+      "implicit_member": false
+    },
+    {
       "id": "M:Korda.Database.DatabaseAdministration.GetMigrationStatusAsync(Korda.Database.MigrationBundle,System.Threading.CancellationToken)",
       "signature": "public System.Threading.Tasks.Task\u003CSystem.Collections.Generic.IReadOnlyList\u003CKorda.Database.MigrationStatus\u003E\u003E Korda.Database.DatabaseAdministration.GetMigrationStatusAsync(Korda.Database.MigrationBundle bundle, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))",
       "implicit_member": false
@@ -487,6 +527,21 @@
       "implicit_member": true
     },
     {
+      "id": "M:Korda.Database.DatabaseModel.Add\u0060\u00601(Korda.Data.Table{\u0060\u00600})",
+      "signature": "public Korda.Database.DatabaseModel Korda.Database.DatabaseModel.Add\u003CTEntity\u003E(Korda.Data.Table\u003CTEntity\u003E table) where TEntity : class",
+      "implicit_member": false
+    },
+    {
+      "id": "M:Korda.Database.DatabaseModel.Parse(System.String)",
+      "signature": "public static Korda.Database.DatabaseModel Korda.Database.DatabaseModel.Parse(string json)",
+      "implicit_member": false
+    },
+    {
+      "id": "M:Korda.Database.DatabaseModel.ToJson",
+      "signature": "public string Korda.Database.DatabaseModel.ToJson()",
+      "implicit_member": false
+    },
+    {
       "id": "M:Korda.Database.DatabaseProvider.#ctor",
       "signature": "public Korda.Database.DatabaseProvider.DatabaseProvider()",
       "implicit_member": true
@@ -539,6 +594,61 @@
     {
       "id": "M:Korda.Database.MigrationBundle.#ctor(Korda.Database.DatabaseProvider,System.Collections.Generic.IReadOnlyList{Korda.Database.Migration})",
       "signature": "public Korda.Database.MigrationBundle.MigrationBundle(Korda.Database.DatabaseProvider provider, System.Collections.Generic.IReadOnlyList\u003CKorda.Database.Migration\u003E migrations)",
+      "implicit_member": false
+    },
+    {
+      "id": "M:Korda.Database.MigrationChange.#ctor(System.String,Korda.Database.MigrationChangeKind,System.String,System.String,System.String,System.String,System.Boolean)",
+      "signature": "public Korda.Database.MigrationChange.MigrationChange(string Id, Korda.Database.MigrationChangeKind Kind, string? Schema, string Table, string? Column, string Sql, bool IsDestructive)",
+      "implicit_member": false
+    },
+    {
+      "id": "M:Korda.Database.MigrationChange.Deconstruct(System.String@,Korda.Database.MigrationChangeKind@,System.String@,System.String@,System.String@,System.String@,System.Boolean@)",
+      "signature": "public void Korda.Database.MigrationChange.Deconstruct(out string Id, out Korda.Database.MigrationChangeKind Kind, out string? Schema, out string Table, out string? Column, out string Sql, out bool IsDestructive)",
+      "implicit_member": true
+    },
+    {
+      "id": "M:Korda.Database.MigrationChange.Equals(Korda.Database.MigrationChange)",
+      "signature": "public bool Korda.Database.MigrationChange.Equals(Korda.Database.MigrationChange? other)",
+      "implicit_member": true
+    },
+    {
+      "id": "M:Korda.Database.MigrationChange.Equals(System.Object)",
+      "signature": "public override bool Korda.Database.MigrationChange.Equals(object? obj)",
+      "implicit_member": true
+    },
+    {
+      "id": "M:Korda.Database.MigrationChange.GetHashCode",
+      "signature": "public override int Korda.Database.MigrationChange.GetHashCode()",
+      "implicit_member": true
+    },
+    {
+      "id": "M:Korda.Database.MigrationChange.ToString",
+      "signature": "public override string Korda.Database.MigrationChange.ToString()",
+      "implicit_member": true
+    },
+    {
+      "id": "M:Korda.Database.MigrationChange.op_Equality(Korda.Database.MigrationChange,Korda.Database.MigrationChange)",
+      "signature": "public static bool Korda.Database.MigrationChange.operator ==(Korda.Database.MigrationChange? left, Korda.Database.MigrationChange? right)",
+      "implicit_member": true
+    },
+    {
+      "id": "M:Korda.Database.MigrationChange.op_Inequality(Korda.Database.MigrationChange,Korda.Database.MigrationChange)",
+      "signature": "public static bool Korda.Database.MigrationChange.operator !=(Korda.Database.MigrationChange? left, Korda.Database.MigrationChange? right)",
+      "implicit_member": true
+    },
+    {
+      "id": "M:Korda.Database.MigrationChange.{Clone}$",
+      "signature": "public Korda.Database.MigrationChange Korda.Database.MigrationChange.\u003CClone\u003E$()",
+      "implicit_member": true
+    },
+    {
+      "id": "M:Korda.Database.MigrationChangeKind.#ctor",
+      "signature": "public Korda.Database.MigrationChangeKind.MigrationChangeKind()",
+      "implicit_member": true
+    },
+    {
+      "id": "M:Korda.Database.MigrationDraft.ToMigration(System.Int64,System.String,System.Collections.Generic.IReadOnlyCollection{System.String})",
+      "signature": "public Korda.Database.Migration Korda.Database.MigrationDraft.ToMigration(long version, string description, System.Collections.Generic.IReadOnlyCollection\u003Cstring\u003E? approvedDestructiveChanges = null)",
       "implicit_member": false
     },
     {
@@ -722,6 +832,101 @@
       "implicit_member": true
     },
     {
+      "id": "M:Korda.Database.SchemaColumnHint.#ctor(System.String,System.String,System.String,System.String,System.String)",
+      "signature": "public Korda.Database.SchemaColumnHint.SchemaColumnHint(string ColumnName, string ClrType, string? CodecDeclaringType = null, string? CodecMember = null, string? PropertyName = null)",
+      "implicit_member": false
+    },
+    {
+      "id": "M:Korda.Database.SchemaColumnHint.Deconstruct(System.String@,System.String@,System.String@,System.String@,System.String@)",
+      "signature": "public void Korda.Database.SchemaColumnHint.Deconstruct(out string ColumnName, out string ClrType, out string? CodecDeclaringType, out string? CodecMember, out string? PropertyName)",
+      "implicit_member": true
+    },
+    {
+      "id": "M:Korda.Database.SchemaColumnHint.Equals(Korda.Database.SchemaColumnHint)",
+      "signature": "public bool Korda.Database.SchemaColumnHint.Equals(Korda.Database.SchemaColumnHint? other)",
+      "implicit_member": true
+    },
+    {
+      "id": "M:Korda.Database.SchemaColumnHint.Equals(System.Object)",
+      "signature": "public override bool Korda.Database.SchemaColumnHint.Equals(object? obj)",
+      "implicit_member": true
+    },
+    {
+      "id": "M:Korda.Database.SchemaColumnHint.GetHashCode",
+      "signature": "public override int Korda.Database.SchemaColumnHint.GetHashCode()",
+      "implicit_member": true
+    },
+    {
+      "id": "M:Korda.Database.SchemaColumnHint.ToString",
+      "signature": "public override string Korda.Database.SchemaColumnHint.ToString()",
+      "implicit_member": true
+    },
+    {
+      "id": "M:Korda.Database.SchemaColumnHint.op_Equality(Korda.Database.SchemaColumnHint,Korda.Database.SchemaColumnHint)",
+      "signature": "public static bool Korda.Database.SchemaColumnHint.operator ==(Korda.Database.SchemaColumnHint? left, Korda.Database.SchemaColumnHint? right)",
+      "implicit_member": true
+    },
+    {
+      "id": "M:Korda.Database.SchemaColumnHint.op_Inequality(Korda.Database.SchemaColumnHint,Korda.Database.SchemaColumnHint)",
+      "signature": "public static bool Korda.Database.SchemaColumnHint.operator !=(Korda.Database.SchemaColumnHint? left, Korda.Database.SchemaColumnHint? right)",
+      "implicit_member": true
+    },
+    {
+      "id": "M:Korda.Database.SchemaColumnHint.{Clone}$",
+      "signature": "public Korda.Database.SchemaColumnHint Korda.Database.SchemaColumnHint.\u003CClone\u003E$()",
+      "implicit_member": true
+    },
+    {
+      "id": "M:Korda.Database.SchemaScaffoldOptions.#ctor(System.String,System.String)",
+      "signature": "public Korda.Database.SchemaScaffoldOptions.SchemaScaffoldOptions(string Namespace, string TypeName)",
+      "implicit_member": false
+    },
+    {
+      "id": "M:Korda.Database.SchemaScaffoldOptions.Deconstruct(System.String@,System.String@)",
+      "signature": "public void Korda.Database.SchemaScaffoldOptions.Deconstruct(out string Namespace, out string TypeName)",
+      "implicit_member": true
+    },
+    {
+      "id": "M:Korda.Database.SchemaScaffoldOptions.Equals(Korda.Database.SchemaScaffoldOptions)",
+      "signature": "public bool Korda.Database.SchemaScaffoldOptions.Equals(Korda.Database.SchemaScaffoldOptions? other)",
+      "implicit_member": true
+    },
+    {
+      "id": "M:Korda.Database.SchemaScaffoldOptions.Equals(System.Object)",
+      "signature": "public override bool Korda.Database.SchemaScaffoldOptions.Equals(object? obj)",
+      "implicit_member": true
+    },
+    {
+      "id": "M:Korda.Database.SchemaScaffoldOptions.GetHashCode",
+      "signature": "public override int Korda.Database.SchemaScaffoldOptions.GetHashCode()",
+      "implicit_member": true
+    },
+    {
+      "id": "M:Korda.Database.SchemaScaffoldOptions.ToString",
+      "signature": "public override string Korda.Database.SchemaScaffoldOptions.ToString()",
+      "implicit_member": true
+    },
+    {
+      "id": "M:Korda.Database.SchemaScaffoldOptions.op_Equality(Korda.Database.SchemaScaffoldOptions,Korda.Database.SchemaScaffoldOptions)",
+      "signature": "public static bool Korda.Database.SchemaScaffoldOptions.operator ==(Korda.Database.SchemaScaffoldOptions? left, Korda.Database.SchemaScaffoldOptions? right)",
+      "implicit_member": true
+    },
+    {
+      "id": "M:Korda.Database.SchemaScaffoldOptions.op_Inequality(Korda.Database.SchemaScaffoldOptions,Korda.Database.SchemaScaffoldOptions)",
+      "signature": "public static bool Korda.Database.SchemaScaffoldOptions.operator !=(Korda.Database.SchemaScaffoldOptions? left, Korda.Database.SchemaScaffoldOptions? right)",
+      "implicit_member": true
+    },
+    {
+      "id": "M:Korda.Database.SchemaScaffoldOptions.{Clone}$",
+      "signature": "public Korda.Database.SchemaScaffoldOptions Korda.Database.SchemaScaffoldOptions.\u003CClone\u003E$()",
+      "implicit_member": true
+    },
+    {
+      "id": "M:Korda.Database.SchemaScaffolder.Generate(Korda.Database.DatabaseProvider,Korda.Database.SchemaTable,Korda.Database.SchemaScaffoldOptions)",
+      "signature": "public static Korda.Database.SchemaScaffoldResult Korda.Database.SchemaScaffolder.Generate(Korda.Database.DatabaseProvider provider, Korda.Database.SchemaTable table, Korda.Database.SchemaScaffoldOptions options)",
+      "implicit_member": false
+    },
+    {
       "id": "M:Korda.Database.SchemaTable.#ctor(System.String,System.String,System.Collections.Generic.IReadOnlyList{Korda.Database.SchemaColumn})",
       "signature": "public Korda.Database.SchemaTable.SchemaTable(string? Schema, string Name, System.Collections.Generic.IReadOnlyList\u003CKorda.Database.SchemaColumn\u003E Columns)",
       "implicit_member": false
@@ -764,6 +969,56 @@
     {
       "id": "M:Korda.Database.SchemaTable.{Clone}$",
       "signature": "public Korda.Database.SchemaTable Korda.Database.SchemaTable.\u003CClone\u003E$()",
+      "implicit_member": true
+    },
+    {
+      "id": "M:Korda.Database.TransactionFailure.#ctor(Korda.Database.TransactionOutcome,System.Boolean,Korda.Database.DatabaseCloseResult,System.String)",
+      "signature": "public Korda.Database.TransactionFailure.TransactionFailure(Korda.Database.TransactionOutcome Outcome, bool CommitAttempted, Korda.Database.DatabaseCloseResult Cleanup, string? RecoveryKey)",
+      "implicit_member": false
+    },
+    {
+      "id": "M:Korda.Database.TransactionFailure.Deconstruct(Korda.Database.TransactionOutcome@,System.Boolean@,Korda.Database.DatabaseCloseResult@,System.String@)",
+      "signature": "public void Korda.Database.TransactionFailure.Deconstruct(out Korda.Database.TransactionOutcome Outcome, out bool CommitAttempted, out Korda.Database.DatabaseCloseResult Cleanup, out string? RecoveryKey)",
+      "implicit_member": true
+    },
+    {
+      "id": "M:Korda.Database.TransactionFailure.Equals(Korda.Database.TransactionFailure)",
+      "signature": "public bool Korda.Database.TransactionFailure.Equals(Korda.Database.TransactionFailure? other)",
+      "implicit_member": true
+    },
+    {
+      "id": "M:Korda.Database.TransactionFailure.Equals(System.Object)",
+      "signature": "public override bool Korda.Database.TransactionFailure.Equals(object? obj)",
+      "implicit_member": true
+    },
+    {
+      "id": "M:Korda.Database.TransactionFailure.GetHashCode",
+      "signature": "public override int Korda.Database.TransactionFailure.GetHashCode()",
+      "implicit_member": true
+    },
+    {
+      "id": "M:Korda.Database.TransactionFailure.ToString",
+      "signature": "public override string Korda.Database.TransactionFailure.ToString()",
+      "implicit_member": true
+    },
+    {
+      "id": "M:Korda.Database.TransactionFailure.TryGet(System.Exception,Korda.Database.TransactionFailure@)",
+      "signature": "public static bool Korda.Database.TransactionFailure.TryGet(System.Exception exception, [System.Diagnostics.CodeAnalysis.NotNullWhenAttribute(true)] out Korda.Database.TransactionFailure? failure)",
+      "implicit_member": false
+    },
+    {
+      "id": "M:Korda.Database.TransactionFailure.op_Equality(Korda.Database.TransactionFailure,Korda.Database.TransactionFailure)",
+      "signature": "public static bool Korda.Database.TransactionFailure.operator ==(Korda.Database.TransactionFailure? left, Korda.Database.TransactionFailure? right)",
+      "implicit_member": true
+    },
+    {
+      "id": "M:Korda.Database.TransactionFailure.op_Inequality(Korda.Database.TransactionFailure,Korda.Database.TransactionFailure)",
+      "signature": "public static bool Korda.Database.TransactionFailure.operator !=(Korda.Database.TransactionFailure? left, Korda.Database.TransactionFailure? right)",
+      "implicit_member": true
+    },
+    {
+      "id": "M:Korda.Database.TransactionFailure.{Clone}$",
+      "signature": "public Korda.Database.TransactionFailure Korda.Database.TransactionFailure.\u003CClone\u003E$()",
       "implicit_member": true
     },
     {
@@ -837,8 +1092,23 @@
       "implicit_member": false
     },
     {
+      "id": "M:Korda.Query.ProjectionBuilder\u00601.Add\u0060\u00601(Korda.Query.SqlExpression{\u0060\u00600},System.String,Korda.Data.ValueCodec{\u0060\u00600})",
+      "signature": "public Korda.Data.ResultColumn\u003CTValue\u003E Korda.Query.ProjectionBuilder\u003CT\u003E.Add\u003CTValue\u003E(Korda.Query.SqlExpression\u003CTValue\u003E expression, string alias, Korda.Data.ValueCodec\u003CTValue\u003E codec)",
+      "implicit_member": false
+    },
+    {
       "id": "M:Korda.Query.ProjectionBuilder\u00601.Build(Korda.Data.RowMaterializer{\u00600})",
       "signature": "public Korda.Data.Projection\u003CT\u003E Korda.Query.ProjectionBuilder\u003CT\u003E.Build(Korda.Data.RowMaterializer\u003CT\u003E materializer)",
+      "implicit_member": false
+    },
+    {
+      "id": "M:Korda.Query.QueryCursor\u00601.Create\u0060\u00601(Korda.Data.Column{\u00600,\u0060\u00600},\u0060\u00600)",
+      "signature": "public static Korda.Query.QueryCursor\u003CTEntity\u003E Korda.Query.QueryCursor\u003CTEntity\u003E.Create\u003CT\u003E(Korda.Data.Column\u003CTEntity, T\u003E column, T value)",
+      "implicit_member": false
+    },
+    {
+      "id": "M:Korda.Query.QueryCursor\u00601.Then\u0060\u00601(Korda.Data.Column{\u00600,\u0060\u00600},\u0060\u00600)",
+      "signature": "public Korda.Query.QueryCursor\u003CTEntity\u003E Korda.Query.QueryCursor\u003CTEntity\u003E.Then\u003CT\u003E(Korda.Data.Column\u003CTEntity, T\u003E column, T value)",
       "implicit_member": false
     },
     {
@@ -1059,6 +1329,11 @@
     {
       "id": "M:Korda.Query.Query\u00601.Projection\u0060\u00601",
       "signature": "public Korda.Query.ProjectionBuilder\u003CT\u003E Korda.Query.Query\u003CTEntity\u003E.Projection\u003CT\u003E()",
+      "implicit_member": false
+    },
+    {
+      "id": "M:Korda.Query.Query\u00601.SeekAfter(Korda.Query.QueryCursor{\u00600})",
+      "signature": "public Korda.Query.Query\u003CTEntity\u003E Korda.Query.Query\u003CTEntity\u003E.SeekAfter(Korda.Query.QueryCursor\u003CTEntity\u003E cursor)",
       "implicit_member": false
     },
     {
@@ -1817,6 +2092,11 @@
       "implicit_member": false
     },
     {
+      "id": "P:Korda.Database.DatabaseModel.Empty",
+      "signature": "public static Korda.Database.DatabaseModel Korda.Database.DatabaseModel.Empty { get; }",
+      "implicit_member": false
+    },
+    {
       "id": "P:Korda.Database.Migration.Description",
       "signature": "public string Korda.Database.Migration.Description { get; init; }",
       "implicit_member": false
@@ -1839,6 +2119,51 @@
     {
       "id": "P:Korda.Database.MigrationBundle.ContentHash",
       "signature": "public string Korda.Database.MigrationBundle.ContentHash { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:Korda.Database.MigrationChange.Column",
+      "signature": "public string? Korda.Database.MigrationChange.Column { get; init; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:Korda.Database.MigrationChange.Id",
+      "signature": "public string Korda.Database.MigrationChange.Id { get; init; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:Korda.Database.MigrationChange.IsDestructive",
+      "signature": "public bool Korda.Database.MigrationChange.IsDestructive { get; init; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:Korda.Database.MigrationChange.Kind",
+      "signature": "public Korda.Database.MigrationChangeKind Korda.Database.MigrationChange.Kind { get; init; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:Korda.Database.MigrationChange.Schema",
+      "signature": "public string? Korda.Database.MigrationChange.Schema { get; init; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:Korda.Database.MigrationChange.Sql",
+      "signature": "public string Korda.Database.MigrationChange.Sql { get; init; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:Korda.Database.MigrationChange.Table",
+      "signature": "public string Korda.Database.MigrationChange.Table { get; init; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:Korda.Database.MigrationDraft.Changes",
+      "signature": "public System.Collections.Generic.IReadOnlyList\u003CKorda.Database.MigrationChange\u003E Korda.Database.MigrationDraft.Changes { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:Korda.Database.MigrationDraft.Provider",
+      "signature": "public Korda.Database.DatabaseProvider Korda.Database.MigrationDraft.Provider { get; }",
       "implicit_member": false
     },
     {
@@ -1912,6 +2237,66 @@
       "implicit_member": false
     },
     {
+      "id": "P:Korda.Database.SchemaColumnHint.ClrType",
+      "signature": "public string Korda.Database.SchemaColumnHint.ClrType { get; init; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:Korda.Database.SchemaColumnHint.CodecDeclaringType",
+      "signature": "public string? Korda.Database.SchemaColumnHint.CodecDeclaringType { get; init; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:Korda.Database.SchemaColumnHint.CodecMember",
+      "signature": "public string? Korda.Database.SchemaColumnHint.CodecMember { get; init; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:Korda.Database.SchemaColumnHint.ColumnName",
+      "signature": "public string Korda.Database.SchemaColumnHint.ColumnName { get; init; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:Korda.Database.SchemaColumnHint.PropertyName",
+      "signature": "public string? Korda.Database.SchemaColumnHint.PropertyName { get; init; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:Korda.Database.SchemaScaffoldOptions.ColumnHints",
+      "signature": "public System.Collections.Generic.IReadOnlyList\u003CKorda.Database.SchemaColumnHint\u003E Korda.Database.SchemaScaffoldOptions.ColumnHints { get; init; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:Korda.Database.SchemaScaffoldOptions.GeneratedColumns",
+      "signature": "public System.Collections.Generic.IReadOnlyList\u003Cstring\u003E? Korda.Database.SchemaScaffoldOptions.GeneratedColumns { get; init; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:Korda.Database.SchemaScaffoldOptions.Namespace",
+      "signature": "public string Korda.Database.SchemaScaffoldOptions.Namespace { get; init; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:Korda.Database.SchemaScaffoldOptions.PrimaryKeyOrder",
+      "signature": "public System.Collections.Generic.IReadOnlyList\u003Cstring\u003E? Korda.Database.SchemaScaffoldOptions.PrimaryKeyOrder { get; init; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:Korda.Database.SchemaScaffoldOptions.TypeName",
+      "signature": "public string Korda.Database.SchemaScaffoldOptions.TypeName { get; init; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:Korda.Database.SchemaScaffoldResult.Notes",
+      "signature": "public System.Collections.Generic.IReadOnlyList\u003Cstring\u003E Korda.Database.SchemaScaffoldResult.Notes { get; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:Korda.Database.SchemaScaffoldResult.Source",
+      "signature": "public string Korda.Database.SchemaScaffoldResult.Source { get; }",
+      "implicit_member": false
+    },
+    {
       "id": "P:Korda.Database.SchemaTable.Columns",
       "signature": "public System.Collections.Generic.IReadOnlyList\u003CKorda.Database.SchemaColumn\u003E Korda.Database.SchemaTable.Columns { get; init; }",
       "implicit_member": false
@@ -1924,6 +2309,26 @@
     {
       "id": "P:Korda.Database.SchemaTable.Schema",
       "signature": "public string? Korda.Database.SchemaTable.Schema { get; init; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:Korda.Database.TransactionFailure.Cleanup",
+      "signature": "public Korda.Database.DatabaseCloseResult Korda.Database.TransactionFailure.Cleanup { get; init; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:Korda.Database.TransactionFailure.CommitAttempted",
+      "signature": "public bool Korda.Database.TransactionFailure.CommitAttempted { get; init; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:Korda.Database.TransactionFailure.Outcome",
+      "signature": "public Korda.Database.TransactionOutcome Korda.Database.TransactionFailure.Outcome { get; init; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:Korda.Database.TransactionFailure.RecoveryKey",
+      "signature": "public string? Korda.Database.TransactionFailure.RecoveryKey { get; init; }",
       "implicit_member": false
     },
     {
@@ -1992,6 +2397,11 @@
       "implicit_member": false
     },
     {
+      "id": "T:Korda.Database.DatabaseModel",
+      "signature": "public sealed class Korda.Database.DatabaseModel",
+      "implicit_member": false
+    },
+    {
       "id": "T:Korda.Database.DatabaseProvider",
       "signature": "public enum Korda.Database.DatabaseProvider : int",
       "implicit_member": false
@@ -2004,6 +2414,21 @@
     {
       "id": "T:Korda.Database.MigrationBundle",
       "signature": "public sealed class Korda.Database.MigrationBundle",
+      "implicit_member": false
+    },
+    {
+      "id": "T:Korda.Database.MigrationChange",
+      "signature": "public sealed record class Korda.Database.MigrationChange : System.IEquatable\u003CKorda.Database.MigrationChange\u003E",
+      "implicit_member": false
+    },
+    {
+      "id": "T:Korda.Database.MigrationChangeKind",
+      "signature": "public enum Korda.Database.MigrationChangeKind : int",
+      "implicit_member": false
+    },
+    {
+      "id": "T:Korda.Database.MigrationDraft",
+      "signature": "public sealed class Korda.Database.MigrationDraft",
       "implicit_member": false
     },
     {
@@ -2032,8 +2457,33 @@
       "implicit_member": false
     },
     {
+      "id": "T:Korda.Database.SchemaColumnHint",
+      "signature": "public sealed record class Korda.Database.SchemaColumnHint : System.IEquatable\u003CKorda.Database.SchemaColumnHint\u003E",
+      "implicit_member": false
+    },
+    {
+      "id": "T:Korda.Database.SchemaScaffoldOptions",
+      "signature": "public sealed record class Korda.Database.SchemaScaffoldOptions : System.IEquatable\u003CKorda.Database.SchemaScaffoldOptions\u003E",
+      "implicit_member": false
+    },
+    {
+      "id": "T:Korda.Database.SchemaScaffoldResult",
+      "signature": "public sealed class Korda.Database.SchemaScaffoldResult",
+      "implicit_member": false
+    },
+    {
+      "id": "T:Korda.Database.SchemaScaffolder",
+      "signature": "public static class Korda.Database.SchemaScaffolder",
+      "implicit_member": false
+    },
+    {
       "id": "T:Korda.Database.SchemaTable",
       "signature": "public sealed record class Korda.Database.SchemaTable : System.IEquatable\u003CKorda.Database.SchemaTable\u003E",
+      "implicit_member": false
+    },
+    {
+      "id": "T:Korda.Database.TransactionFailure",
+      "signature": "public sealed record class Korda.Database.TransactionFailure : System.IEquatable\u003CKorda.Database.TransactionFailure\u003E",
       "implicit_member": false
     },
     {
@@ -2079,6 +2529,11 @@
     {
       "id": "T:Korda.Query.ProjectionBuilder\u00601",
       "signature": "public sealed class Korda.Query.ProjectionBuilder\u003CT\u003E",
+      "implicit_member": false
+    },
+    {
+      "id": "T:Korda.Query.QueryCursor\u00601",
+      "signature": "public sealed class Korda.Query.QueryCursor\u003CTEntity\u003E where TEntity : class",
       "implicit_member": false
     },
     {

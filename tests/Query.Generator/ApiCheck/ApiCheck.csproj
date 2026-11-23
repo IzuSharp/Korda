@@ -4,5 +4,6 @@
     <Reference Include="Microsoft.CodeAnalysis"><HintPath>$(MSBuildSDKsPath)/../Roslyn/bincore/Microsoft.CodeAnalysis.dll</HintPath></Reference>
     <Reference Include="Microsoft.CodeAnalysis.CSharp"><HintPath>$(MSBuildSDKsPath)/../Roslyn/bincore/Microsoft.CodeAnalysis.CSharp.dll</HintPath></Reference>
     <ProjectReference Include="../../../src/Query.Generator/Korda.Query.Generator.csproj" />
+    <ProjectReference Include="../../../src/Data.NativeHost/Korda.Database.csproj" />
   </ItemGroup>
 </Project>

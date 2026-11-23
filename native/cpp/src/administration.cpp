@@ -1,5 +1,6 @@
 #include "nw/administration.hpp"
 
+#include <nlohmann/json.hpp>
 #include <openssl/sha.h>
 
 #include <algorithm>
@@ -814,6 +815,36 @@ AdministrationRequest parse_administration(Profile profile, std::uint32_t action
     validate_limits(limits);
     if (input.size() > limits.parameter_bytes)
         capacity_error();
+    if (action == 4)
+    {
+        const auto fields = Fields::parse(input, 5, {{1, 1, true}, {7, 5, true}, {8, 5, true}});
+        if (fields.u32(1) != (profile == Profile::PostgreSql ? 0U : 1U))
+            throw Error::invalid("schema draft provider differs from source");
+        AdministrationRequest result;
+        result.profile = profile;
+        result.action = action;
+        std::size_t nodes = 0;
+        const auto parse_models = [&](ByteView encoded, std::vector<Model>& models)
+        {
+            for (const auto entry : sequence(encoded))
+            {
+                auto model = Model::parse(entry, profile);
+                nodes += 1 + model.columns().size();
+                if (nodes > limits.nodes)
+                    capacity_error();
+                if (model.table().size() > limits.field_bytes ||
+                    (model.schema() && model.schema()->size() > limits.field_bytes))
+                    capacity_error();
+                for (const auto& column : model.columns())
+                    if (column.name.size() > limits.field_bytes)
+                        capacity_error();
+                models.push_back(std::move(model));
+            }
+        };
+        parse_models(fields.bytes(7), result.previous_models);
+        parse_models(fields.bytes(8), result.current_models);
+        return result;
+    }
     const auto fields = Fields::parse(
         input, 5, {{1, 1, true}, {2, 5, false}, {3, 2, false}, {4, 3, false}, {5, 1, false}, {6, 4, false}});
     const auto provider_id = profile == Profile::PostgreSql ? 0U : 1U;
@@ -871,6 +902,295 @@ AdministrationRequest parse_administration(Profile profile, std::uint32_t action
             throw Error::invalid("schema scope is not an admitted user schema");
     }
     if (limits.bytes < (action == 0 ? 100U : 36U) || (action == 0 && limits.rows == 0))
+        capacity_error();
+    return result;
+}
+
+namespace
+{
+std::string draft_identifier(std::string_view value, Profile profile)
+{
+    if (value.empty() || value.find('\0') != std::string_view::npos ||
+        (profile == Profile::PostgreSql && value.size() > 63))
+        throw Error::invalid("schema draft identifier is empty, contains NUL or exceeds the provider limit");
+    std::string result = "\"";
+    for (const auto ch : value)
+    {
+        result += ch;
+        if (ch == '"')
+            result += '"';
+    }
+    return result + '"';
+}
+
+std::string draft_table(const Model& model, Profile profile)
+{
+    const auto name = draft_identifier(model.table(), profile);
+    if (!model.schema())
+        return name;
+    if ((profile == Profile::Sqlite && *model.schema() != "main") || model.schema()->starts_with("pg_") ||
+        *model.schema() == "information_schema")
+        throw Error::invalid("schema draft admits only user schemas in the selected provider");
+    return draft_identifier(*model.schema(), profile) + '.' + name;
+}
+
+[[noreturn]] void unsupported_draft(const Model& model, const Column* column, std::string_view reason)
+{
+    throw Error::invalid("schema draft cannot " + std::string(reason) + " for table " + model.table() +
+                         (column ? ", column " + column->name : "") + "; use reviewed explicit SQL");
+}
+
+std::string draft_type(const Model& model, const Column& column, Profile profile)
+{
+    const auto id = column.codec.id;
+    if (profile == Profile::Sqlite)
+    {
+        switch (id)
+        {
+            case 1:
+            case 2:
+            case 3:
+            case 4:
+            case 10:
+            case 15:
+            case 17:
+                return "INTEGER";
+            case 5:
+            case 8:
+            case 9:
+            case 14:
+            case 16:
+                return "TEXT";
+            case 6:
+            case 7:
+                return "BLOB";
+            case 11:
+            case 12:
+                return "REAL";
+            default:
+                unsupported_draft(model, &column, "create this SQLite scalar type");
+        }
+    }
+    switch (id)
+    {
+        case 1:
+            return "SMALLINT";
+        case 2:
+        case 17:
+            return "INTEGER";
+        case 3:
+        case 15:
+            return "BIGINT";
+        case 4:
+            return "BOOLEAN";
+        case 5:
+            return "TEXT";
+        case 6:
+            return "BYTEA";
+        case 7:
+            return "UUID";
+        case 8:
+            return "DATE";
+        case 9:
+            return "TIME";
+        case 10:
+            return "TIMESTAMPTZ";
+        case 11:
+            return "DOUBLE PRECISION";
+        case 12:
+            return "REAL";
+        case 13:
+        {
+            const auto config = nlohmann::json::parse(*column.codec.configuration);
+            return "NUMERIC(" + std::to_string(config.at("precision").get<unsigned>()) + ',' +
+                   std::to_string(config.at("scale").get<unsigned>()) + ')';
+        }
+        case 16:
+            return "JSONB";
+        default:
+            unsupported_draft(model, &column, "create this PostgreSQL scalar type");
+    }
+}
+
+std::string draft_column(const Model& model, const Column& column, Profile profile, bool new_table)
+{
+    if (column.collation || column.max_length)
+        unsupported_draft(model, &column, "infer collation or byte-length constraints");
+    if (column.generated &&
+        (!new_table || model.keys().size() != 1 || !column.key_ordinal ||
+         (profile == Profile::Sqlite ? column.codec.id != 3 : column.codec.id < 1 || column.codec.id > 3)))
+        unsupported_draft(model, &column, "infer a generated/default expression");
+    std::string sql = draft_identifier(column.name, profile) + ' ' + draft_type(model, column, profile);
+    if (column.generated && profile == Profile::PostgreSql)
+        sql += " GENERATED BY DEFAULT AS IDENTITY";
+    if (!column.codec.nullable)
+        sql += " NOT NULL";
+    if (column.generated && profile == Profile::Sqlite)
+        sql += " PRIMARY KEY AUTOINCREMENT";
+    return sql;
+}
+
+std::string draft_create(const Model& model, Profile profile)
+{
+    std::string sql = "CREATE TABLE " + draft_table(model, profile) + " (";
+    for (std::size_t index = 0; index < model.projection().size(); ++index)
+    {
+        if (index)
+            sql += ", ";
+        sql += draft_column(model, model.column(model.projection()[index]), profile, true);
+    }
+    const auto keys = model.keys();
+    const bool inline_key = profile == Profile::Sqlite && keys.size() == 1 && keys.front()->generated;
+    if (!keys.empty() && !inline_key)
+    {
+        sql += ", PRIMARY KEY (";
+        for (std::size_t index = 0; index < keys.size(); ++index)
+        {
+            if (index)
+                sql += ", ";
+            sql += draft_identifier(keys[index]->name, profile);
+        }
+        sql += ')';
+    }
+    return sql + ");";
+}
+
+std::string draft_name(std::string value, Profile profile)
+{
+    if (profile == Profile::Sqlite)
+        for (auto& ch : value)
+            if (ch >= 'A' && ch <= 'Z')
+                ch = static_cast<char>(ch + ('a' - 'A'));
+    return value;
+}
+
+using DraftModels = std::map<std::pair<std::string, std::string>, const Model*>;
+DraftModels draft_models(const std::vector<Model>& models, Profile profile)
+{
+    DraftModels result;
+    for (const auto& model : models)
+    {
+        (void)draft_table(model, profile);
+        const auto schema = profile == Profile::Sqlite ? "main" : model.schema().value_or("");
+        if (!result.emplace(std::pair{schema, draft_name(model.table(), profile)}, &model).second)
+            throw Error::invalid("schema draft contains duplicate provider table names");
+    }
+    return result;
+}
+} // namespace
+
+Bytes draft_schema(const AdministrationRequest& request, const AdministrationLimits& limits, const CallContext& context)
+try
+{
+    validate_limits(limits);
+    if (request.action != 4)
+        throw Error::invalid("not a schema draft request");
+    context.check();
+    const auto before = draft_models(request.previous_models, request.profile);
+    const auto after = draft_models(request.current_models, request.profile);
+    Budget budget(limits);
+    std::vector<Bytes> changes;
+    const auto append = [&](std::uint32_t kind, const Model& model, const Column* column, const std::string& sql)
+    {
+        context.check();
+        budget.row(180);
+        budget.text(model.table());
+        budget.text(sql);
+        if (model.schema())
+            budget.text(*model.schema());
+        if (column)
+            budget.text(column->name);
+        std::vector<ControlField> fields{{2, 1, u32(kind)}};
+        if (model.schema())
+            fields.push_back({3, 4, bytes(*model.schema())});
+        fields.push_back({4, 4, bytes(model.table())});
+        if (column)
+            fields.push_back({5, 4, bytes(column->name)});
+        fields.push_back({6, 4, bytes(sql)});
+        fields.push_back({7, 1, u32(kind >= 2)});
+        // Review approval belongs to this versioned provider operation, even
+        // when two dialects happen to render identical SQL for a DROP.
+        auto identity = bytes("NWDB-SCHEMA-DRAFT-CHANGE-v1");
+        const auto provider = u32(request.profile == Profile::PostgreSql ? 0U : 1U);
+        identity.insert(identity.end(), provider.begin(), provider.end());
+        const auto operation = encode_control(21, fields);
+        identity.insert(identity.end(), operation.begin(), operation.end());
+        const auto digest = sha256(identity);
+        const auto id = hex(digest);
+        budget.text(id);
+        fields.insert(fields.begin(), {1, 4, bytes(id)});
+        changes.push_back(encode_control(21, fields));
+    };
+    for (const auto& [key, model] : after)
+    {
+        context.check();
+        const auto old = before.find(key);
+        if (old == before.end())
+        {
+            append(0, *model, nullptr, draft_create(*model, request.profile));
+            continue;
+        }
+        const auto& previous = *old->second;
+        if (model->table() != previous.table() || model->schema() != previous.schema())
+            unsupported_draft(*model, nullptr, "infer a table/schema rename");
+        std::map<std::string, const Column*> previous_columns;
+        std::map<std::string, const Column*> current_columns;
+        for (const auto& column : previous.columns())
+            previous_columns.emplace(draft_name(column.name, request.profile), &column);
+        for (const auto& column : model->columns())
+            current_columns.emplace(draft_name(column.name, request.profile), &column);
+        for (const auto id : model->projection())
+        {
+            const auto& column = model->column(id);
+            const auto prior = previous_columns.find(draft_name(column.name, request.profile));
+            if (prior == previous_columns.end())
+            {
+                if (!column.codec.nullable || column.key_ordinal || column.generated)
+                    unsupported_draft(*model, &column,
+                                      "add a required/key/generated column without an explicit backfill");
+                append(1, *model, &column,
+                       "ALTER TABLE " + draft_table(*model, request.profile) + " ADD COLUMN " +
+                           draft_column(*model, column, request.profile, false) + ';');
+                continue;
+            }
+            const auto& original = *prior->second;
+            if (column.name != original.name || column.codec != original.codec ||
+                column.key_ordinal != original.key_ordinal || column.generated != original.generated ||
+                column.collation != original.collation || column.max_length != original.max_length)
+                unsupported_draft(*model, &column, "alter a column, key, type, nullability or storage policy");
+        }
+        for (const auto id : previous.projection())
+        {
+            const auto& column = previous.column(id);
+            if (current_columns.contains(draft_name(column.name, request.profile)))
+                continue;
+            if (column.key_ordinal)
+                unsupported_draft(previous, &column, "drop a primary-key column");
+            append(2, previous, &column,
+                   "ALTER TABLE " + draft_table(previous, request.profile) + " DROP COLUMN " +
+                       draft_identifier(column.name, request.profile) + ';');
+        }
+    }
+    for (const auto& [key, model] : before)
+        if (!after.contains(key))
+            append(3, *model, nullptr, "DROP TABLE " + draft_table(*model, request.profile) + ';');
+    auto result = encode_control(19, {{1, 1, u32(4)}, {2, 5, encode_sequence(changes)}});
+    if (result.size() > std::min(limits.bytes, MAX_BYTES))
+        capacity_error();
+    return result;
+}
+catch (const Error& error)
+{
+    // Draft validation has no provider effects. Return its bounded reason as an
+    // action-specific result so the managed caller retains the exact offending
+    // table/column after releasing the result buffer. Other native failures keep
+    // their ordinary status, cancellation and resource-limit behavior.
+    if (error.status != NW_INVALID_ARGUMENT)
+        throw;
+    Budget budget(limits);
+    budget.text(error.message);
+    auto result = encode_control(19, {{1, 1, u32(4)}, {6, 4, bytes(error.message)}});
+    if (result.size() > std::min(limits.bytes, MAX_BYTES))
         capacity_error();
     return result;
 }

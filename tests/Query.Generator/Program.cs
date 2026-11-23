@@ -1,5 +1,7 @@
 using Korda.Data;
 
+if (args.Contains("--require-aot") && System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported)
+    throw new InvalidOperationException("Actual Native AOT mapping execution is required.");
 int checks = 0;
 void Check(bool value, string message) { if (!value) throw new Exception(message); checks++; }
 var manual = new TableBuilder<Student>("students");
@@ -23,6 +25,7 @@ Check(instance.Code == 11 && instance.Label == "set", "Class property/init assig
 using var secondLease = new OracleLease<Second>(SecondMapping.Row, [Guid.Empty, (short?)null, DateTime.UnixEpoch]);
 var second = SecondMapping.Row.Read(secondLease);
 Check(second.Key == Guid.Empty && second.Optional is null && second.When.Kind == DateTimeKind.Utc, "Second entity supported codecs/nullable/UTC mapping");
+checks += ExperienceChecks.Run();
 Console.WriteLine($"B10 generated static DTO component: {checks} assertions; runtime dynamic code supported={System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported}. Native Host/Fluent composition is a separate acceptance row.");
 
 [WeaveTable("students", DescriptorName = "Students")]

@@ -2,12 +2,13 @@
 
 > **DB-CPP-01 implementation update.** The public C# examples, signatures and ownership contracts in this guide remain the compatibility inputs. The current maintained native implementation is C++20; its module mapping, direct libpq/sqlite3 execution, Clang/CMake commands and package production are documented in [C++ native implementation](cpp-native.md). Descriptions below of Rust, SQLx, SeaQuery or Tokio internals are retained as the fixed `465cd0f` behavioral reference, not current build dependencies. The named verification entry points now build the ported C++ fixtures and retain their original managed assertions.
 
-Use the `Korda.Database` facade with `Korda.Database.Sqlite` or
-`Korda.Database.PostgreSql`. `Korda.Data` supplies immutable table,
+Install `Korda.Database.Sqlite` or `Korda.Database.PostgreSql` independently;
+each bundles the `Korda.Database` facade and its internal components.
+`Korda.Data` supplies immutable table,
 column, key and value contracts; `Korda.Query` supplies typed native query
 builders. B14 is part of that facade and its provider assets, with no separate ORM
-package to register. The provider's maintainer-built native asset contains
-SeaQuery, SQLx and the bounded database Host. Adding a C# entity, DTO, descriptor
+package to register. The provider's maintainer-built native asset contains the
+C++20 query compiler, bounded database Host and libpq or sqlite3 driver. Adding a C# entity, DTO, descriptor
 or materializer reuses that asset.
 
 See the [database Host guide](data-nativehost.md) for source creation, provider
@@ -111,6 +112,88 @@ each successful ABI call still owns its returned wrapper. Source closure drops
 cache roots before waiting for accepted cursor cleanup. Accepted operations retain
 their model/projection roots until the cursor and callbacks retire.
 
+### Load one page as a batch
+
+Pass the page's complete keys to the collection overload. The returned outer
+list has the same positions as the input; a parent without matching children
+receives an empty list. Repeated parent keys retain repeated result positions.
+For the existing sample model:
+
+```csharp
+var keys = parents.Select(parent => Catalog.Parents
+    .Key(Catalog.ParentTenant, parent.Tenant)
+    .And(Catalog.ParentId, parent.Id)).ToArray();
+var details = await session.LoadRelatedAsync(keys, Catalog.Relation, cancellationToken);
+for (var i = 0; i < parents.Count; i++)
+    Console.WriteLine($"Parent {parents[i].Id}: {details[i].Count} children");
+```
+
+A nonempty batch dispatches one parameterized SQL statement through the native
+query engine. Its `UNION ALL` branches carry an internal parent ordinal, so SQL
+equality and collation decide membership and the ordinal preserves page order.
+This uses existing native query, projection and set operations. There is no
+parent-existence query or client-side key comparison. Empty input dispatches no
+SQL; children within each group have no implied order.
+
+Input keys are snapshotted before asynchronous work. A batch is bounded by
+`DatabaseLimits.MaxBatchRows`; native node, parameter and byte limits can reject
+a smaller batch. The whole result, including repeated keys, shares the source's
+buffered row and byte budgets. Large pages must be split explicitly by the
+application. The API never silently starts extra queries or retries.
+
+The provider execution counter used by the acceptance consumer measures SQL
+statement dispatches. PostgreSQL preparation, description and synchronization
+can add protocol submissions; one SQL execution does not mean one TCP packet or
+one protocol exchange. Query the root page first, then load its detail batch to
+avoid a query per parent and to preserve root pagination boundaries.
+
+## A transaction callback
+
+`InTransactionAsync` owns a new transaction on the current session. It invokes
+the callback once after BEGIN, awaits its operations, and returns its result
+only after a confirmed commit and cleanup. The existing single-command rule
+still applies; do not run commands concurrently on that session or complete its
+transaction from inside the callback.
+
+```csharp
+var saved = await session.InTransactionAsync(async (current, token) =>
+{
+    return await current.InsertReturningAsync(Catalog.Parents,
+        new Parent(tenant, nextParentId, "new parent", 1),
+        Catalog.Parents.Row, token);
+}, new TransactionOptions { RecoveryKey = operationId }, cancellationToken);
+```
+
+The callback result can be an entity, DTO or scalar. A callback without a result
+uses the non-generic overload. An existing transaction rejects before callback
+execution; use the explicit transaction/savepoint APIs when the caller owns a
+larger unit of work. There is no ambient transaction or automatic retry.
+
+Callback exceptions keep their original type and identity. Cleanup uses its own
+native policy, so cancellation before commit admission can still confirm
+rollback. Cancellation after commit admission cannot turn a possible commit
+into an `OperationCanceledException`. A lost commit confirmation remains
+`CommitOutcomeUnknownException`, with the original recovery identity.
+
+```csharp
+catch (Exception error) when (TransactionFailure.TryGet(error, out var failure))
+{
+    Console.Error.WriteLine($"Outcome={failure.Outcome}; " +
+        $"commit attempted={failure.CommitAttempted}; " +
+        $"cleanup={failure.Cleanup.Status}");
+    throw;
+}
+```
+
+`TransactionFailure` records observed effect knowledge and cleanup after the
+owned scope is closed. It does not wrap the original error or infer durability
+from cancellation. The snapshot stays associated with that exception even when
+its custom `Data` getter or dictionary rejects optional enrichment. A rollback
+confirmation failure can leave `InProgress`
+with `CommitAttempted=false`; that differs from `Unknown` after a possible
+commit. For `Unknown`, reconcile using the application recovery identity before
+deciding whether another business attempt is appropriate.
+
 ## Bounded bulk writes
 
 `InsertManyAsync` enumerates once and snapshots each entity before asking for the
@@ -166,11 +249,11 @@ safe replay.
 
 ## Native boundary, lifetime and cost
 
-The C# layer copies typed descriptors and values; SeaQuery builds CRUD, relation
-predicates and dialect SQL in Rust. Native mutation kinds 0 through 6 validate
+The C# layer copies typed descriptors and values; the C++20 kernel builds CRUD,
+relation predicates and dialect SQL. Native mutation kinds 0 through 6 validate
 their exact required/forbidden control fields before admission. Upsert kind 6
-uses the independent field 8 update payload. SQLx receives parameters through the
-existing single B07 codec decoder, preserving typed NULL and provider semantics.
+uses the independent field 8 update payload. libpq and sqlite3 receive parameters
+through the native codec decoder, preserving typed NULL and provider semantics.
 
 Each entity snapshot reserves its fixed wire/control overhead before invoking the
 writer, then charges each encoded cell against the remaining row bytes. Text
@@ -203,7 +286,7 @@ successful JSON round trips within the available physical grant.
 
 Each finite batch assembles a canonical db-wire value record and control record.
 The native Created call validates and
-copies borrowed input before returning; native SeaQuery parameter ordering then
+copies borrowed input before returning; native query parameter ordering then
 produces the provider's owned argument record. Input enumerators cannot keep an
 unbounded backlog inside the bulk operation. One batch pays one mutation creation,
 start and count-take path plus retirement; transaction/savepoint control adds its
@@ -227,7 +310,7 @@ identity map, graph save operation or dynamic SeaORM eager loader is introduced.
 ## Verification and contract sources
 
 The Linux component suite in `tests/Orm.Relations` executes the actual separate
-SQLite and PostgreSQL Host assets in ordinary managed and `linux-x64` Native AOT
+SQLite and PostgreSQL Host assets in directly executed `linux-x64` Native AOT
 consumers. It covers native LEFT JOIN/count/sum, composite nullable keys, generated
 and manual metadata parity, tenant CAS races, exact mutation inventories, bounded
 cache registration, mapping/cancellation cleanup, savepoint rollback, partial
@@ -242,6 +325,10 @@ The exact public contract is pinned to Design commit
 [database API](https://github.com/IzuSharp/NativeWeave-Design/blob/c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9/docs/api/database.md),
 [query semantics](https://github.com/IzuSharp/NativeWeave-Design/blob/c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9/docs/database/query-semantics.md),
 and [public declarations](https://github.com/IzuSharp/NativeWeave-Design/blob/c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9/experiments/public-api/NativeWeave.Api.Design/Database.cs).
-Generated [Database reference](../../src/Orm.Relations/reference/database.md)
-and [Data reference](../../src/Orm.Relations/reference/data.md) are checked against
-that exact inventory and actual compiled XML documentation.
+DB-API-01 additions are recorded separately in the
+[Fluent ORM contract](https://github.com/IzuSharp/NativeWeave-Design/blob/main/docs/database/fluent-orm.md)
+and the implementation's explicit additive inventory. Generated
+[Database reference](../../src/Orm.Relations/reference/database.md) and
+[Data reference](../../src/Orm.Relations/reference/data.md) preserve every frozen
+declaration and validate the additions against actual compiled signatures and
+XML documentation.

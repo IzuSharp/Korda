@@ -48,8 +48,12 @@ var implementedFrom = productCompilation.GetTypeByMetadataName(sessionName)!.Get
 expected.Add(declaredFrom.GetDocumentationCommentId()!, Signature(declaredFrom));
 actual.Add(implementedFrom.GetDocumentationCommentId()!, Signature(implementedFrom));
 documented.Add(declaredFrom.GetDocumentationCommentId()!);
+using var currentContract = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "src/Data.NativeHost/db-api-01.api.json")));
+var currentAdditions = currentContract.RootElement.GetProperty("assemblies").GetProperty("Korda.Database").EnumerateArray().Select(x => x.GetProperty("id").GetString()!).ToHashSet(StringComparer.Ordinal);
+// The shared compiled-assembly gate checks exact additive signatures and XML.
+// This historical gate still rejects every removed or changed frozen member.
 var errors = expected.Where(x => !actual.TryGetValue(x.Key, out var got) || got != x.Value).Select(x => $"{x.Key}\n  design: {x.Value}\n  actual: {(actual.TryGetValue(x.Key, out var got) ? got : "<missing>")}")
-    .Concat(actual.Keys.Except(expected.Keys).Select(x => "Unexpected product member: " + x)).ToArray();
+    .Concat(actual.Keys.Except(expected.Keys).Where(x => !currentAdditions.Contains(x)).Select(x => "Unexpected product member: " + x)).ToArray();
 if (errors.Length != 0) throw new Exception(string.Join("\n", errors));
 string baselinePath = Path.Combine(root, "src/Query.Fluent/public-api.expected.json");
 string baseline = JsonSerializer.Serialize(new { design_commit = "c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9", symbols = expected }, new JsonSerializerOptions { WriteIndented = true }) + "\n";

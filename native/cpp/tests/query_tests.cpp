@@ -85,7 +85,7 @@ Codec scalar(std::uint32_t id, bool nullable = false)
 }
 Capabilities all_caps(Profile profile)
 {
-    return Capabilities::from_mask((1ULL << 25) - 1, profile);
+    return Capabilities::from_mask((1ULL << 26) - 1, profile);
 }
 Bytes cells(Profile profile, Codec codec, const std::vector<std::optional<Bytes>>& values)
 {
@@ -420,6 +420,11 @@ void assert_oracle(Profile profile)
 
 void binding_and_safety()
 {
+    const auto capabilities = all_caps(Profile::Sqlite);
+    check(capabilities.query && capabilities.metadata && capabilities.scalar_codecs,
+          "schema draft capability leaves existing query capabilities available");
+    rejects(NW_INVALID_ARGUMENT, [] { (void)Capabilities::from_mask(1ULL << 26, Profile::Sqlite); });
+    rejects(NW_INVALID_ARGUMENT, [] { (void)Capabilities::from_mask(1ULL << 63, Profile::PostgreSql); });
     Context c(Profile::Sqlite);
     auto q = c.query();
     auto integer = q.column(0, column(c.root, "Id"));

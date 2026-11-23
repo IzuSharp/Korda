@@ -9,7 +9,7 @@ namespace Korda.Query;
 /// <typeparam name="TEntity">The explicitly described root entity class.</typeparam>
 /// <remarks>Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query;
 /// use Clone before a second execution. Keep this owner alive across streaming and dispose after use.</remarks>
-public sealed class Query<TEntity> : IDisposable where TEntity : class
+public sealed partial class Query<TEntity> : IDisposable where TEntity : class
 {
     internal QueryContext Context { get; }
     private readonly Table<TEntity> _table;
@@ -267,9 +267,11 @@ public sealed class Query<TEntity> : IDisposable where TEntity : class
     private Query<TEntity> Order<T>(SqlExpression<T> expression, SortDirection direction, NullOrder nullOrder, bool replace) => Context.Run(() =>
     {
         Context.Same(expression.Owner);
+        if (_compositeSeek) throw new InvalidOperationException("Ordering cannot change after a composite cursor has been applied.");
         if (!replace && !Context.HasOrder) throw new InvalidOperationException("ThenBy requires an existing order.");
         Context.Clause(3, U(1, expression.Reference.In(Context.Binding)), N(2, (uint)direction), N(3, (uint)nullOrder), N(4, replace ? 1u : 0u));
-        if (replace) { _orderColumns.Clear(); _orderCount = 0; }
+        if (replace) { _orderColumns.Clear(); _cursorOrder.Clear(); _orderCount = 0; }
+        _cursorOrder.Add((expression.RootColumnId, direction));
         if (expression.RootColumnId is { } id) _orderColumns.Add(id);
         _orderCount++; Context.HasOrder = true;
         Context.UniqueOrder = _table.KeyColumns.Length != 0 && _table.KeyColumns.All(c => _orderColumns.Contains(c.Definition.Id));
@@ -320,7 +322,7 @@ public sealed class Query<TEntity> : IDisposable where TEntity : class
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
     /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
-    public Query<TEntity> Skip(int count) => Context.Run(() => { ArgumentOutOfRangeException.ThrowIfNegative(count); if (!Context.UniqueOrder) throw new ArgumentException("Offset paging requires an order including the complete root primary key.", nameof(count)); Context.Clause(5, U(2, (ulong)count)); Context.HasOffset = true; return this; });
+    public Query<TEntity> Skip(int count) => Context.Run(() => { ArgumentOutOfRangeException.ThrowIfNegative(count); if (_compositeSeek) throw new InvalidOperationException("An offset cannot be combined with a composite cursor."); if (!Context.UniqueOrder) throw new ArgumentException("Offset paging requires an order including the complete root primary key.", nameof(count)); Context.Clause(5, U(2, (ulong)count)); Context.HasOffset = true; return this; });
     /// <summary>Appends strict keyset comparison for one non-null unique ascending root key.</summary>
     /// <inheritdoc cref="Query{TEntity}"/>
     /// <param name="uniqueOrderKey">The sole non-null primary key already ordered ascending, with no conflicting offset.</param>
@@ -592,8 +594,8 @@ public sealed class Query<TEntity> : IDisposable where TEntity : class
     public Query<TEntity> Clone() => Context.Run(() =>
     {
         var context = new QueryContext(Context.Session, _table.Identity, Context.Binding.CloneSelected()) { HasOrder = Context.HasOrder, UniqueOrder = Context.UniqueOrder, SingleAscendingKey = Context.SingleAscendingKey, HasOffset = Context.HasOffset };
-        context.MergeParameters(Context.Parameters.Values); var clone = new Query<TEntity>(context, _table) { _orderCount = _orderCount };
-        clone._orderColumns.UnionWith(_orderColumns); return clone;
+        context.MergeParameters(Context.Parameters.Values); var clone = new Query<TEntity>(context, _table) { _orderCount = _orderCount, _compositeSeek = _compositeSeek };
+        clone._orderColumns.UnionWith(_orderColumns); clone._cursorOrder.AddRange(_cursorOrder); return clone;
     });
     /// <summary>Closes query admission, requests any active cursor stop and releases the native arena reference.</summary>
     /// <inheritdoc cref="Query{TEntity}"/>

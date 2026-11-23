@@ -6,6 +6,7 @@ import os
 import re
 import subprocess
 from pathlib import Path
+import sys
 
 root = Path(__file__).resolve().parents[2]
 parser = argparse.ArgumentParser()
@@ -16,6 +17,9 @@ args = parser.parse_args()
 pin = 'c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9'
 assert subprocess.check_output(['git', '-C', args.design, 'rev-parse', 'HEAD'], text=True).strip() == pin
 expected = {entry['id']: entry for entry in json.loads((args.design / 'docs/api/public-api.json').read_text().replace('NativeWeave.', 'Korda.'))['symbols']}
+sys.path.insert(0, str(root / 'eng/ci'))
+from api_contract import load, validate_additions
+expected, current_additions = load(root, expected)
 types = {
     'Korda.Data.' + name for name in ['Changes', 'ConcurrencyCheck', 'ConcurrencyConflictException', 'EntityKey', 'Relation']
 } | {
@@ -52,6 +56,7 @@ for name, project, assembly, folders in [
     command = ['dotnet', str(args.tool), str(root), os.environ['DOTNET_ROOT'], str(path)]
     subprocess.run([*command, '--snapshot'], check=True)
     actual = json.loads(reference.with_suffix('.json').read_text())['symbols']
+    validate_additions(current_additions, assembly, actual)
     for entry in actual:
         assert entry['id'] in expected and expected[entry['id']]['signature'] == entry['signature'], entry
     all_ids.update(entry['id'] for entry in actual)

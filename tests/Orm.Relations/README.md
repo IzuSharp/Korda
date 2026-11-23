@@ -1,4 +1,4 @@
-# B14 Linux component acceptance
+# ORM relations and DB-API-01 Linux component acceptance
 
 These consumers execute the actual source-composed Database facade and two
 independent provider Host assets. The test executable requires a real PostgreSQL18
@@ -6,35 +6,32 @@ URI through `NW_TEST_POSTGRES`; it never silently skips that provider. The exist
 `tests/Data.NativeHost/run.py` helper creates and stops an isolated TCP-only cluster
 for the selected consumer without rerunning the B04 test suite.
 
-Use the repository-pinned .NET11/Rust toolchains and lock files. From the repository
-root, maintainer native builds are:
+Use the repository-pinned .NET 11 and C++20 toolchains and lock files. Follow
+[`AGENTS.md`](../../AGENTS.md) and the selected checks from
+`python3 eng/ci/impact.py origin/main`. From a clean committed repository,
+the maintainer native build is:
 
 ```sh
-cargo build -p korda-database-host --no-default-features --features sqlite --locked --offline --target-dir artifacts/B14/native-sqlite
-cargo build -p korda-database-host --no-default-features --features postgres --locked --offline --target-dir artifacts/B14/native-postgres
+python3 eng/task07_native.py --output artifacts/B14/native
 ```
 
-Copy the resulting libraries to the task's immutable asset directory under the
-provider names `libnw_database_sqlite.so` and `libnw_database_postgresql.so`. Supply
-their absolute paths through the existing `KordaSqliteAssetPath` and
-`KordaPostgresAssetPath` MSBuild properties for each managed build/publish.
-Those are maintainer asset inputs. Ordinary entity/DTO source compilation does
-not run Rust.
+This requires the pinned tools and PostgreSQL 18 build described in the
+[C++ native guide](../../docs/guides/cpp-native.md). It installs each provider
+library at the default source-build asset path and records a copy, its hash and
+build inputs in the fresh output directory. Alternate immutable asset paths can
+be supplied through `KordaSqliteAssetPath` and `KordaPostgresAssetPath` when
+publishing. Ordinary NuGet entity/DTO builds use the packaged native assets.
 
 The actual consumer commands are:
 
 ```sh
-dotnet restore tests/Orm.Relations/Korda.Orm.Relations.Tests.csproj --locked-mode
-dotnet build tests/Orm.Relations/Korda.Orm.Relations.Tests.csproj -c Release --no-restore -p:UseSharedCompilation=false -nr:false -m:1 -p:KordaSqliteAssetPath=/absolute/libnw_database_sqlite.so -p:KordaPostgresAssetPath=/absolute/libnw_database_postgresql.so
-python3 tests/Data.NativeHost/run.py --postgres-bin /absolute/postgres18/bin --output artifacts/B14/jit -- dotnet tests/Orm.Relations/bin/Release/net11.0/Korda.Orm.Relations.Tests.dll
-
 dotnet restore tests/Orm.Relations/Korda.Orm.Relations.Tests.csproj -r linux-x64 -p:PublishAot=true --locked-mode
-dotnet publish tests/Orm.Relations/Korda.Orm.Relations.Tests.csproj -c Release -r linux-x64 -p:PublishAot=true --no-restore -p:UseSharedCompilation=false -nr:false -m:1 -p:KordaSqliteAssetPath=/absolute/libnw_database_sqlite.so -p:KordaPostgresAssetPath=/absolute/libnw_database_postgresql.so -o artifacts/B14/aot
+dotnet publish tests/Orm.Relations/Korda.Orm.Relations.Tests.csproj -c Release -r linux-x64 -p:PublishAot=true --no-restore -p:IlcTreatWarningsAsErrors=true -p:UseSharedCompilation=false -nr:false -m:1 -o artifacts/B14/aot
 python3 tests/Data.NativeHost/run.py --postgres-bin /absolute/postgres18/bin --output artifacts/B14/aot-run -- artifacts/B14/aot/Korda.Orm.Relations.Tests --require-aot
 ```
 
 The AOT consumer verifies that runtime dynamic-code support and compilation are
-both unavailable. Both modes check static generated/manual metadata identity,
+both unavailable. It checks static generated/manual metadata identity,
 unchanged native asset bytes, real results/errors, managed A07 retirement and all
 six native owner counters. The scripts deliberately terminate only their own
 PostgreSQL sessions to observe actual unknown-commit and rollback-failure paths.
@@ -52,21 +49,38 @@ existing nonwaiting SQL-plus-input-copy grant rejecting before statement dispatc
 the logical parameter ceiling does not guarantee this physical grant. This is a
 bounded-rejection regression, not a throughput or complete-process memory benchmark.
 
-The leaf Rust tests independently validate both SQL dialects, exact mutation
+The C++ component tests independently validate both SQL dialects, exact mutation
 inventories and copied parameter ordering:
 
 ```sh
-cargo test -p korda-data-relations --locked --offline
-cargo clippy -p korda-data-relations -p korda-database-host --all-targets --locked --offline -- -D warnings
+ctest --test-dir artifacts/cmake/linux-x64-release --output-on-failure --no-tests=error
 ```
 
 After a Release product build, run `api.py` with `--design` pointing to the exact
 read-only pin and `--tool` pointing to the built shared
 `Korda.Build.ApiReference.dll`. It compares actual compiled signatures,
 generics/nullability/defaults and XML, rejects every declaration absent from the
-pin, requires all B14 symbols, and writes owned generated references. Run
+historical pin or the explicit DB-API-01 additive contract, requires all B14
+symbols, and writes owned generated references. Run
 `compile_negative.py` to check six invalid typed consumers against those same
 product assemblies using the actual pinned SDK compiler. No Design stub is linked.
+
+`FluentExperience.cs` adds real-provider checks for exact DTO codec policy,
+rejection before SQL and a usable projection after rejection; complete composite
+cursor ordering, ties, descending and mixed directions, cloned cursors, rejected
+offsets and incomplete keys. Batch relation checks observe one actual SQL
+execution for nonempty input and none for empty input, duplicate positions,
+empty groups, composite nullable foreign keys, result budgets and cleanup after
+materializer failure. SQLite's real `NOCASE` comparison also matches differently
+cased parent inputs; no CLR string regrouping decides membership. The SQL
+execution counter is separate from PostgreSQL protocol submissions.
+
+Transaction callback checks cover committed results, original exception
+identity including custom read-only/throwing `Data`, confirmed rollback,
+pre-admission and active-query cancellation, commit-admission cancellation and
+nested-call rejection. PostgreSQL tests
+terminate their own backend to observe unknown commit and unconfirmed rollback
+separately. No automatic replay is part of the callback contract.
 
 The runnable sample is `samples/api/orm-relations`; pass `postgresql` for the
 explicit local PostgreSQL test configuration, or `sqlite` and an optional database

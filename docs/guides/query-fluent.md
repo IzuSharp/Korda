@@ -2,17 +2,17 @@
 
 > **DB-CPP-01 implementation update.** The public C# examples, signatures and ownership contracts in this guide remain the compatibility inputs. The current maintained native implementation is C++20; its module mapping, direct libpq/sqlite3 execution, Clang/CMake commands and package production are documented in [C++ native implementation](cpp-native.md). Descriptions below of Rust, SQLx, SeaQuery or Tokio internals are retained as the fixed `465cd0f` behavioral reference, not current build dependencies. The named verification entry points now build the ported C++ fixtures and retain their original managed assertions.
 
-`Korda.Query` is the application query surface in the
-`Korda.Database` package. A C# call creates or changes a real Rust
-SeaQuery owner immediately. C# retains typed columns, codecs and owner tokens;
+`Korda.Query` is the application query surface bundled into each standalone
+`Korda.Database.Sqlite` or `Korda.Database.PostgreSql` package. A C# call
+creates or changes a C++ native query owner immediately. C# retains typed columns, codecs and owner tokens;
 it does not collect a SQL AST, compile expression trees or execute a managed
 LINQ database engine. Ordinary entity and DTO changes use the same precompiled
 provider module.
 
 ## Install, describe a model, execute
 
-Reference `Korda.Database` and `Korda.Database.Sqlite` or
-`Korda.Database.PostgreSql`. Import `Korda.Data`,
+Reference `Korda.Database.Sqlite` or `Korda.Database.PostgreSql` independently.
+Each package bundles its managed components, generator and provider asset. Import `Korda.Data`,
 `Korda.Database`, the selected provider namespace and
 `Korda.Query`. Use either explicit `TableBuilder<TEntity>` metadata or
 B10's optional generated descriptor; both produce the same typed table/column
@@ -35,8 +35,9 @@ var rows = await query
 are ordinary handwritten static descriptors. That consumer creates isolated
 sample tables and executes both providers using normal PackageReferences. It
 also contains grouping, explicit DTOs, window snapshots, CTEs, sets, parameters,
-locking and pagination. It compiles in ordinary .NET and Linux x64 Native AOT
-without a Rust compiler or a source-project reference in the consumer project.
+locking and pagination. Current Linux checks publish and directly execute Native
+AOT consumers without a native compiler or a source-project reference in the
+consumer project.
 
 ## Values and callbacks have a precise snapshot point
 
@@ -117,9 +118,40 @@ aliases are distinct types and carry exact table and query association.
 appends. Both providers receive explicit direction and NULL placement. Offset
 paging requires an order with all declared primary-key columns providing the
 unique tie-breaker. A later replacement that removes uniqueness rejects before
-execution. `SeekAfter` currently requires the sole non-null primary key ordered
-ascending and no offset. It appends its comparison without removing existing
-security/tenant predicates.
+execution. The original `SeekAfter(column, value)` overload requires the sole
+non-null primary key ordered ascending and no offset. It appends its comparison
+without removing existing security/tenant predicates.
+
+For a composite key or a nonkey sort followed by a unique key, pass an immutable
+`QueryCursor<TEntity>`. For example, the relation sample's tenant and parent ID
+form a complete key:
+
+```csharp
+var cursor = QueryCursor<Parent>.Create(Catalog.ParentTenant, tenant)
+    .Then(Catalog.ParentId, lastParentId);
+using var page = session.From(Catalog.Parents);
+var rows = await page.OrderBy(Catalog.ParentTenant)
+    .ThenBy(Catalog.ParentId)
+    .SeekAfter(cursor)
+    .Take(50)
+    .SelectAll()
+    .ToListAsync(cancellationToken);
+```
+
+The cursor must name every ordering column in the same sequence, and that
+sequence must contain the complete root primary key. Each value is typed and
+copied at `Create` or `Then`. Mixed ascending and descending directions follow
+the query's `OrderBy`/`ThenBy`; the strict native comparison excludes the cursor
+row and handles ties using the later keys. Nullable columns, foreign metadata,
+repeated columns, incomplete keys and conflicting offsets reject. After applying
+this overload, changing the order or adding an offset also rejects, including
+on a clone. Existing filters and `Take` remain in force.
+
+An empty result is the end of the page sequence. The cursor does not create a
+snapshot across requests: updates to sort values can move rows between pages.
+Keep one explicit transaction when a consistent database snapshot is required,
+and choose a supported isolation policy. A complete root key also cannot make
+one-to-many join output unique; page root entities before batch-loading children.
 
 `GroupBy` and `Having` operate natively. Nonaggregated selected expressions must
 be grouping keys; the native adapter validates their actual SeaQuery expression
@@ -213,7 +245,7 @@ The Linux evidence includes exact pinned public API/nullability/generic and XML
 reference checks; typed negative consumers; actual PostgreSQL18/SQLite SQL
 paths; native operation/cursor/buffer counters after each group and all six
 owner counters after shutdown; deterministic plan-disposal and JOIN-scope
-regressions; actual JIT and AOT execution; isolated normal NuGet consumption;
+regressions; actual Native AOT execution; isolated normal NuGet consumption;
 and exact source, lock, native, package and executable hashes. The optional
 B10 generator's consumer is verified separately against the same facade.
 Windows and final pristine release consumption remain their own platform/task

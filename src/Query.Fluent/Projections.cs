@@ -151,6 +151,24 @@ public sealed class ProjectionBuilder<T>
     /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public ResultColumn<TValue> Add<TValue>(SqlExpression<TValue> expression, string alias)
     { _owner.Same(expression.Owner); return _owner.Run(() => _definition.Add(expression.Reference, expression.Codec, alias)); }
+    /// <summary>Adds a same-query scalar after checking its exact declared DTO codec policy.</summary>
+    /// <inheritdoc cref="ProjectionBuilder{T}"/>
+    /// <param name="expression">The compatible native scalar owned by the same live query.</param>
+    /// <param name="alias">The unique exact SQL/result alias.</param>
+    /// <param name="codec">The expected logical codec, configuration and SQL nullability used by the DTO reader.</param>
+    /// <typeparam name="TValue">The statically known property type.</typeparam>
+    /// <returns>The result token associated with this projection builder and explicit reader policy.</returns>
+    /// <exception cref="ArgumentNullException">The expected codec is null.</exception>
+    /// <exception cref="ArgumentException">The expression belongs elsewhere or differs in codec, configuration or nullability.</exception>
+    /// <exception cref="InvalidOperationException">The owner or builder is in an invalid state.</exception>
+    /// <exception cref="ObjectDisposedException">The native query owner has closed admission.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability or finite resource limits reject the operation.</exception>
+    public ResultColumn<TValue> Add<TValue>(SqlExpression<TValue> expression, string alias, ValueCodec<TValue> codec)
+    {
+        ArgumentNullException.ThrowIfNull(codec); _owner.Same(expression.Owner);
+        if (expression.Codec.Descriptor != codec.Descriptor) throw new ArgumentException("The expression differs from the projection's declared codec policy.", nameof(expression));
+        return _owner.Run(() => _definition.Add(expression.Reference, codec, alias));
+    }
     /// <summary>Consumes the builder and freezes a direct AOT-visible materializer; it does not execute SQL.</summary>
     /// <inheritdoc cref="ProjectionBuilder{T}"/>
     /// <param name="materializer">The statically compiled direct constructor or field reader; runtime reflection is not used.</param>

@@ -15,7 +15,7 @@ if (args.Contains("--manifest-bounds")) { Suite.ManifestBounds(); return; }
 if (args.Length > 0) { await Suite.Worker(args); return; }
 await Suite.Run();
 
-internal static class Suite
+internal static partial class Suite
 {
     private static int _assertions, _retirements;
     internal static void ManifestBounds()
@@ -62,6 +62,8 @@ internal static class Suite
             Check(source.Capabilities.Supports("db.migrations.v1") && source.Capabilities.Supports("db.schema.read.v1"), "real capability mapping");
             Check(ReferenceEquals(source.Administration, source.Administration), "one lazy administration facade");
             if (provider == DatabaseProvider.Sqlite) Check(!File.Exists(sqlite), "administration property does not open SQLite");
+            await SchemaExperience(source, connection);
+            if (provider == DatabaseProvider.Sqlite) Check(!File.Exists(sqlite), "schema drafting and scaffolding do not open SQLite");
             var migrations = new List<Migration> { new(1, "create", "CREATE TABLE b08_items(id INTEGER PRIMARY KEY, name TEXT NOT NULL)"), new(2, "seed", "INSERT INTO b08_items VALUES(1,'one')") };
             var bundle = new MigrationBundle(provider, migrations); var hash = bundle.ContentHash; migrations.Clear();
             Check(hash.Length == 64 && hash.All(c => char.IsAsciiHexDigitLower(c) || char.IsAsciiDigit(c)), "separate canonical bundle SHA256");

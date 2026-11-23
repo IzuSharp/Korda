@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import sys
 import subprocess
 
 root = Path(__file__).resolve().parents[2]
@@ -15,7 +16,20 @@ args = parser.parse_args()
 pin = 'c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9'
 if subprocess.check_output(['git', '-C', str(args.design), 'rev-parse', 'HEAD'], text=True).strip() != pin:
     raise SystemExit('Design checkout does not match the Plan-locked commit')
-expected = {entry['id']: entry for entry in json.loads((args.design / 'docs/api/public-api.json').read_text().replace('NativeWeave.', 'Korda.'))['symbols']}
+historical = (args.design / 'docs/api/public-api.json').read_text().replace('NativeWeave.', 'Korda.')
+# The already-merged product rename also changed the DI type/method identifiers,
+# which are not namespace prefixes. Preserve their exact historical declarations
+# through that same explicit rename instead of leaving this retained gate broken.
+for old, current in (
+    ('NativeWeaveDatabaseServiceCollectionExtensions', 'KordaDatabaseServiceCollectionExtensions'),
+    ('AddKeyedNativeWeaveDatabase', 'AddKeyedKordaDatabase'),
+    ('AddNativeWeaveDatabase', 'AddKordaDatabase'),
+):
+    historical = historical.replace(old, current)
+expected = {entry['id']: entry for entry in json.loads(historical)['symbols']}
+sys.path.insert(0, str(root / 'eng/ci'))
+from api_contract import load, validate_additions
+expected, current_additions = load(root, expected)
 output = root / 'artifacts/B04/api'
 output.mkdir(parents=True, exist_ok=True)
 core_types = {'Korda.Database.' + value for value in ['DatabaseProvider', 'DatabaseLimits', 'DatabaseCapabilities', 'DataSourceBuilder', 'DataSource', 'DataSession']}
@@ -50,6 +64,7 @@ for name, directory, assembly, sources in compositions:
     command = ['dotnet', str(args.tool), str(root), os.environ['DOTNET_ROOT'], str(config_path)]
     subprocess.run([*command, '--snapshot'], check=True, cwd=root)
     actual = json.loads(reference.with_suffix('.json').read_text())['symbols']
+    validate_additions(current_additions, assembly, actual)
     missing = []
     for entry in actual:
         baseline = expected.get(entry['id'])

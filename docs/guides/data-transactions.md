@@ -55,6 +55,34 @@ ReadCommitted conflict recovery uses a subsequent SELECT; one missing result in 
 same-statement CTE or one cleanup response cannot prove the old transaction rolled
 back. B21 owns the complete application idempotency flow.
 
+## Transaction callbacks
+
+For a unit of work that owns a new transaction, `DataSession.InTransactionAsync`
+supplies the current session and request token to one awaited callback. It
+returns the callback result only after confirmed commit and local cleanup.
+
+```csharp
+var saved = await session.InTransactionAsync(async (current, token) =>
+{
+    return await current.InsertReturningAsync(Orders.Table, order, Orders.Row, token);
+}, new TransactionOptions { RecoveryKey = operationId }, requestToken);
+```
+
+An existing transaction rejects before the callback runs. Keep each operation
+awaited and leave commit, rollback and disposal to the callback helper. Use the
+explicit transaction and savepoint APIs when a wider caller already owns the
+scope. The callback introduces no ambient context or retry.
+
+The original callback or commit exception is rethrown after independent cleanup.
+`TransactionFailure.TryGet(error, out var failure)` retrieves the retained
+outcome, `CommitAttempted`, cleanup result and recovery key from that exact
+exception. Cancellation before commit admission can therefore report a
+confirmed rollback; cancellation after admission cannot misreport a possible
+commit as a canceled write. A `CommitOutcomeUnknownException` remains unknown
+after cleanup. Reconcile the recovery identity through application policy before
+another business attempt. See the [relations guide](orm-relations.md#a-transaction-callback)
+for failure inspection and the no-result overload.
+
 ## Four observations
 
 | Dimension | Values | Meaning |

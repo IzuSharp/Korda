@@ -8,8 +8,46 @@
         "resolved": "11.0.0",
         "contentHash": "gK2aq4XvChj5kvozpPHrkfKkr7zc5Z4xoTrJb4GPZzDEPMlCk0TX632bwY3LsWcX2UVcVRQBBGzsBGC2lq6YhA=="
       },
+      "korda.core": {
+        "type": "Project",
+        "dependencies": {
+          "Korda.Interop.Abi": "[0.1.0-preview.1, )"
+        }
+      },
       "korda.data": {
         "type": "Project"
+      },
+      "korda.data.streaming": {
+        "type": "Project",
+        "dependencies": {
+          "Korda.Data": "[0.1.0-preview.1, )"
+        }
+      },
+      "korda.database": {
+        "type": "Project",
+        "dependencies": {
+          "Korda.Core": "[0.1.0-preview.1, )",
+          "Korda.Data": "[0.1.0-preview.1, )",
+          "Korda.Data.Streaming": "[0.1.0-preview.1, )",
+          "Korda.Database.Transactions": "[0.1.0-preview.1, )",
+          "Korda.Query.Binding": "[0.1.0-preview.1, )"
+        }
+      },
+      "korda.database.transactions": {
+        "type": "Project",
+        "dependencies": {
+          "Korda.Data": "[0.1.0-preview.1, )"
+        }
+      },
+      "Korda.Interop.Abi": {
+        "type": "Project"
+      },
+      "korda.query.binding": {
+        "type": "Project",
+        "dependencies": {
+          "Korda.Data": "[0.1.0-preview.1, )",
+          "Korda.Interop.Abi": "[0.1.0-preview.1, )"
+        }
       }
     }
   }

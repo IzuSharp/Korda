@@ -42,6 +42,8 @@ Error configuration_error()
     return Error(NW_DOMAIN_ERROR, 8, "invalid provider configuration");
 }
 std::atomic<std::uint64_t> next_connection{1};
+std::atomic<std::uint64_t> dispatch_count{0};
+std::atomic<std::uint64_t> protocol_count{0};
 
 #if NW_ENABLE_SQLITE
 std::optional<std::string> sqlite_declared(const char* declaration)
@@ -173,6 +175,7 @@ void protocol_sync(PGconn* connection, const CallContext& cleanup)
     }
     if (PQstatus(connection) != CONNECTION_OK || !PQenterPipelineMode(connection) || !PQpipelineSync(connection))
         throw postgres_error();
+    protocol_count.fetch_add(1, std::memory_order_relaxed);
     // This otherwise empty temporary pipeline contains exactly one Sync. A
     // successful queue/flush is not confirmation: require its ReadyForQuery.
     auto* result = receive(connection, cleanup);
@@ -253,6 +256,15 @@ void CallContext::check() const
         throw Error(NW_TIMEOUT, 8, "database command deadline exceeded");
 }
 
+std::uint64_t provider_dispatch_count() noexcept
+{
+    return dispatch_count.load(std::memory_order_relaxed);
+}
+std::uint64_t provider_protocol_count() noexcept
+{
+    return protocol_count.load(std::memory_order_relaxed);
+}
+
 struct ProviderConnection::Impl
 {
     explicit Impl(ProviderOptions value) : options(std::move(value)), id(next_connection.fetch_add(1)) {}
@@ -321,6 +333,7 @@ struct ProviderStatement::Impl
     CallContext context;
 #if NW_ENABLE_SQLITE
     sqlite3_stmt* sqlite = nullptr;
+    bool sqlite_started = false;
 #endif
 #if NW_ENABLE_POSTGRES
     PGresult* postgres = nullptr;
@@ -365,6 +378,11 @@ struct ProviderStatement::Impl
 #if NW_ENABLE_SQLITE
         if (sqlite)
         {
+            if (!sqlite_started)
+            {
+                dispatch_count.fetch_add(1, std::memory_order_relaxed);
+                sqlite_started = true;
+            }
             const int status = sqlite3_step(sqlite);
             update_transaction();
             if (status == SQLITE_ROW)
@@ -391,6 +409,8 @@ struct ProviderStatement::Impl
                 if (!PQsendQueryPrepared(provider.postgres, "", static_cast<int>(values.size()), values.data(), nullptr,
                                          nullptr, 1))
                     throw postgres_error();
+                dispatch_count.fetch_add(1, std::memory_order_relaxed);
+                protocol_count.fetch_add(1, std::memory_order_relaxed);
                 postgres_started = true;
                 postgres_pending = true;
                 if (!PQsetSingleRowMode(provider.postgres))
@@ -743,6 +763,7 @@ std::unique_ptr<ProviderStatement> ProviderConnection::prepare(std::string_view 
         {
             if (!PQsendPrepare(impl_->postgres, "", owned_sql.c_str(), static_cast<int>(types.size()), types.data()))
                 throw postgres_error();
+            protocol_count.fetch_add(1, std::memory_order_relaxed);
             result->impl_->postgres_pending = true;
             while (auto* reply = receive(impl_->postgres, context))
             {
@@ -755,6 +776,7 @@ std::unique_ptr<ProviderStatement> ProviderConnection::prepare(std::string_view 
         prepare();
         if (!PQsendDescribePrepared(impl_->postgres, ""))
             throw postgres_error();
+        protocol_count.fetch_add(1, std::memory_order_relaxed);
         result->impl_->postgres_pending = true;
         while (auto* reply = receive(impl_->postgres, context))
         {
@@ -786,6 +808,8 @@ std::unique_ptr<ProviderStatement> ProviderConnection::prepare(std::string_view 
             const auto lookup = "SELECT oid::text,typname::text FROM pg_catalog.pg_type WHERE oid IN (" + unknown + ")";
             if (!PQsendQueryParams(impl_->postgres, lookup.c_str(), 0, nullptr, nullptr, nullptr, nullptr, 0))
                 throw postgres_error();
+            dispatch_count.fetch_add(1, std::memory_order_relaxed);
+            protocol_count.fetch_add(1, std::memory_order_relaxed);
             result->impl_->postgres_pending = true;
             while (auto* reply = receive(impl_->postgres, context))
             {
@@ -1181,6 +1205,7 @@ void ProviderConnection::execute_script(std::string_view sql, const CallContext&
             if (!statement->impl_->sqlite)
                 continue;
             statement->impl_->ended = false;
+            statement->impl_->sqlite_started = false;
             while (statement->impl_->advance(context))
             {
             }
@@ -1195,7 +1220,11 @@ void ProviderConnection::execute_script(std::string_view sql, const CallContext&
     if (impl_->postgres)
     {
         const std::string text(sql);
-        if (!PQsendQuery(impl_->postgres, text.c_str()) || !PQsetSingleRowMode(impl_->postgres))
+        if (!PQsendQuery(impl_->postgres, text.c_str()))
+            throw postgres_error();
+        dispatch_count.fetch_add(1, std::memory_order_relaxed);
+        protocol_count.fetch_add(1, std::memory_order_relaxed);
+        if (!PQsetSingleRowMode(impl_->postgres))
             throw postgres_error();
         statement->impl_->postgres_started = true;
         statement->impl_->postgres_pending = true;

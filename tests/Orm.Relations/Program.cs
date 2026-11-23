@@ -50,6 +50,7 @@ internal static partial class Suite
                 await Execute(session, provider == DatabaseProvider.Sqlite ? "CREATE TABLE b14_generated(\"Id\" INTEGER PRIMARY KEY AUTOINCREMENT)" : "CREATE TABLE b14_generated(\"Id\" BIGSERIAL PRIMARY KEY)");
                 await Crud(source, session);
                 await Relations(source, session);
+                await FluentExperience(source, session, connection);
                 await BulkCases(source, session);
                 await CompoundAdmission(session);
                 await RawContracts(source, session);
@@ -61,7 +62,7 @@ internal static partial class Suite
         }
         foreach (var (path, hash) in nativeHashes) Check(Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path))) == hash, "C# entities/descriptors reuse unchanged native asset");
         await WaitZero(SqliteDataSource.Engine); await WaitZero(PostgreSqlDataSource.Engine); Directory.Delete(directory, true);
-        Console.WriteLine($"B14 actual Linux two-provider assertions={_assertions}; managed retirements={_retirements}; all native counters=0");
+        Console.WriteLine($"B14 actual Linux two-provider assertions={_assertions}; managed retirements={_retirements}; all six native owner counters=0");
     }
     private static async Task Crud(DataSource source, DataSession session)
     {
