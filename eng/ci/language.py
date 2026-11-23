@@ -7,6 +7,7 @@ EXTENSIONS = {
     "cpp": (".cpp", ".cc", ".cxx", ".hpp", ".hxx", ".hh"),
     "c": (".c",),
     "c-header": (".h",),
+    "rust": (".rs",),
     "go": (".go",),
     "python": (".py", ".pyi"),
     "cmake": (".cmake",),

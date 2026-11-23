@@ -32,7 +32,7 @@
     "NativeWeave-Design:experiments/public-api/NativeWeave.Api.Design/Interop.cs": "aa806f2a24914363031dc0466adc446313e1e69b5464d6fb2f8c953114de0208",
     "NativeWeave-Design:experiments/public-api/NativeWeave.Api.Consumers/InteropExamples.cs": "7b1ec450f8a61d21904084ee71ebff6bf179b2e165580511f7e37ca494e4b286",
     "NativeWeave-Design:experiments/public-api/NativeWeave.Api.Consumers/DatabaseAdvancedExamples.cs": "f71eeaf8b7541d76fe5d7b9f9a27f3ced72eba96411519d8c680e70805c27182",
-    "NativeWeave-Design:experiments/public-api/abi/korda_server_api_v1.h": "f7316b35bfb8cce5cb4fded82a0907e602626c4e9e54ff18d99fe242f2b4b681",
+    "NativeWeave-Design:experiments/public-api/abi/nativeweave_server_api_v1.h": "f7316b35bfb8cce5cb4fded82a0907e602626c4e9e54ff18d99fe242f2b4b681",
     "NativeWeave-Design:docs/server/body-retirement-protocol.md": "ef7c3f5a32a1d9b047d884edada7b2bafd409b36d79b798d8da273be1a4338cd",
     "NativeWeave-Design:docs/contracts/abi-v0.1.md": "d9e8fd60ff33d3c56410cd4cc3a6ad591609c0b49282bd3ccf9ad7b93f06e9f2",
     "NativeWeave-Design:docs/platforms/build-package-release.md": "4810c05f0af850dadc1c814ca7707ff348e7b448a9fcb792ec2a7aeb2d7c46cc"
