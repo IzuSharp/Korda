@@ -21,7 +21,7 @@ def sha(path):
 
 def source_identity():
     paths = subprocess.check_output(["git", "ls-files", "--cached", "--others", "--exclude-standard", "--", *OWNED,
-                                     "tests/ProviderProfileChecks.cs", "src/Data.NativeHost", "native/cpp", "src/Data.Abstractions", "src/NativeWeave.Core", "src/Interop.Abi", "src/Interop.Negotiation", "src/Interop.Errors", "native/database/interfaces", "native/database/binding", "native/interop/abi", "native/dependencies.lock.json", "CMakeLists.txt", "CMakePresets.json", ".clang-format", "Directory.Build.props", "global.json"], cwd=ROOT, text=True).splitlines()
+                                     "tests/ProviderProfileChecks.cs", "src/Data.NativeHost", "native/cpp", "src/Data.Abstractions", "src/Korda.Core", "src/Interop.Abi", "src/Interop.Negotiation", "src/Interop.Errors", "native/database/interfaces", "native/database/binding", "native/interop/abi", "native/dependencies.lock.json", "CMakeLists.txt", "CMakePresets.json", ".clang-format", "Directory.Build.props", "global.json"], cwd=ROOT, text=True).splitlines()
     return {p: sha(ROOT / p) for p in sorted(set(paths)) if (ROOT / p).is_file()}
 
 
@@ -71,11 +71,11 @@ def main():
     sdk = Path(dotnet).resolve().parent
     native_build = args.native_build.resolve()
     host_native = native_build / "libnw_database_sqlite.so"
-    native = native_build / "fixtures/libnativeweave_sqlite_fixture.so"
+    native = native_build / "fixtures/libkorda_sqlite_fixture.so"
     component_native = native  # The former standalone bootstrap is retained only in the test bridge.
-    build_flags = ["-p:UseSharedCompilation=false", "-nr:false", "-m:1", f"-p:NativeWeaveSqliteAssetPath={host_native}"]
-    ordinary = ["src/Data.Sqlite/NativeWeave.Database.Sqlite.csproj",
-                "tests/Data.Sqlite/NativeWeave.Data.Sqlite.Tests.csproj",
+    build_flags = ["-p:UseSharedCompilation=false", "-nr:false", "-m:1", f"-p:KordaSqliteAssetPath={host_native}"]
+    ordinary = ["src/Data.Sqlite/Korda.Database.Sqlite.csproj",
+                "tests/Data.Sqlite/Korda.Data.Sqlite.Tests.csproj",
                 "tests/Data.Sqlite/ApiCheck/ApiCheck.csproj",
                 "samples/api/data-sqlite/Data.Sqlite.Sample.csproj"]
 
@@ -91,7 +91,7 @@ def main():
         assert not manifest["sourceDirty"], "Formal acceptance requires a clean committed source tree"
         assert platform.system() == "Linux" and platform.machine() == "x86_64", "This run only accepts Linux x64"
         assert host_native.is_file(), "Build the actual SQLite Database Host before component/preflight verification"
-        assert native.is_file(), "Build the C++ nativeweave_sqlite_fixture target before component verification"
+        assert native.is_file(), "Build the C++ korda_sqlite_fixture target before component verification"
         if args.design:
             revision = subprocess.check_output(["git", "-C", str(args.design), "rev-parse", "HEAD"], text=True).strip()
             # The exact compiled API/XML gate below remains authoritative. The
@@ -103,8 +103,8 @@ def main():
             for project in (ordinary[0], ordinary[2]):
                 restore("api-restore-" + Path(project).stem, project)
                 run("api-build-" + Path(project).stem, [dotnet, "build", project, "-c", "Release", "--no-restore", *build_flags])
-            assembly = ROOT / "src/Data.Sqlite/bin/Release/net11.0/NativeWeave.Database.Sqlite.dll"
-            api_result = json.loads(run("compiled-api-xml-reference", [dotnet, "tests/Data.Sqlite/ApiCheck/bin/Release/net11.0/NativeWeave.Sqlite.ApiCheck.dll", ROOT, sdk, assembly]))
+            assembly = ROOT / "src/Data.Sqlite/bin/Release/net11.0/Korda.Database.Sqlite.dll"
+            api_result = json.loads(run("compiled-api-xml-reference", [dotnet, "tests/Data.Sqlite/ApiCheck/bin/Release/net11.0/Korda.Sqlite.ApiCheck.dll", ROOT, sdk, assembly]))
             manifest.update(status="passed", api=api_result)
             save()
             return
@@ -132,13 +132,13 @@ def main():
             run("ordinary-build-" + str(index), [dotnet, "build", project, "-c", "Release", "--no-restore", *build_flags])
         run("managed-whitespace", [dotnet, "format", "whitespace", ".", "--folder", "--verify-no-changes", "--include",
                                     "src/Data.Sqlite/SqliteOptions.cs", "src/Data.Sqlite/SqliteConfiguration.cs", "src/Data.Sqlite/SqliteDataSource.cs", "tests/Data.Sqlite/Program.cs", "tests/ProviderProfileChecks.cs", "tests/Data.Sqlite/ApiCheck/Program.cs", "samples/api/data-sqlite/SqliteExamples.cs", "--verbosity", "quiet"])
-        assembly = ROOT / "src/Data.Sqlite/bin/Release/net11.0/NativeWeave.Database.Sqlite.dll"
-        api_result = {} if args.test_only else json.loads(run("compiled-api-xml-reference", [dotnet, "tests/Data.Sqlite/ApiCheck/bin/Release/net11.0/NativeWeave.Sqlite.ApiCheck.dll", ROOT, sdk, assembly]))
+        assembly = ROOT / "src/Data.Sqlite/bin/Release/net11.0/Korda.Database.Sqlite.dll"
+        api_result = {} if args.test_only else json.loads(run("compiled-api-xml-reference", [dotnet, "tests/Data.Sqlite/ApiCheck/bin/Release/net11.0/Korda.Sqlite.ApiCheck.dll", ROOT, sdk, assembly]))
         restore("aot-restore", ordinary[1], True)
         publish = output / "publish"
         run("aot-publish", [dotnet, "publish", ordinary[1], "-c", "Release", "-r", "linux-x64", "-p:PublishAot=true", "--no-restore", "-p:IlcTreatWarningsAsErrors=true", *build_flags, "-o", publish])
-        executable = publish / "NativeWeave.Data.Sqlite.Tests"
-        execution_env["NATIVEWEAVE_B03_TEST_ROOT"] = str(output / "aot-data")
+        executable = publish / "Korda.Data.Sqlite.Tests"
+        execution_env["KORDA_B03_TEST_ROOT"] = str(output / "aot-data")
         assert executable.read_bytes()[:4] == b"\x7fELF" and not executable.with_suffix(".dll").exists(), "Expected actual standalone Native AOT"
         aot_output = run("aot-execution", [executable, "--aot"], execution_env)
         assert "NativeAOT=True" in aot_output and all(f"PASS B03 native scenario {i}" in aot_output for i in range(1, 15))
@@ -149,13 +149,13 @@ def main():
             if tool and Path(tool).is_file():
                 manifest.setdefault("toolHashes", {})[str(Path(tool).resolve())] = sha(Path(tool).resolve())
         generated = list((ROOT / "src/Data.Sqlite/obj").rglob("EngineProfile.g.cs"))
-        generated += list((ROOT / "src/Data.Sqlite/obj").rglob("NativeWeave.database.sqlite.assets.json"))
+        generated += list((ROOT / "src/Data.Sqlite/obj").rglob("Korda.database.sqlite.assets.json"))
         for artifact in generated:
             manifest.setdefault("generatedMaintainerProfileSha256", {})[str(artifact)] = sha(artifact)
         for location in [ROOT / "tests/Data.Sqlite/bin/Release/net11.0", publish]:
-            record_path = location / "NativeWeave.database.sqlite.assets.json"
+            record_path = location / "Korda.database.sqlite.assets.json"
             record = json.loads(record_path.read_text())
-            assert record["engineId"] == "database.sqlite" and record["packageId"] == "NativeWeave.Database.Sqlite"
+            assert record["engineId"] == "database.sqlite" and record["packageId"] == "Korda.Database.Sqlite"
             assert record["sourcePath"] == record["outputPath"] == "runtimes/linux-x64/native/libnw_database_sqlite.so"
             assert record["sha256"] == sha(host_native)
             assert sha(location / record["outputPath"]) == sha(host_native)

@@ -1,4 +1,4 @@
-namespace NativeWeave.Database;
+namespace Korda.Database;
 
 // Internal B04 engine-operation composition seam. No managed transaction state
 // machine, physical pool, runtime, provider or public construction hook lives here.

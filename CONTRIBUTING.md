@@ -10,7 +10,7 @@ Use a topic branch and isolated worktree. Keep source, tests, XML documentation,
 pre-commit install
 pre-commit run clang-format --all-files
 python3 eng/check_native.py tidy
-dotnet format NativeWeave.slnx
+dotnet format Korda.slnx
 # Set a disposable PostgreSQL18 endpoint and server-tool path as described in README.
 python3 eng/build.py verify --design /path/to/frozen-design
 ```

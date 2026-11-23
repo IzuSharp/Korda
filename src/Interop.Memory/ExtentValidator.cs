@@ -1,4 +1,4 @@
-namespace NativeWeave.Interop.Memory;
+namespace Korda.Interop.Memory;
 
 /// <summary>Internal D07 contiguous-region arithmetic; it never probes or dereferences an address.</summary>
 internal static class ExtentValidator

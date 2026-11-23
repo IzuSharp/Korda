@@ -41,7 +41,7 @@ struct ProviderOptions
 {
     Profile profile = Profile::Sqlite;
     std::string connection;
-    std::string application_name = "NativeWeave";
+    std::string application_name = "Korda";
     std::optional<std::string> root_certificate;
     bool verify_tls = true;
     std::uint64_t connect_timeout_ns = 30'000'000'000;

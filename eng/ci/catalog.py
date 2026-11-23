@@ -18,7 +18,7 @@ def git(*args):
 
 
 class Catalog:
-    def __init__(self, modules):
+    def __init__(self, modules, *, historical=False):
         self.modules = modules
         self.rules = []
         self.closures = {}
@@ -99,7 +99,8 @@ class Catalog:
                     self.rules.append((len(prefix), pattern, name, kind))
             if "package" in spec:
                 identity = spec["package"]
-                if not re.fullmatch(r"NativeWeave\.[A-Za-z0-9.-]+", identity) or identity.lower() in (
+                prefix = r"(?:NativeWeave|Korda)" if historical else "Korda"
+                if not re.fullmatch(prefix + r"\.[A-Za-z0-9.-]+", identity) or identity.lower() in (
                     p.lower() for p in self.packages.values()
                 ):
                     raise ValueError(f"Invalid or duplicate public package: {identity}")
@@ -166,7 +167,7 @@ class Catalog:
         return {name for name, closure in self.closures.items() if sources & closure}
 
 
-def load_catalog(tree=None):
+def load_catalog(tree=None, *, historical=False):
     modules = {}
     if tree is None:
         documents = [(p.name, p.read_bytes()) for p in sorted((ROOT / DIRECTORY).glob("*.json"))]
@@ -178,7 +179,7 @@ def load_catalog(tree=None):
         if modules.keys() & registrations.keys():
             raise ValueError(f"Duplicate module in {path}")
         modules.update(registrations)
-    catalog = Catalog(modules)
+    catalog = Catalog(modules, historical=historical)
     if tree and modules:
         projects = git("ls-tree", "-r", "--name-only", tree).decode().splitlines()
         catalog.add_project_references(

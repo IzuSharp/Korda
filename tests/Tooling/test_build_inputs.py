@@ -30,7 +30,7 @@ class BuildInputsTests(unittest.TestCase):
                 (manifests / (family + ".json")).write_text(
                     json.dumps({family: {"sources": [family + "/"], "checks": ["example.api"]}})
                 )
-            (root / "NativeWeave.slnx").write_text(
+            (root / "Korda.slnx").write_text(
                 '<Solution><Folder Name="/Products/"><Project Path="database/Db.csproj"/>'
                 '<Project Path="qt/Ui.csproj"/></Folder></Solution>'
             )

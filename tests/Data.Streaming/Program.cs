@@ -1,8 +1,8 @@
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
-using NativeWeave.Data;
-using NativeWeave.Database.Internal;
+using Korda.Data;
+using Korda.Database.Internal;
 
 if (args.Length == 0) throw new ArgumentException("Usage: Data.Streaming.Tests <report-directory> [--require-aot]");
 if (args.Contains("--require-aot", StringComparer.Ordinal) && RuntimeFeature.IsDynamicCodeSupported) throw new InvalidOperationException("Actual NativeAOT execution required.");

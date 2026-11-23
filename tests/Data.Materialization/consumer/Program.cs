@@ -1,9 +1,9 @@
 using System.Runtime.CompilerServices;
-using NativeWeave.Data;
-using NativeWeave.Database;
-using NativeWeave.Database.PostgreSql;
-using NativeWeave.Database.Sqlite;
-using NativeWeave.Samples.Materialization;
+using Korda.Data;
+using Korda.Database;
+using Korda.Database.PostgreSql;
+using Korda.Database.Sqlite;
+using Korda.Samples.Materialization;
 
 if (args.Contains("--require-aot") && RuntimeFeature.IsDynamicCodeSupported) throw new InvalidOperationException("Actual AOT execution required.");
 var connection = Environment.GetEnvironmentVariable("NW_TEST_POSTGRES") ?? throw new InvalidOperationException("Actual PostgreSQL18 endpoint required.");

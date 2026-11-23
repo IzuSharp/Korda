@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 // Deliberately illegal under enabled runtime marshalling. Isolated negative only.
 internal static unsafe partial class Program
 {
-    [LibraryImport("nativeweave_errors_fixture", EntryPoint = "nw_errors_invalid_uco")]
+    [LibraryImport("korda_errors_fixture", EntryPoint = "nw_errors_invalid_uco")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
     private static partial uint Invoke(nint callback);
 

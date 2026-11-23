@@ -1,8 +1,8 @@
-using NativeWeave.Data;
-using NativeWeave.Database.Internal;
-using NativeWeave.Query.Internal;
+using Korda.Data;
+using Korda.Database.Internal;
+using Korda.Query.Internal;
 
-namespace NativeWeave.Database;
+namespace Korda.Database;
 
 /// <summary>Owns one physical native session with fail-fast single-command admission.</summary>
 /// <remarks>A cursor and transaction control retain the same session gate. A session is not a concurrent command queue.

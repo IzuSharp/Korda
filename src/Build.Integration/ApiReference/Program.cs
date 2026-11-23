@@ -23,7 +23,7 @@ foreach (var hostAssembly in new[] { typeof(Compilation).Assembly, typeof(CSharp
     referenceFiles.TryAdd(Path.GetFileName(hostAssembly.Location), hostAssembly.Location);
 var references = referenceFiles.Values.Select(p => MetadataReference.CreateFromFile(p)).ToList();
 var library = references.Single(r => Path.GetFullPath(r.FilePath!) == assemblyPath);
-var compilation = CSharpCompilation.Create("NativeWeave.CompiledApi", references: references, options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, metadataImportOptions: MetadataImportOptions.All));
+var compilation = CSharpCompilation.Create("Korda.CompiledApi", references: references, options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, metadataImportOptions: MetadataImportOptions.All));
 var assembly = (IAssemblySymbol)(compilation.GetAssemblyOrModuleSymbol(library) ?? throw new InvalidOperationException("Cannot import assembly"));
 var sourceRecordTypes = new HashSet<string>(StringComparer.Ordinal);
 var trees = sourceRoots.SelectMany(path => Directory.GetFiles(path, "*.cs", SearchOption.AllDirectories))
@@ -35,7 +35,7 @@ foreach (var tree in trees)
         string? ns = record.Ancestors().OfType<Microsoft.CodeAnalysis.CSharp.Syntax.BaseNamespaceDeclarationSyntax>().FirstOrDefault()?.Name.ToString();
         if (ns is not null) sourceRecordTypes.Add(ns + "." + record.Identifier.ValueText);
     }
-var sourceCompilation = CSharpCompilation.Create("NativeWeave.SourceShape", syntaxTrees: trees, references: references,
+var sourceCompilation = CSharpCompilation.Create("Korda.SourceShape", syntaxTrees: trees, references: references,
     options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
 var primaryParameters = new Dictionary<string, string[]>(StringComparer.Ordinal);
 foreach (var tree in trees)

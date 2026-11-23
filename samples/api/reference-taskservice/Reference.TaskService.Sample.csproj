@@ -1,8 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <AssemblyName>NativeWeave.Reference.TaskService.Sample</AssemblyName>
-    <RootNamespace>NativeWeave.Reference.TaskService</RootNamespace>
+    <AssemblyName>Korda.Reference.TaskService.Sample</AssemblyName>
+    <RootNamespace>Korda.Reference.TaskService</RootNamespace>
     <IsAotCompatible>true</IsAotCompatible>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
@@ -10,14 +10,14 @@
     <DefineConstants Condition="'$(ReferenceIncludePostgreSql)' != 'true'">$(DefineConstants);REFERENCE_SQLITE_ONLY</DefineConstants>
     <ReferenceProfile>sqlite</ReferenceProfile>
     <ReferenceProfile Condition="'$(ReferenceIncludePostgreSql)' == 'true'">full</ReferenceProfile>
-    <NativeWeavePackageVersion Condition="'$(NativeWeavePackageVersion)' == ''">0.1.0-preview.1</NativeWeavePackageVersion>
+    <KordaPackageVersion Condition="'$(KordaPackageVersion)' == ''">0.1.0-preview.1</KordaPackageVersion>
     <NuGetLockFilePath>$(MSBuildProjectDirectory)/packages.$(ReferenceProfile).lock.json</NuGetLockFilePath>
     <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifiers)' != ''">$(MSBuildProjectDirectory)/packages.$(ReferenceProfile).$(RuntimeIdentifiers).aot.lock.json</NuGetLockFilePath>
     <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifier)' != ''">$(MSBuildProjectDirectory)/packages.$(ReferenceProfile).$(RuntimeIdentifier).aot.lock.json</NuGetLockFilePath>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="NativeWeave.Database.Sqlite" Version="$(NativeWeavePackageVersion)" />
-    <PackageReference Include="NativeWeave.Database.PostgreSql" Version="$(NativeWeavePackageVersion)" Condition="'$(ReferenceIncludePostgreSql)' == 'true'" />
+    <PackageReference Include="Korda.Database.Sqlite" Version="$(KordaPackageVersion)" />
+    <PackageReference Include="Korda.Database.PostgreSql" Version="$(KordaPackageVersion)" Condition="'$(ReferenceIncludePostgreSql)' == 'true'" />
     <Compile Include="../../../src/Reference.TaskService/*.cs" Link="Application/%(Filename)%(Extension)" />
     <EmbeddedResource Include="../../../src/Reference.TaskService/Migrations/*.sql" Link="Migrations/%(Filename)%(Extension)" />
   </ItemGroup>

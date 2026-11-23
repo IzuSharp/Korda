@@ -1,4 +1,4 @@
-namespace NativeWeave.Data;
+namespace Korda.Data;
 
 /// <summary>Provider-neutral database failure categories; cancellation and timeouts use their standard CLR exceptions.</summary>
 public enum DatabaseErrorKind

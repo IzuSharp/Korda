@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only, fail-closed maintainer checks for immutable NativeWeave updates.
+"""Read-only, fail-closed maintainer checks for immutable Korda updates.
 
 The input is a reviewed release/component record, not a source of trust by itself.
 This tool never downloads, publishes, edits a lockfile, unlists, or unloads code.
@@ -76,7 +76,7 @@ def source_profile(manifest):
             and type(toolchain.get("standard")) is int and toolchain["standard"] >= 20
             and toolchain.get("compiler") == "Clang" and toolchain.get("version"),
             "NWCMP005", "C++ provenance needs its language standard and exact Clang version")
-    require(manifest.get("native_lock_format") == "nativeweave-cpp-dependencies-v1",
+    require(manifest.get("native_lock_format") == "korda-cpp-dependencies-v1",
             "NWCMP001", "Version 2 requires an explicit native dependency-lock format")
     return "native_lock", toolchain
 
@@ -282,7 +282,7 @@ def package_payload(path, expected):
         edges = {}
         for dep in metadata.findall(".//{*}dependency"):
             package = dep.attrib["id"]
-            if not package.lower().startswith("nativeweave."):
+            if not package.lower().startswith("korda."):
                 continue
             wanted = dep.attrib["version"]
             require(re.fullmatch(r"\[[^,\[\]()]+\]", wanted) is not None, "NWPKG012", "Owned dependency must use [exact-version]")
@@ -299,9 +299,9 @@ def package_payload(path, expected):
                 require(len(header) == 64 and header[:7] == b"\x7fELF\x02\x01\x01"
                         and int.from_bytes(header[16:18], "little") == 3 and int.from_bytes(header[18:20], "little") == 62,
                         "NWPKG014", "Native bytes are not the declared Linux x64 shared library")
-            require(archive.getinfo("nativeweave/manifest.json").file_size <= 16 * 1024 * 1024,
+            require(archive.getinfo("korda/manifest.json").file_size <= 16 * 1024 * 1024,
                     "NWPKG010", "Internal manifest exceeds the bounded profile")
-            manifest = json.loads(archive.read("nativeweave/manifest.json"))
+            manifest = json.loads(archive.read("korda/manifest.json"))
             require(manifest["packageId"] == identity and manifest["packageVersion"] == version
                     and manifest["nativePath"] == native["path"] and manifest["nativeSha256"] == native["sha256"]
                     and manifest["rid"] == native["rid"] and manifest["abiMajor"] == native["abi_major"]
@@ -374,10 +374,10 @@ def validate_closure(record, packages, assets=None):
         actual = {}
         for name, value in assets["libraries"].items():
             identity, version = name.rsplit("/", 1)
-            if value["type"] == "package" and identity.lower().startswith("nativeweave."):
+            if value["type"] == "package" and identity.lower().startswith("korda."):
                 actual[identity.lower()] = version
         require(actual == {key: value["version"] for key, value in expected.items()}, "NWPKG016",
-                "Resolved NativeWeave graph differs even if NuGet warnings were suppressed")
+                "Resolved Korda graph differs even if NuGet warnings were suppressed")
     return {"complete": True, "packages": observed}
 
 

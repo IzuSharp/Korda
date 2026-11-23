@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "module": {
-    "id": "nativeweave.exports.conformance",
+    "id": "korda.exports.conformance",
     "abi_major": 1,
     "abi_minor": 0,
     "rid": "linux-x64",
@@ -10,11 +10,11 @@
   },
   "provenance": {
     "adapter_sha256": "402727b3eb306214fe9f7a586a55727b3b4757c0b93f3d2e4ffa01d9b0483d9c",
-    "tool": "nativeweave-binding-inventory",
+    "tool": "korda-binding-inventory",
     "tool_version": "0.1.0",
     "upstream": [
       {
-        "repository": "https://github.com/IzuSharp/NativeWeave",
+        "repository": "https://github.com/IzuSharp/Korda",
         "commit": "22b467667bcf44aa8b22e964937446b225e87e61",
         "features": [
           "abi-v1"
@@ -446,7 +446,7 @@
   "owners": [
     {
       "kind": "NwFixtureOwner",
-      "module": "nativeweave.exports.conformance",
+      "module": "korda.exports.conformance",
       "release": "nw_exports_release_v1",
       "clone": "",
       "parent": "",

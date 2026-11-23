@@ -2,11 +2,11 @@
 
 > **DB-CPP-01 implementation update.** The public C# examples, signatures and ownership contracts in this guide remain the compatibility inputs. The current maintained native implementation is C++20; its module mapping, direct libpq/sqlite3 execution, Clang/CMake commands and package production are documented in [C++ native implementation](cpp-native.md). Descriptions below of Rust, SQLx, SeaQuery or Tokio internals are retained as the fixed `465cd0f` behavioral reference, not current build dependencies. The named verification entry points now build the ported C++ fixtures and retain their original managed assertions.
 
-`NativeWeave.Database.Sqlite` supplies the SQLite factory and builder extension for
+`Korda.Database.Sqlite` supplies the SQLite factory and builder extension for
 the complete [Database Host](data-nativehost.md). Its candidate package depends on
-the shared database facade and the independent `NativeWeave.Database.Sqlite.Native`
+the shared database facade and the independent `Korda.Database.Sqlite.Native`
 asset package. An ordinary C# application uses PackageReference and the precompiled
-asset; it needs no Rust toolchain or NativeWeave server/protocol package.
+asset; it needs no Rust toolchain or Korda server/protocol package.
 
 The retained B03 Rust SQLite execution adapter uses SQLx **0.9.0**, Tokio
 **1.54.1**, and bundled libsqlite3-sys **0.37.0** / SQLite **3.51.3**. C# owns
@@ -22,7 +22,7 @@ especially D14 `docs/database/drivers.md`, D15
 
 ## Public API and Database Host profile
 
-Import `NativeWeave.Database.Sqlite` for `SqliteOptions`, its four enums, and
+Import `Korda.Database.Sqlite` for `SqliteOptions`, its four enums, and
 `SqliteDataSource.Create` / `Engine`. The options are mutable during configuration, then
 copied once into B01's canonical kind9 control record. The record has six exact
 fields: open mode, journal mode, synchronous mode, BEGIN mode, busy timeout in
@@ -30,7 +30,7 @@ nanoseconds, and canonical foreign-key Boolean. No path, SQL, or parameter value
 is put into provider error messages.
 
 ```csharp
-using NativeWeave.Database.Sqlite;
+using Korda.Database.Sqlite;
 
 var descriptor = SqliteDataSource.Engine;
 var information = descriptor.Inspect();
@@ -57,15 +57,15 @@ asynchronously so their retained native work can retire.
 | Threading model | `EngineLocalAsync` |
 | Bootstrap | `nw_database_sqlite_get_abi_v1` |
 | Linux x64 asset | `libnw_database_sqlite.so` |
-| Generated output record | `NativeWeave.database.sqlite.assets.json` |
+| Generated output record | `Korda.database.sqlite.assets.json` |
 
 The bootstrap reports **23** capabilities: every name defined in
 [`DatabaseEngineProfile`](../../src/Data.NativeHost/DatabaseOptions.cs) except
 `db.row-lock.v1` and `db.decimal.numeric.v1`. This includes `db.query.v1`,
 transactions/savepoints, streaming, migrations, schema reading, relations and
 `db.decimal.text.v1`. In the fixed Rust reference, this advertised mask is composed by the
-[native query profile](https://github.com/IzuSharp/NativeWeave/blob/465cd0f90e6af05ec50eb581156240377cf0825b/native/database/host/src/query.rs) and
-[Host bootstrap](https://github.com/IzuSharp/NativeWeave/blob/465cd0f90e6af05ec50eb581156240377cf0825b/native/database/host/src/abi.rs). The private B03 component's
+[native query profile](https://github.com/IzuSharp/Korda/blob/465cd0f90e6af05ec50eb581156240377cf0825b/native/database/host/src/query.rs) and
+[Host bootstrap](https://github.com/IzuSharp/Korda/blob/465cd0f90e6af05ec50eb581156240377cf0825b/native/database/host/src/abi.rs). The private B03 component's
 `db.sqlite.profile.v1` bootstrap remains a component-test input; it is not the public
 provider descriptor or the packaged Database Host.
 
@@ -73,8 +73,8 @@ The maintainer source project defaults to
 `target/release/libnw_database_sqlite.so`, hashes that actual file, and generates
 the immutable profile and output record under `obj`. Its ordinary/AOT outputs copy
 the asset to `runtimes/linux-x64/native/libnw_database_sqlite.so`. A maintainer can
-supply `NativeWeaveSqliteAssetPath`, `NativeWeaveSqliteRuntimeIdentifier`, and
-`NativeWeaveSqliteAssetName` as explicit existing-asset inputs. Missing input is a
+supply `KordaSqliteAssetPath`, `KordaSqliteRuntimeIdentifier`, and
+`KordaSqliteAssetName` as explicit existing-asset inputs. Missing input is a
 build error. Consumer MSBuild never invokes Cargo. Candidate NuGet native-leaf
 selection and the actual SDK publish layout are checked separately by the
 [package consumer gates](packaging-domain.md).

@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <AssemblyName>NativeWeave.Interop.Negotiation.Tests</AssemblyName>
+    <AssemblyName>Korda.Interop.Negotiation.Tests</AssemblyName>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <IsAotCompatible>true</IsAotCompatible>
     <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifiers)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifiers).aot.lock.json</NuGetLockFilePath>
@@ -9,6 +9,6 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Remove="ApiCheck/**/*.cs" />
-    <ProjectReference Include="../../src/NativeWeave.Core/NativeWeave.Core.csproj" />
+    <ProjectReference Include="../../src/Korda.Core/Korda.Core.csproj" />
   </ItemGroup>
 </Project>

@@ -15,7 +15,7 @@ import shutil
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
-spec = importlib.util.spec_from_file_location("nativeweave_compatibility", ROOT / "src/Verification.Compatibility/compatibility.py")
+spec = importlib.util.spec_from_file_location("korda_compatibility", ROOT / "src/Verification.Compatibility/compatibility.py")
 compat = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(compat)
 
@@ -66,7 +66,7 @@ def publish(record, staging, destination, journal_path, catalog_path, verify_rea
     staging, destination = Path(staging), Path(destination)
     source_packages = {item["id"]: staging / f"{item['id']}.{item['version']}.nupkg" for item in record["packages"]}
     compat.validate_closure(record, source_packages)
-    expected_builder = "nativeweave-local-reviewed-staging"
+    expected_builder = "korda-local-reviewed-staging"
     compat.require(record.get("builder_identity") == expected_builder, "NWPKG015", "Unknown staging builder identity")
     compat.require(record.get("rid") == "linux-x64", "NWPKG003", "This staged release row is Linux x64 only")
     for item in record["packages"]:

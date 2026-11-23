@@ -126,7 +126,7 @@ def workspace(destination):
     from catalog import load_catalog
     catalog = load_catalog()
     database_modules = json.loads((ROOT / "eng/ci/modules/database.json").read_text())
-    solution = ET.parse(ROOT / "NativeWeave.slnx")
+    solution = ET.parse(ROOT / "Korda.slnx")
     for parent in solution.iter():
         for project in list(parent.findall("Project")):
             path = project.attrib["Path"]
@@ -175,16 +175,16 @@ def api_docs(design):
          "--output", OUTPUT / "api-checks/tool"], "api-tool-negative-contracts")
     run(["dotnet", "run", "--project", "tests/Packaging.Release/ApiCheck", "-c", "Release",
          "--no-build", "--", OUTPUT / "api-checks/packaging-task-reference.md"], "packaging-task-api")
-    tool = ROOT / "src/Build.Integration/ApiReference/bin/Release/net11.0/NativeWeave.ApiReference.dll"
+    tool = ROOT / "src/Build.Integration/ApiReference/bin/Release/net11.0/Korda.ApiReference.dll"
     if not tool.is_file():
         directory = tool.parent
         tool = next(p for p in directory.glob("*.dll") if p.with_suffix(".runtimeconfig.json").is_file())
     for name in ("Data.Migrations", "Orm.Relations"):
         run([sys.executable, f"tests/{name}/api.py", "--design", design, "--tool", tool], name + "-api")
-    run(["dotnet", "tests/Query.Fluent/ApiCheck/bin/Release/net11.0/NativeWeave.Query.Fluent.ApiCheck.dll",
+    run(["dotnet", "tests/Query.Fluent/ApiCheck/bin/Release/net11.0/Korda.Query.Fluent.ApiCheck.dll",
          ROOT, design, os.environ["DOTNET_ROOT"]], "fluent-api")
-    run(["dotnet", "tests/Query.Generator/bin/Release/net11.0/NativeWeave.Query.Generator.Tests.dll"], "query-generator")
-    run(["dotnet", "tests/Query.Generator/ApiCheck/bin/Release/net11.0/NativeWeave.Query.Generator.ApiCheck.dll",
+    run(["dotnet", "tests/Query.Generator/bin/Release/net11.0/Korda.Query.Generator.Tests.dll"], "query-generator")
+    run(["dotnet", "tests/Query.Generator/ApiCheck/bin/Release/net11.0/Korda.Query.Generator.ApiCheck.dll",
          ROOT, design, os.environ["DOTNET_ROOT"]], "query-generator-api")
 
 
@@ -193,7 +193,7 @@ def consumer_probes(version, only=None):
                          ("database-business", "tests/Reference.TaskService/package_probe.py")):
         if only and only != name:
             continue
-        with tempfile.TemporaryDirectory(prefix="nativeweave-" + name + "-") as temp:
+        with tempfile.TemporaryDirectory(prefix="korda-" + name + "-") as temp:
             external = Path(temp) / "consumer"
             try:
                 run([sys.executable, driver, "--feed", OUTPUT / "prepared/candidate/feed",

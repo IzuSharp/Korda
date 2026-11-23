@@ -1,4 +1,4 @@
-using NativeWeave.Data;
+using Korda.Data;
 using System.Runtime.CompilerServices;
 
 if (args.Contains("--require-aot", StringComparer.Ordinal) && RuntimeFeature.IsDynamicCodeSupported)
@@ -23,7 +23,7 @@ if (Students.Table.TryGetColumn("name", Codecs.String, out _))
 
 // The bounded mapping surface is ready for the downstream Database host. No query is executed here.
 GC.KeepAlive(key); GC.KeepAlive(changes); GC.KeepAlive(command); GC.KeepAlive(relation);
-Console.WriteLine("NativeWeave.Data consumer passed: typed metadata, parameters, projection and relation; no native runtime.");
+Console.WriteLine("Korda.Data consumer passed: typed metadata, parameters, projection and relation; no native runtime.");
 Console.WriteLine("Table: " + Students.Table.MetadataHash);
 Console.WriteLine("Projection: " + projection.ShapeHash);
 

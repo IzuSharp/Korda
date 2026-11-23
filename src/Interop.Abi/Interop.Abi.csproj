@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <IsPackable>true</IsPackable>
-    <AssemblyName>NativeWeave.Interop.Abi</AssemblyName>
+    <AssemblyName>Korda.Interop.Abi</AssemblyName>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <IsAotCompatible>true</IsAotCompatible>
@@ -9,26 +9,26 @@
     <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifier)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifier).aot.lock.json</NuGetLockFilePath>
   </PropertyGroup>
   <ItemGroup>
-    <InternalsVisibleTo Include="NativeWeave.Interop.Abi.Tests" />
-    <InternalsVisibleTo Include="NativeWeave.Interop.Abi.Sample" />
-    <InternalsVisibleTo Include="NativeWeave.Core" />
-    <InternalsVisibleTo Include="NativeWeave.Verification.Interop" />
-    <InternalsVisibleTo Include="NativeWeave.Interop.Errors.Tests" />
-    <InternalsVisibleTo Include="NativeWeave.Query.Binding" />
-    <InternalsVisibleTo Include="NativeWeave.Query.Binding.Tests" />
-    <InternalsVisibleTo Include="NativeWeave.Query.Native.Tests" />
-    <InternalsVisibleTo Include="NativeWeave.Data.Materialization.Tests" />
+    <InternalsVisibleTo Include="Korda.Interop.Abi.Tests" />
+    <InternalsVisibleTo Include="Korda.Interop.Abi.Sample" />
+    <InternalsVisibleTo Include="Korda.Core" />
+    <InternalsVisibleTo Include="Korda.Verification.Interop" />
+    <InternalsVisibleTo Include="Korda.Interop.Errors.Tests" />
+    <InternalsVisibleTo Include="Korda.Query.Binding" />
+    <InternalsVisibleTo Include="Korda.Query.Binding.Tests" />
+    <InternalsVisibleTo Include="Korda.Query.Native.Tests" />
+    <InternalsVisibleTo Include="Korda.Data.Materialization.Tests" />
   </ItemGroup>
   <ItemGroup>
-    <InternalsVisibleTo Include="NativeWeave.Interop.Async.Tests" />
-    <InternalsVisibleTo Include="NativeWeave.Interop.Execution.Tests" />
-    <InternalsVisibleTo Include="NativeWeave.Interop.Execution.Sample" />
-    <InternalsVisibleTo Include="NativeWeave.Interop.Async.Sample" />
-    <InternalsVisibleTo Include="NativeWeave.Interop.Callbacks.Tests" />
-    <InternalsVisibleTo Include="NativeWeave.Interop.Callbacks.Sample" />
-    <InternalsVisibleTo Include="NativeWeave.Database" />
-    <InternalsVisibleTo Include="NativeWeave.Data.NativeHost.Tests" />
-    <InternalsVisibleTo Include="NativeWeave.Data.Migrations.Tests" />
-    <InternalsVisibleTo Include="NativeWeave.Orm.Relations.Tests" />
+    <InternalsVisibleTo Include="Korda.Interop.Async.Tests" />
+    <InternalsVisibleTo Include="Korda.Interop.Execution.Tests" />
+    <InternalsVisibleTo Include="Korda.Interop.Execution.Sample" />
+    <InternalsVisibleTo Include="Korda.Interop.Async.Sample" />
+    <InternalsVisibleTo Include="Korda.Interop.Callbacks.Tests" />
+    <InternalsVisibleTo Include="Korda.Interop.Callbacks.Sample" />
+    <InternalsVisibleTo Include="Korda.Database" />
+    <InternalsVisibleTo Include="Korda.Data.NativeHost.Tests" />
+    <InternalsVisibleTo Include="Korda.Data.Migrations.Tests" />
+    <InternalsVisibleTo Include="Korda.Orm.Relations.Tests" />
   </ItemGroup>
 </Project>

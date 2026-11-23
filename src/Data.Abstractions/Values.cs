@@ -1,4 +1,4 @@
-namespace NativeWeave.Data;
+namespace Korda.Data;
 
 /// <summary>An immutable ordered snapshot of a table's non-null primary-key values.</summary>
 /// <typeparam name="TEntity">The application entity class.</typeparam>

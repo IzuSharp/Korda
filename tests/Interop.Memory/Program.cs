@@ -1,9 +1,9 @@
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using NativeWeave.Interop;
-using NativeWeave.Interop.Extensibility;
-using NativeWeave.Interop.Memory;
+using Korda.Interop;
+using Korda.Interop.Extensibility;
+using Korda.Interop.Memory;
 
 internal static class Program
 {

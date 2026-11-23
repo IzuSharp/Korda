@@ -4,7 +4,7 @@
 dotnet run --project samples/api/data-codecs
 ```
 
-This sample exercises real canonical `NativeWeave.Data` typed snapshots,
+This sample exercises real canonical `Korda.Data` typed snapshots,
 configured decimal, typed NULL and static JSON metadata. B07's actual native
 provider conversion is verified by `tests/Data.Codecs/verify.py`; the source/
 session host remains a separate B04 composition. No Rust toolchain is invoked

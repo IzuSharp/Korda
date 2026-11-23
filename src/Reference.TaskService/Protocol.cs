@@ -4,7 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace NativeWeave.Reference.TaskService;
+namespace Korda.Reference.TaskService;
 
 /// <summary>Internal database application values; these types introduce no framework API or transport.</summary>
 internal sealed record CreateItem(string Title);

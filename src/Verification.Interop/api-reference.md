@@ -1,4 +1,4 @@
-# NativeWeave internal ABI and ownership verification surface
+# Korda internal ABI and ownership verification surface
 
 Generated from the compiled product assembly and XML by `src/Build.Integration/ApiReference`.
 

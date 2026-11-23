@@ -1,115 +1,115 @@
-# NativeWeave.Data API reference
+# Korda.Data API reference
 
 Generated from the compiled product assembly and its XML comments by `tests/Data.Abstractions/ApiCheck`. Covers data descriptors and transport, static model annotations, and shared ORM errors. Database provider execution remains in the database assemblies. Exact declarations retain the pinned Design identity in `public-api.expected.json`.
 
-## `F:NativeWeave.Data.DatabaseErrorKind.ConcurrentUse`
+## `F:Korda.Data.DatabaseErrorKind.ConcurrentUse`
 
 ```csharp
-NativeWeave.Data.DatabaseErrorKind.ConcurrentUse = 6
+Korda.Data.DatabaseErrorKind.ConcurrentUse = 6
 ```
 
 **summary:** A single-command owner already admits another operation.
 
-## `F:NativeWeave.Data.DatabaseErrorKind.Constraint`
+## `F:Korda.Data.DatabaseErrorKind.Constraint`
 
 ```csharp
-NativeWeave.Data.DatabaseErrorKind.Constraint = 1
+Korda.Data.DatabaseErrorKind.Constraint = 1
 ```
 
 **summary:** A database constraint or expected affected-row condition failed.
 
-## `F:NativeWeave.Data.DatabaseErrorKind.Conversion`
+## `F:Korda.Data.DatabaseErrorKind.Conversion`
 
 ```csharp
-NativeWeave.Data.DatabaseErrorKind.Conversion = 2
+Korda.Data.DatabaseErrorKind.Conversion = 2
 ```
 
 **summary:** A value cannot be represented exactly by its declared codec.
 
-## `F:NativeWeave.Data.DatabaseErrorKind.InvalidState`
+## `F:Korda.Data.DatabaseErrorKind.InvalidState`
 
 ```csharp
-NativeWeave.Data.DatabaseErrorKind.InvalidState = 7
+Korda.Data.DatabaseErrorKind.InvalidState = 7
 ```
 
 **summary:** The operation is invalid for the owner's current state or metadata.
 
-## `F:NativeWeave.Data.DatabaseErrorKind.Provider`
+## `F:Korda.Data.DatabaseErrorKind.Provider`
 
 ```csharp
-NativeWeave.Data.DatabaseErrorKind.Provider = 0
+Korda.Data.DatabaseErrorKind.Provider = 0
 ```
 
 **summary:** The provider reported a failure.
 
-## `F:NativeWeave.Data.DatabaseErrorKind.ResourceLimit`
+## `F:Korda.Data.DatabaseErrorKind.ResourceLimit`
 
 ```csharp
-NativeWeave.Data.DatabaseErrorKind.ResourceLimit = 5
+Korda.Data.DatabaseErrorKind.ResourceLimit = 5
 ```
 
 **summary:** A configured finite resource limit was exceeded.
 
-## `F:NativeWeave.Data.DatabaseErrorKind.ShapeMismatch`
+## `F:Korda.Data.DatabaseErrorKind.ShapeMismatch`
 
 ```csharp
-NativeWeave.Data.DatabaseErrorKind.ShapeMismatch = 3
+Korda.Data.DatabaseErrorKind.ShapeMismatch = 3
 ```
 
 **summary:** The complete result shape differs from the declared projection.
 
-## `F:NativeWeave.Data.DatabaseErrorKind.UnknownOutcome`
+## `F:Korda.Data.DatabaseErrorKind.UnknownOutcome`
 
 ```csharp
-NativeWeave.Data.DatabaseErrorKind.UnknownOutcome = 8
+Korda.Data.DatabaseErrorKind.UnknownOutcome = 8
 ```
 
 **summary:** The external outcome cannot be established; automatic retry is unsafe.
 
-## `F:NativeWeave.Data.DatabaseErrorKind.UnsupportedCapability`
+## `F:Korda.Data.DatabaseErrorKind.UnsupportedCapability`
 
 ```csharp
-NativeWeave.Data.DatabaseErrorKind.UnsupportedCapability = 4
+Korda.Data.DatabaseErrorKind.UnsupportedCapability = 4
 ```
 
 **summary:** The selected engine or provider cannot perform the requested operation.
 
-## `F:NativeWeave.Data.SqlCommandKind.Mutation`
+## `F:Korda.Data.SqlCommandKind.Mutation`
 
 ```csharp
-NativeWeave.Data.SqlCommandKind.Mutation = 1
+Korda.Data.SqlCommandKind.Mutation = 1
 ```
 
 **summary:** A mutation whose affected-row count must be observed.
 
-## `F:NativeWeave.Data.SqlCommandKind.Query`
+## `F:Korda.Data.SqlCommandKind.Query`
 
 ```csharp
-NativeWeave.Data.SqlCommandKind.Query = 0
+Korda.Data.SqlCommandKind.Query = 0
 ```
 
 **summary:** A result-bearing query.
 
-## `F:NativeWeave.Data.SqlCommandKind.SessionMutating`
+## `F:Korda.Data.SqlCommandKind.SessionMutating`
 
 ```csharp
-NativeWeave.Data.SqlCommandKind.SessionMutating = 2
+Korda.Data.SqlCommandKind.SessionMutating = 2
 ```
 
 **summary:** Expert session-changing SQL requiring independent admission and connection retirement policy.
 
-## `M:NativeWeave.Data.Changes`1.#ctor`
+## `M:Korda.Data.Changes`1.#ctor`
 
 ```csharp
-public NativeWeave.Data.Changes<TEntity>.Changes()
+public Korda.Data.Changes<TEntity>.Changes()
 ```
 
 **summary:** Creates an empty changeset; execution requires at least one assignment.
 
-## `M:NativeWeave.Data.Changes`1.Set``1(NativeWeave.Data.Column{`0,``0},``0)`
+## `M:Korda.Data.Changes`1.Set``1(Korda.Data.Column{`0,``0},``0)`
 
 ```csharp
-public NativeWeave.Data.Changes<TEntity> NativeWeave.Data.Changes<TEntity>.Set<T>(NativeWeave.Data.Column<TEntity, T> column, T value)
+public Korda.Data.Changes<TEntity> Korda.Data.Changes<TEntity>.Set<T>(Korda.Data.Column<TEntity, T> column, T value)
 ```
 
 **summary:** Copies a value and adds or replaces one nonkey, nongenerated column assignment.
@@ -126,10 +126,10 @@ public NativeWeave.Data.Changes<TEntity> NativeWeave.Data.Changes<TEntity>.Set<T
 
 **exception:** The column is foreign, a key, generated, unbuilt or the value is invalid.
 
-## `M:NativeWeave.Data.Changes`1.Unset``1(NativeWeave.Data.Column{`0,``0})`
+## `M:Korda.Data.Changes`1.Unset``1(Korda.Data.Column{`0,``0})`
 
 ```csharp
-public NativeWeave.Data.Changes<TEntity> NativeWeave.Data.Changes<TEntity>.Unset<T>(NativeWeave.Data.Column<TEntity, T> column)
+public Korda.Data.Changes<TEntity> Korda.Data.Changes<TEntity>.Unset<T>(Korda.Data.Column<TEntity, T> column)
 ```
 
 **summary:** Removes an assignment without assigning SQL NULL.
@@ -144,10 +144,10 @@ public NativeWeave.Data.Changes<TEntity> NativeWeave.Data.Changes<TEntity>.Unset
 
 **exception:** The column is foreign, a key, generated or unbuilt.
 
-## `M:NativeWeave.Data.Codecs.Decimal(System.Byte,System.Byte)`
+## `M:Korda.Data.Codecs.Decimal(System.Byte,System.Byte)`
 
 ```csharp
-public static NativeWeave.Data.ValueCodec<decimal> NativeWeave.Data.Codecs.Decimal(byte precision, byte scale)
+public static Korda.Data.ValueCodec<decimal> Korda.Data.Codecs.Decimal(byte precision, byte scale)
 ```
 
 **summary:** Selects exact decimal numeric precision and scale; ordinary SQLite does not support this provider profile.
@@ -160,10 +160,10 @@ public static NativeWeave.Data.ValueCodec<decimal> NativeWeave.Data.Codecs.Decim
 
 **exception:** The precision or scale is outside the declared range.
 
-## `M:NativeWeave.Data.Codecs.EnumInt32``1`
+## `M:Korda.Data.Codecs.EnumInt32``1`
 
 ```csharp
-public static NativeWeave.Data.ValueCodec<TEnum> NativeWeave.Data.Codecs.EnumInt32<TEnum>() where TEnum : struct, System.Enum
+public static Korda.Data.ValueCodec<TEnum> Korda.Data.Codecs.EnumInt32<TEnum>() where TEnum : struct, System.Enum
 ```
 
 **summary:** Selects a checked signed Int32 enum representation, preserving undefined numeric values.
@@ -172,10 +172,10 @@ public static NativeWeave.Data.ValueCodec<TEnum> NativeWeave.Data.Codecs.EnumInt
 
 **returns:** An immutable enum codec; values outside Int32 reject at snapshot.
 
-## `M:NativeWeave.Data.Codecs.FixedScaleMoney(System.Byte)`
+## `M:Korda.Data.Codecs.FixedScaleMoney(System.Byte)`
 
 ```csharp
-public static NativeWeave.Data.ValueCodec<decimal> NativeWeave.Data.Codecs.FixedScaleMoney(byte scale)
+public static Korda.Data.ValueCodec<decimal> Korda.Data.Codecs.FixedScaleMoney(byte scale)
 ```
 
 **summary:** Selects exact signed Int64 fixed-scale storage, without rounding.
@@ -186,10 +186,10 @@ public static NativeWeave.Data.ValueCodec<decimal> NativeWeave.Data.Codecs.Fixed
 
 **exception:** exceeds 18.
 
-## `M:NativeWeave.Data.Codecs.Json``1(System.Text.Json.Serialization.Metadata.JsonTypeInfo{``0})`
+## `M:Korda.Data.Codecs.Json``1(System.Text.Json.Serialization.Metadata.JsonTypeInfo{``0})`
 
 ```csharp
-public static NativeWeave.Data.ValueCodec<T> NativeWeave.Data.Codecs.Json<T>(System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> typeInfo)
+public static Korda.Data.ValueCodec<T> Korda.Data.Codecs.Json<T>(System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> typeInfo)
 ```
 
 **summary:** Selects JSON serialization using explicit static metadata; JSON null is distinct from SQL NULL.
@@ -202,10 +202,10 @@ public static NativeWeave.Data.ValueCodec<T> NativeWeave.Data.Codecs.Json<T>(Sys
 
 **exception:** is null.
 
-## `M:NativeWeave.Data.Codecs.NullableReference``1(NativeWeave.Data.ValueCodec{``0})`
+## `M:Korda.Data.Codecs.NullableReference``1(Korda.Data.ValueCodec{``0})`
 
 ```csharp
-public static NativeWeave.Data.ValueCodec<T?> NativeWeave.Data.Codecs.NullableReference<T>(NativeWeave.Data.ValueCodec<T> codec) where T : class
+public static Korda.Data.ValueCodec<T?> Korda.Data.Codecs.NullableReference<T>(Korda.Data.ValueCodec<T> codec) where T : class
 ```
 
 **summary:** Adds SQL NULL support to a reference codec while preserving its logical scalar identity.
@@ -218,10 +218,10 @@ public static NativeWeave.Data.ValueCodec<T?> NativeWeave.Data.Codecs.NullableRe
 
 **exception:** is null.
 
-## `M:NativeWeave.Data.Codecs.Nullable``1(NativeWeave.Data.ValueCodec{``0})`
+## `M:Korda.Data.Codecs.Nullable``1(Korda.Data.ValueCodec{``0})`
 
 ```csharp
-public static NativeWeave.Data.ValueCodec<T?> NativeWeave.Data.Codecs.Nullable<T>(NativeWeave.Data.ValueCodec<T> codec) where T : struct
+public static Korda.Data.ValueCodec<T?> Korda.Data.Codecs.Nullable<T>(Korda.Data.ValueCodec<T> codec) where T : struct
 ```
 
 **summary:** Adds SQL NULL support to a value codec without changing its logical scalar identity.
@@ -234,82 +234,82 @@ public static NativeWeave.Data.ValueCodec<T?> NativeWeave.Data.Codecs.Nullable<T
 
 **exception:** is null.
 
-## `M:NativeWeave.Data.ColumnOptions.#ctor`
+## `M:Korda.Data.ColumnOptions.#ctor`
 
 ```csharp
-public NativeWeave.Data.ColumnOptions.ColumnOptions()
+public Korda.Data.ColumnOptions.ColumnOptions()
 ```
 
 Compiler-generated member; inherits the documented type semantics.
 
-## `M:NativeWeave.Data.ColumnOptions.Equals(NativeWeave.Data.ColumnOptions)`
+## `M:Korda.Data.ColumnOptions.Equals(Korda.Data.ColumnOptions)`
 
 ```csharp
-public bool NativeWeave.Data.ColumnOptions.Equals(NativeWeave.Data.ColumnOptions? other)
+public bool Korda.Data.ColumnOptions.Equals(Korda.Data.ColumnOptions? other)
 ```
 
 Compiler-generated member; inherits the documented type semantics.
 
-## `M:NativeWeave.Data.ColumnOptions.Equals(System.Object)`
+## `M:Korda.Data.ColumnOptions.Equals(System.Object)`
 
 ```csharp
-public override bool NativeWeave.Data.ColumnOptions.Equals(object? obj)
+public override bool Korda.Data.ColumnOptions.Equals(object? obj)
 ```
 
 Compiler-generated member; inherits the documented type semantics.
 
-## `M:NativeWeave.Data.ColumnOptions.GetHashCode`
+## `M:Korda.Data.ColumnOptions.GetHashCode`
 
 ```csharp
-public override int NativeWeave.Data.ColumnOptions.GetHashCode()
+public override int Korda.Data.ColumnOptions.GetHashCode()
 ```
 
 Compiler-generated member; inherits the documented type semantics.
 
-## `M:NativeWeave.Data.ColumnOptions.ToString`
+## `M:Korda.Data.ColumnOptions.ToString`
 
 ```csharp
-public override string NativeWeave.Data.ColumnOptions.ToString()
+public override string Korda.Data.ColumnOptions.ToString()
 ```
 
 Compiler-generated member; inherits the documented type semantics.
 
-## `M:NativeWeave.Data.ColumnOptions.op_Equality(NativeWeave.Data.ColumnOptions,NativeWeave.Data.ColumnOptions)`
+## `M:Korda.Data.ColumnOptions.op_Equality(Korda.Data.ColumnOptions,Korda.Data.ColumnOptions)`
 
 ```csharp
-public static bool NativeWeave.Data.ColumnOptions.operator ==(NativeWeave.Data.ColumnOptions? left, NativeWeave.Data.ColumnOptions? right)
+public static bool Korda.Data.ColumnOptions.operator ==(Korda.Data.ColumnOptions? left, Korda.Data.ColumnOptions? right)
 ```
 
 Compiler-generated member; inherits the documented type semantics.
 
-## `M:NativeWeave.Data.ColumnOptions.op_Inequality(NativeWeave.Data.ColumnOptions,NativeWeave.Data.ColumnOptions)`
+## `M:Korda.Data.ColumnOptions.op_Inequality(Korda.Data.ColumnOptions,Korda.Data.ColumnOptions)`
 
 ```csharp
-public static bool NativeWeave.Data.ColumnOptions.operator !=(NativeWeave.Data.ColumnOptions? left, NativeWeave.Data.ColumnOptions? right)
+public static bool Korda.Data.ColumnOptions.operator !=(Korda.Data.ColumnOptions? left, Korda.Data.ColumnOptions? right)
 ```
 
 Compiler-generated member; inherits the documented type semantics.
 
-## `M:NativeWeave.Data.ColumnOptions.{Clone}$`
+## `M:Korda.Data.ColumnOptions.{Clone}$`
 
 ```csharp
-public NativeWeave.Data.ColumnOptions NativeWeave.Data.ColumnOptions.<Clone>$()
+public Korda.Data.ColumnOptions Korda.Data.ColumnOptions.<Clone>$()
 ```
 
 Compiler-generated member; inherits the documented type semantics.
 
-## `M:NativeWeave.Data.ConcurrencyCheck`1.#ctor`
+## `M:Korda.Data.ConcurrencyCheck`1.#ctor`
 
 ```csharp
-public NativeWeave.Data.ConcurrencyCheck<TEntity>.ConcurrencyCheck()
+public Korda.Data.ConcurrencyCheck<TEntity>.ConcurrencyCheck()
 ```
 
 **summary:** Creates an empty check; execution requires all declared concurrency tokens.
 
-## `M:NativeWeave.Data.ConcurrencyCheck`1.Expect``1(NativeWeave.Data.Column{`0,``0},``0)`
+## `M:Korda.Data.ConcurrencyCheck`1.Expect``1(Korda.Data.Column{`0,``0},``0)`
 
 ```csharp
-public NativeWeave.Data.ConcurrencyCheck<TEntity> NativeWeave.Data.ConcurrencyCheck<TEntity>.Expect<T>(NativeWeave.Data.Column<TEntity, T> column, T value)
+public Korda.Data.ConcurrencyCheck<TEntity> Korda.Data.ConcurrencyCheck<TEntity>.Expect<T>(Korda.Data.Column<TEntity, T> column, T value)
 ```
 
 **summary:** Snapshots one declared expected token.
@@ -326,10 +326,10 @@ public NativeWeave.Data.ConcurrencyCheck<TEntity> NativeWeave.Data.ConcurrencyCh
 
 **exception:** The token is foreign, repeated, unbuilt or not marked for concurrency.
 
-## `M:NativeWeave.Data.ConcurrencyConflictException.#ctor(System.String,System.Int64,System.Int64)`
+## `M:Korda.Data.ConcurrencyConflictException.#ctor(System.String,System.Int64,System.Int64)`
 
 ```csharp
-public NativeWeave.Data.ConcurrencyConflictException.ConcurrencyConflictException(string message, long expectedRows, long actualRows)
+public Korda.Data.ConcurrencyConflictException.ConcurrencyConflictException(string message, long expectedRows, long actualRows)
 ```
 
 **summary:** Creates an immutable expected/actual count diagnostic.
@@ -344,10 +344,10 @@ public NativeWeave.Data.ConcurrencyConflictException.ConcurrencyConflictExceptio
 
 **exception:** A count is negative.
 
-## `M:NativeWeave.Data.DatabaseCapabilityException.#ctor(System.String,System.String)`
+## `M:Korda.Data.DatabaseCapabilityException.#ctor(System.String,System.String)`
 
 ```csharp
-public NativeWeave.Data.DatabaseCapabilityException.DatabaseCapabilityException(string capability, string provider)
+public Korda.Data.DatabaseCapabilityException.DatabaseCapabilityException(string capability, string provider)
 ```
 
 **summary:** Creates a failure that must be reported before a native business side effect.
@@ -360,18 +360,18 @@ public NativeWeave.Data.DatabaseCapabilityException.DatabaseCapabilityException(
 
 **exception:** An identity is null.
 
-## `M:NativeWeave.Data.DatabaseErrorKind.#ctor`
+## `M:Korda.Data.DatabaseErrorKind.#ctor`
 
 ```csharp
-public NativeWeave.Data.DatabaseErrorKind.DatabaseErrorKind()
+public Korda.Data.DatabaseErrorKind.DatabaseErrorKind()
 ```
 
 Compiler-generated member; inherits the documented type semantics.
 
-## `M:NativeWeave.Data.DatabaseException.#ctor(System.String,NativeWeave.Data.DatabaseErrorKind,System.String,System.UInt64,System.Exception)`
+## `M:Korda.Data.DatabaseException.#ctor(System.String,Korda.Data.DatabaseErrorKind,System.String,System.UInt64,System.Exception)`
 
 ```csharp
-public NativeWeave.Data.DatabaseException.DatabaseException(string message, NativeWeave.Data.DatabaseErrorKind kind, string? providerCode = null, ulong correlationId = 0, System.Exception? innerException = null)
+public Korda.Data.DatabaseException.DatabaseException(string message, Korda.Data.DatabaseErrorKind kind, string? providerCode = null, ulong correlationId = 0, System.Exception? innerException = null)
 ```
 
 **summary:** Creates a database failure without inferring provider transience.
@@ -390,10 +390,10 @@ public NativeWeave.Data.DatabaseException.DatabaseException(string message, Nati
 
 **exception:** is undefined.
 
-## `M:NativeWeave.Data.EntityKey`1.And``1(NativeWeave.Data.Column{`0,``0},``0)`
+## `M:Korda.Data.EntityKey`1.And``1(Korda.Data.Column{`0,``0},``0)`
 
 ```csharp
-public NativeWeave.Data.EntityKey<TEntity> NativeWeave.Data.EntityKey<TEntity>.And<T>(NativeWeave.Data.Column<TEntity, T> column, T value)
+public Korda.Data.EntityKey<TEntity> Korda.Data.EntityKey<TEntity>.And<T>(Korda.Data.Column<TEntity, T> column, T value)
 ```
 
 **summary:** Returns a new snapshot with the next primary-key component appended.
@@ -410,42 +410,42 @@ public NativeWeave.Data.EntityKey<TEntity> NativeWeave.Data.EntityKey<TEntity>.A
 
 **exception:** The column is foreign, repeated, nullable, nonkey or out of key order.
 
-## `M:NativeWeave.Data.EntityWriter`1.#ctor(System.Object,System.IntPtr)`
+## `M:Korda.Data.EntityWriter`1.#ctor(System.Object,System.IntPtr)`
 
 ```csharp
-public NativeWeave.Data.EntityWriter<T>.EntityWriter(object @object, nint method)
+public Korda.Data.EntityWriter<T>.EntityWriter(object @object, nint method)
 ```
 
 Compiler-generated member; inherits the documented type semantics.
 
-## `M:NativeWeave.Data.EntityWriter`1.BeginInvoke(NativeWeave.Data.RowWriter,`0,System.AsyncCallback,System.Object)`
+## `M:Korda.Data.EntityWriter`1.BeginInvoke(Korda.Data.RowWriter,`0,System.AsyncCallback,System.Object)`
 
 ```csharp
-public virtual System.IAsyncResult NativeWeave.Data.EntityWriter<T>.BeginInvoke(NativeWeave.Data.RowWriter row, T value, System.AsyncCallback callback, object @object)
+public virtual System.IAsyncResult Korda.Data.EntityWriter<T>.BeginInvoke(Korda.Data.RowWriter row, T value, System.AsyncCallback callback, object @object)
 ```
 
 Compiler-generated member; inherits the documented type semantics.
 
-## `M:NativeWeave.Data.EntityWriter`1.EndInvoke(System.IAsyncResult)`
+## `M:Korda.Data.EntityWriter`1.EndInvoke(System.IAsyncResult)`
 
 ```csharp
-public virtual void NativeWeave.Data.EntityWriter<T>.EndInvoke(System.IAsyncResult result)
+public virtual void Korda.Data.EntityWriter<T>.EndInvoke(System.IAsyncResult result)
 ```
 
 Compiler-generated member; inherits the documented type semantics.
 
-## `M:NativeWeave.Data.EntityWriter`1.Invoke(NativeWeave.Data.RowWriter,`0)`
+## `M:Korda.Data.EntityWriter`1.Invoke(Korda.Data.RowWriter,`0)`
 
 ```csharp
-public virtual void NativeWeave.Data.EntityWriter<T>.Invoke(NativeWeave.Data.RowWriter row, T value)
+public virtual void Korda.Data.EntityWriter<T>.Invoke(Korda.Data.RowWriter row, T value)
 ```
 
 Compiler-generated member; inherits the documented type semantics.
 
-## `M:NativeWeave.Data.Projection`1.Create(System.ReadOnlySpan{NativeWeave.Data.ResultField},NativeWeave.Data.RowMaterializer{`0})`
+## `M:Korda.Data.Projection`1.Create(System.ReadOnlySpan{Korda.Data.ResultField},Korda.Data.RowMaterializer{`0})`
 
 ```csharp
-public static NativeWeave.Data.Projection<T> NativeWeave.Data.Projection<T>.Create(System.ReadOnlySpan<NativeWeave.Data.ResultField> fields, NativeWeave.Data.RowMaterializer<T> materializer)
+public static Korda.Data.Projection<T> Korda.Data.Projection<T>.Create(System.ReadOnlySpan<Korda.Data.ResultField> fields, Korda.Data.RowMaterializer<T> materializer)
 ```
 
 **summary:** Copies a unique ordered field sequence and retains an AOT-visible materializer.
@@ -460,10 +460,10 @@ public static NativeWeave.Data.Projection<T> NativeWeave.Data.Projection<T>.Crea
 
 **exception:** Fields are empty, contain nulls or duplicate aliases.
 
-## `M:NativeWeave.Data.Relation`2.AndOptionalReference``1(NativeWeave.Data.Column{`0,``0},NativeWeave.Data.Column{`1,``0})`
+## `M:Korda.Data.Relation`2.AndOptionalReference``1(Korda.Data.Column{`0,``0},Korda.Data.Column{`1,``0})`
 
 ```csharp
-public NativeWeave.Data.Relation<TParent, TChild> NativeWeave.Data.Relation<TParent, TChild>.AndOptionalReference<T>(NativeWeave.Data.Column<TParent, T> parentKey, NativeWeave.Data.Column<TChild, T?> foreignKey) where T : class
+public Korda.Data.Relation<TParent, TChild> Korda.Data.Relation<TParent, TChild>.AndOptionalReference<T>(Korda.Data.Column<TParent, T> parentKey, Korda.Data.Column<TChild, T?> foreignKey) where T : class
 ```
 
 **summary:** Returns a new relation with the next optional reference-key pair.
@@ -480,10 +480,10 @@ public NativeWeave.Data.Relation<TParent, TChild> NativeWeave.Data.Relation<TPar
 
 **exception:** The pair violates identity, ordering or codec rules.
 
-## `M:NativeWeave.Data.Relation`2.AndOptional``1(NativeWeave.Data.Column{`0,``0},NativeWeave.Data.Column{`1,System.Nullable{``0}})`
+## `M:Korda.Data.Relation`2.AndOptional``1(Korda.Data.Column{`0,``0},Korda.Data.Column{`1,System.Nullable{``0}})`
 
 ```csharp
-public NativeWeave.Data.Relation<TParent, TChild> NativeWeave.Data.Relation<TParent, TChild>.AndOptional<T>(NativeWeave.Data.Column<TParent, T> parentKey, NativeWeave.Data.Column<TChild, T?> foreignKey) where T : struct
+public Korda.Data.Relation<TParent, TChild> Korda.Data.Relation<TParent, TChild>.AndOptional<T>(Korda.Data.Column<TParent, T> parentKey, Korda.Data.Column<TChild, T?> foreignKey) where T : struct
 ```
 
 **summary:** Returns a new relation with the next optional value-key pair.
@@ -500,10 +500,10 @@ public NativeWeave.Data.Relation<TParent, TChild> NativeWeave.Data.Relation<TPar
 
 **exception:** The pair violates identity, ordering or codec rules.
 
-## `M:NativeWeave.Data.Relation`2.And``1(NativeWeave.Data.Column{`0,``0},NativeWeave.Data.Column{`1,``0})`
+## `M:Korda.Data.Relation`2.And``1(Korda.Data.Column{`0,``0},Korda.Data.Column{`1,``0})`
 
 ```csharp
-public NativeWeave.Data.Relation<TParent, TChild> NativeWeave.Data.Relation<TParent, TChild>.And<T>(NativeWeave.Data.Column<TParent, T> parentKey, NativeWeave.Data.Column<TChild, T> foreignKey)
+public Korda.Data.Relation<TParent, TChild> Korda.Data.Relation<TParent, TChild>.And<T>(Korda.Data.Column<TParent, T> parentKey, Korda.Data.Column<TChild, T> foreignKey)
 ```
 
 **summary:** Returns a new relation with the next non-null key pair appended.
@@ -520,10 +520,10 @@ public NativeWeave.Data.Relation<TParent, TChild> NativeWeave.Data.Relation<TPar
 
 **exception:** The pair violates identity, ordering or codec rules.
 
-## `M:NativeWeave.Data.Relation`2.CreateOptionalReference``1(NativeWeave.Data.Table{`0},NativeWeave.Data.Column{`0,``0},NativeWeave.Data.Table{`1},NativeWeave.Data.Column{`1,``0})`
+## `M:Korda.Data.Relation`2.CreateOptionalReference``1(Korda.Data.Table{`0},Korda.Data.Column{`0,``0},Korda.Data.Table{`1},Korda.Data.Column{`1,``0})`
 
 ```csharp
-public static NativeWeave.Data.Relation<TParent, TChild> NativeWeave.Data.Relation<TParent, TChild>.CreateOptionalReference<T>(NativeWeave.Data.Table<TParent> parent, NativeWeave.Data.Column<TParent, T> parentKey, NativeWeave.Data.Table<TChild> child, NativeWeave.Data.Column<TChild, T?> foreignKey) where T : class
+public static Korda.Data.Relation<TParent, TChild> Korda.Data.Relation<TParent, TChild>.CreateOptionalReference<T>(Korda.Data.Table<TParent> parent, Korda.Data.Column<TParent, T> parentKey, Korda.Data.Table<TChild> child, Korda.Data.Column<TChild, T?> foreignKey) where T : class
 ```
 
 **summary:** Starts a relation from a non-null reference key to a nullable child reference.
@@ -544,10 +544,10 @@ public static NativeWeave.Data.Relation<TParent, TChild> NativeWeave.Data.Relati
 
 **exception:** The pair violates identity, ordering or codec rules.
 
-## `M:NativeWeave.Data.Relation`2.CreateOptional``1(NativeWeave.Data.Table{`0},NativeWeave.Data.Column{`0,``0},NativeWeave.Data.Table{`1},NativeWeave.Data.Column{`1,System.Nullable{``0}})`
+## `M:Korda.Data.Relation`2.CreateOptional``1(Korda.Data.Table{`0},Korda.Data.Column{`0,``0},Korda.Data.Table{`1},Korda.Data.Column{`1,System.Nullable{``0}})`
 
 ```csharp
-public static NativeWeave.Data.Relation<TParent, TChild> NativeWeave.Data.Relation<TParent, TChild>.CreateOptional<T>(NativeWeave.Data.Table<TParent> parent, NativeWeave.Data.Column<TParent, T> parentKey, NativeWeave.Data.Table<TChild> child, NativeWeave.Data.Column<TChild, T?> foreignKey) where T : struct
+public static Korda.Data.Relation<TParent, TChild> Korda.Data.Relation<TParent, TChild>.CreateOptional<T>(Korda.Data.Table<TParent> parent, Korda.Data.Column<TParent, T> parentKey, Korda.Data.Table<TChild> child, Korda.Data.Column<TChild, T?> foreignKey) where T : struct
 ```
 
 **summary:** Starts a relation from a value key to a nullable child foreign key.
@@ -568,10 +568,10 @@ public static NativeWeave.Data.Relation<TParent, TChild> NativeWeave.Data.Relati
 
 **exception:** The pair violates identity, ordering or codec rules.
 
-## `M:NativeWeave.Data.Relation`2.Create``1(NativeWeave.Data.Table{`0},NativeWeave.Data.Column{`0,``0},NativeWeave.Data.Table{`1},NativeWeave.Data.Column{`1,``0})`
+## `M:Korda.Data.Relation`2.Create``1(Korda.Data.Table{`0},Korda.Data.Column{`0,``0},Korda.Data.Table{`1},Korda.Data.Column{`1,``0})`
 
 ```csharp
-public static NativeWeave.Data.Relation<TParent, TChild> NativeWeave.Data.Relation<TParent, TChild>.Create<T>(NativeWeave.Data.Table<TParent> parent, NativeWeave.Data.Column<TParent, T> parentKey, NativeWeave.Data.Table<TChild> child, NativeWeave.Data.Column<TChild, T> foreignKey)
+public static Korda.Data.Relation<TParent, TChild> Korda.Data.Relation<TParent, TChild>.Create<T>(Korda.Data.Table<TParent> parent, Korda.Data.Column<TParent, T> parentKey, Korda.Data.Table<TChild> child, Korda.Data.Column<TChild, T> foreignKey)
 ```
 
 **summary:** Starts a relation at key ordinal zero with a non-null foreign key.
@@ -592,18 +592,18 @@ public static NativeWeave.Data.Relation<TParent, TChild> NativeWeave.Data.Relati
 
 **exception:** Identity, key order, codec, configuration, collation or nullability differs.
 
-## `M:NativeWeave.Data.ResultColumn`1.#ctor`
+## `M:Korda.Data.ResultColumn`1.#ctor`
 
 ```csharp
-public NativeWeave.Data.ResultColumn<T>.ResultColumn()
+public Korda.Data.ResultColumn<T>.ResultColumn()
 ```
 
 Compiler-generated member; inherits the documented type semantics.
 
-## `M:NativeWeave.Data.ResultField.Create``1(System.String,NativeWeave.Data.ValueCodec{``0})`
+## `M:Korda.Data.ResultField.Create``1(System.String,Korda.Data.ValueCodec{``0})`
 
 ```csharp
-public static NativeWeave.Data.ResultField NativeWeave.Data.ResultField.Create<T>(string name, NativeWeave.Data.ValueCodec<T> codec)
+public static Korda.Data.ResultField Korda.Data.ResultField.Create<T>(string name, Korda.Data.ValueCodec<T> codec)
 ```
 
 **summary:** Creates a field for a static projection.
@@ -620,50 +620,50 @@ public static NativeWeave.Data.ResultField NativeWeave.Data.ResultField.Create<T
 
 **exception:** The alias is empty or invalid Unicode.
 
-## `M:NativeWeave.Data.RowMaterializer`1.#ctor(System.Object,System.IntPtr)`
+## `M:Korda.Data.RowMaterializer`1.#ctor(System.Object,System.IntPtr)`
 
 ```csharp
-public NativeWeave.Data.RowMaterializer<T>.RowMaterializer(object @object, nint method)
+public Korda.Data.RowMaterializer<T>.RowMaterializer(object @object, nint method)
 ```
 
 Compiler-generated member; inherits the documented type semantics.
 
-## `M:NativeWeave.Data.RowMaterializer`1.BeginInvoke(NativeWeave.Data.RowReader,System.AsyncCallback,System.Object)`
+## `M:Korda.Data.RowMaterializer`1.BeginInvoke(Korda.Data.RowReader,System.AsyncCallback,System.Object)`
 
 ```csharp
-public virtual System.IAsyncResult NativeWeave.Data.RowMaterializer<T>.BeginInvoke(NativeWeave.Data.RowReader row, System.AsyncCallback callback, object @object)
+public virtual System.IAsyncResult Korda.Data.RowMaterializer<T>.BeginInvoke(Korda.Data.RowReader row, System.AsyncCallback callback, object @object)
 ```
 
 Compiler-generated member; inherits the documented type semantics.
 
-## `M:NativeWeave.Data.RowMaterializer`1.EndInvoke(System.IAsyncResult)`
+## `M:Korda.Data.RowMaterializer`1.EndInvoke(System.IAsyncResult)`
 
 ```csharp
-public virtual T NativeWeave.Data.RowMaterializer<T>.EndInvoke(System.IAsyncResult result)
+public virtual T Korda.Data.RowMaterializer<T>.EndInvoke(System.IAsyncResult result)
 ```
 
 Compiler-generated member; inherits the documented type semantics.
 
-## `M:NativeWeave.Data.RowMaterializer`1.Invoke(NativeWeave.Data.RowReader)`
+## `M:Korda.Data.RowMaterializer`1.Invoke(Korda.Data.RowReader)`
 
 ```csharp
-public virtual T NativeWeave.Data.RowMaterializer<T>.Invoke(NativeWeave.Data.RowReader row)
+public virtual T Korda.Data.RowMaterializer<T>.Invoke(Korda.Data.RowReader row)
 ```
 
 Compiler-generated member; inherits the documented type semantics.
 
-## `M:NativeWeave.Data.RowReader.#ctor`
+## `M:Korda.Data.RowReader.#ctor`
 
 ```csharp
-public NativeWeave.Data.RowReader.RowReader()
+public Korda.Data.RowReader.RowReader()
 ```
 
 Compiler-generated member; inherits the documented type semantics.
 
-## `M:NativeWeave.Data.RowReader.Get``1(NativeWeave.Data.ResultColumn{``0})`
+## `M:Korda.Data.RowReader.Get``1(Korda.Data.ResultColumn{``0})`
 
 ```csharp
-public T NativeWeave.Data.RowReader.Get<T>(NativeWeave.Data.ResultColumn<T> column)
+public T Korda.Data.RowReader.Get<T>(Korda.Data.ResultColumn<T> column)
 ```
 
 **summary:** Reads a typed token belonging to this exact projection.
@@ -682,10 +682,10 @@ public T NativeWeave.Data.RowReader.Get<T>(NativeWeave.Data.ResultColumn<T> colu
 
 **exception:** The row lease has retired.
 
-## `M:NativeWeave.Data.RowReader.Get``2(NativeWeave.Data.Column{``0,``1})`
+## `M:Korda.Data.RowReader.Get``2(Korda.Data.Column{``0,``1})`
 
 ```csharp
-public T NativeWeave.Data.RowReader.Get<TEntity, T>(NativeWeave.Data.Column<TEntity, T> column) where TEntity : class
+public T Korda.Data.RowReader.Get<TEntity, T>(Korda.Data.Column<TEntity, T> column) where TEntity : class
 ```
 
 **summary:** Reads a typed token from this table's declared row projection.
@@ -706,10 +706,10 @@ public T NativeWeave.Data.RowReader.Get<TEntity, T>(NativeWeave.Data.Column<TEnt
 
 **exception:** The row lease has retired.
 
-## `M:NativeWeave.Data.RowReader.IsNull(System.Int32)`
+## `M:Korda.Data.RowReader.IsNull(System.Int32)`
 
 ```csharp
-public bool NativeWeave.Data.RowReader.IsNull(int ordinal)
+public bool Korda.Data.RowReader.IsNull(int ordinal)
 ```
 
 **summary:** Tests SQL NULL after complete shape validation; missing fields never mean NULL.
@@ -724,10 +724,10 @@ public bool NativeWeave.Data.RowReader.IsNull(int ordinal)
 
 **exception:** The lease has retired.
 
-## `M:NativeWeave.Data.RowReader.Read``1(System.Int32,NativeWeave.Data.ValueCodec{``0})`
+## `M:Korda.Data.RowReader.Read``1(System.Int32,Korda.Data.ValueCodec{``0})`
 
 ```csharp
-public T NativeWeave.Data.RowReader.Read<T>(int ordinal, NativeWeave.Data.ValueCodec<T> codec)
+public T Korda.Data.RowReader.Read<T>(int ordinal, Korda.Data.ValueCodec<T> codec)
 ```
 
 **summary:** Reads an explicit ordinal with the exact declared scalar configuration and nullability.
@@ -748,18 +748,18 @@ public T NativeWeave.Data.RowReader.Read<T>(int ordinal, NativeWeave.Data.ValueC
 
 **exception:** The lease has retired.
 
-## `M:NativeWeave.Data.RowWriter.#ctor`
+## `M:Korda.Data.RowWriter.#ctor`
 
 ```csharp
-public NativeWeave.Data.RowWriter.RowWriter()
+public Korda.Data.RowWriter.RowWriter()
 ```
 
 Compiler-generated member; inherits the documented type semantics.
 
-## `M:NativeWeave.Data.RowWriter.Set``2(NativeWeave.Data.Column{``0,``1},``1)`
+## `M:Korda.Data.RowWriter.Set``2(Korda.Data.Column{``0,``1},``1)`
 
 ```csharp
-public void NativeWeave.Data.RowWriter.Set<TEntity, T>(NativeWeave.Data.Column<TEntity, T> column, T value) where TEntity : class
+public void Korda.Data.RowWriter.Set<TEntity, T>(Korda.Data.Column<TEntity, T> column, T value) where TEntity : class
 ```
 
 **summary:** Copies one typed value into the current row snapshot.
@@ -778,10 +778,10 @@ public void NativeWeave.Data.RowWriter.Set<TEntity, T>(NativeWeave.Data.Column<T
 
 **exception:** The writer is default or the snapshot has completed.
 
-## `M:NativeWeave.Data.SqlCommand.Create(System.String,NativeWeave.Data.SqlParameters,NativeWeave.Data.SqlCommandKind,System.Nullable{System.TimeSpan})`
+## `M:Korda.Data.SqlCommand.Create(System.String,Korda.Data.SqlParameters,Korda.Data.SqlCommandKind,System.Nullable{System.TimeSpan})`
 
 ```csharp
-public static NativeWeave.Data.SqlCommand NativeWeave.Data.SqlCommand.Create(string sql, NativeWeave.Data.SqlParameters? parameters = null, NativeWeave.Data.SqlCommandKind kind = NativeWeave.Data.SqlCommandKind.Query, System.TimeSpan? timeout = null)
+public static Korda.Data.SqlCommand Korda.Data.SqlCommand.Create(string sql, Korda.Data.SqlParameters? parameters = null, Korda.Data.SqlCommandKind kind = Korda.Data.SqlCommandKind.Query, System.TimeSpan? timeout = null)
 ```
 
 **summary:** Snapshots trusted named SQL and typed parameters without provider work.
@@ -802,10 +802,10 @@ public static NativeWeave.Data.SqlCommand NativeWeave.Data.SqlCommand.Create(str
 
 **exception:** The kind or timeout is invalid.
 
-## `M:NativeWeave.Data.SqlCommand.Parameterized(System.FormattableString,NativeWeave.Data.SqlCommandKind,System.Nullable{System.TimeSpan})`
+## `M:Korda.Data.SqlCommand.Parameterized(System.FormattableString,Korda.Data.SqlCommandKind,System.Nullable{System.TimeSpan})`
 
 ```csharp
-public static NativeWeave.Data.SqlCommand NativeWeave.Data.SqlCommand.Parameterized(System.FormattableString sql, NativeWeave.Data.SqlCommandKind kind = NativeWeave.Data.SqlCommandKind.Query, System.TimeSpan? timeout = null)
+public static Korda.Data.SqlCommand Korda.Data.SqlCommand.Parameterized(System.FormattableString sql, Korda.Data.SqlCommandKind kind = Korda.Data.SqlCommandKind.Query, System.TimeSpan? timeout = null)
 ```
 
 **summary:** Snapshots built-in scalar interpolation values and literal segments, without building SQL.
@@ -824,26 +824,26 @@ public static NativeWeave.Data.SqlCommand NativeWeave.Data.SqlCommand.Parameteri
 
 **exception:** The kind or timeout is invalid.
 
-## `M:NativeWeave.Data.SqlCommandKind.#ctor`
+## `M:Korda.Data.SqlCommandKind.#ctor`
 
 ```csharp
-public NativeWeave.Data.SqlCommandKind.SqlCommandKind()
+public Korda.Data.SqlCommandKind.SqlCommandKind()
 ```
 
 Compiler-generated member; inherits the documented type semantics.
 
-## `M:NativeWeave.Data.SqlParameters.#ctor`
+## `M:Korda.Data.SqlParameters.#ctor`
 
 ```csharp
-public NativeWeave.Data.SqlParameters.SqlParameters()
+public Korda.Data.SqlParameters.SqlParameters()
 ```
 
 **summary:** Creates an empty ordered parameter collection.
 
-## `M:NativeWeave.Data.SqlParameters.Add``1(System.String,``0,NativeWeave.Data.ValueCodec{``0})`
+## `M:Korda.Data.SqlParameters.Add``1(System.String,``0,Korda.Data.ValueCodec{``0})`
 
 ```csharp
-public NativeWeave.Data.SqlParameters NativeWeave.Data.SqlParameters.Add<T>(string name, T value, NativeWeave.Data.ValueCodec<T> codec)
+public Korda.Data.SqlParameters Korda.Data.SqlParameters.Add<T>(string name, T value, Korda.Data.ValueCodec<T> codec)
 ```
 
 **summary:** Copies one value using an explicit scalar codec and a unique logical name.
@@ -862,10 +862,10 @@ public NativeWeave.Data.SqlParameters NativeWeave.Data.SqlParameters.Add<T>(stri
 
 **exception:** The name is invalid/duplicate or the value cannot be encoded exactly.
 
-## `M:NativeWeave.Data.TableBuilder`1.#ctor(System.String,System.String)`
+## `M:Korda.Data.TableBuilder`1.#ctor(System.String,System.String)`
 
 ```csharp
-public NativeWeave.Data.TableBuilder<TEntity>.TableBuilder(string tableName, string? schema = null)
+public Korda.Data.TableBuilder<TEntity>.TableBuilder(string tableName, string? schema = null)
 ```
 
 **summary:** Starts a declaration with exact store names.
@@ -878,10 +878,10 @@ public NativeWeave.Data.TableBuilder<TEntity>.TableBuilder(string tableName, str
 
 **exception:** is null.
 
-## `M:NativeWeave.Data.TableBuilder`1.Build(NativeWeave.Data.RowMaterializer{`0},NativeWeave.Data.EntityWriter{`0})`
+## `M:Korda.Data.TableBuilder`1.Build(Korda.Data.RowMaterializer{`0},Korda.Data.EntityWriter{`0})`
 
 ```csharp
-public NativeWeave.Data.Table<TEntity> NativeWeave.Data.TableBuilder<TEntity>.Build(NativeWeave.Data.RowMaterializer<TEntity> materializer, NativeWeave.Data.EntityWriter<TEntity> writer)
+public Korda.Data.Table<TEntity> Korda.Data.TableBuilder<TEntity>.Build(Korda.Data.RowMaterializer<TEntity> materializer, Korda.Data.EntityWriter<TEntity> writer)
 ```
 
 **summary:** Validates and consumes the builder, retaining direct managed mapping delegates.
@@ -896,10 +896,10 @@ public NativeWeave.Data.Table<TEntity> NativeWeave.Data.TableBuilder<TEntity>.Bu
 
 **exception:** There are no columns or the builder was already consumed.
 
-## `M:NativeWeave.Data.TableBuilder`1.Column``1(System.String,NativeWeave.Data.ValueCodec{``0},NativeWeave.Data.ColumnOptions)`
+## `M:Korda.Data.TableBuilder`1.Column``1(System.String,Korda.Data.ValueCodec{``0},Korda.Data.ColumnOptions)`
 
 ```csharp
-public NativeWeave.Data.Column<TEntity, T> NativeWeave.Data.TableBuilder<TEntity>.Column<T>(string name, NativeWeave.Data.ValueCodec<T> codec, NativeWeave.Data.ColumnOptions? options = null)
+public Korda.Data.Column<TEntity, T> Korda.Data.TableBuilder<TEntity>.Column<T>(string name, Korda.Data.ValueCodec<T> codec, Korda.Data.ColumnOptions? options = null)
 ```
 
 **summary:** Adds a typed column in projection and primary-key declaration order.
@@ -920,10 +920,10 @@ public NativeWeave.Data.Column<TEntity, T> NativeWeave.Data.TableBuilder<TEntity
 
 **exception:** The builder was consumed.
 
-## `M:NativeWeave.Data.Table`1.Key``1(NativeWeave.Data.Column{`0,``0},``0)`
+## `M:Korda.Data.Table`1.Key``1(Korda.Data.Column{`0,``0},``0)`
 
 ```csharp
-public NativeWeave.Data.EntityKey<TEntity> NativeWeave.Data.Table<TEntity>.Key<T>(NativeWeave.Data.Column<TEntity, T> column, T value)
+public Korda.Data.EntityKey<TEntity> Korda.Data.Table<TEntity>.Key<T>(Korda.Data.Column<TEntity, T> column, T value)
 ```
 
 **summary:** Starts a primary-key snapshot with key ordinal zero.
@@ -940,10 +940,10 @@ public NativeWeave.Data.EntityKey<TEntity> NativeWeave.Data.Table<TEntity>.Key<T
 
 **exception:** or a non-null value is null.
 
-## `M:NativeWeave.Data.Table`1.TryGetColumn``1(System.String,NativeWeave.Data.ValueCodec{``0},NativeWeave.Data.Column{`0,``0}@)`
+## `M:Korda.Data.Table`1.TryGetColumn``1(System.String,Korda.Data.ValueCodec{``0},Korda.Data.Column{`0,``0}@)`
 
 ```csharp
-public bool NativeWeave.Data.Table<TEntity>.TryGetColumn<T>(string name, NativeWeave.Data.ValueCodec<T> codec, [System.Diagnostics.CodeAnalysis.NotNullWhenAttribute(true)] out NativeWeave.Data.Column<TEntity, T>? column)
+public bool Korda.Data.Table<TEntity>.TryGetColumn<T>(string name, Korda.Data.ValueCodec<T> codec, [System.Diagnostics.CodeAnalysis.NotNullWhenAttribute(true)] out Korda.Data.Column<TEntity, T>? column)
 ```
 
 **summary:** Resolves a declared exact store name and codec without inspecting entity members.
@@ -962,10 +962,10 @@ public bool NativeWeave.Data.Table<TEntity>.TryGetColumn<T>(string name, NativeW
 
 **exception:** A required argument is null.
 
-## `M:NativeWeave.Data.WeaveColumnAttribute.#ctor(System.String)`
+## `M:Korda.Data.WeaveColumnAttribute.#ctor(System.String)`
 
 ```csharp
-public NativeWeave.Data.WeaveColumnAttribute.WeaveColumnAttribute(string name)
+public Korda.Data.WeaveColumnAttribute.WeaveColumnAttribute(string name)
 ```
 
 **summary:** Declares the exact store column name.
@@ -976,26 +976,26 @@ public NativeWeave.Data.WeaveColumnAttribute.WeaveColumnAttribute(string name)
 
 **inheritdoc:**
 
-## `M:NativeWeave.Data.WeaveIgnoreAttribute.#ctor`
+## `M:Korda.Data.WeaveIgnoreAttribute.#ctor`
 
 ```csharp
-public NativeWeave.Data.WeaveIgnoreAttribute.WeaveIgnoreAttribute()
+public Korda.Data.WeaveIgnoreAttribute.WeaveIgnoreAttribute()
 ```
 
 Compiler-generated member; inherits the documented type semantics.
 
-## `M:NativeWeave.Data.WeaveKeyAttribute.#ctor`
+## `M:Korda.Data.WeaveKeyAttribute.#ctor`
 
 ```csharp
-public NativeWeave.Data.WeaveKeyAttribute.WeaveKeyAttribute()
+public Korda.Data.WeaveKeyAttribute.WeaveKeyAttribute()
 ```
 
 Compiler-generated member; inherits the documented type semantics.
 
-## `M:NativeWeave.Data.WeaveTableAttribute.#ctor(System.String)`
+## `M:Korda.Data.WeaveTableAttribute.#ctor(System.String)`
 
 ```csharp
-public NativeWeave.Data.WeaveTableAttribute.WeaveTableAttribute(string name)
+public Korda.Data.WeaveTableAttribute.WeaveTableAttribute(string name)
 ```
 
 **summary:** Declares the exact store table name.
@@ -1006,388 +1006,388 @@ public NativeWeave.Data.WeaveTableAttribute.WeaveTableAttribute(string name)
 
 **inheritdoc:**
 
-## `M:NativeWeave.Data.WeaveVersionAttribute.#ctor`
+## `M:Korda.Data.WeaveVersionAttribute.#ctor`
 
 ```csharp
-public NativeWeave.Data.WeaveVersionAttribute.WeaveVersionAttribute()
+public Korda.Data.WeaveVersionAttribute.WeaveVersionAttribute()
 ```
 
 Compiler-generated member; inherits the documented type semantics.
 
-## `P:NativeWeave.Data.Codecs.Boolean`
+## `P:Korda.Data.Codecs.Boolean`
 
 ```csharp
-public static NativeWeave.Data.ValueCodec<bool> NativeWeave.Data.Codecs.Boolean { get; }
+public static Korda.Data.ValueCodec<bool> Korda.Data.Codecs.Boolean { get; }
 ```
 
 **summary:** Gets the Boolean codec whose only wire bytes are zero and one.
 
-## `P:NativeWeave.Data.Codecs.Bytes`
+## `P:Korda.Data.Codecs.Bytes`
 
 ```csharp
-public static NativeWeave.Data.ValueCodec<byte[]> NativeWeave.Data.Codecs.Bytes { get; }
+public static Korda.Data.ValueCodec<byte[]> Korda.Data.Codecs.Bytes { get; }
 ```
 
 **summary:** Gets binary values; input and output arrays are copied at a snapshot boundary.
 
-## `P:NativeWeave.Data.Codecs.Date`
+## `P:Korda.Data.Codecs.Date`
 
 ```csharp
-public static NativeWeave.Data.ValueCodec<System.DateOnly> NativeWeave.Data.Codecs.Date { get; }
+public static Korda.Data.ValueCodec<System.DateOnly> Korda.Data.Codecs.Date { get; }
 ```
 
 **summary:** Gets signed days since 1970-01-01 within the DateOnly domain.
 
-## `P:NativeWeave.Data.Codecs.DecimalText`
+## `P:Korda.Data.Codecs.DecimalText`
 
 ```csharp
-public static NativeWeave.Data.ValueCodec<decimal> NativeWeave.Data.Codecs.DecimalText { get; }
+public static Korda.Data.ValueCodec<decimal> Korda.Data.Codecs.DecimalText { get; }
 ```
 
 **summary:** Gets exact decimal text storage; provider arithmetic, range ordering and aggregation are not implied.
 
-## `P:NativeWeave.Data.Codecs.Double`
+## `P:Korda.Data.Codecs.Double`
 
 ```csharp
-public static NativeWeave.Data.ValueCodec<double> NativeWeave.Data.Codecs.Double { get; }
+public static Korda.Data.ValueCodec<double> Korda.Data.Codecs.Double { get; }
 ```
 
 **summary:** Gets finite IEEE 754 binary64 values, preserving signed zero in the wire.
 
-## `P:NativeWeave.Data.Codecs.Guid`
+## `P:Korda.Data.Codecs.Guid`
 
 ```csharp
-public static NativeWeave.Data.ValueCodec<System.Guid> NativeWeave.Data.Codecs.Guid { get; }
+public static Korda.Data.ValueCodec<System.Guid> Korda.Data.Codecs.Guid { get; }
 ```
 
 **summary:** Gets RFC 4122 network-order UUID encoding.
 
-## `P:NativeWeave.Data.Codecs.Int16`
+## `P:Korda.Data.Codecs.Int16`
 
 ```csharp
-public static NativeWeave.Data.ValueCodec<short> NativeWeave.Data.Codecs.Int16 { get; }
+public static Korda.Data.ValueCodec<short> Korda.Data.Codecs.Int16 { get; }
 ```
 
 **summary:** Gets the exact signed 16-bit codec.
 
-## `P:NativeWeave.Data.Codecs.Int32`
+## `P:Korda.Data.Codecs.Int32`
 
 ```csharp
-public static NativeWeave.Data.ValueCodec<int> NativeWeave.Data.Codecs.Int32 { get; }
+public static Korda.Data.ValueCodec<int> Korda.Data.Codecs.Int32 { get; }
 ```
 
 **summary:** Gets the exact signed 32-bit codec.
 
-## `P:NativeWeave.Data.Codecs.Int64`
+## `P:Korda.Data.Codecs.Int64`
 
 ```csharp
-public static NativeWeave.Data.ValueCodec<long> NativeWeave.Data.Codecs.Int64 { get; }
+public static Korda.Data.ValueCodec<long> Korda.Data.Codecs.Int64 { get; }
 ```
 
 **summary:** Gets the exact signed 64-bit codec.
 
-## `P:NativeWeave.Data.Codecs.Single`
+## `P:Korda.Data.Codecs.Single`
 
 ```csharp
-public static NativeWeave.Data.ValueCodec<float> NativeWeave.Data.Codecs.Single { get; }
+public static Korda.Data.ValueCodec<float> Korda.Data.Codecs.Single { get; }
 ```
 
 **summary:** Gets finite IEEE 754 binary32 values, preserving signed zero in the wire.
 
-## `P:NativeWeave.Data.Codecs.String`
+## `P:Korda.Data.Codecs.String`
 
 ```csharp
-public static NativeWeave.Data.ValueCodec<string> NativeWeave.Data.Codecs.String { get; }
+public static Korda.Data.ValueCodec<string> Korda.Data.Codecs.String { get; }
 ```
 
 **summary:** Gets strict UTF-8 text with no normalization or implicit SQL collation.
 
-## `P:NativeWeave.Data.Codecs.Time`
+## `P:Korda.Data.Codecs.Time`
 
 ```csharp
-public static NativeWeave.Data.ValueCodec<System.TimeOnly> NativeWeave.Data.Codecs.Time { get; }
+public static Korda.Data.ValueCodec<System.TimeOnly> Korda.Data.Codecs.Time { get; }
 ```
 
 **summary:** Gets microseconds since midnight; submicrosecond precision rejects.
 
-## `P:NativeWeave.Data.Codecs.UtcDateTime`
+## `P:Korda.Data.Codecs.UtcDateTime`
 
 ```csharp
-public static NativeWeave.Data.ValueCodec<System.DateTime> NativeWeave.Data.Codecs.UtcDateTime { get; }
+public static Korda.Data.ValueCodec<System.DateTime> Korda.Data.Codecs.UtcDateTime { get; }
 ```
 
 **summary:** Gets UTC-only DateTime values; Local and Unspecified values reject.
 
-## `P:NativeWeave.Data.Codecs.UtcInstant`
+## `P:Korda.Data.Codecs.UtcInstant`
 
 ```csharp
-public static NativeWeave.Data.ValueCodec<System.DateTimeOffset> NativeWeave.Data.Codecs.UtcInstant { get; }
+public static Korda.Data.ValueCodec<System.DateTimeOffset> Korda.Data.Codecs.UtcInstant { get; }
 ```
 
 **summary:** Gets UTC-normalized instants in Unix microseconds; no precision loss is allowed.
 
-## `P:NativeWeave.Data.ColumnOptions.Collation`
+## `P:Korda.Data.ColumnOptions.Collation`
 
 ```csharp
-public string? NativeWeave.Data.ColumnOptions.Collation { get; init; }
+public string? Korda.Data.ColumnOptions.Collation { get; init; }
 ```
 
 **summary:** Gets the exact provider collation name, or no explicit collation.
 
-## `P:NativeWeave.Data.ColumnOptions.IsConcurrencyToken`
+## `P:Korda.Data.ColumnOptions.IsConcurrencyToken`
 
 ```csharp
-public bool NativeWeave.Data.ColumnOptions.IsConcurrencyToken { get; init; }
+public bool Korda.Data.ColumnOptions.IsConcurrencyToken { get; init; }
 ```
 
 **summary:** Gets whether the column is an explicit optimistic-concurrency token.
 
-## `P:NativeWeave.Data.ColumnOptions.IsGenerated`
+## `P:Korda.Data.ColumnOptions.IsGenerated`
 
 ```csharp
-public bool NativeWeave.Data.ColumnOptions.IsGenerated { get; init; }
+public bool Korda.Data.ColumnOptions.IsGenerated { get; init; }
 ```
 
 **summary:** Gets whether the database generates the value on insert.
 
-## `P:NativeWeave.Data.ColumnOptions.IsPrimaryKey`
+## `P:Korda.Data.ColumnOptions.IsPrimaryKey`
 
 ```csharp
-public bool NativeWeave.Data.ColumnOptions.IsPrimaryKey { get; init; }
+public bool Korda.Data.ColumnOptions.IsPrimaryKey { get; init; }
 ```
 
 **summary:** Gets whether the column participates in the primary key, ordered by declaration.
 
-## `P:NativeWeave.Data.ColumnOptions.MaxLength`
+## `P:Korda.Data.ColumnOptions.MaxLength`
 
 ```csharp
-public int? NativeWeave.Data.ColumnOptions.MaxLength { get; init; }
+public int? Korda.Data.ColumnOptions.MaxLength { get; init; }
 ```
 
 **summary:** Gets the positive maximum byte capacity, or no declared capacity.
 
-## `P:NativeWeave.Data.Column`2.Codec`
+## `P:Korda.Data.Column`2.Codec`
 
 ```csharp
-public NativeWeave.Data.ValueCodec<T> NativeWeave.Data.Column<TEntity, T>.Codec { get; }
+public Korda.Data.ValueCodec<T> Korda.Data.Column<TEntity, T>.Codec { get; }
 ```
 
 **summary:** Gets the exact logical codec and its configuration.
 
-## `P:NativeWeave.Data.Column`2.Id`
+## `P:Korda.Data.Column`2.Id`
 
 ```csharp
-public uint NativeWeave.Data.Column<TEntity, T>.Id { get; }
+public uint Korda.Data.Column<TEntity, T>.Id { get; }
 ```
 
 **summary:** Gets the stable nonzero little-endian SHA-256-derived column ID.
 
-## `P:NativeWeave.Data.Column`2.Name`
+## `P:Korda.Data.Column`2.Name`
 
 ```csharp
-public string NativeWeave.Data.Column<TEntity, T>.Name { get; }
+public string Korda.Data.Column<TEntity, T>.Name { get; }
 ```
 
 **summary:** Gets the exact store name, preserving case and Unicode.
 
-## `P:NativeWeave.Data.ConcurrencyConflictException.ActualRows`
+## `P:Korda.Data.ConcurrencyConflictException.ActualRows`
 
 ```csharp
-public long NativeWeave.Data.ConcurrencyConflictException.ActualRows { get; }
+public long Korda.Data.ConcurrencyConflictException.ActualRows { get; }
 ```
 
 **summary:** Gets the actual affected-row count.
 
-## `P:NativeWeave.Data.ConcurrencyConflictException.ExpectedRows`
+## `P:Korda.Data.ConcurrencyConflictException.ExpectedRows`
 
 ```csharp
-public long NativeWeave.Data.ConcurrencyConflictException.ExpectedRows { get; }
+public long Korda.Data.ConcurrencyConflictException.ExpectedRows { get; }
 ```
 
 **summary:** Gets the expected affected-row count.
 
-## `P:NativeWeave.Data.DatabaseCapabilityException.Capability`
+## `P:Korda.Data.DatabaseCapabilityException.Capability`
 
 ```csharp
-public string NativeWeave.Data.DatabaseCapabilityException.Capability { get; }
+public string Korda.Data.DatabaseCapabilityException.Capability { get; }
 ```
 
 **summary:** Gets the exact required capability name.
 
-## `P:NativeWeave.Data.DatabaseCapabilityException.Provider`
+## `P:Korda.Data.DatabaseCapabilityException.Provider`
 
 ```csharp
-public string NativeWeave.Data.DatabaseCapabilityException.Provider { get; }
+public string Korda.Data.DatabaseCapabilityException.Provider { get; }
 ```
 
 **summary:** Gets the provider identity.
 
-## `P:NativeWeave.Data.DatabaseException.CorrelationId`
+## `P:Korda.Data.DatabaseException.CorrelationId`
 
 ```csharp
-public ulong NativeWeave.Data.DatabaseException.CorrelationId { get; }
+public ulong Korda.Data.DatabaseException.CorrelationId { get; }
 ```
 
 **summary:** Gets the native correlation identity, or zero when absent.
 
-## `P:NativeWeave.Data.DatabaseException.IsTransient`
+## `P:Korda.Data.DatabaseException.IsTransient`
 
 ```csharp
-public bool NativeWeave.Data.DatabaseException.IsTransient { get; }
+public bool Korda.Data.DatabaseException.IsTransient { get; }
 ```
 
 **summary:** Gets the provider's explicit classification; unknown outcomes are always nontransient.
 
-## `P:NativeWeave.Data.DatabaseException.Kind`
+## `P:Korda.Data.DatabaseException.Kind`
 
 ```csharp
-public NativeWeave.Data.DatabaseErrorKind NativeWeave.Data.DatabaseException.Kind { get; }
+public Korda.Data.DatabaseErrorKind Korda.Data.DatabaseException.Kind { get; }
 ```
 
 **summary:** Gets the immutable provider-neutral category.
 
-## `P:NativeWeave.Data.DatabaseException.ProviderCode`
+## `P:Korda.Data.DatabaseException.ProviderCode`
 
 ```csharp
-public string? NativeWeave.Data.DatabaseException.ProviderCode { get; }
+public string? Korda.Data.DatabaseException.ProviderCode { get; }
 ```
 
 **summary:** Gets the optional provider code without interpreting it as retry authorization.
 
-## `P:NativeWeave.Data.Projection`1.ShapeHash`
+## `P:Korda.Data.Projection`1.ShapeHash`
 
 ```csharp
-public string NativeWeave.Data.Projection<T>.ShapeHash { get; }
+public string Korda.Data.Projection<T>.ShapeHash { get; }
 ```
 
 **summary:** Gets lowercase SHA-256 of the exact logical shape, excluding managed delegate and native IDs.
 
-## `P:NativeWeave.Data.ResultColumn`1.Name`
+## `P:Korda.Data.ResultColumn`1.Name`
 
 ```csharp
-public string NativeWeave.Data.ResultColumn<T>.Name { get; }
+public string Korda.Data.ResultColumn<T>.Name { get; }
 ```
 
 **summary:** Gets the exact result alias; the default token rejects.
 
 **exception:** This token is default.
 
-## `P:NativeWeave.Data.ResultColumn`1.Ordinal`
+## `P:Korda.Data.ResultColumn`1.Ordinal`
 
 ```csharp
-public int NativeWeave.Data.ResultColumn<T>.Ordinal { get; }
+public int Korda.Data.ResultColumn<T>.Ordinal { get; }
 ```
 
 **summary:** Gets the zero-based ordinal; the default token rejects.
 
 **exception:** This token is default.
 
-## `P:NativeWeave.Data.ResultField.CodecId`
+## `P:Korda.Data.ResultField.CodecId`
 
 ```csharp
-public uint NativeWeave.Data.ResultField.CodecId { get; }
+public uint Korda.Data.ResultField.CodecId { get; }
 ```
 
 **summary:** Gets the logical codec ID, independent of source-bound configured IDs.
 
-## `P:NativeWeave.Data.ResultField.IsNullable`
+## `P:Korda.Data.ResultField.IsNullable`
 
 ```csharp
-public bool NativeWeave.Data.ResultField.IsNullable { get; }
+public bool Korda.Data.ResultField.IsNullable { get; }
 ```
 
 **summary:** Gets whether the typed codec permits SQL NULL.
 
-## `P:NativeWeave.Data.ResultField.Name`
+## `P:Korda.Data.ResultField.Name`
 
 ```csharp
-public string NativeWeave.Data.ResultField.Name { get; }
+public string Korda.Data.ResultField.Name { get; }
 ```
 
 **summary:** Gets the exact result alias.
 
-## `P:NativeWeave.Data.Table`1.MetadataHash`
+## `P:Korda.Data.Table`1.MetadataHash`
 
 ```csharp
-public string NativeWeave.Data.Table<TEntity>.MetadataHash { get; }
+public string Korda.Data.Table<TEntity>.MetadataHash { get; }
 ```
 
 **summary:** Gets lowercase hexadecimal SHA-256 of the canonical model bytes.
 
-## `P:NativeWeave.Data.Table`1.Name`
+## `P:Korda.Data.Table`1.Name`
 
 ```csharp
-public string NativeWeave.Data.Table<TEntity>.Name { get; }
+public string Korda.Data.Table<TEntity>.Name { get; }
 ```
 
 **summary:** Gets the exact table name.
 
-## `P:NativeWeave.Data.Table`1.Row`
+## `P:Korda.Data.Table`1.Row`
 
 ```csharp
-public NativeWeave.Data.Projection<TEntity> NativeWeave.Data.Table<TEntity>.Row { get; }
+public Korda.Data.Projection<TEntity> Korda.Data.Table<TEntity>.Row { get; }
 ```
 
 **summary:** Gets the immutable projection in declared constructor order.
 
-## `P:NativeWeave.Data.Table`1.Schema`
+## `P:Korda.Data.Table`1.Schema`
 
 ```csharp
-public string? NativeWeave.Data.Table<TEntity>.Schema { get; }
+public string? Korda.Data.Table<TEntity>.Schema { get; }
 ```
 
 **summary:** Gets the explicit schema or null.
 
-## `P:NativeWeave.Data.ValueCodec`1.Id`
+## `P:Korda.Data.ValueCodec`1.Id`
 
 ```csharp
-public uint NativeWeave.Data.ValueCodec<T>.Id { get; }
+public uint Korda.Data.ValueCodec<T>.Id { get; }
 ```
 
 **summary:** Gets the logical db-wire scalar ID, independent of source-bound configured IDs.
 
-## `P:NativeWeave.Data.ValueCodec`1.Name`
+## `P:Korda.Data.ValueCodec`1.Name`
 
 ```csharp
-public string NativeWeave.Data.ValueCodec<T>.Name { get; }
+public string Korda.Data.ValueCodec<T>.Name { get; }
 ```
 
 **summary:** Gets the descriptive scalar codec name.
 
-## `P:NativeWeave.Data.WeaveColumnAttribute.Generated`
+## `P:Korda.Data.WeaveColumnAttribute.Generated`
 
 ```csharp
-public bool NativeWeave.Data.WeaveColumnAttribute.Generated { get; init; }
+public bool Korda.Data.WeaveColumnAttribute.Generated { get; init; }
 ```
 
 **summary:** Gets or initializes whether the database supplies the value on insertion.
 
 **inheritdoc:**
 
-## `P:NativeWeave.Data.WeaveTableAttribute.DescriptorName`
+## `P:Korda.Data.WeaveTableAttribute.DescriptorName`
 
 ```csharp
-public string? NativeWeave.Data.WeaveTableAttribute.DescriptorName { get; init; }
+public string? Korda.Data.WeaveTableAttribute.DescriptorName { get; init; }
 ```
 
 **summary:** Gets or initializes the generated static descriptor class name; default is EntityNameMapping.
 
 **inheritdoc:**
 
-## `P:NativeWeave.Data.WeaveTableAttribute.Schema`
+## `P:Korda.Data.WeaveTableAttribute.Schema`
 
 ```csharp
-public string? NativeWeave.Data.WeaveTableAttribute.Schema { get; init; }
+public string? Korda.Data.WeaveTableAttribute.Schema { get; init; }
 ```
 
 **summary:** Gets or initializes the optional exact schema name.
 
 **inheritdoc:**
 
-## `T:NativeWeave.Data.Changes`1`
+## `T:Korda.Data.Changes`1`
 
 ```csharp
-public sealed class NativeWeave.Data.Changes<TEntity> where TEntity : class
+public sealed class Korda.Data.Changes<TEntity> where TEntity : class
 ```
 
 **summary:** A single-writer explicit changeset containing owned value snapshots.
@@ -1396,30 +1396,30 @@ public sealed class NativeWeave.Data.Changes<TEntity> where TEntity : class
 
 **remarks:** This is assignment data, not a SQL AST. Unset removes an assignment; Set with a nullable value assigns SQL NULL. Native execution snapshots the current changes independently and rejects an empty set.
 
-## `T:NativeWeave.Data.Codecs`
+## `T:Korda.Data.Codecs`
 
 ```csharp
-public static class NativeWeave.Data.Codecs
+public static class Korda.Data.Codecs
 ```
 
 **summary:** Factories for the fixed db-wire/1 logical scalar registry.
 
 **remarks:** Selections are immutable. Encoding snapshots strings, byte arrays and JSON into owned storage. No provider, native loader, reflection serializer or SQL semantics are installed by these factories.
 
-## `T:NativeWeave.Data.ColumnOptions`
+## `T:Korda.Data.ColumnOptions`
 
 ```csharp
-public sealed record class NativeWeave.Data.ColumnOptions : System.IEquatable<NativeWeave.Data.ColumnOptions>
+public sealed record class Korda.Data.ColumnOptions : System.IEquatable<Korda.Data.ColumnOptions>
 ```
 
 **summary:** Immutable declaration flags for one table column.
 
 **remarks:** Null optional settings remain distinct from defaults. MaxLength is a positive byte capacity. The builder snapshots this record and validates key nullability before publishing a table.
 
-## `T:NativeWeave.Data.Column`2`
+## `T:Korda.Data.Column`2`
 
 ```csharp
-public sealed class NativeWeave.Data.Column<TEntity, T> where TEntity : class
+public sealed class Korda.Data.Column<TEntity, T> where TEntity : class
 ```
 
 **summary:** An immutable entity- and value-typed column token belonging to one table declaration.
@@ -1430,10 +1430,10 @@ public sealed class NativeWeave.Data.Column<TEntity, T> where TEntity : class
 
 **remarks:** Tokens expose no native pointer. Equivalent metadata in another builder does not authorize using its token.
 
-## `T:NativeWeave.Data.ConcurrencyCheck`1`
+## `T:Korda.Data.ConcurrencyCheck`1`
 
 ```csharp
-public sealed class NativeWeave.Data.ConcurrencyCheck<TEntity> where TEntity : class
+public sealed class Korda.Data.ConcurrencyCheck<TEntity> where TEntity : class
 ```
 
 **summary:** A single-writer explicit set of expected concurrency-token values.
@@ -1442,48 +1442,48 @@ public sealed class NativeWeave.Data.ConcurrencyCheck<TEntity> where TEntity : c
 
 **remarks:** Values are copied immediately. There is no identity map, implicit version increment or managed compare-and-swap.
 
-## `T:NativeWeave.Data.ConcurrencyConflictException`
+## `T:Korda.Data.ConcurrencyConflictException`
 
 ```csharp
-public sealed class NativeWeave.Data.ConcurrencyConflictException : NativeWeave.Data.DatabaseException
+public sealed class Korda.Data.ConcurrencyConflictException : Korda.Data.DatabaseException
 ```
 
 **summary:** A native optimistic write did not match its exact expected affected-row count.
 
 **remarks:** The original key and expected token predicate ran once in the database. This exception never authorizes a write replay.
 
-## `T:NativeWeave.Data.DatabaseCapabilityException`
+## `T:Korda.Data.DatabaseCapabilityException`
 
 ```csharp
-public sealed class NativeWeave.Data.DatabaseCapabilityException : NativeWeave.Data.DatabaseException
+public sealed class Korda.Data.DatabaseCapabilityException : Korda.Data.DatabaseException
 ```
 
 **summary:** Identifies a required capability missing from an engine or provider profile.
 
 **remarks:** The owned exception retains validated managed identity strings and no native handle. Constructing or reading it performs no provider call; capability admission rejects before business dispatch.
 
-## `T:NativeWeave.Data.DatabaseErrorKind`
+## `T:Korda.Data.DatabaseErrorKind`
 
 ```csharp
-public enum NativeWeave.Data.DatabaseErrorKind : int
+public enum Korda.Data.DatabaseErrorKind : int
 ```
 
 **summary:** Provider-neutral database failure categories; cancellation and timeouts use their standard CLR exceptions.
 
-## `T:NativeWeave.Data.DatabaseException`
+## `T:Korda.Data.DatabaseException`
 
 ```csharp
-public class NativeWeave.Data.DatabaseException : System.Exception
+public class Korda.Data.DatabaseException : System.Exception
 ```
 
 **summary:** Preserves a bounded provider-neutral failure and correlation identity.
 
 **remarks:** Diagnostic values are immutable and remain readable after cleanup. Construction loads no native engine. A transient cause is not permission to retry a write; outcome and application idempotency remain separate.
 
-## `T:NativeWeave.Data.EntityKey`1`
+## `T:Korda.Data.EntityKey`1`
 
 ```csharp
-public sealed class NativeWeave.Data.EntityKey<TEntity> where TEntity : class
+public sealed class Korda.Data.EntityKey<TEntity> where TEntity : class
 ```
 
 **summary:** An immutable ordered snapshot of a table's non-null primary-key values.
@@ -1492,10 +1492,10 @@ public sealed class NativeWeave.Data.EntityKey<TEntity> where TEntity : class
 
 **remarks:** Incomplete prefixes are construction values only; registration or execution requires the complete key.
 
-## `T:NativeWeave.Data.EntityWriter`1`
+## `T:Korda.Data.EntityWriter`1`
 
 ```csharp
-public delegate void NativeWeave.Data.EntityWriter<T>(NativeWeave.Data.RowWriter row, T value)
+public delegate void Korda.Data.EntityWriter<T>(Korda.Data.RowWriter row, T value)
 ```
 
 **summary:** Synchronously extracts typed entity values before native dispatch.
@@ -1508,10 +1508,10 @@ public delegate void NativeWeave.Data.EntityWriter<T>(NativeWeave.Data.RowWriter
 
 **remarks:** The callback runs synchronously during a finite input snapshot. Typed writes copy encoded values into owned buffers before native dispatch; the stack-only writer must not be retained.
 
-## `T:NativeWeave.Data.Projection`1`
+## `T:Korda.Data.Projection`1`
 
 ```csharp
-public sealed class NativeWeave.Data.Projection<T>
+public sealed class Korda.Data.Projection<T>
 ```
 
 **summary:** An immutable ordered static row shape and direct materializer.
@@ -1520,10 +1520,10 @@ public sealed class NativeWeave.Data.Projection<T>
 
 **remarks:** Creation copies the field sequence and hashes canonical metadata. Materializers stay managed; no CLR delegate or function pointer is encoded in metadata. Instances are shareable if their delegates are.
 
-## `T:NativeWeave.Data.Relation`2`
+## `T:Korda.Data.Relation`2`
 
 ```csharp
-public sealed class NativeWeave.Data.Relation<TParent, TChild> where TParent : class where TChild : class
+public sealed class Korda.Data.Relation<TParent, TChild> where TParent : class where TChild : class
 ```
 
 **summary:** Immutable ordered primary-key/foreign-key metadata over two already-built tables.
@@ -1534,10 +1534,10 @@ public sealed class NativeWeave.Data.Relation<TParent, TChild> where TParent : c
 
 **remarks:** Creation loads no native engine. And methods return new descriptors and never alter either table hash. A complete key prefix is required for native registration; lazy loading and alternate-key inference are excluded.
 
-## `T:NativeWeave.Data.ResultColumn`1`
+## `T:Korda.Data.ResultColumn`1`
 
 ```csharp
-public readonly struct NativeWeave.Data.ResultColumn<T>
+public readonly struct Korda.Data.ResultColumn<T>
 ```
 
 **summary:** An opaque result-column token created by the owning query projection.
@@ -1546,20 +1546,20 @@ public readonly struct NativeWeave.Data.ResultColumn<T>
 
 **remarks:** The default token is invalid; no public constructor can forge projection ownership.
 
-## `T:NativeWeave.Data.ResultField`
+## `T:Korda.Data.ResultField`
 
 ```csharp
-public sealed class NativeWeave.Data.ResultField
+public sealed class Korda.Data.ResultField
 ```
 
 **summary:** An immutable exact result alias, logical codec configuration and SQL nullability.
 
 **remarks:** Creating a field allocates one managed metadata object with no native resource. It can be retained in a static projection; source-specific codec binding occurs separately at registration.
 
-## `T:NativeWeave.Data.RowMaterializer`1`
+## `T:Korda.Data.RowMaterializer`1`
 
 ```csharp
-public delegate T NativeWeave.Data.RowMaterializer<T>(NativeWeave.Data.RowReader row)
+public delegate T Korda.Data.RowMaterializer<T>(Korda.Data.RowReader row)
 ```
 
 **summary:** Synchronously materializes one validated row into an owned CLR value.
@@ -1572,58 +1572,58 @@ public delegate T NativeWeave.Data.RowMaterializer<T>(NativeWeave.Data.RowReader
 
 **remarks:** The callback runs synchronously while its batch lease is live. Decoding and the application constructor create owned CLR values; borrowed reader state must not escape or cross an await.
 
-## `T:NativeWeave.Data.RowReader`
+## `T:Korda.Data.RowReader`
 
 ```csharp
-public readonly ref struct NativeWeave.Data.RowReader
+public readonly ref struct Korda.Data.RowReader
 ```
 
 **summary:** A stack-only reader over a validated live row lease.
 
 **remarks:** Shape validation precedes NULL interpretation. Every read checks the lease; default readers reject. Values are owned CLR copies. Readers cannot be retained across await or stored in an ordinary heap object.
 
-## `T:NativeWeave.Data.RowWriter`
+## `T:Korda.Data.RowWriter`
 
 ```csharp
-public readonly ref struct NativeWeave.Data.RowWriter
+public readonly ref struct Korda.Data.RowWriter
 ```
 
 **summary:** A stack-only writer that snapshots typed entity fields without invoking native code.
 
 **remarks:** A writer is valid only during EntityWriter invocation. Repeated assignment rejects. Insert policy omits generated columns. An exception publishes no partial row to a provider.
 
-## `T:NativeWeave.Data.SqlCommand`
+## `T:Korda.Data.SqlCommand`
 
 ```csharp
-public sealed class NativeWeave.Data.SqlCommand
+public sealed class Korda.Data.SqlCommand
 ```
 
 **summary:** An immutable, shareable trusted SQL template and owned typed parameter snapshot.
 
 **remarks:** This type does not parse SQL, choose dialects, prove safety or contact a provider. The native engine transports placeholders and validates actual capability/effect policy before dispatch. Interpolated convenience has boxing costs.
 
-## `T:NativeWeave.Data.SqlCommandKind`
+## `T:Korda.Data.SqlCommandKind`
 
 ```csharp
-public enum NativeWeave.Data.SqlCommandKind : int
+public enum Korda.Data.SqlCommandKind : int
 ```
 
 **summary:** The explicit trusted command effect classification.
 
-## `T:NativeWeave.Data.SqlParameters`
+## `T:Korda.Data.SqlParameters`
 
 ```csharp
-public sealed class NativeWeave.Data.SqlParameters
+public sealed class Korda.Data.SqlParameters
 ```
 
 **summary:** A single-writer ordered collection of typed owned parameter snapshots.
 
 **remarks:** Names are case-sensitive ASCII without @. Add copies mutable values immediately; command construction snapshots the collection. Provider placeholder scanning and missing/unused-hole checks remain native B02/B03 work.
 
-## `T:NativeWeave.Data.TableBuilder`1`
+## `T:Korda.Data.TableBuilder`1`
 
 ```csharp
-public sealed class NativeWeave.Data.TableBuilder<TEntity> where TEntity : class
+public sealed class Korda.Data.TableBuilder<TEntity> where TEntity : class
 ```
 
 **summary:** Constructs one immutable table declaration using explicit AOT-visible delegates.
@@ -1632,10 +1632,10 @@ public sealed class NativeWeave.Data.TableBuilder<TEntity> where TEntity : class
 
 **remarks:** This single-writer startup builder is consumed by successful Build. It performs O(column count) managed work and loads no native engine. The known closed type is used only for its assembly/name identity.
 
-## `T:NativeWeave.Data.Table`1`
+## `T:Korda.Data.Table`1`
 
 ```csharp
-public sealed class NativeWeave.Data.Table<TEntity> where TEntity : class
+public sealed class Korda.Data.Table<TEntity> where TEntity : class
 ```
 
 **summary:** An immutable, shareable table declaration; first native registration belongs to the source owner.
@@ -1644,10 +1644,10 @@ public sealed class NativeWeave.Data.Table<TEntity> where TEntity : class
 
 **remarks:** Canonical metadata hashes are business schema identities, independent of ABI and package versions.
 
-## `T:NativeWeave.Data.ValueCodec`1`
+## `T:Korda.Data.ValueCodec`1`
 
 ```csharp
-public sealed class NativeWeave.Data.ValueCodec<T>
+public sealed class Korda.Data.ValueCodec<T>
 ```
 
 **summary:** A closed typed selection of one precompiled logical scalar codec.
@@ -1656,55 +1656,55 @@ public sealed class NativeWeave.Data.ValueCodec<T>
 
 **remarks:** Instances are immutable and shareable. IDs are logical metadata, not source-owned native handles. Nullable wrappers preserve the logical ID. Configured decimal identities include precision and scale. No native runtime is loaded; provider conversions and capability enforcement belong to B07.
 
-## `T:NativeWeave.Data.WeaveColumnAttribute`
+## `T:Korda.Data.WeaveColumnAttribute`
 
 ```csharp
 [System.AttributeUsageAttribute(System.AttributeTargets.Property, Inherited = false)]
-public sealed class NativeWeave.Data.WeaveColumnAttribute : System.Attribute
+public sealed class Korda.Data.WeaveColumnAttribute : System.Attribute
 ```
 
 **summary:** Overrides a property's exact store name and generated-value policy.
 
 **remarks:** Without this attribute the CLR property symbol name is used unchanged. The generated column member keeps its CLR spelling.
 
-## `T:NativeWeave.Data.WeaveIgnoreAttribute`
+## `T:Korda.Data.WeaveIgnoreAttribute`
 
 ```csharp
 [System.AttributeUsageAttribute(System.AttributeTargets.Property, Inherited = false)]
-public sealed class NativeWeave.Data.WeaveIgnoreAttribute : System.Attribute
+public sealed class Korda.Data.WeaveIgnoreAttribute : System.Attribute
 ```
 
 **summary:** Excludes a property from generated metadata and row serialization.
 
 **remarks:** Combining Ignore with another mapping annotation is inconsistent and rejected. Required constructor inputs still need a supported static mapping.
 
-## `T:NativeWeave.Data.WeaveKeyAttribute`
+## `T:Korda.Data.WeaveKeyAttribute`
 
 ```csharp
 [System.AttributeUsageAttribute(System.AttributeTargets.Property, Inherited = false)]
-public sealed class NativeWeave.Data.WeaveKeyAttribute : System.Attribute
+public sealed class Korda.Data.WeaveKeyAttribute : System.Attribute
 ```
 
 **summary:** Marks a non-null primary-key property in deterministic projection order.
 
 **remarks:** Nullable keys are rejected at compilation and again by the static descriptor builder; there is no inferred key convention.
 
-## `T:NativeWeave.Data.WeaveTableAttribute`
+## `T:Korda.Data.WeaveTableAttribute`
 
 ```csharp
 [System.AttributeUsageAttribute(System.AttributeTargets.Class, Inherited = false)]
-public sealed class NativeWeave.Data.WeaveTableAttribute : System.Attribute
+public sealed class Korda.Data.WeaveTableAttribute : System.Attribute
 ```
 
 **summary:** Opts a model into deterministic, static table and DTO mapping generation.
 
 **remarks:** The generator reads source symbols and emits the same TableBuilder calls as manual metadata. It never opens a database, loads a native module, compiles native code or discovers runtime model types.
 
-## `T:NativeWeave.Data.WeaveVersionAttribute`
+## `T:Korda.Data.WeaveVersionAttribute`
 
 ```csharp
 [System.AttributeUsageAttribute(System.AttributeTargets.Property, Inherited = false)]
-public sealed class NativeWeave.Data.WeaveVersionAttribute : System.Attribute
+public sealed class Korda.Data.WeaveVersionAttribute : System.Attribute
 ```
 
 **summary:** Marks an explicit optimistic-concurrency token.

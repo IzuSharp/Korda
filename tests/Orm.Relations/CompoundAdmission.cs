@@ -1,5 +1,5 @@
-using NativeWeave.Data;
-using NativeWeave.Database;
+using Korda.Data;
+using Korda.Database;
 
 internal static partial class Suite
 {

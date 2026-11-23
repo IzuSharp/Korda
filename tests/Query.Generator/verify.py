@@ -70,8 +70,8 @@ def component_checks():
                            ('api', 'tests/Query.Generator/ApiCheck/ApiCheck.csproj')]:
         run(label + '-restore', ['dotnet', 'restore', project, '--locked-mode', *flags])
         run(label + '-build', ['dotnet', 'build', project, '-c', 'Release', '--no-restore', *flags])
-    run('component', ['dotnet', ROOT / 'tests/Query.Generator/bin/Release/net11.0/NativeWeave.Query.Generator.Tests.dll'])
-    run('exact-api-diagnostics-incremental', ['dotnet', ROOT / 'tests/Query.Generator/ApiCheck/bin/Release/net11.0/NativeWeave.Query.Generator.ApiCheck.dll', ROOT, a.design, a.sdk])
+    run('component', ['dotnet', ROOT / 'tests/Query.Generator/bin/Release/net11.0/Korda.Query.Generator.Tests.dll'])
+    run('exact-api-diagnostics-incremental', ['dotnet', ROOT / 'tests/Query.Generator/ApiCheck/bin/Release/net11.0/Korda.Query.Generator.ApiCheck.dll', ROOT, a.design, a.sdk])
 
 initial = sources()
 commit = git('rev-parse', 'HEAD')
@@ -96,7 +96,7 @@ try:
     package_hashes = {p.name: sha(p) for p in FEED.glob('*.nupkg')}
     if len(package_hashes) < 10:
         raise RuntimeError('The complete previously verified facade feed is required.')
-    with zipfile.ZipFile(FEED / 'NativeWeave.Database.Sqlite.0.1.0-preview.1.nupkg') as z:
+    with zipfile.ZipFile(FEED / 'Korda.Database.Sqlite.0.1.0-preview.1.nupkg') as z:
         native_sha = hashlib.sha256(z.read('runtimes/linux-x64/native/libnw_database_sqlite.so')).hexdigest()
     save('feed-inputs.json', dict(source=str(a.feed_source), candidate=a.feed_candidate,
          package_sha256=package_hashes, native_sha256=native_sha, reused_acceptance='B13 Linux immutable package feed'))

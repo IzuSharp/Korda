@@ -6,8 +6,8 @@
   "nativeAbiChange": false,
   "exportedFrameworkTypes": [],
   "consumers": [
-    "NativeWeave.Database.Sqlite",
-    "NativeWeave.Database.PostgreSql"
+    "Korda.Database.Sqlite",
+    "Korda.Database.PostgreSql"
   ],
   "historicalSource": "ea5fa528035d025bd7a28698ee7c71194432236c",
   "retained": [
@@ -21,7 +21,7 @@
     "database and application retirement"
   ],
   "removed": [
-    "NativeWeave HTTP host",
+    "Korda HTTP host",
     "routing",
     "authentication adapters",
     "server/protocol dependencies"

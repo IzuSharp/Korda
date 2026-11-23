@@ -1,6 +1,6 @@
-using NativeWeave.Interop;
+using Korda.Interop;
 
-namespace NativeWeave.Database.Sqlite;
+namespace Korda.Database.Sqlite;
 
 /// <summary>Creates SQLite datasources backed by the maintainer-built C++ Database Host.</summary>
 /// <remarks>Descriptor access is pure metadata. Inspect verifies the packaged asset without creating a runtime or opening a connection; Create owns the configured runtime and datasource.</remarks>

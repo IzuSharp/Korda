@@ -1,9 +1,9 @@
-using NativeWeave.Interop;
-namespace NativeWeave.Database.PostgreSql;
+using Korda.Interop;
+namespace Korda.Database.PostgreSql;
 
 public static partial class PostgreSqlDataSource
 {
-    internal static EngineDescriptor HostEngine { get; } = DatabaseEngineProfile.Create("database.postgresql", "NativeWeave.Database.PostgreSql", PostgreSqlAssetIdentity.RuntimeIdentifier, PostgreSqlAssetIdentity.RelativePath, PostgreSqlAssetIdentity.Sha256, typeof(PostgreSqlDataSource).Assembly);
+    internal static EngineDescriptor HostEngine { get; } = DatabaseEngineProfile.Create("database.postgresql", "Korda.Database.PostgreSql", PostgreSqlAssetIdentity.RuntimeIdentifier, PostgreSqlAssetIdentity.RelativePath, PostgreSqlAssetIdentity.Sha256, typeof(PostgreSqlDataSource).Assembly);
     /// <summary>Creates one independently owned lazy libpq PostgreSQL data source.</summary>
     /// <param name="connectionString">An explicit TCP PostgreSQL URI; ambient connection policy is rejected.</param>
     /// <param name="configure">An optional synchronous options callback, snapshotted before native admission.</param>

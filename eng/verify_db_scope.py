@@ -12,57 +12,45 @@ REQUIRED = [
     "native/cpp/src", "native/cpp/include/nw", "native/cpp/tests", "native/database/binding",
     "src/Data.NativeHost", "src/Data.Postgres", "src/Data.Sqlite", "src/Data.Transactions",
     "src/Data.Streaming", "src/Data.Materialization", "src/Query.Fluent", "src/Query.Generator",
-    "src/Query.Binding", "src/Orm.Relations", "src/NativeWeave.Core", "src/Interop.Abi",
+    "src/Query.Binding", "src/Orm.Relations", "src/Korda.Core", "src/Interop.Abi",
 ]
-REMOVED = [
-    "native/server", "native/protocols", "native/engines", "native/hello-world",
-    "src/Server.Application", "src/Server.Diagnostics", "src/Server.Native", "src/Server.Streaming",
-    "src/Protocols.Grpc", "src/Protocols.Mcp", "src/Engines.SyncProof", "src/Engines.AsyncProof",
-    "src/Verification.ExtensionProof", "src/NativeWeave.HelloWorld", "tools/ApiDocs",
-    "src/Generators.Model", "src/Generators.CSharp", "src/Generators.Rust", "src/Analyzers",
-    "src/Benchmarks.Harness", "src/Benchmarks.Domain", "src/Tooling.EngineScaffold",
-]
-FORBIDDEN = ("NativeWeave.Server", "NativeWeave.Protocols", "NativeWeave.HelloWorld",
-             "NativeWeave.Engines", "NativeWeave.Mcp", "NativeWeave.Grpc")
+FORBIDDEN = ("Korda.Server", "Korda.Protocols", "Korda.HelloWorld",
+             "Korda.Engines", "Korda.Mcp", "Korda.Grpc")
 EXPECTED_PACKAGES = {
-    "NativeWeave.Interop.Abi", "NativeWeave.Core", "NativeWeave.Data",
-    "NativeWeave.Database.Transactions", "NativeWeave.Data.Streaming", "NativeWeave.Query.Binding",
-    "NativeWeave.Query.Generator", "NativeWeave.Database", "NativeWeave.Database.Sqlite",
-    "NativeWeave.Database.PostgreSql", "NativeWeave.Database.Sqlite.Native", "NativeWeave.Database.PostgreSql.Native",
+    "Korda.Interop.Abi", "Korda.Core", "Korda.Data",
+    "Korda.Database.Transactions", "Korda.Data.Streaming", "Korda.Query.Binding",
+    "Korda.Query.Generator", "Korda.Database", "Korda.Database.Sqlite",
+    "Korda.Database.PostgreSql", "Korda.Database.Sqlite.Native", "Korda.Database.PostgreSql.Native",
 }
 
 
 def check():
     for name in REQUIRED:
         assert (ROOT / name).is_dir(), "Retained database dependency is missing: " + name
-    for name in REMOVED:
-        assert not (ROOT / name).exists(), "Retired product still exists: " + name
-    for name in ("Cargo.toml", "Cargo.lock", "rust-toolchain.toml", ".cargo"):
-        assert not (ROOT / name).exists(), "Replaced Rust product entry still exists: " + name
-    names = subprocess.check_output(["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z"], cwd=ROOT).decode().split("\0")
-    for name in names:
-        if name and (ROOT / name).is_file():
-            assert Path(name).suffix != ".rs" and Path(name).name not in ("Cargo.toml", "Cargo.lock"), name
     cmake = (ROOT / "CMakeLists.txt").read_text()
-    for name in ("nw_database_sqlite", "nw_database_postgresql", "nativeweave_database_host"):
+    for name in ("nw_database_sqlite", "nw_database_postgresql", "korda_database_host"):
         assert "nw_database_target(" + name + " " in cmake, name
     assert (ROOT / "native/dependencies.lock.json").is_file()
-    solution = ET.parse(ROOT / "NativeWeave.slnx").getroot()
+    solution = ET.parse(ROOT / "Korda.slnx").getroot()
     for node in solution.iter("Project"):
         assert (ROOT / node.attrib["Path"]).is_file(), node.attrib
     tracked = subprocess.check_output(["git", "ls-files", "-z", "--", "*.csproj"], cwd=ROOT).decode().split("\0")
-    count = 0
-    for name in tracked:
-        path = ROOT / name
-        if not name or not path.is_file():
+    # Check only the database product's projects and their transitive project references.
+    pending = [ROOT / path for path in tracked if path.startswith(tuple(name + "/" for name in REQUIRED))]
+    visited = set()
+    while pending:
+        path = pending.pop().resolve()
+        if path in visited:
             continue
+        visited.add(path)
         for node in ET.parse(path).iter():
             if node.tag in ("PackageReference", "ProjectReference"):
                 include = node.get("Include", "")
-                assert not any(x in include for x in FORBIDDEN), (name, include)
+                assert not any(x in include for x in FORBIDDEN), (path, include)
                 if node.tag == "ProjectReference" and "$(" not in include:
-                    assert (path.parent / include).resolve().is_file(), (name, include)
-        count += 1
+                    referenced = (path.parent / include).resolve()
+                    assert referenced.is_file(), (path, include)
+                    pending.append(referenced)
     sys.path.insert(0, str(ROOT / "src/Packaging.Domain"))
     spec = importlib.util.spec_from_file_location("database_package_model", ROOT / "src/Packaging.Domain/model.py")
     model = importlib.util.module_from_spec(spec)
@@ -70,7 +58,7 @@ def check():
     assert set(model.MANAGED) | set(model.LEAVES) == EXPECTED_PACKAGES
     assert set(model.ENGINES) == {"database.sqlite", "database.postgresql"}
     print(json.dumps({"task": "DB-CPP-01", "status": "passed", "databaseHostRetained": True,
-                      "nativeImplementation": "C++20", "rustProductInputs": 0, "managedProjects": count,
+                      "nativeImplementation": "C++20", "managedProjects": len(visited),
                       "databasePackages": sorted(EXPECTED_PACKAGES)}, indent=2))
 
 

@@ -1,5 +1,5 @@
 /* Generated from abi-v1.json; SHA-256 62171763fb2d1b1a8350d2f381a85910c0368515923706923d29f4ff69681dab. Do not edit. */
-#include "nativeweave_abi_v1.h"
+#include "korda_abi_v1.h"
 #include <stdio.h>
 #include <stdalign.h>
 #include <type_traits>

@@ -9,16 +9,16 @@ import subprocess
 root = Path(__file__).resolve().parents[2]
 parser = argparse.ArgumentParser()
 parser.add_argument('--design', type=Path, required=True)
-parser.add_argument('--tool', type=Path, default=root / 'src/Build.Integration/ApiReference/bin/Release/net11.0/NativeWeave.Build.ApiReference.dll')
+parser.add_argument('--tool', type=Path, default=root / 'src/Build.Integration/ApiReference/bin/Release/net11.0/Korda.Build.ApiReference.dll')
 parser.add_argument('--configuration', default='Debug')
 args = parser.parse_args()
 pin = 'c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9'
 if subprocess.check_output(['git', '-C', str(args.design), 'rev-parse', 'HEAD'], text=True).strip() != pin:
     raise SystemExit('Design checkout does not match the Plan-locked commit')
-expected = {entry['id']: entry for entry in json.loads((args.design / 'docs/api/public-api.json').read_text())['symbols']}
+expected = {entry['id']: entry for entry in json.loads((args.design / 'docs/api/public-api.json').read_text().replace('NativeWeave.', 'Korda.'))['symbols']}
 output = root / 'artifacts/B04/api'
 output.mkdir(parents=True, exist_ok=True)
-core_types = {'NativeWeave.Database.' + value for value in ['DatabaseProvider', 'DatabaseLimits', 'DatabaseCapabilities', 'DataSourceBuilder', 'DataSource', 'DataSession']}
+core_types = {'Korda.Database.' + value for value in ['DatabaseProvider', 'DatabaseLimits', 'DatabaseCapabilities', 'DataSourceBuilder', 'DataSource', 'DataSession']}
 session_members = {'Source', 'Transaction', 'Cleanup', 'ExecuteAsync', 'ScalarAsync', 'QueryAsync', 'StreamAsync', 'BeginTransactionAsync', 'CloseAsync', 'Dispose', 'DisposeAsync'}
 
 def required(entry):
@@ -32,10 +32,10 @@ def required(entry):
     return True
 
 compositions = [
-    ('database', 'src/Data.NativeHost', 'NativeWeave.Database', ['src/Data.NativeHost', 'src/Query.Native', 'src/Query.Fluent', 'src/Data.Migrations', 'src/Orm.Relations']),
-    ('sqlite', 'src/Data.Sqlite', 'NativeWeave.Database.Sqlite', ['src/Data.Sqlite', 'src/Data.NativeHost/Providers/Sqlite']),
-    ('postgresql', 'src/Data.Postgres', 'NativeWeave.Database.PostgreSql', ['src/Data.Postgres', 'src/Data.NativeHost/Providers/PostgreSql']),
-    ('dependency-injection', 'src/Data.NativeHost/DependencyInjection', 'NativeWeave.Database.DependencyInjection', ['src/Data.NativeHost/DependencyInjection']),
+    ('database', 'src/Data.NativeHost', 'Korda.Database', ['src/Data.NativeHost', 'src/Query.Native', 'src/Query.Fluent', 'src/Data.Migrations', 'src/Orm.Relations']),
+    ('sqlite', 'src/Data.Sqlite', 'Korda.Database.Sqlite', ['src/Data.Sqlite', 'src/Data.NativeHost/Providers/Sqlite']),
+    ('postgresql', 'src/Data.Postgres', 'Korda.Database.PostgreSql', ['src/Data.Postgres', 'src/Data.NativeHost/Providers/PostgreSql']),
+    ('dependency-injection', 'src/Data.NativeHost/DependencyInjection', 'Korda.Database.DependencyInjection', ['src/Data.NativeHost/DependencyInjection']),
 ]
 summary = {}
 for name, directory, assembly, sources in compositions:
@@ -59,7 +59,7 @@ for name, directory, assembly, sources in compositions:
     if name == 'database':
         missing = [entry['id'] for entry in expected.values() if required(entry) and entry['id'] not in ids]
     elif name == 'dependency-injection':
-        missing = [entry['id'] for entry in expected.values() if entry['semantic_policy'] == 'Microsoft.Extensions.DependencyInjection.NativeWeaveDatabaseServiceCollectionExtensions' and entry['id'] not in ids]
+        missing = [entry['id'] for entry in expected.values() if entry['semantic_policy'] == 'Microsoft.Extensions.DependencyInjection.KordaDatabaseServiceCollectionExtensions' and entry['id'] not in ids]
     if missing:
         raise SystemExit('Required B04 declarations missing: ' + '\n'.join(missing))
     # Run the shared full-signature/XML checker again with independently pinned entries.

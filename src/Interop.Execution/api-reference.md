@@ -1,6 +1,6 @@
 # Internal executor close reference
 
-Generated from the compiled NativeWeave.Core assembly and XML by `tests/Interop.Execution/ApiCheck`.
+Generated from the compiled Korda.Core assembly and XML by `tests/Interop.Execution/ApiCheck`.
 
 A08 adds **zero public types or members**. Two namespace types remain internal: the sealed `ExecutorLifetime` and readonly `ExecutorJoinResult`.
 

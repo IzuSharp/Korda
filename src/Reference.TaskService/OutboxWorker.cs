@@ -1,8 +1,8 @@
-using NativeWeave.Data;
-using NativeWeave.Database;
-using NativeWeave.Query;
+using Korda.Data;
+using Korda.Database;
+using Korda.Query;
 
-namespace NativeWeave.Reference.TaskService;
+namespace Korda.Reference.TaskService;
 
 /// <summary>Bounded lease claims followed by publication into a separate durable consumer transaction.</summary>
 internal sealed class OutboxWorker(DataSource source, DataSource consumer)

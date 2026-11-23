@@ -1,10 +1,10 @@
-using NativeWeave.Data;
-using NativeWeave.Database;
-using NativeWeave.Database.Internal;
-using NativeWeave.Query.Internal;
-using static NativeWeave.Query.QueryContext;
+using Korda.Data;
+using Korda.Database;
+using Korda.Database.Internal;
+using Korda.Query.Internal;
+using static Korda.Query.QueryContext;
 
-namespace NativeWeave.Query;
+namespace Korda.Query;
 
 /// <summary>A borrowed typed view of a native query's current selection; it owns no second arena.</summary>
 /// <typeparam name="T">The statically materialized owned result type.</typeparam>
@@ -24,7 +24,7 @@ public readonly struct QuerySelection<T>
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public QuerySelection<T> Combine(QuerySelection<T> other, SetOperation operation = SetOperation.UnionAll)
     {
         var owner = Owner; var projection = Projection; var self = this;
@@ -37,7 +37,7 @@ public readonly struct QuerySelection<T>
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     /// <exception cref="OperationCanceledException">Cancellation requests termination and cleanup.</exception>
     /// <exception cref="TimeoutException">The finite total query deadline expires; cleanup still completes.</exception>
     public Task<IReadOnlyList<T>> ToListAsync(CancellationToken cancellationToken = default) => Owner.Stream(Projection, 0, cancellationToken, buffered: true).ToListAsync();
@@ -48,7 +48,7 @@ public readonly struct QuerySelection<T>
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     /// <exception cref="OperationCanceledException">Cancellation requests termination and cleanup.</exception>
     /// <exception cref="TimeoutException">The finite total query deadline expires; cleanup still completes.</exception>
     public Task<T[]> ToArrayAsync(CancellationToken cancellationToken = default) => Owner.Stream(Projection, 1, cancellationToken, buffered: true).ToArrayAsync();
@@ -59,7 +59,7 @@ public readonly struct QuerySelection<T>
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     /// <exception cref="OperationCanceledException">Cancellation requests termination and cleanup.</exception>
     /// <exception cref="TimeoutException">The finite total query deadline expires; cleanup still completes.</exception>
     public Task<T> FirstAsync(CancellationToken cancellationToken = default) => Owner.Stream(Projection, 2, cancellationToken).FirstAsync();
@@ -70,7 +70,7 @@ public readonly struct QuerySelection<T>
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     /// <exception cref="OperationCanceledException">Cancellation requests termination and cleanup.</exception>
     /// <exception cref="TimeoutException">The finite total query deadline expires; cleanup still completes.</exception>
     public Task<T?> FirstOrDefaultAsync(CancellationToken cancellationToken = default) => Owner.Stream(Projection, 2, cancellationToken).FirstOrDefaultAsync();
@@ -81,7 +81,7 @@ public readonly struct QuerySelection<T>
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     /// <exception cref="OperationCanceledException">Cancellation requests termination and cleanup.</exception>
     /// <exception cref="TimeoutException">The finite total query deadline expires; cleanup still completes.</exception>
     public Task<T> SingleAsync(CancellationToken cancellationToken = default) => Owner.Stream(Projection, 3, cancellationToken).SingleAsync();
@@ -92,7 +92,7 @@ public readonly struct QuerySelection<T>
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     /// <exception cref="OperationCanceledException">Cancellation requests termination and cleanup.</exception>
     /// <exception cref="TimeoutException">The finite total query deadline expires; cleanup still completes.</exception>
     public Task<T?> SingleOrDefaultAsync(CancellationToken cancellationToken = default) => Owner.Stream(Projection, 3, cancellationToken).SingleOrDefaultAsync();
@@ -103,7 +103,7 @@ public readonly struct QuerySelection<T>
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     /// <exception cref="OperationCanceledException">Cancellation requests termination and cleanup.</exception>
     /// <exception cref="TimeoutException">The finite total query deadline expires; cleanup still completes.</exception>
     public IAsyncEnumerable<T> AsAsyncEnumerable(CancellationToken cancellationToken = default) => Owner.Stream(Projection, 0, cancellationToken);
@@ -113,7 +113,7 @@ public readonly struct QuerySelection<T>
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public PreparedQuery<T> Prepare()
     {
         var owner = Owner; var projection = Projection;
@@ -126,7 +126,7 @@ public readonly struct QuerySelection<T>
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public string ToSql() => Owner.Render(Projection);
 }
 /// <summary>An immutable source-bound native query plan with independent execution values and cursor owners.</summary>
@@ -164,7 +164,7 @@ public sealed class PreparedQuery<T> : IDisposable
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     /// <exception cref="OperationCanceledException">Cancellation requests termination and cleanup.</exception>
     /// <exception cref="TimeoutException">The finite total query deadline expires; cleanup still completes.</exception>
     public Task<IReadOnlyList<T>> ToListAsync(DataSession session, QueryParameters? parameters = null, CancellationToken cancellationToken = default)
@@ -181,7 +181,7 @@ public sealed class PreparedQuery<T> : IDisposable
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     /// <exception cref="OperationCanceledException">Cancellation requests termination and cleanup.</exception>
     /// <exception cref="TimeoutException">The finite total query deadline expires; cleanup still completes.</exception>
     public IAsyncEnumerable<T> AsAsyncEnumerable(DataSession session, QueryParameters? parameters = null, CancellationToken cancellationToken = default) => Stream(session, parameters, cancellationToken);
@@ -206,7 +206,7 @@ public sealed class CommonTable<T> : IDisposable where T : class
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public static unsafe CommonTable<T> Create(Table<T> declaredShape, QuerySelection<T> body, bool recursive = false)
     {
         ArgumentNullException.ThrowIfNull(declaredShape); var owner = body.Owner;
@@ -237,7 +237,7 @@ public sealed class WindowDefinition
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public WindowDefinition PartitionBy<T>(SqlExpression<T> expression)
     { Owner.Same(expression.Owner); Owner.Clause(11, N(1, 1), U(2, Token), U(3, expression.Reference.In(Owner.Binding))); return this; }
     /// <summary>Appends native ordering with explicit direction and SQL NULL placement.</summary>
@@ -250,7 +250,7 @@ public sealed class WindowDefinition
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public WindowDefinition OrderBy<T>(SqlExpression<T> expression, SortDirection direction = SortDirection.Ascending, NullOrder nullOrder = NullOrder.Last)
     { Owner.Same(expression.Owner); Owner.Clause(11, N(1, 2), U(2, Token), U(3, expression.Reference.In(Owner.Binding)), N(4, (uint)direction), N(5, (uint)nullOrder)); return this; }
     /// <summary>Sets one supported ROWS frame; invalid endpoints reject before publication.</summary>
@@ -261,7 +261,7 @@ public sealed class WindowDefinition
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public WindowDefinition RowsBetween(FrameBoundary start, FrameBoundary end)
     { Owner.Clause(11, N(1, 3), U(2, Token), N(6, (uint)start), N(7, (uint)end)); return this; }
 }

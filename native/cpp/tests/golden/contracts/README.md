@@ -1,7 +1,7 @@
 # Managed contract reference bytes
 
 These ten immutable fixtures were emitted by the accepted C# Data.Abstractions
-consumer at NativeWeave commit `465cd0f90e6af05ec50eb581156240377cf0825b`.
+consumer at Korda commit `465cd0f90e6af05ec50eb581156240377cf0825b`.
 The C# generator and public metadata/wire contracts were unchanged for DB-CPP-01.
 `contracts_tests.cpp` ports the original Rust `interfaces/src/bin/verify-fixtures.rs`
 assertions, including independent native scalar construction and 43 corruptions.
@@ -9,7 +9,7 @@ assertions, including independent native scalar construction and 43 corruptions.
 Generate fresh evidence outside this reference directory:
 
 ```sh
-dotnet run --project tests/Data.Abstractions/NativeWeave.Data.Tests.csproj \
+dotnet run --project tests/Data.Abstractions/Korda.Data.Tests.csproj \
   -c Release -- /absolute/path/to/fresh-managed-fixtures
 /path/to/contracts_tests /absolute/path/to/fresh-managed-fixtures
 ```

@@ -57,7 +57,7 @@ def main():
     result = {"schemaVersion": 1, "task": TASK, "passed": False, "image": RUNTIME_IMAGE,
               "source_commit": manifest["source_commit"], "packages": manifest["packages"],
               "manifestSha256": sha(bundle / "manifest.json"), "toolAbsence": absence, "cases": []}
-    work = Path(tempfile.mkdtemp(prefix="nativeweave-b24-runtime-"))
+    work = Path(tempfile.mkdtemp(prefix="korda-b24-runtime-"))
     try:
         for graph, row in manifest["graphs"].items():
             if row.get("providers") != PROVIDERS[graph]:

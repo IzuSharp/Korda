@@ -2,8 +2,8 @@
 
 > **DB-CPP-01 implementation update.** The public C# examples, signatures and ownership contracts in this guide remain the compatibility inputs. The current maintained native implementation is C++20; its module mapping, direct libpq/sqlite3 execution, Clang/CMake commands and package production are documented in [C++ native implementation](cpp-native.md). Descriptions below of Rust, SQLx, SeaQuery or Tokio internals are retained as the fixed `465cd0f` behavioral reference, not current build dependencies. The named verification entry points now build the ported C++ fixtures and retain their original managed assertions.
 
-`NativeWeave.Query` is the application query surface in the
-`NativeWeave.Database` package. A C# call creates or changes a real Rust
+`Korda.Query` is the application query surface in the
+`Korda.Database` package. A C# call creates or changes a real Rust
 SeaQuery owner immediately. C# retains typed columns, codecs and owner tokens;
 it does not collect a SQL AST, compile expression trees or execute a managed
 LINQ database engine. Ordinary entity and DTO changes use the same precompiled
@@ -11,10 +11,10 @@ provider module.
 
 ## Install, describe a model, execute
 
-Reference `NativeWeave.Database` and `NativeWeave.Database.Sqlite` or
-`NativeWeave.Database.PostgreSql`. Import `NativeWeave.Data`,
-`NativeWeave.Database`, the selected provider namespace and
-`NativeWeave.Query`. Use either explicit `TableBuilder<TEntity>` metadata or
+Reference `Korda.Database` and `Korda.Database.Sqlite` or
+`Korda.Database.PostgreSql`. Import `Korda.Data`,
+`Korda.Database`, the selected provider namespace and
+`Korda.Query`. Use either explicit `TableBuilder<TEntity>` metadata or
 B10's optional generated descriptor; both produce the same typed table/column
 and static row contracts.
 

@@ -1,8 +1,8 @@
-using NativeWeave.Data;
-using NativeWeave.Interop.Abi;
-using NativeWeave.Query.Internal;
+using Korda.Data;
+using Korda.Interop.Abi;
+using Korda.Query.Internal;
 
-namespace NativeWeave.Database;
+namespace Korda.Database;
 
 internal sealed class HostTransactionTransport : ITransactionTransport
 {
@@ -43,7 +43,7 @@ internal sealed class HostTransactionTransport : ITransactionTransport
     {
         try { await _source.Start(() => FinishCreate(_owner, action), ReadSnapshot, token).ConfigureAwait(false); }
         catch (CommitOutcomeUnknownException failure) { throw new CommitOutcomeUnknownException(failure.Message, _recoveryKey, failure.ProviderCode, failure.CorrelationId); }
-        catch (DatabaseException failure) when (action == 1) { throw new DatabaseCleanupException("The native rollback was not confirmed.", Snapshot.Cleanup) { Data = { ["NativeWeave.Database.Primary.v1"] = failure } }; }
+        catch (DatabaseException failure) when (action == 1) { throw new DatabaseCleanupException("The native rollback was not confirmed.", Snapshot.Cleanup) { Data = { ["Korda.Database.Primary.v1"] = failure } }; }
         finally { lock (_gate) if (!_owner.IsClosed) _last = NativeHost.Snapshot(_owner); }
     }
     private TransactionSnapshot ReadSnapshot(nint operation)

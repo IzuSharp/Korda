@@ -42,7 +42,7 @@ def run(root, evidence, old_dll, new_dll, native_old, native_new, old_api, new_a
     source = ROOT / "native/cpp/tests/fixtures/compatibility.cpp"
     source_files = [source, ROOT / "native/cpp/include/nw/interop.hpp", ROOT / "native/cpp/src/interop.cpp",
                     ROOT / "native/cpp/include/nw/contracts.hpp", ROOT / "native/cpp/src/contracts.cpp",
-                    ROOT / "native/interop/abi/include/nativeweave_abi_v1.h", ROOT / "native/dependencies.lock.json",
+                    ROOT / "native/interop/abi/include/korda_abi_v1.h", ROOT / "native/dependencies.lock.json",
                     ROOT / "CMakeLists.txt", ROOT / "native/cpp/tests/CMakeLists.txt",
                     ROOT / "samples/api/verification-compatibility/Program.cs",
                     ROOT / "samples/api/verification-compatibility/CompatibilitySample.csproj",
@@ -54,13 +54,13 @@ def run(root, evidence, old_dll, new_dll, native_old, native_new, old_api, new_a
     new_receipt = write(policy_dir / "new-behavior.json", {"passed": True, "native_sha256": compat.file_hash(native_new),
         "managed_sha256": compat.file_hash(new_dll), "matrix_receipt": record(evidence / "matrix.json", root)})
     old = {
-        "schema_version": 2, "native_lock_format": "nativeweave-cpp-dependencies-v1", "component": "unpublished-a02-a22-conformance", "version": "0.1.0", "rid": "linux-x64",
+        "schema_version": 2, "native_lock_format": "korda-cpp-dependencies-v1", "component": "unpublished-a02-a22-conformance", "version": "0.1.0", "rid": "linux-x64",
         "source_commit": behavior["source_commit"], "available_utc": "2026-01-01T00:00:00Z",
         "artifacts": {"managed": record(old_dll, root), "native": record(native_old, root), "api": record(old_api, root),
-            "api_assembly": record(old_dll.parent / "NativeWeave.Core.dll", root),
+            "api_assembly": record(old_dll.parent / "Korda.Core.dll", root),
             "native_lock": record(ROOT / "native/dependencies.lock.json", root), "source_inventory": record(inventory, root),
             "behavior_receipt": record(old_receipt, root)},
-        "abi": {"major": 1, "minor": 0, "layout_sha256": compat.file_hash(ROOT / "native/interop/abi/include/nativeweave_abi_v1.h"),
+        "abi": {"major": 1, "minor": 0, "layout_sha256": compat.file_hash(ROOT / "native/interop/abi/include/korda_abi_v1.h"),
                 "capabilities": {"compat.base.v1": 0}, "required": ["compat.base.v1"]},
         "domain": {"schema": 1, "semantics": "wrapping-add-seven-v1", "errors": "a05-v1", "cancellation": "not-async"},
         "upstream": {"commit": behavior["source_commit"], "public_seams": {"write_abi": record(ROOT / "native/cpp/include/nw/interop.hpp", root)},
@@ -70,7 +70,7 @@ def run(root, evidence, old_dll, new_dll, native_old, native_new, old_api, new_a
     new.update(version="0.2.0")
     new["abi"].update(minor=1, capabilities={"compat.base.v1": 0, "compat.optional.v1": 1})
     new["artifacts"].update(managed=record(new_dll, root), native=record(native_new, root), api=record(new_api, root),
-                             behavior_receipt=record(new_receipt, root), api_assembly=record(new_dll.parent / "NativeWeave.Core.dll", root))
+                             behavior_receipt=record(new_receipt, root), api_assembly=record(new_dll.parent / "Korda.Core.dll", root))
     previous_path, candidate_path = policy_dir / "previous.json", policy_dir / "candidate.json"
     review_path = policy_dir / "controlled-review.json"
     write(previous_path, old)

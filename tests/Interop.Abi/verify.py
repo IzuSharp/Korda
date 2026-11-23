@@ -139,7 +139,7 @@ def main():
         compare_layout(json.loads(run("cpp-layout", [CPP_BINARIES / "nw_abi_layout_cpp"])), expected)
         run("c-signatures", [CPP_BINARIES / "nw_abi_bootstrap_c"])
         mutation_results = []
-        header = (ROOT / "native/interop/abi/include/nativeweave_abi_v1.h").read_text()
+        header = (ROOT / "native/interop/abi/include/korda_abi_v1.h").read_text()
         mutations = {
             "offset": header.replace("uint32_t abi_major;\n    uint32_t abi_minor;", "uint32_t abi_minor;\n    uint32_t abi_major;"),
             "width": header.replace("uint64_t length;", "uint32_t length;")}
@@ -148,7 +148,7 @@ def main():
                 raise ValueError("Mutation did not change the declaration")
             location = out / f"mutation-{label}"
             location.mkdir()
-            (location / "nativeweave_abi_v1.h").write_text(changed)
+            (location / "korda_abi_v1.h").write_text(changed)
             run(f"mutation-{label}-build", ["clang", "-std=c17", "-Wall", "-Wextra", "-Werror", "-I", location, "tests/Interop.Abi/native/layout.c", "-o", location / "layout"])
             actual = json.loads(run(f"mutation-{label}-layout", [location / "layout"]))
             try:
@@ -165,20 +165,20 @@ def main():
         for name, path in [("tests", project), ("sample", sample)]:
             run(f"{name}-restore", ["dotnet", "restore", path, "--locked-mode", prop, *restore_options])
             run(f"{name}-build", ["dotnet", "build", path, "-c", "Release", "--no-restore", prop])
-        testdll = ROOT / "tests/Interop.Abi/bin/Release/net11.0/NativeWeave.Interop.Abi.Tests.dll"
-        sampledll = ROOT / "samples/api/interop-abi/bin/Release/net11.0/NativeWeave.Interop.Abi.Sample.dll"
-        assembly = ROOT / "src/Interop.Abi/bin/Release/net11.0/NativeWeave.Interop.Abi.dll"
+        testdll = ROOT / "tests/Interop.Abi/bin/Release/net11.0/Korda.Interop.Abi.Tests.dll"
+        sampledll = ROOT / "samples/api/interop-abi/bin/Release/net11.0/Korda.Interop.Abi.Sample.dll"
+        assembly = ROOT / "src/Interop.Abi/bin/Release/net11.0/Korda.Interop.Abi.dll"
         surface = json.loads(run("managed-api-surface", ["dotnet", testdll, "--surface", assembly]))
         xml = assembly.with_suffix(".xml")
         xml_members = list(ET.parse(xml).getroot().find("members"))
         if not xml_members or any(member.find("summary") is None for member in xml_members):
             raise ValueError("Internal boundary XML documentation is missing")
-        reference = "# Generated ABI assembly API reference\n\nAssembly: `NativeWeave.Interop.Abi`.\n\nCompiled public types: **0**. Compiled public members: **0**.\n\nThis component exposes no application API. Its fixed wire records, status constants and validation are internal.\nApplication metadata/preflight types remain owned by A02/A24. The C ABI inventory is generated from `native/interop/abi/abi-v1.json`.\n"
+        reference = "# Generated ABI assembly API reference\n\nAssembly: `Korda.Interop.Abi`.\n\nCompiled public types: **0**. Compiled public members: **0**.\n\nThis component exposes no application API. Its fixed wire records, status constants and validation are internal.\nApplication metadata/preflight types remain owned by A02/A24. The C ABI inventory is generated from `native/interop/abi/abi-v1.json`.\n"
         (ROOT / "src/Interop.Abi/api-reference.md").write_text(reference)
         (out / "api-surface.json").write_text(json.dumps({**surface, "internal_xml_members": len(xml_members), "reference_sha256": digest(ROOT / "src/Interop.Abi/api-reference.md")}, indent=2) + "\n")
         artifacts = [library, CPP_BINARIES / "nw_abi_layout_c", CPP_BINARIES / "nw_abi_layout_cpp", assembly, xml, testdll, sampledll]
         if not args.skip_aot:
-            for name, path, executable in [("tests", project, "NativeWeave.Interop.Abi.Tests"), ("sample", sample, "NativeWeave.Interop.Abi.Sample")]:
+            for name, path, executable in [("tests", project, "Korda.Interop.Abi.Tests"), ("sample", sample, "Korda.Interop.Abi.Sample")]:
                 destination = out / f"aot-{name}"
                 run(f"{name}-aot-restore", ["dotnet", "restore", path, "-r", "linux-x64", "-p:PublishAot=true", "--locked-mode", prop, *restore_options])
                 if name == "tests":

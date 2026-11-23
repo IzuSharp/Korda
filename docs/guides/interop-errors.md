@@ -4,7 +4,7 @@
 
 A05 implements the fixed D08 error boundary and its exact managed diagnostics.
 The canonical wire status and 24-byte error record are imported from A01, not
-redeclared. The error and negotiation sources compose into one `NativeWeave.Core`
+redeclared. The error and negotiation sources compose into one `Korda.Core`
 assembly. This component starts no executor, database pool or server.
 
 ## Application use

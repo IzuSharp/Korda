@@ -1,8 +1,8 @@
 using System.Runtime.CompilerServices;
-using NativeWeave.Data;
-using NativeWeave.Database;
+using Korda.Data;
+using Korda.Database;
 
-namespace NativeWeave.Verification.EndToEnd;
+namespace Korda.Verification.EndToEnd;
 
 internal static partial class Probe
 {
@@ -60,7 +60,7 @@ internal static partial class Probe
         await session.InsertAsync(Relations.Parents, new Parent(7, 1));
         foreach (var child in new[] { new Child(1, 7, 1), new Child(2, null, null), new Child(3, 7, null), new Child(4, null, 1) })
             await session.InsertAsync(Relations.Children, child);
-        // These assertions were previously hidden inside a NativeWeave HTTP handler.
+        // These assertions were previously hidden inside a Korda HTTP handler.
         // The same typed business query now executes directly in this ordinary C# consumer.
         var related = await session.LoadRelatedAsync(Relations.Parents.Key(Relations.Tenant, 7L).And(Relations.Id, 1L), Relations.Optional);
         using (var query = session.From(Relations.Children))

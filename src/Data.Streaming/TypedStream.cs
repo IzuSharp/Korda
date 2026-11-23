@@ -1,6 +1,6 @@
-using NativeWeave.Data;
+using Korda.Data;
 
-namespace NativeWeave.Database.Internal;
+namespace Korda.Database.Internal;
 
 /// <summary>One-shot typed stream adapter used by the Database host and query terminal owners.</summary>
 /// <remarks>Creation validates and freezes the projection identity without dispatch. The factory captures an
@@ -181,7 +181,7 @@ internal sealed class TypedStream<T> : IAsyncEnumerable<T>
             {
                 _finished = true;
                 try { await CleanupAsync().ConfigureAwait(false); }
-                catch (Exception cleanup) { original.Data["NativeWeave.Database.StreamCleanup.v1"] = cleanup; }
+                catch (Exception cleanup) { original.Data["Korda.Database.StreamCleanup.v1"] = cleanup; }
                 throw;
             }
             finally

@@ -2,7 +2,7 @@
  * Compile the unmodified normative database header as C17 and call the real
  * C++ module. C++ definitions also compile against its private declaration view.
  */
-#include "../../database/binding/nativeweave_database_binding_v1.h"
+#include "../../database/binding/korda_database_binding_v1.h"
 #include <assert.h>
 #include <stdint.h>
 

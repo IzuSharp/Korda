@@ -2,7 +2,7 @@ using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text.Json;
-using NativeWeave.Database.PostgreSql;
+using Korda.Database.PostgreSql;
 
 if (args.Contains("--require-aot") && RuntimeFeature.IsDynamicCodeSupported) throw new InvalidOperationException("Actual Native AOT required.");
 int assertions = 0;
@@ -10,7 +10,7 @@ void Check(bool value) { assertions++; if (!value) throw new InvalidOperationExc
 void Reject(Action action) { assertions++; try { action(); } catch (ArgumentException) { return; } throw new InvalidOperationException("Invalid option accepted."); }
 var defaults = new PostgreSqlOptions();
 Check(defaults.TlsMode == PostgreSqlTlsMode.VerifyFull);
-Check(defaults.RootCertificatePath is null && defaults.ApplicationName == "NativeWeave" && defaults.ConnectTimeout == TimeSpan.FromSeconds(15));
+Check(defaults.RootCertificatePath is null && defaults.ApplicationName == "Korda" && defaults.ConnectTimeout == TimeSpan.FromSeconds(15));
 var snapshot = PostgreSqlConfiguration.Snapshot(defaults);
 Check(BinaryPrimitives.ReadUInt16LittleEndian(snapshot.Record.Span[2..]) == 8);
 Check(BinaryPrimitives.ReadUInt32LittleEndian(snapshot.Record.Span[8..]) == 3);
@@ -23,7 +23,7 @@ Reject(() => PostgreSqlConfiguration.Snapshot(new() { ApplicationName = new stri
 Reject(() => PostgreSqlConfiguration.Snapshot(new() { RootCertificatePath = "relative.pem" }));
 Reject(() => PostgreSqlConfiguration.Snapshot(new() { ConnectTimeout = TimeSpan.Zero }));
 Reject(() => PostgreSqlConfiguration.Snapshot(new() { ConnectTimeout = TimeSpan.MaxValue }));
-var options = new PostgreSqlOptions { RootCertificatePath = Environment.GetEnvironmentVariable("NW_PG_ROOT")!, ApplicationName = "NativeWeave.B02.Consumer", ConnectTimeout = TimeSpan.FromSeconds(2) };
+var options = new PostgreSqlOptions { RootCertificatePath = Environment.GetEnvironmentVariable("NW_PG_ROOT")!, ApplicationName = "Korda.B02.Consumer", ConnectTimeout = TimeSpan.FromSeconds(2) };
 byte[] record = PostgreSqlConfiguration.Snapshot(options).Record.ToArray();
 unsafe
 {
@@ -44,10 +44,10 @@ Console.WriteLine($"PASS managed B02 assertions={assertions}; dynamicCodeSupport
 
 internal static partial class Native
 {
-    [LibraryImport("nativeweave_postgres_fixture", EntryPoint = "nw_postgres_fixture_run_v1")]
+    [LibraryImport("korda_postgres_fixture", EntryPoint = "nw_postgres_fixture_run_v1")]
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
     internal static partial uint Run();
-    [LibraryImport("nativeweave_postgres_fixture", EntryPoint = "nw_postgres_fixture_options_v1")]
+    [LibraryImport("korda_postgres_fixture", EntryPoint = "nw_postgres_fixture_options_v1")]
     [UnmanagedCallConv(CallConvs = new[] { typeof(CallConvCdecl) })]
     internal static unsafe partial uint Options(byte* record, uint length);
 }

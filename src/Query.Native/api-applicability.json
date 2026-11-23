@@ -2,7 +2,7 @@
   "task": "B11",
   "design_commit": "c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9",
   "public_clr_surface": [],
-  "reason": "B11 owns native SeaQuery implementation. B09 already owns the exact internal generated Cdecl adapter and owner/token transport. B13 owns the public Fluent surface in NativeWeave.Database. Reusing the existing internal adapter introduces no duplicate public type or assembly.",
+  "reason": "B11 owns native SeaQuery implementation. B09 already owns the exact internal generated Cdecl adapter and owner/token transport. B13 owns the public Fluent surface in Korda.Database. Reusing the existing internal adapter introduces no duplicate public type or assembly.",
   "managed_adapter": "src/Query.Binding/QueryBinding.cs",
   "metadata_adapter": "src/Query.Binding/MetadataBindings.cs",
   "native_implementation": "native/database/query",

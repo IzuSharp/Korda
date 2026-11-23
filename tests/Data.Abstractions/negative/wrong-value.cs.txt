@@ -1,4 +1,4 @@
-using NativeWeave.Data;
+using Korda.Data;
 var builder = new TableBuilder<Entity>("Entity");
 var column = builder.Column("Value", Codecs.Int64);
 new Changes<Entity>().Set(column, "wrong");

@@ -1,4 +1,4 @@
-#include "../../native/database/binding/nativeweave_database_binding_v1.h"
+#include "../../native/database/binding/korda_database_binding_v1.h"
 _Static_assert(sizeof(nw_db_token) == 8, "query token is u64, not a pointer");
 _Static_assert(sizeof(nw_db_ref) == sizeof(void*), "opaque owner pointer");
 _Static_assert(sizeof(nw_bytes_view_v1) == 16, "canonical A01 byte view on Linux x64");

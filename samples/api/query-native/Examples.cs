@@ -1,5 +1,5 @@
-using NativeWeave.Data;
-using NativeWeave.Query.Internal;
+using Korda.Data;
+using Korda.Query.Internal;
 
 // Compiled maintainer example of B11's internal integration seam. B13 supplies the
 // application Fluent surface; applications never expose these owners or ABI calls.

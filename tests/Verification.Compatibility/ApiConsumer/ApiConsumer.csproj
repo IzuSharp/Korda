@@ -2,10 +2,10 @@
   <PropertyGroup>
     <NuGetLockFilePath Condition="'$(PublishAot)' == 'true'">$(MSBuildProjectDirectory)/packages.linux-x64.aot.lock.json</NuGetLockFilePath>
     <OutputType>Exe</OutputType>
-    <AssemblyName>NativeWeave.Compatibility.ApiConsumer</AssemblyName>
+    <AssemblyName>Korda.Compatibility.ApiConsumer</AssemblyName>
     <DefineConstants>$(DefineConstants);$(ConsumerGeneration)</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="NativeWeave.Compatibility.ApiFixture" HintPath="$(FixtureAssembly)" />
+    <Reference Include="Korda.Compatibility.ApiFixture" HintPath="$(FixtureAssembly)" />
   </ItemGroup>
 </Project>

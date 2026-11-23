@@ -26,7 +26,7 @@ def save(path, value):
 
 
 class Database:
-    """Independent CPython SQLite / PostgreSQL command-line SQL, outside NativeWeave."""
+    """Independent CPython SQLite / PostgreSQL command-line SQL, outside Korda."""
     def __init__(self, provider, database, psql='psql'):
         self.provider, self.database, self.psql = provider, database, psql
 

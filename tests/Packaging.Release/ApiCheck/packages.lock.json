@@ -2,7 +2,7 @@
   "version": 1,
   "dependencies": {
     "net11.0": {
-      "nativeweave.packaging.tasks": {
+      "korda.packaging.tasks": {
         "type": "Project"
       }
     }

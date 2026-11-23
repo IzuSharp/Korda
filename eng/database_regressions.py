@@ -14,11 +14,11 @@ FLAGS = ["-m:1", "-nr:false", "-p:UseSharedCompilation=false"]
 
 
 SUITES = [
-    ("Data.NativeHost", "NativeWeave.Data.NativeHost.Tests", []),
-    ("Data.Migrations", "NativeWeave.Data.Migrations.Tests", []),
-    ("Data.Materialization", "NativeWeave.Data.Materialization.Tests", ["results"]),
-    ("Query.Fluent", "NativeWeave.Query.Fluent.Tests", ["results"]),
-    ("Orm.Relations", "NativeWeave.Orm.Relations.Tests", []),
+    ("Data.NativeHost", "Korda.Data.NativeHost.Tests", []),
+    ("Data.Migrations", "Korda.Data.Migrations.Tests", []),
+    ("Data.Materialization", "Korda.Data.Materialization.Tests", ["results"]),
+    ("Query.Fluent", "Korda.Query.Fluent.Tests", ["results"]),
+    ("Orm.Relations", "Korda.Orm.Relations.Tests", []),
 ]
 
 
@@ -71,7 +71,7 @@ def main():
     if not os.environ.get("NW_TEST_POSTGRES"):
         raise RuntimeError("NW_TEST_POSTGRES is required")
     env = os.environ.copy()
-    env["NATIVEWEAVE_TEST_POSTGRES_URL"] = env["NW_TEST_POSTGRES"]
+    env["KORDA_TEST_POSTGRES_URL"] = env["NW_TEST_POSTGRES"]
     env.update(DOTNET_CLI_USE_MSBUILD_SERVER="0", MSBUILDDISABLENODEREUSE="1")
     records = []
     initial = build.source()
@@ -145,7 +145,7 @@ def main():
     # The internal cross-provider query oracle uses a maintainer-only combined Host.
     # Its binary is never added to either provider package.
     component("Query.Native", "--design", design, "--postgres-bin", pg, "--host-source", ROOT,
-              "--native-build", native_build, "--native-module", native_build / "libnativeweave_database_host.so")
+              "--native-build", native_build, "--native-module", native_build / "libkorda_database_host.so")
 
     # Execute the actual published test applications against isolated databases.
     managed_suites(None, output, pg, run, run_isolated)

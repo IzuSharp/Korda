@@ -233,7 +233,7 @@ std::string column(std::uint32_t id, std::string_view name, std::uint32_t codec,
 }
 std::shared_ptr<Model> model(bool parent)
 {
-    const auto logical = "NativeWeave.B14.Adapter:" + std::string(parent ? "Parent" : "Child");
+    const auto logical = "Korda.B14.Adapter:" + std::string(parent ? "Parent" : "Child");
     const auto table = "b14_adapter_" + std::string(parent ? "parent" : "child");
     std::vector<std::pair<std::uint32_t, std::string>> columns;
     std::string projection;

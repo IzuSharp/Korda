@@ -26,17 +26,17 @@ class DatabasePayloadTests(unittest.TestCase):
 
     def package(self, directory, *, dependency="", extra=None):
         path = directory / "fixture.nupkg"
-        metadata = ('<package><metadata><id>NativeWeave.Data</id><version>1.0.0-test</version>'
+        metadata = ('<package><metadata><id>Korda.Data</id><version>1.0.0-test</version>'
                     + dependency + '</metadata></package>')
         with zipfile.ZipFile(path, "w") as archive:
-            archive.writestr("NativeWeave.Data.nuspec", metadata)
-            archive.writestr("lib/net11.0/NativeWeave.Data.dll", b"unexecuted scope fixture")
+            archive.writestr("Korda.Data.nuspec", metadata)
+            archive.writestr("lib/net11.0/Korda.Data.dll", b"unexecuted scope fixture")
             if extra:
                 archive.writestr(extra, b"unexecuted unwanted asset")
         return path
 
     def test_external_protocol_dependency_is_rejected(self):
-        expected = {"id": "NativeWeave.Data", "dependencies": {}}
+        expected = {"id": "Korda.Data", "dependencies": {}}
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             valid = self.package(root)
@@ -46,9 +46,9 @@ class DatabasePayloadTests(unittest.TestCase):
                 validate_database_payload(invalid, expected)
 
     def test_undeclared_native_and_managed_runtime_files_are_rejected(self):
-        expected = {"id": "NativeWeave.Data", "dependencies": {}}
+        expected = {"id": "Korda.Data", "dependencies": {}}
         with tempfile.TemporaryDirectory() as temporary:
-            for name in ("runtimes/linux-x64/native/libnativeweave_server.so", "lib/net11.0/NativeWeave.Server.dll"):
+            for name in ("runtimes/linux-x64/native/libkorda_server.so", "lib/net11.0/Korda.Server.dll"):
                 with self.subTest(name=name):
                     invalid = self.package(Path(temporary), extra=name)
                     with self.assertRaisesRegex(ValueError, "undeclared"):
@@ -69,11 +69,11 @@ class ReleaseResultTests(unittest.TestCase):
         for closure in ("previous", "candidate"):
             directory = self.root / closure
             directory.mkdir()
-            item = {"id": "NativeWeave.Fixture.Native", "version": "1.0.0-" + closure, "native": True}
+            item = {"id": "Korda.Fixture.Native", "version": "1.0.0-" + closure, "native": True}
             # Uninterpreted fixture bytes, not a built or valid NuGet package.
             (directory / f"{item['id']}.{item['version']}.nupkg").write_bytes(closure.encode())
             record = {"source_commit": self.manifest["sourceCommit"], "rid": "linux-x64", "packages": [item],
-                      "builder_identity": "nativeweave-local-reviewed-staging"}
+                      "builder_identity": "korda-local-reviewed-staging"}
             self.records[closure] = record
             CASES.save(directory / "record.json", record)
             self.manifest[closure] = {"releaseRecord": closure + "/record.json", "feed": closure}

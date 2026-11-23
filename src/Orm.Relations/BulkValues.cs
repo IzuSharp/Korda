@@ -1,6 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 
-namespace NativeWeave.Database;
+namespace Korda.Database;
 
 /// <summary>Selects whole-operation atomicity or explicitly independent committed batches.</summary>
 public enum BulkAtomicity
@@ -41,7 +41,7 @@ public sealed record BulkProgress(long RowsAffectedInCompletedBatches, int Compl
 /// recursive error traversal or inference from cancellation. The returned snapshot can outlive all native owners.</remarks>
 public static class BulkFailure
 {
-    internal const string Key = "NativeWeave.Database.BulkProgress.v1";
+    internal const string Key = "Korda.Database.BulkProgress.v1";
     /// <summary>Reads only the exact bulk-progress entry on the supplied exception.</summary>
     /// <param name="exception">The original exception to inspect; inner exceptions are not traversed.</param>
     /// <param name="progress">The immutable progress when present, otherwise null.</param>

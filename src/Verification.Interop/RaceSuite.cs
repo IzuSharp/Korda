@@ -1,12 +1,12 @@
 using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
-using NativeWeave.Interop;
-using NativeWeave.Interop.Abi;
-using NativeWeave.Interop.Async;
-using NativeWeave.Interop.Callbacks;
-using NativeWeave.Interop.Lifetime;
+using Korda.Interop;
+using Korda.Interop.Abi;
+using Korda.Interop.Async;
+using Korda.Interop.Callbacks;
+using Korda.Interop.Lifetime;
 
-namespace NativeWeave.Verification.Interop;
+namespace Korda.Verification.Interop;
 
 /// <summary>Concrete refinements of bounded D04-D09 schedules using real gates, native leases and reverse callbacks.</summary>
 internal static class RaceSuite

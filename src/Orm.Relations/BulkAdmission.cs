@@ -1,6 +1,6 @@
-using NativeWeave.Data;
+using Korda.Data;
 
-namespace NativeWeave.Database;
+namespace Korda.Database;
 
 public sealed partial class DataSession
 {

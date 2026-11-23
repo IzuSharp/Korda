@@ -1,61 +1,61 @@
-# NativeWeave.Database migration API
+# Korda.Database migration API
 
 Generated from the compiled product assembly and XML by `src/Build.Integration/ApiReference`.
 
 Compiled product API compared to Design commit c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9. B08 owns explicit migration and catalog administration; docs/guides/data-migrations.md describes limits and provider semantics.
 
-## `F:NativeWeave.Database.BulkAtomicity.All`
+## `F:Korda.Database.BulkAtomicity.All`
 
 ```csharp
-NativeWeave.Database.BulkAtomicity.All = 0
+Korda.Database.BulkAtomicity.All = 0
 ```
 
 **summary:** Owns a transaction, or an internal savepoint inside the caller's transaction.
 
-## `F:NativeWeave.Database.BulkAtomicity.PerBatch`
+## `F:Korda.Database.BulkAtomicity.PerBatch`
 
 ```csharp
-NativeWeave.Database.BulkAtomicity.PerBatch = 1
+Korda.Database.BulkAtomicity.PerBatch = 1
 ```
 
 **summary:** Commits each complete batch independently; rejected inside a caller transaction.
 
-## `F:NativeWeave.Database.DatabaseProvider.PostgreSql`
+## `F:Korda.Database.DatabaseProvider.PostgreSql`
 
 ```csharp
-NativeWeave.Database.DatabaseProvider.PostgreSql = 0
+Korda.Database.DatabaseProvider.PostgreSql = 0
 ```
 
 **summary:** The libpq PostgreSQL provider.
 
-## `F:NativeWeave.Database.DatabaseProvider.Sqlite`
+## `F:Korda.Database.DatabaseProvider.Sqlite`
 
 ```csharp
-NativeWeave.Database.DatabaseProvider.Sqlite = 1
+Korda.Database.DatabaseProvider.Sqlite = 1
 ```
 
 **summary:** The serialized sqlite3 provider.
 
-## `F:NativeWeave.Database.MigrationTransactionMode.NonTransactional`
+## `F:Korda.Database.MigrationTransactionMode.NonTransactional`
 
 ```csharp
-NativeWeave.Database.MigrationTransactionMode.NonTransactional = 1
+Korda.Database.MigrationTransactionMode.NonTransactional = 1
 ```
 
 **summary:** Requires PostgreSQL and an explicit opt-in; partial effects can remain after failure.
 
-## `F:NativeWeave.Database.MigrationTransactionMode.Transactional`
+## `F:Korda.Database.MigrationTransactionMode.Transactional`
 
 ```csharp
-NativeWeave.Database.MigrationTransactionMode.Transactional = 0
+Korda.Database.MigrationTransactionMode.Transactional = 0
 ```
 
 **summary:** Commits the script and its ledger atomically; SQLite also wraps the entire selected batch.
 
-## `F:NativeWeave.Query.FrameBoundary.CurrentRow`
+## `F:Korda.Query.FrameBoundary.CurrentRow`
 
 ```csharp
-NativeWeave.Query.FrameBoundary.CurrentRow = 1
+Korda.Query.FrameBoundary.CurrentRow = 1
 ```
 
 **summary:** Uses the native CurrentRow policy.
@@ -64,10 +64,10 @@ NativeWeave.Query.FrameBoundary.CurrentRow = 1
 
 **Inherited type policy:** Only these ROWS endpoints are supported. Reversed or unsupported bounds fail before native state publication; finite numeric PRECEDING/FOLLOWING frames are not declared.
 
-## `F:NativeWeave.Query.FrameBoundary.UnboundedFollowing`
+## `F:Korda.Query.FrameBoundary.UnboundedFollowing`
 
 ```csharp
-NativeWeave.Query.FrameBoundary.UnboundedFollowing = 2
+Korda.Query.FrameBoundary.UnboundedFollowing = 2
 ```
 
 **summary:** Uses the native UnboundedFollowing policy.
@@ -76,10 +76,10 @@ NativeWeave.Query.FrameBoundary.UnboundedFollowing = 2
 
 **Inherited type policy:** Only these ROWS endpoints are supported. Reversed or unsupported bounds fail before native state publication; finite numeric PRECEDING/FOLLOWING frames are not declared.
 
-## `F:NativeWeave.Query.FrameBoundary.UnboundedPreceding`
+## `F:Korda.Query.FrameBoundary.UnboundedPreceding`
 
 ```csharp
-NativeWeave.Query.FrameBoundary.UnboundedPreceding = 0
+Korda.Query.FrameBoundary.UnboundedPreceding = 0
 ```
 
 **summary:** Uses the native UnboundedPreceding policy.
@@ -88,10 +88,10 @@ NativeWeave.Query.FrameBoundary.UnboundedPreceding = 0
 
 **Inherited type policy:** Only these ROWS endpoints are supported. Reversed or unsupported bounds fail before native state publication; finite numeric PRECEDING/FOLLOWING frames are not declared.
 
-## `F:NativeWeave.Query.LockWait.NoWait`
+## `F:Korda.Query.LockWait.NoWait`
 
 ```csharp
-NativeWeave.Query.LockWait.NoWait = 1
+Korda.Query.LockWait.NoWait = 1
 ```
 
 **summary:** Uses the native NoWait policy.
@@ -100,10 +100,10 @@ NativeWeave.Query.LockWait.NoWait = 1
 
 **Inherited type policy:** Controls PostgreSQL row-lock conflicts within the same transaction and total query deadline; it does not enable transparent retries.
 
-## `F:NativeWeave.Query.LockWait.SkipLocked`
+## `F:Korda.Query.LockWait.SkipLocked`
 
 ```csharp
-NativeWeave.Query.LockWait.SkipLocked = 2
+Korda.Query.LockWait.SkipLocked = 2
 ```
 
 **summary:** Uses the native SkipLocked policy.
@@ -112,10 +112,10 @@ NativeWeave.Query.LockWait.SkipLocked = 2
 
 **Inherited type policy:** Controls PostgreSQL row-lock conflicts within the same transaction and total query deadline; it does not enable transparent retries.
 
-## `F:NativeWeave.Query.LockWait.Wait`
+## `F:Korda.Query.LockWait.Wait`
 
 ```csharp
-NativeWeave.Query.LockWait.Wait = 0
+Korda.Query.LockWait.Wait = 0
 ```
 
 **summary:** Uses the native Wait policy.
@@ -124,10 +124,10 @@ NativeWeave.Query.LockWait.Wait = 0
 
 **Inherited type policy:** Controls PostgreSQL row-lock conflicts within the same transaction and total query deadline; it does not enable transparent retries.
 
-## `F:NativeWeave.Query.NullOrder.First`
+## `F:Korda.Query.NullOrder.First`
 
 ```csharp
-NativeWeave.Query.NullOrder.First = 0
+Korda.Query.NullOrder.First = 0
 ```
 
 **summary:** Uses the native First policy.
@@ -136,10 +136,10 @@ NativeWeave.Query.NullOrder.First = 0
 
 **Inherited type policy:** Both providers render explicit SQL NULL placement. Ordering alone supplies no uniqueness or snapshot guarantee.
 
-## `F:NativeWeave.Query.NullOrder.Last`
+## `F:Korda.Query.NullOrder.Last`
 
 ```csharp
-NativeWeave.Query.NullOrder.Last = 1
+Korda.Query.NullOrder.Last = 1
 ```
 
 **summary:** Uses the native Last policy.
@@ -148,10 +148,10 @@ NativeWeave.Query.NullOrder.Last = 1
 
 **Inherited type policy:** Both providers render explicit SQL NULL placement. Ordering alone supplies no uniqueness or snapshot guarantee.
 
-## `F:NativeWeave.Query.RowLockMode.KeyShare`
+## `F:Korda.Query.RowLockMode.KeyShare`
 
 ```csharp
-NativeWeave.Query.RowLockMode.KeyShare = 3
+Korda.Query.RowLockMode.KeyShare = 3
 ```
 
 **summary:** Uses the native KeyShare policy.
@@ -160,10 +160,10 @@ NativeWeave.Query.RowLockMode.KeyShare = 3
 
 **Inherited type policy:** Available only on PostgreSQL with an explicit live transaction. SQLite rejects the operation before provider dispatch.
 
-## `F:NativeWeave.Query.RowLockMode.NoKeyUpdate`
+## `F:Korda.Query.RowLockMode.NoKeyUpdate`
 
 ```csharp
-NativeWeave.Query.RowLockMode.NoKeyUpdate = 2
+Korda.Query.RowLockMode.NoKeyUpdate = 2
 ```
 
 **summary:** Uses the native NoKeyUpdate policy.
@@ -172,10 +172,10 @@ NativeWeave.Query.RowLockMode.NoKeyUpdate = 2
 
 **Inherited type policy:** Available only on PostgreSQL with an explicit live transaction. SQLite rejects the operation before provider dispatch.
 
-## `F:NativeWeave.Query.RowLockMode.Share`
+## `F:Korda.Query.RowLockMode.Share`
 
 ```csharp
-NativeWeave.Query.RowLockMode.Share = 1
+Korda.Query.RowLockMode.Share = 1
 ```
 
 **summary:** Uses the native Share policy.
@@ -184,10 +184,10 @@ NativeWeave.Query.RowLockMode.Share = 1
 
 **Inherited type policy:** Available only on PostgreSQL with an explicit live transaction. SQLite rejects the operation before provider dispatch.
 
-## `F:NativeWeave.Query.RowLockMode.Update`
+## `F:Korda.Query.RowLockMode.Update`
 
 ```csharp
-NativeWeave.Query.RowLockMode.Update = 0
+Korda.Query.RowLockMode.Update = 0
 ```
 
 **summary:** Uses the native Update policy.
@@ -196,10 +196,10 @@ NativeWeave.Query.RowLockMode.Update = 0
 
 **Inherited type policy:** Available only on PostgreSQL with an explicit live transaction. SQLite rejects the operation before provider dispatch.
 
-## `F:NativeWeave.Query.SetOperation.Except`
+## `F:Korda.Query.SetOperation.Except`
 
 ```csharp
-NativeWeave.Query.SetOperation.Except = 3
+Korda.Query.SetOperation.Except = 3
 ```
 
 **summary:** Uses the native Except policy.
@@ -208,10 +208,10 @@ NativeWeave.Query.SetOperation.Except = 3
 
 **Inherited type policy:** Operands must have the same source, field order, aliases, codecs and nullability. The native engine snapshots the right operand; SQL duplicate and NULL semantics apply.
 
-## `F:NativeWeave.Query.SetOperation.Intersect`
+## `F:Korda.Query.SetOperation.Intersect`
 
 ```csharp
-NativeWeave.Query.SetOperation.Intersect = 2
+Korda.Query.SetOperation.Intersect = 2
 ```
 
 **summary:** Uses the native Intersect policy.
@@ -220,10 +220,10 @@ NativeWeave.Query.SetOperation.Intersect = 2
 
 **Inherited type policy:** Operands must have the same source, field order, aliases, codecs and nullability. The native engine snapshots the right operand; SQL duplicate and NULL semantics apply.
 
-## `F:NativeWeave.Query.SetOperation.Union`
+## `F:Korda.Query.SetOperation.Union`
 
 ```csharp
-NativeWeave.Query.SetOperation.Union = 0
+Korda.Query.SetOperation.Union = 0
 ```
 
 **summary:** Uses the native Union policy.
@@ -232,10 +232,10 @@ NativeWeave.Query.SetOperation.Union = 0
 
 **Inherited type policy:** Operands must have the same source, field order, aliases, codecs and nullability. The native engine snapshots the right operand; SQL duplicate and NULL semantics apply.
 
-## `F:NativeWeave.Query.SetOperation.UnionAll`
+## `F:Korda.Query.SetOperation.UnionAll`
 
 ```csharp
-NativeWeave.Query.SetOperation.UnionAll = 1
+Korda.Query.SetOperation.UnionAll = 1
 ```
 
 **summary:** Uses the native UnionAll policy.
@@ -244,10 +244,10 @@ NativeWeave.Query.SetOperation.UnionAll = 1
 
 **Inherited type policy:** Operands must have the same source, field order, aliases, codecs and nullability. The native engine snapshots the right operand; SQL duplicate and NULL semantics apply.
 
-## `F:NativeWeave.Query.SortDirection.Ascending`
+## `F:Korda.Query.SortDirection.Ascending`
 
 ```csharp
-NativeWeave.Query.SortDirection.Ascending = 0
+Korda.Query.SortDirection.Ascending = 0
 ```
 
 **summary:** Uses the native Ascending policy.
@@ -256,10 +256,10 @@ NativeWeave.Query.SortDirection.Ascending = 0
 
 **Inherited type policy:** The native query validates each enum value before mutation. Direction is explicit; it does not change SQL NULL ordering.
 
-## `F:NativeWeave.Query.SortDirection.Descending`
+## `F:Korda.Query.SortDirection.Descending`
 
 ```csharp
-NativeWeave.Query.SortDirection.Descending = 1
+Korda.Query.SortDirection.Descending = 1
 ```
 
 **summary:** Uses the native Descending policy.
@@ -268,18 +268,18 @@ NativeWeave.Query.SortDirection.Descending = 1
 
 **Inherited type policy:** The native query validates each enum value before mutation. Direction is explicit; it does not change SQL NULL ordering.
 
-## `M:NativeWeave.Database.BulkAtomicity.#ctor`
+## `M:Korda.Database.BulkAtomicity.#ctor`
 
 ```csharp
-public NativeWeave.Database.BulkAtomicity.BulkAtomicity()
+public Korda.Database.BulkAtomicity.BulkAtomicity()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
-## `M:NativeWeave.Database.BulkFailure.TryGetProgress(System.Exception,NativeWeave.Database.BulkProgress@)`
+## `M:Korda.Database.BulkFailure.TryGetProgress(System.Exception,Korda.Database.BulkProgress@)`
 
 ```csharp
-public static bool NativeWeave.Database.BulkFailure.TryGetProgress(System.Exception exception, [System.Diagnostics.CodeAnalysis.NotNullWhenAttribute(true)] out NativeWeave.Database.BulkProgress? progress)
+public static bool Korda.Database.BulkFailure.TryGetProgress(System.Exception exception, [System.Diagnostics.CodeAnalysis.NotNullWhenAttribute(true)] out Korda.Database.BulkProgress? progress)
 ```
 
 **summary:** Reads only the exact bulk-progress entry on the supplied exception.
@@ -294,90 +294,90 @@ public static bool NativeWeave.Database.BulkFailure.TryGetProgress(System.Except
 
 **Inherited type policy:** The helper reads one exact typed Exception.Data entry without native calls, allocation of a wrapper, recursive error traversal or inference from cancellation. The returned snapshot can outlive all native owners.
 
-## `M:NativeWeave.Database.BulkOptions.#ctor`
+## `M:Korda.Database.BulkOptions.#ctor`
 
 ```csharp
-public NativeWeave.Database.BulkOptions.BulkOptions()
+public Korda.Database.BulkOptions.BulkOptions()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This managed configuration owns no native resource. A bulk operation reads its immutable values at admission, then lowers the requested row count to source byte, node and parameter limits.
 
-## `M:NativeWeave.Database.BulkOptions.Equals(NativeWeave.Database.BulkOptions)`
+## `M:Korda.Database.BulkOptions.Equals(Korda.Database.BulkOptions)`
 
 ```csharp
-public bool NativeWeave.Database.BulkOptions.Equals(NativeWeave.Database.BulkOptions? other)
+public bool Korda.Database.BulkOptions.Equals(Korda.Database.BulkOptions? other)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This managed configuration owns no native resource. A bulk operation reads its immutable values at admission, then lowers the requested row count to source byte, node and parameter limits.
 
-## `M:NativeWeave.Database.BulkOptions.Equals(System.Object)`
+## `M:Korda.Database.BulkOptions.Equals(System.Object)`
 
 ```csharp
-public override bool NativeWeave.Database.BulkOptions.Equals(object? obj)
+public override bool Korda.Database.BulkOptions.Equals(object? obj)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This managed configuration owns no native resource. A bulk operation reads its immutable values at admission, then lowers the requested row count to source byte, node and parameter limits.
 
-## `M:NativeWeave.Database.BulkOptions.GetHashCode`
+## `M:Korda.Database.BulkOptions.GetHashCode`
 
 ```csharp
-public override int NativeWeave.Database.BulkOptions.GetHashCode()
+public override int Korda.Database.BulkOptions.GetHashCode()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This managed configuration owns no native resource. A bulk operation reads its immutable values at admission, then lowers the requested row count to source byte, node and parameter limits.
 
-## `M:NativeWeave.Database.BulkOptions.ToString`
+## `M:Korda.Database.BulkOptions.ToString`
 
 ```csharp
-public override string NativeWeave.Database.BulkOptions.ToString()
+public override string Korda.Database.BulkOptions.ToString()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This managed configuration owns no native resource. A bulk operation reads its immutable values at admission, then lowers the requested row count to source byte, node and parameter limits.
 
-## `M:NativeWeave.Database.BulkOptions.op_Equality(NativeWeave.Database.BulkOptions,NativeWeave.Database.BulkOptions)`
+## `M:Korda.Database.BulkOptions.op_Equality(Korda.Database.BulkOptions,Korda.Database.BulkOptions)`
 
 ```csharp
-public static bool NativeWeave.Database.BulkOptions.operator ==(NativeWeave.Database.BulkOptions? left, NativeWeave.Database.BulkOptions? right)
+public static bool Korda.Database.BulkOptions.operator ==(Korda.Database.BulkOptions? left, Korda.Database.BulkOptions? right)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This managed configuration owns no native resource. A bulk operation reads its immutable values at admission, then lowers the requested row count to source byte, node and parameter limits.
 
-## `M:NativeWeave.Database.BulkOptions.op_Inequality(NativeWeave.Database.BulkOptions,NativeWeave.Database.BulkOptions)`
+## `M:Korda.Database.BulkOptions.op_Inequality(Korda.Database.BulkOptions,Korda.Database.BulkOptions)`
 
 ```csharp
-public static bool NativeWeave.Database.BulkOptions.operator !=(NativeWeave.Database.BulkOptions? left, NativeWeave.Database.BulkOptions? right)
+public static bool Korda.Database.BulkOptions.operator !=(Korda.Database.BulkOptions? left, Korda.Database.BulkOptions? right)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This managed configuration owns no native resource. A bulk operation reads its immutable values at admission, then lowers the requested row count to source byte, node and parameter limits.
 
-## `M:NativeWeave.Database.BulkOptions.{Clone}$`
+## `M:Korda.Database.BulkOptions.{Clone}$`
 
 ```csharp
-public NativeWeave.Database.BulkOptions NativeWeave.Database.BulkOptions.<Clone>$()
+public Korda.Database.BulkOptions Korda.Database.BulkOptions.<Clone>$()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This managed configuration owns no native resource. A bulk operation reads its immutable values at admission, then lowers the requested row count to source byte, node and parameter limits.
 
-## `M:NativeWeave.Database.BulkProgress.#ctor(System.Int64,System.Int32,System.Boolean,NativeWeave.Database.TransactionOutcome)`
+## `M:Korda.Database.BulkProgress.#ctor(System.Int64,System.Int32,System.Boolean,Korda.Database.TransactionOutcome)`
 
 ```csharp
-public NativeWeave.Database.BulkProgress.BulkProgress(long RowsAffectedInCompletedBatches, int CompletedBatches, bool CompletedBatchesCommitted, NativeWeave.Database.TransactionOutcome CurrentTransactionOutcome)
+public Korda.Database.BulkProgress.BulkProgress(long RowsAffectedInCompletedBatches, int CompletedBatches, bool CompletedBatchesCommitted, Korda.Database.TransactionOutcome CurrentTransactionOutcome)
 ```
 
 **summary:** Immutable progress at failure, distinct from uncertain current-batch effects or later rollback.
@@ -394,90 +394,90 @@ public NativeWeave.Database.BulkProgress.BulkProgress(long RowsAffectedInComplet
 
 **Inherited type policy:** The original admitted bulk exception retains this managed snapshot after cleanup. Counts describe previously completed batches, which All may have rolled back; they do not prove current-batch effects or authorize replay. The record owns no native resource and remains readable after session/source disposal.
 
-## `M:NativeWeave.Database.BulkProgress.Deconstruct(System.Int64@,System.Int32@,System.Boolean@,NativeWeave.Database.TransactionOutcome@)`
+## `M:Korda.Database.BulkProgress.Deconstruct(System.Int64@,System.Int32@,System.Boolean@,Korda.Database.TransactionOutcome@)`
 
 ```csharp
-public void NativeWeave.Database.BulkProgress.Deconstruct(out long RowsAffectedInCompletedBatches, out int CompletedBatches, out bool CompletedBatchesCommitted, out NativeWeave.Database.TransactionOutcome CurrentTransactionOutcome)
+public void Korda.Database.BulkProgress.Deconstruct(out long RowsAffectedInCompletedBatches, out int CompletedBatches, out bool CompletedBatchesCommitted, out Korda.Database.TransactionOutcome CurrentTransactionOutcome)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** The original admitted bulk exception retains this managed snapshot after cleanup. Counts describe previously completed batches, which All may have rolled back; they do not prove current-batch effects or authorize replay. The record owns no native resource and remains readable after session/source disposal.
 
-## `M:NativeWeave.Database.BulkProgress.Equals(NativeWeave.Database.BulkProgress)`
+## `M:Korda.Database.BulkProgress.Equals(Korda.Database.BulkProgress)`
 
 ```csharp
-public bool NativeWeave.Database.BulkProgress.Equals(NativeWeave.Database.BulkProgress? other)
+public bool Korda.Database.BulkProgress.Equals(Korda.Database.BulkProgress? other)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** The original admitted bulk exception retains this managed snapshot after cleanup. Counts describe previously completed batches, which All may have rolled back; they do not prove current-batch effects or authorize replay. The record owns no native resource and remains readable after session/source disposal.
 
-## `M:NativeWeave.Database.BulkProgress.Equals(System.Object)`
+## `M:Korda.Database.BulkProgress.Equals(System.Object)`
 
 ```csharp
-public override bool NativeWeave.Database.BulkProgress.Equals(object? obj)
+public override bool Korda.Database.BulkProgress.Equals(object? obj)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** The original admitted bulk exception retains this managed snapshot after cleanup. Counts describe previously completed batches, which All may have rolled back; they do not prove current-batch effects or authorize replay. The record owns no native resource and remains readable after session/source disposal.
 
-## `M:NativeWeave.Database.BulkProgress.GetHashCode`
+## `M:Korda.Database.BulkProgress.GetHashCode`
 
 ```csharp
-public override int NativeWeave.Database.BulkProgress.GetHashCode()
+public override int Korda.Database.BulkProgress.GetHashCode()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** The original admitted bulk exception retains this managed snapshot after cleanup. Counts describe previously completed batches, which All may have rolled back; they do not prove current-batch effects or authorize replay. The record owns no native resource and remains readable after session/source disposal.
 
-## `M:NativeWeave.Database.BulkProgress.ToString`
+## `M:Korda.Database.BulkProgress.ToString`
 
 ```csharp
-public override string NativeWeave.Database.BulkProgress.ToString()
+public override string Korda.Database.BulkProgress.ToString()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** The original admitted bulk exception retains this managed snapshot after cleanup. Counts describe previously completed batches, which All may have rolled back; they do not prove current-batch effects or authorize replay. The record owns no native resource and remains readable after session/source disposal.
 
-## `M:NativeWeave.Database.BulkProgress.op_Equality(NativeWeave.Database.BulkProgress,NativeWeave.Database.BulkProgress)`
+## `M:Korda.Database.BulkProgress.op_Equality(Korda.Database.BulkProgress,Korda.Database.BulkProgress)`
 
 ```csharp
-public static bool NativeWeave.Database.BulkProgress.operator ==(NativeWeave.Database.BulkProgress? left, NativeWeave.Database.BulkProgress? right)
+public static bool Korda.Database.BulkProgress.operator ==(Korda.Database.BulkProgress? left, Korda.Database.BulkProgress? right)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** The original admitted bulk exception retains this managed snapshot after cleanup. Counts describe previously completed batches, which All may have rolled back; they do not prove current-batch effects or authorize replay. The record owns no native resource and remains readable after session/source disposal.
 
-## `M:NativeWeave.Database.BulkProgress.op_Inequality(NativeWeave.Database.BulkProgress,NativeWeave.Database.BulkProgress)`
+## `M:Korda.Database.BulkProgress.op_Inequality(Korda.Database.BulkProgress,Korda.Database.BulkProgress)`
 
 ```csharp
-public static bool NativeWeave.Database.BulkProgress.operator !=(NativeWeave.Database.BulkProgress? left, NativeWeave.Database.BulkProgress? right)
+public static bool Korda.Database.BulkProgress.operator !=(Korda.Database.BulkProgress? left, Korda.Database.BulkProgress? right)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** The original admitted bulk exception retains this managed snapshot after cleanup. Counts describe previously completed batches, which All may have rolled back; they do not prove current-batch effects or authorize replay. The record owns no native resource and remains readable after session/source disposal.
 
-## `M:NativeWeave.Database.BulkProgress.{Clone}$`
+## `M:Korda.Database.BulkProgress.{Clone}$`
 
 ```csharp
-public NativeWeave.Database.BulkProgress NativeWeave.Database.BulkProgress.<Clone>$()
+public Korda.Database.BulkProgress Korda.Database.BulkProgress.<Clone>$()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** The original admitted bulk exception retains this managed snapshot after cleanup. Counts describe previously completed batches, which All may have rolled back; they do not prove current-batch effects or authorize replay. The record owns no native resource and remains readable after session/source disposal.
 
-## `M:NativeWeave.Database.BulkResult.#ctor(System.Int64,System.Int32,System.Boolean)`
+## `M:Korda.Database.BulkResult.#ctor(System.Int64,System.Int32,System.Boolean)`
 
 ```csharp
-public NativeWeave.Database.BulkResult.BulkResult(long RowsAffected, int Batches, bool CommittedByOperation)
+public Korda.Database.BulkResult.BulkResult(long RowsAffected, int Batches, bool CommittedByOperation)
 ```
 
 **summary:** The acknowledged result of all admitted batches.
@@ -492,90 +492,90 @@ public NativeWeave.Database.BulkResult.BulkResult(long RowsAffected, int Batches
 
 **Inherited type policy:** The owned immutable result contains only acknowledged counts and an ownership observation. Constructing it allocates one managed record; it retains no session, transaction, cursor or native buffer.
 
-## `M:NativeWeave.Database.BulkResult.Deconstruct(System.Int64@,System.Int32@,System.Boolean@)`
+## `M:Korda.Database.BulkResult.Deconstruct(System.Int64@,System.Int32@,System.Boolean@)`
 
 ```csharp
-public void NativeWeave.Database.BulkResult.Deconstruct(out long RowsAffected, out int Batches, out bool CommittedByOperation)
+public void Korda.Database.BulkResult.Deconstruct(out long RowsAffected, out int Batches, out bool CommittedByOperation)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** The owned immutable result contains only acknowledged counts and an ownership observation. Constructing it allocates one managed record; it retains no session, transaction, cursor or native buffer.
 
-## `M:NativeWeave.Database.BulkResult.Equals(NativeWeave.Database.BulkResult)`
+## `M:Korda.Database.BulkResult.Equals(Korda.Database.BulkResult)`
 
 ```csharp
-public bool NativeWeave.Database.BulkResult.Equals(NativeWeave.Database.BulkResult? other)
+public bool Korda.Database.BulkResult.Equals(Korda.Database.BulkResult? other)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** The owned immutable result contains only acknowledged counts and an ownership observation. Constructing it allocates one managed record; it retains no session, transaction, cursor or native buffer.
 
-## `M:NativeWeave.Database.BulkResult.Equals(System.Object)`
+## `M:Korda.Database.BulkResult.Equals(System.Object)`
 
 ```csharp
-public override bool NativeWeave.Database.BulkResult.Equals(object? obj)
+public override bool Korda.Database.BulkResult.Equals(object? obj)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** The owned immutable result contains only acknowledged counts and an ownership observation. Constructing it allocates one managed record; it retains no session, transaction, cursor or native buffer.
 
-## `M:NativeWeave.Database.BulkResult.GetHashCode`
+## `M:Korda.Database.BulkResult.GetHashCode`
 
 ```csharp
-public override int NativeWeave.Database.BulkResult.GetHashCode()
+public override int Korda.Database.BulkResult.GetHashCode()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** The owned immutable result contains only acknowledged counts and an ownership observation. Constructing it allocates one managed record; it retains no session, transaction, cursor or native buffer.
 
-## `M:NativeWeave.Database.BulkResult.ToString`
+## `M:Korda.Database.BulkResult.ToString`
 
 ```csharp
-public override string NativeWeave.Database.BulkResult.ToString()
+public override string Korda.Database.BulkResult.ToString()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** The owned immutable result contains only acknowledged counts and an ownership observation. Constructing it allocates one managed record; it retains no session, transaction, cursor or native buffer.
 
-## `M:NativeWeave.Database.BulkResult.op_Equality(NativeWeave.Database.BulkResult,NativeWeave.Database.BulkResult)`
+## `M:Korda.Database.BulkResult.op_Equality(Korda.Database.BulkResult,Korda.Database.BulkResult)`
 
 ```csharp
-public static bool NativeWeave.Database.BulkResult.operator ==(NativeWeave.Database.BulkResult? left, NativeWeave.Database.BulkResult? right)
+public static bool Korda.Database.BulkResult.operator ==(Korda.Database.BulkResult? left, Korda.Database.BulkResult? right)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** The owned immutable result contains only acknowledged counts and an ownership observation. Constructing it allocates one managed record; it retains no session, transaction, cursor or native buffer.
 
-## `M:NativeWeave.Database.BulkResult.op_Inequality(NativeWeave.Database.BulkResult,NativeWeave.Database.BulkResult)`
+## `M:Korda.Database.BulkResult.op_Inequality(Korda.Database.BulkResult,Korda.Database.BulkResult)`
 
 ```csharp
-public static bool NativeWeave.Database.BulkResult.operator !=(NativeWeave.Database.BulkResult? left, NativeWeave.Database.BulkResult? right)
+public static bool Korda.Database.BulkResult.operator !=(Korda.Database.BulkResult? left, Korda.Database.BulkResult? right)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** The owned immutable result contains only acknowledged counts and an ownership observation. Constructing it allocates one managed record; it retains no session, transaction, cursor or native buffer.
 
-## `M:NativeWeave.Database.BulkResult.{Clone}$`
+## `M:Korda.Database.BulkResult.{Clone}$`
 
 ```csharp
-public NativeWeave.Database.BulkResult NativeWeave.Database.BulkResult.<Clone>$()
+public Korda.Database.BulkResult Korda.Database.BulkResult.<Clone>$()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** The owned immutable result contains only acknowledged counts and an ownership observation. Constructing it allocates one managed record; it retains no session, transaction, cursor or native buffer.
 
-## `M:NativeWeave.Database.ConflictTarget`1.#ctor(System.String)`
+## `M:Korda.Database.ConflictTarget`1.#ctor(System.String)`
 
 ```csharp
-public NativeWeave.Database.ConflictTarget<TEntity>.ConflictTarget(string constraintName)
+public Korda.Database.ConflictTarget<TEntity>.ConflictTarget(string constraintName)
 ```
 
 **summary:** Creates an explicit named PostgreSQL constraint target.
@@ -588,10 +588,10 @@ public NativeWeave.Database.ConflictTarget<TEntity>.ConflictTarget(string constr
 
 **Inherited type policy:** Construction performs no schema query. The native database checks that the selected unique constraint exists.
 
-## `M:NativeWeave.Database.ConflictTarget`1.And``1(NativeWeave.Data.Column{`0,``0})`
+## `M:Korda.Database.ConflictTarget`1.And``1(Korda.Data.Column{`0,``0})`
 
 ```csharp
-public NativeWeave.Database.ConflictTarget<TEntity> NativeWeave.Database.ConflictTarget<TEntity>.And<T>(NativeWeave.Data.Column<TEntity, T> column)
+public Korda.Database.ConflictTarget<TEntity> Korda.Database.ConflictTarget<TEntity>.And<T>(Korda.Data.Column<TEntity, T> column)
 ```
 
 **summary:** Returns a new target with an additional unique column in the stated order.
@@ -608,10 +608,10 @@ public NativeWeave.Database.ConflictTarget<TEntity> NativeWeave.Database.Conflic
 
 **Inherited type policy:** Construction performs no schema query. The native database checks that the selected unique constraint exists.
 
-## `M:NativeWeave.Database.ConflictTarget`1.Columns``1(NativeWeave.Data.Column{`0,``0})`
+## `M:Korda.Database.ConflictTarget`1.Columns``1(Korda.Data.Column{`0,``0})`
 
 ```csharp
-public static NativeWeave.Database.ConflictTarget<TEntity> NativeWeave.Database.ConflictTarget<TEntity>.Columns<T>(NativeWeave.Data.Column<TEntity, T> column)
+public static Korda.Database.ConflictTarget<TEntity> Korda.Database.ConflictTarget<TEntity>.Columns<T>(Korda.Data.Column<TEntity, T> column)
 ```
 
 **summary:** Starts an immutable portable conflict target at one built table column.
@@ -628,10 +628,10 @@ public static NativeWeave.Database.ConflictTarget<TEntity> NativeWeave.Database.
 
 **Inherited type policy:** Construction performs no schema query. The native database checks that the selected unique constraint exists.
 
-## `M:NativeWeave.Database.DataSession.BeginTransactionAsync(NativeWeave.Database.TransactionOptions,System.Threading.CancellationToken)`
+## `M:Korda.Database.DataSession.BeginTransactionAsync(Korda.Database.TransactionOptions,System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task<NativeWeave.Database.DataTransaction> NativeWeave.Database.DataSession.BeginTransactionAsync(NativeWeave.Database.TransactionOptions options, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+public System.Threading.Tasks.Task<Korda.Database.DataTransaction> Korda.Database.DataSession.BeginTransactionAsync(Korda.Database.TransactionOptions options, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
 ```
 
 **summary:** Begins an exact native transaction without weakening unsupported isolation or read-only policy.
@@ -650,10 +650,10 @@ public System.Threading.Tasks.Task<NativeWeave.Database.DataTransaction> NativeW
 
 **Inherited type policy:** A cursor and transaction control retain the same session gate. A session is not a concurrent command queue. Every query maps synchronously into owned CLR values and joins cleanup before its public Task completes.
 
-## `M:NativeWeave.Database.DataSession.BeginTransactionAsync(System.Threading.CancellationToken)`
+## `M:Korda.Database.DataSession.BeginTransactionAsync(System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task<NativeWeave.Database.DataTransaction> NativeWeave.Database.DataSession.BeginTransactionAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+public System.Threading.Tasks.Task<Korda.Database.DataTransaction> Korda.Database.DataSession.BeginTransactionAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
 ```
 
 **summary:** Begins a native transaction using the provider's default isolation.
@@ -668,10 +668,10 @@ public System.Threading.Tasks.Task<NativeWeave.Database.DataTransaction> NativeW
 
 **Inherited type policy:** A cursor and transaction control retain the same session gate. A session is not a concurrent command queue. Every query maps synchronously into owned CLR values and joins cleanup before its public Task completes.
 
-## `M:NativeWeave.Database.DataSession.CloseAsync(System.TimeSpan,System.Threading.CancellationToken)`
+## `M:Korda.Database.DataSession.CloseAsync(System.TimeSpan,System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task<NativeWeave.Database.DatabaseCloseResult> NativeWeave.Database.DataSession.CloseAsync(System.TimeSpan waitBudget, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+public System.Threading.Tasks.Task<Korda.Database.DatabaseCloseResult> Korda.Database.DataSession.CloseAsync(System.TimeSpan waitBudget, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
 ```
 
 **summary:** Starts closure, then waits within an independent finite caller budget.
@@ -688,10 +688,10 @@ public System.Threading.Tasks.Task<NativeWeave.Database.DatabaseCloseResult> Nat
 
 **Inherited type policy:** A cursor and transaction control retain the same session gate. A session is not a concurrent command queue. Every query maps synchronously into owned CLR values and joins cleanup before its public Task completes.
 
-## `M:NativeWeave.Database.DataSession.DeleteAsync``1(NativeWeave.Data.Table{``0},NativeWeave.Data.EntityKey{``0},System.Threading.CancellationToken)`
+## `M:Korda.Database.DataSession.DeleteAsync``1(Korda.Data.Table{``0},Korda.Data.EntityKey{``0},System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task<long> NativeWeave.Database.DataSession.DeleteAsync<TEntity>(NativeWeave.Data.Table<TEntity> table, NativeWeave.Data.EntityKey<TEntity> key, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) where TEntity : class
+public System.Threading.Tasks.Task<long> Korda.Database.DataSession.DeleteAsync<TEntity>(Korda.Data.Table<TEntity> table, Korda.Data.EntityKey<TEntity> key, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) where TEntity : class
 ```
 
 **summary:** Deletes by the entire native primary-key predicate with no read-before-write query.
@@ -712,10 +712,10 @@ public System.Threading.Tasks.Task<long> NativeWeave.Database.DataSession.Delete
 
 **Inherited type policy:** A cursor and transaction control retain the same session gate. A session is not a concurrent command queue. Every query maps synchronously into owned CLR values and joins cleanup before its public Task completes.
 
-## `M:NativeWeave.Database.DataSession.DeleteCheckedAsync``1(NativeWeave.Data.Table{``0},NativeWeave.Data.EntityKey{``0},NativeWeave.Data.ConcurrencyCheck{``0},System.Threading.CancellationToken)`
+## `M:Korda.Database.DataSession.DeleteCheckedAsync``1(Korda.Data.Table{``0},Korda.Data.EntityKey{``0},Korda.Data.ConcurrencyCheck{``0},System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task<long> NativeWeave.Database.DataSession.DeleteCheckedAsync<TEntity>(NativeWeave.Data.Table<TEntity> table, NativeWeave.Data.EntityKey<TEntity> key, NativeWeave.Data.ConcurrencyCheck<TEntity> concurrency, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) where TEntity : class
+public System.Threading.Tasks.Task<long> Korda.Database.DataSession.DeleteCheckedAsync<TEntity>(Korda.Data.Table<TEntity> table, Korda.Data.EntityKey<TEntity> key, Korda.Data.ConcurrencyCheck<TEntity> concurrency, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) where TEntity : class
 ```
 
 **summary:** Deletes once using the complete key and every explicit expected concurrency token.
@@ -738,20 +738,20 @@ public System.Threading.Tasks.Task<long> NativeWeave.Database.DataSession.Delete
 
 **Inherited type policy:** A cursor and transaction control retain the same session gate. A session is not a concurrent command queue. Every query maps synchronously into owned CLR values and joins cleanup before its public Task completes.
 
-## `M:NativeWeave.Database.DataSession.Dispose`
+## `M:Korda.Database.DataSession.Dispose`
 
 ```csharp
-public void NativeWeave.Database.DataSession.Dispose()
+public void Korda.Database.DataSession.Dispose()
 ```
 
 **summary:** Closes admission and transfers cleanup to the bounded native owner without blocking.
 
 **Inherited type policy:** A cursor and transaction control retain the same session gate. A session is not a concurrent command queue. Every query maps synchronously into owned CLR values and joins cleanup before its public Task completes.
 
-## `M:NativeWeave.Database.DataSession.DisposeAsync`
+## `M:Korda.Database.DataSession.DisposeAsync`
 
 ```csharp
-public System.Threading.Tasks.ValueTask NativeWeave.Database.DataSession.DisposeAsync()
+public System.Threading.Tasks.ValueTask Korda.Database.DataSession.DisposeAsync()
 ```
 
 **summary:** Closes admission and joins actual native local safety.
@@ -760,10 +760,10 @@ public System.Threading.Tasks.ValueTask NativeWeave.Database.DataSession.Dispose
 
 **Inherited type policy:** A cursor and transaction control retain the same session gate. A session is not a concurrent command queue. Every query maps synchronously into owned CLR values and joins cleanup before its public Task completes.
 
-## `M:NativeWeave.Database.DataSession.ExecuteAsync(NativeWeave.Data.SqlCommand,System.Threading.CancellationToken)`
+## `M:Korda.Database.DataSession.ExecuteAsync(Korda.Data.SqlCommand,System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task<long> NativeWeave.Database.DataSession.ExecuteAsync(NativeWeave.Data.SqlCommand command, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+public System.Threading.Tasks.Task<long> Korda.Database.DataSession.ExecuteAsync(Korda.Data.SqlCommand command, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
 ```
 
 **summary:** Executes one trusted mutation or explicit session-changing command and observes its affected-row count.
@@ -784,10 +784,10 @@ public System.Threading.Tasks.Task<long> NativeWeave.Database.DataSession.Execut
 
 **Inherited type policy:** A cursor and transaction control retain the same session gate. A session is not a concurrent command queue. Every query maps synchronously into owned CLR values and joins cleanup before its public Task completes.
 
-## `M:NativeWeave.Database.DataSession.FindAsync``1(NativeWeave.Data.Table{``0},NativeWeave.Data.EntityKey{``0},System.Threading.CancellationToken)`
+## `M:Korda.Database.DataSession.FindAsync``1(Korda.Data.Table{``0},Korda.Data.EntityKey{``0},System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task<TEntity?> NativeWeave.Database.DataSession.FindAsync<TEntity>(NativeWeave.Data.Table<TEntity> table, NativeWeave.Data.EntityKey<TEntity> key, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) where TEntity : class
+public System.Threading.Tasks.Task<TEntity?> Korda.Database.DataSession.FindAsync<TEntity>(Korda.Data.Table<TEntity> table, Korda.Data.EntityKey<TEntity> key, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) where TEntity : class
 ```
 
 **summary:** Executes one native complete-key SELECT and returns the sole row or null.
@@ -810,10 +810,10 @@ public System.Threading.Tasks.Task<TEntity?> NativeWeave.Database.DataSession.Fi
 
 **Inherited type policy:** A cursor and transaction control retain the same session gate. A session is not a concurrent command queue. Every query maps synchronously into owned CLR values and joins cleanup before its public Task completes.
 
-## `M:NativeWeave.Database.DataSession.From``1(NativeWeave.Data.Table{``0})`
+## `M:Korda.Database.DataSession.From``1(Korda.Data.Table{``0})`
 
 ```csharp
-public NativeWeave.Query.Query<TEntity> NativeWeave.Database.DataSession.From<TEntity>(NativeWeave.Data.Table<TEntity> table) where TEntity : class
+public Korda.Query.Query<TEntity> Korda.Database.DataSession.From<TEntity>(Korda.Data.Table<TEntity> table) where TEntity : class
 ```
 
 **summary:** Creates one mutable native query arena bound to this session and exact static table.
@@ -834,10 +834,10 @@ public NativeWeave.Query.Query<TEntity> NativeWeave.Database.DataSession.From<TE
 
 **Inherited type policy:** A cursor and transaction control retain the same session gate. A session is not a concurrent command queue. Every query maps synchronously into owned CLR values and joins cleanup before its public Task completes.
 
-## `M:NativeWeave.Database.DataSession.InsertAsync``1(NativeWeave.Data.Table{``0},``0,System.Threading.CancellationToken)`
+## `M:Korda.Database.DataSession.InsertAsync``1(Korda.Data.Table{``0},``0,System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task<long> NativeWeave.Database.DataSession.InsertAsync<TEntity>(NativeWeave.Data.Table<TEntity> table, TEntity entity, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) where TEntity : class
+public System.Threading.Tasks.Task<long> Korda.Database.DataSession.InsertAsync<TEntity>(Korda.Data.Table<TEntity> table, TEntity entity, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) where TEntity : class
 ```
 
 **summary:** Snapshots one entity, omits generated columns and executes one native insert.
@@ -860,10 +860,10 @@ public System.Threading.Tasks.Task<long> NativeWeave.Database.DataSession.Insert
 
 **Inherited type policy:** A cursor and transaction control retain the same session gate. A session is not a concurrent command queue. Every query maps synchronously into owned CLR values and joins cleanup before its public Task completes.
 
-## `M:NativeWeave.Database.DataSession.InsertManyAsync``1(NativeWeave.Data.Table{``0},System.Collections.Generic.IAsyncEnumerable{``0},NativeWeave.Database.BulkOptions,System.Threading.CancellationToken)`
+## `M:Korda.Database.DataSession.InsertManyAsync``1(Korda.Data.Table{``0},System.Collections.Generic.IAsyncEnumerable{``0},Korda.Database.BulkOptions,System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task<NativeWeave.Database.BulkResult> NativeWeave.Database.DataSession.InsertManyAsync<TEntity>(NativeWeave.Data.Table<TEntity> table, System.Collections.Generic.IAsyncEnumerable<TEntity> rows, NativeWeave.Database.BulkOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) where TEntity : class
+public System.Threading.Tasks.Task<Korda.Database.BulkResult> Korda.Database.DataSession.InsertManyAsync<TEntity>(Korda.Data.Table<TEntity> table, System.Collections.Generic.IAsyncEnumerable<TEntity> rows, Korda.Database.BulkOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) where TEntity : class
 ```
 
 **summary:** Incrementally snapshots and writes finite native batches under explicit transaction ownership.
@@ -894,10 +894,10 @@ public System.Threading.Tasks.Task<NativeWeave.Database.BulkResult> NativeWeave.
 
 **Inherited type policy:** A cursor and transaction control retain the same session gate. A session is not a concurrent command queue. Every query maps synchronously into owned CLR values and joins cleanup before its public Task completes.
 
-## `M:NativeWeave.Database.DataSession.InsertReturningAsync``2(NativeWeave.Data.Table{``0},``0,NativeWeave.Data.Projection{``1},System.Threading.CancellationToken)`
+## `M:Korda.Database.DataSession.InsertReturningAsync``2(Korda.Data.Table{``0},``0,Korda.Data.Projection{``1},System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task<T> NativeWeave.Database.DataSession.InsertReturningAsync<TEntity, T>(NativeWeave.Data.Table<TEntity> table, TEntity entity, NativeWeave.Data.Projection<T> returning, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) where TEntity : class
+public System.Threading.Tasks.Task<T> Korda.Database.DataSession.InsertReturningAsync<TEntity, T>(Korda.Data.Table<TEntity> table, TEntity entity, Korda.Data.Projection<T> returning, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) where TEntity : class
 ```
 
 **summary:** Snapshots one entity and materializes exactly one native INSERT RETURNING row.
@@ -924,10 +924,10 @@ public System.Threading.Tasks.Task<T> NativeWeave.Database.DataSession.InsertRet
 
 **Inherited type policy:** A cursor and transaction control retain the same session gate. A session is not a concurrent command queue. Every query maps synchronously into owned CLR values and joins cleanup before its public Task completes.
 
-## `M:NativeWeave.Database.DataSession.LoadRelatedAsync``2(NativeWeave.Data.EntityKey{``0},NativeWeave.Data.Relation{``0,``1},System.Threading.CancellationToken)`
+## `M:Korda.Database.DataSession.LoadRelatedAsync``2(Korda.Data.EntityKey{``0},Korda.Data.Relation{``0,``1},System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<TChild>> NativeWeave.Database.DataSession.LoadRelatedAsync<TParent, TChild>(NativeWeave.Data.EntityKey<TParent> parentKey, NativeWeave.Data.Relation<TParent, TChild> relation, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) where TParent : class where TChild : class
+public System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<TChild>> Korda.Database.DataSession.LoadRelatedAsync<TParent, TChild>(Korda.Data.EntityKey<TParent> parentKey, Korda.Data.Relation<TParent, TChild> relation, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) where TParent : class where TChild : class
 ```
 
 **summary:** Snapshots one complete parent key and runs one bounded native child foreign-key query.
@@ -956,10 +956,10 @@ public System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<TChi
 
 **Inherited type policy:** A cursor and transaction control retain the same session gate. A session is not a concurrent command queue. Every query maps synchronously into owned CLR values and joins cleanup before its public Task completes.
 
-## `M:NativeWeave.Database.DataSession.QueryAsync``1(NativeWeave.Data.SqlCommand,NativeWeave.Data.Projection{``0},System.Threading.CancellationToken)`
+## `M:Korda.Database.DataSession.QueryAsync``1(Korda.Data.SqlCommand,Korda.Data.Projection{``0},System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<T>> NativeWeave.Database.DataSession.QueryAsync<T>(NativeWeave.Data.SqlCommand command, NativeWeave.Data.Projection<T> projection, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+public System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<T>> Korda.Database.DataSession.QueryAsync<T>(Korda.Data.SqlCommand command, Korda.Data.Projection<T> projection, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
 ```
 
 **summary:** Materializes a bounded list using the complete declared row shape.
@@ -982,10 +982,10 @@ public System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<T>> 
 
 **Inherited type policy:** A cursor and transaction control retain the same session gate. A session is not a concurrent command queue. Every query maps synchronously into owned CLR values and joins cleanup before its public Task completes.
 
-## `M:NativeWeave.Database.DataSession.ScalarAsync``1(NativeWeave.Data.SqlCommand,NativeWeave.Data.ValueCodec{``0},System.Threading.CancellationToken)`
+## `M:Korda.Database.DataSession.ScalarAsync``1(Korda.Data.SqlCommand,Korda.Data.ValueCodec{``0},System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task<T> NativeWeave.Database.DataSession.ScalarAsync<T>(NativeWeave.Data.SqlCommand command, NativeWeave.Data.ValueCodec<T> codec, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+public System.Threading.Tasks.Task<T> Korda.Database.DataSession.ScalarAsync<T>(Korda.Data.SqlCommand command, Korda.Data.ValueCodec<T> codec, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
 ```
 
 **summary:** Reads exactly one row and column through an explicit scalar codec.
@@ -1010,10 +1010,10 @@ public System.Threading.Tasks.Task<T> NativeWeave.Database.DataSession.ScalarAsy
 
 **Inherited type policy:** A cursor and transaction control retain the same session gate. A session is not a concurrent command queue. Every query maps synchronously into owned CLR values and joins cleanup before its public Task completes.
 
-## `M:NativeWeave.Database.DataSession.StreamAsync``1(NativeWeave.Data.SqlCommand,NativeWeave.Data.Projection{``0},System.Threading.CancellationToken)`
+## `M:Korda.Database.DataSession.StreamAsync``1(Korda.Data.SqlCommand,Korda.Data.Projection{``0},System.Threading.CancellationToken)`
 
 ```csharp
-public System.Collections.Generic.IAsyncEnumerable<T> NativeWeave.Database.DataSession.StreamAsync<T>(NativeWeave.Data.SqlCommand command, NativeWeave.Data.Projection<T> projection, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+public System.Collections.Generic.IAsyncEnumerable<T> Korda.Database.DataSession.StreamAsync<T>(Korda.Data.SqlCommand command, Korda.Data.Projection<T> projection, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
 ```
 
 **summary:** Creates a one-shot bounded stream; the first MoveNext admits native execution.
@@ -1036,10 +1036,10 @@ public System.Collections.Generic.IAsyncEnumerable<T> NativeWeave.Database.DataS
 
 **Inherited type policy:** A cursor and transaction control retain the same session gate. A session is not a concurrent command queue. Every query maps synchronously into owned CLR values and joins cleanup before its public Task completes.
 
-## `M:NativeWeave.Database.DataSession.UpdateAsync``1(NativeWeave.Data.Table{``0},NativeWeave.Data.EntityKey{``0},NativeWeave.Data.Changes{``0},System.Threading.CancellationToken)`
+## `M:Korda.Database.DataSession.UpdateAsync``1(Korda.Data.Table{``0},Korda.Data.EntityKey{``0},Korda.Data.Changes{``0},System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task<long> NativeWeave.Database.DataSession.UpdateAsync<TEntity>(NativeWeave.Data.Table<TEntity> table, NativeWeave.Data.EntityKey<TEntity> key, NativeWeave.Data.Changes<TEntity> changes, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) where TEntity : class
+public System.Threading.Tasks.Task<long> Korda.Database.DataSession.UpdateAsync<TEntity>(Korda.Data.Table<TEntity> table, Korda.Data.EntityKey<TEntity> key, Korda.Data.Changes<TEntity> changes, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) where TEntity : class
 ```
 
 **summary:** Applies only explicit nonkey assignments under the entire native key predicate.
@@ -1062,10 +1062,10 @@ public System.Threading.Tasks.Task<long> NativeWeave.Database.DataSession.Update
 
 **Inherited type policy:** A cursor and transaction control retain the same session gate. A session is not a concurrent command queue. Every query maps synchronously into owned CLR values and joins cleanup before its public Task completes.
 
-## `M:NativeWeave.Database.DataSession.UpdateCheckedAsync``1(NativeWeave.Data.Table{``0},NativeWeave.Data.EntityKey{``0},NativeWeave.Data.Changes{``0},NativeWeave.Data.ConcurrencyCheck{``0},System.Threading.CancellationToken)`
+## `M:Korda.Database.DataSession.UpdateCheckedAsync``1(Korda.Data.Table{``0},Korda.Data.EntityKey{``0},Korda.Data.Changes{``0},Korda.Data.ConcurrencyCheck{``0},System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task<long> NativeWeave.Database.DataSession.UpdateCheckedAsync<TEntity>(NativeWeave.Data.Table<TEntity> table, NativeWeave.Data.EntityKey<TEntity> key, NativeWeave.Data.Changes<TEntity> changes, NativeWeave.Data.ConcurrencyCheck<TEntity> concurrency, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) where TEntity : class
+public System.Threading.Tasks.Task<long> Korda.Database.DataSession.UpdateCheckedAsync<TEntity>(Korda.Data.Table<TEntity> table, Korda.Data.EntityKey<TEntity> key, Korda.Data.Changes<TEntity> changes, Korda.Data.ConcurrencyCheck<TEntity> concurrency, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) where TEntity : class
 ```
 
 **summary:** Executes one key-and-version compare-and-swap without an implicit version increment or replay.
@@ -1092,10 +1092,10 @@ public System.Threading.Tasks.Task<long> NativeWeave.Database.DataSession.Update
 
 **Inherited type policy:** A cursor and transaction control retain the same session gate. A session is not a concurrent command queue. Every query maps synchronously into owned CLR values and joins cleanup before its public Task completes.
 
-## `M:NativeWeave.Database.DataSession.UpsertAsync``1(NativeWeave.Data.Table{``0},``0,NativeWeave.Database.ConflictTarget{``0},NativeWeave.Data.Changes{``0},System.Threading.CancellationToken)`
+## `M:Korda.Database.DataSession.UpsertAsync``1(Korda.Data.Table{``0},``0,Korda.Database.ConflictTarget{``0},Korda.Data.Changes{``0},System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task<long> NativeWeave.Database.DataSession.UpsertAsync<TEntity>(NativeWeave.Data.Table<TEntity> table, TEntity entity, NativeWeave.Database.ConflictTarget<TEntity> conflict, NativeWeave.Data.Changes<TEntity> update, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) where TEntity : class
+public System.Threading.Tasks.Task<long> Korda.Database.DataSession.UpsertAsync<TEntity>(Korda.Data.Table<TEntity> table, TEntity entity, Korda.Database.ConflictTarget<TEntity> conflict, Korda.Data.Changes<TEntity> update, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) where TEntity : class
 ```
 
 **summary:** Executes one atomic native upsert with independent insert and conflict-update snapshots.
@@ -1122,10 +1122,10 @@ public System.Threading.Tasks.Task<long> NativeWeave.Database.DataSession.Upsert
 
 **Inherited type policy:** A cursor and transaction control retain the same session gate. A session is not a concurrent command queue. Every query maps synchronously into owned CLR values and joins cleanup before its public Task completes.
 
-## `M:NativeWeave.Database.DataSource.CanConnectAsync(System.Threading.CancellationToken)`
+## `M:Korda.Database.DataSource.CanConnectAsync(System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task<bool> NativeWeave.Database.DataSource.CanConnectAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+public System.Threading.Tasks.Task<bool> Korda.Database.DataSource.CanConnectAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
 ```
 
 **summary:** Opens and closes a real session, returning false only for provider connection failures.
@@ -1142,10 +1142,10 @@ public System.Threading.Tasks.Task<bool> NativeWeave.Database.DataSource.CanConn
 
 **Inherited type policy:** Sources support concurrent independent session opens. Closing rejects new work and retains every admitted native operation until real retirement. Dispose requests cleanup; DisposeAsync joins local safety.
 
-## `M:NativeWeave.Database.DataSource.CloseAsync(System.TimeSpan,System.Threading.CancellationToken)`
+## `M:Korda.Database.DataSource.CloseAsync(System.TimeSpan,System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task<NativeWeave.Database.DatabaseCloseResult> NativeWeave.Database.DataSource.CloseAsync(System.TimeSpan waitBudget, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+public System.Threading.Tasks.Task<Korda.Database.DatabaseCloseResult> Korda.Database.DataSource.CloseAsync(System.TimeSpan waitBudget, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
 ```
 
 **summary:** Starts closure and waits only within the caller's independent budget.
@@ -1162,20 +1162,20 @@ public System.Threading.Tasks.Task<NativeWeave.Database.DatabaseCloseResult> Nat
 
 **Inherited type policy:** Sources support concurrent independent session opens. Closing rejects new work and retains every admitted native operation until real retirement. Dispose requests cleanup; DisposeAsync joins local safety.
 
-## `M:NativeWeave.Database.DataSource.Dispose`
+## `M:Korda.Database.DataSource.Dispose`
 
 ```csharp
-public void NativeWeave.Database.DataSource.Dispose()
+public void Korda.Database.DataSource.Dispose()
 ```
 
 **summary:** Closes admission and requests bounded native cleanup without blocking for I/O.
 
 **Inherited type policy:** Sources support concurrent independent session opens. Closing rejects new work and retains every admitted native operation until real retirement. Dispose requests cleanup; DisposeAsync joins local safety.
 
-## `M:NativeWeave.Database.DataSource.DisposeAsync`
+## `M:Korda.Database.DataSource.DisposeAsync`
 
 ```csharp
-public System.Threading.Tasks.ValueTask NativeWeave.Database.DataSource.DisposeAsync()
+public System.Threading.Tasks.ValueTask Korda.Database.DataSource.DisposeAsync()
 ```
 
 **summary:** Closes admission and joins actual local safety, even beyond an application policy deadline.
@@ -1184,10 +1184,10 @@ public System.Threading.Tasks.ValueTask NativeWeave.Database.DataSource.DisposeA
 
 **Inherited type policy:** Sources support concurrent independent session opens. Closing rejects new work and retains every admitted native operation until real retirement. Dispose requests cleanup; DisposeAsync joins local safety.
 
-## `M:NativeWeave.Database.DataSource.OpenSessionAsync(System.Threading.CancellationToken)`
+## `M:Korda.Database.DataSource.OpenSessionAsync(System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task<NativeWeave.Database.DataSession> NativeWeave.Database.DataSource.OpenSessionAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+public System.Threading.Tasks.Task<Korda.Database.DataSession> Korda.Database.DataSource.OpenSessionAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
 ```
 
 **summary:** Acquires an independent physical session through bounded native pool admission.
@@ -1204,20 +1204,20 @@ public System.Threading.Tasks.Task<NativeWeave.Database.DataSession> NativeWeave
 
 **Inherited type policy:** Sources support concurrent independent session opens. Closing rejects new work and retains every admitted native operation until real retirement. Dispose requests cleanup; DisposeAsync joins local safety.
 
-## `M:NativeWeave.Database.DataSourceBuilder.#ctor`
+## `M:Korda.Database.DataSourceBuilder.#ctor`
 
 ```csharp
-public NativeWeave.Database.DataSourceBuilder.DataSourceBuilder()
+public Korda.Database.DataSourceBuilder.DataSourceBuilder()
 ```
 
 **summary:** Creates an unconfigured builder without loading a module.
 
 **Inherited type policy:** Configuration snapshots values. Build negotiates the packaged module and creates a lazy native pool; it opens no database connection. Independent builds create independent source generations.
 
-## `M:NativeWeave.Database.DataSourceBuilder.Build`
+## `M:Korda.Database.DataSourceBuilder.Build`
 
 ```csharp
-public NativeWeave.Database.DataSource NativeWeave.Database.DataSourceBuilder.Build()
+public Korda.Database.DataSource Korda.Database.DataSourceBuilder.Build()
 ```
 
 **summary:** Negotiates the selected precompiled engine and creates an independently owned lazy pool.
@@ -1234,10 +1234,10 @@ public NativeWeave.Database.DataSource NativeWeave.Database.DataSourceBuilder.Bu
 
 **Inherited type policy:** Configuration snapshots values. Build negotiates the packaged module and creates a lazy native pool; it opens no database connection. Independent builds create independent source generations.
 
-## `M:NativeWeave.Database.DataSourceBuilder.ConfigureLimits(NativeWeave.Database.DatabaseLimits)`
+## `M:Korda.Database.DataSourceBuilder.ConfigureLimits(Korda.Database.DatabaseLimits)`
 
 ```csharp
-public NativeWeave.Database.DataSourceBuilder NativeWeave.Database.DataSourceBuilder.ConfigureLimits(NativeWeave.Database.DatabaseLimits limits)
+public Korda.Database.DataSourceBuilder Korda.Database.DataSourceBuilder.ConfigureLimits(Korda.Database.DatabaseLimits limits)
 ```
 
 **summary:** Copies and validates finite resource limits for subsequent builds.
@@ -1252,10 +1252,10 @@ public NativeWeave.Database.DataSourceBuilder NativeWeave.Database.DataSourceBui
 
 **Inherited type policy:** Configuration snapshots values. Build negotiates the packaged module and creates a lazy native pool; it opens no database connection. Independent builds create independent source generations.
 
-## `M:NativeWeave.Database.DataSourceBuilder.WithName(System.String)`
+## `M:Korda.Database.DataSourceBuilder.WithName(System.String)`
 
 ```csharp
-public NativeWeave.Database.DataSourceBuilder NativeWeave.Database.DataSourceBuilder.WithName(string name)
+public Korda.Database.DataSourceBuilder Korda.Database.DataSourceBuilder.WithName(string name)
 ```
 
 **summary:** Sets the diagnostic source identity without including connection credentials.
@@ -1272,10 +1272,10 @@ public NativeWeave.Database.DataSourceBuilder NativeWeave.Database.DataSourceBui
 
 **Inherited type policy:** Configuration snapshots values. Build negotiates the packaged module and creates a lazy native pool; it opens no database connection. Independent builds create independent source generations.
 
-## `M:NativeWeave.Database.DatabaseAdministration.GetMigrationStatusAsync(NativeWeave.Database.MigrationBundle,System.Threading.CancellationToken)`
+## `M:Korda.Database.DatabaseAdministration.GetMigrationStatusAsync(Korda.Database.MigrationBundle,System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<NativeWeave.Database.MigrationStatus>> NativeWeave.Database.DatabaseAdministration.GetMigrationStatusAsync(NativeWeave.Database.MigrationBundle bundle, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+public System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Korda.Database.MigrationStatus>> Korda.Database.DatabaseAdministration.GetMigrationStatusAsync(Korda.Database.MigrationBundle bundle, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
 ```
 
 **summary:** Reads an immutable comparison of this bundle and the successful native ledger.
@@ -1294,10 +1294,10 @@ public System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Nati
 
 **Inherited type policy:** One independent administrative connection executes at a time per source, with bounded waiting. Every outcome closes that connection before task retirement. It never uses a request session or request transaction. Result counts, strings and nested columns are charged to source buffering and field limits.
 
-## `M:NativeWeave.Database.DatabaseAdministration.GetTablesAsync(System.String,System.Threading.CancellationToken)`
+## `M:Korda.Database.DatabaseAdministration.GetTablesAsync(System.String,System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<NativeWeave.Database.SchemaTable>> NativeWeave.Database.DatabaseAdministration.GetTablesAsync(string? schema = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+public System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Korda.Database.SchemaTable>> Korda.Database.DatabaseAdministration.GetTablesAsync(string? schema = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
 ```
 
 **summary:** Reads bounded table and column metadata with native parameterized catalog queries.
@@ -1318,10 +1318,10 @@ public System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<Nati
 
 **Inherited type policy:** One independent administrative connection executes at a time per source, with bounded waiting. Every outcome closes that connection before task retirement. It never uses a request session or request transaction. Result counts, strings and nested columns are charged to source buffering and field limits.
 
-## `M:NativeWeave.Database.DatabaseAdministration.MigrateAsync(NativeWeave.Database.MigrationBundle,NativeWeave.Database.MigrationOptions,System.Threading.CancellationToken)`
+## `M:Korda.Database.DatabaseAdministration.MigrateAsync(Korda.Database.MigrationBundle,Korda.Database.MigrationOptions,System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task<NativeWeave.Database.MigrationReport> NativeWeave.Database.DatabaseAdministration.MigrateAsync(NativeWeave.Database.MigrationBundle bundle, NativeWeave.Database.MigrationOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+public System.Threading.Tasks.Task<Korda.Database.MigrationReport> Korda.Database.DatabaseAdministration.MigrateAsync(Korda.Database.MigrationBundle bundle, Korda.Database.MigrationOptions? options = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
 ```
 
 **summary:** Applies the selected forward migration range using the native provider and the retained checksum ledger.
@@ -1346,10 +1346,10 @@ public System.Threading.Tasks.Task<NativeWeave.Database.MigrationReport> NativeW
 
 **Inherited type policy:** One independent administrative connection executes at a time per source, with bounded waiting. Every outcome closes that connection before task retirement. It never uses a request session or request transaction. Result counts, strings and nested columns are charged to source buffering and field limits.
 
-## `M:NativeWeave.Database.DatabaseAdministration.ValidateMigrationsAsync(NativeWeave.Database.MigrationBundle,System.Threading.CancellationToken)`
+## `M:Korda.Database.DatabaseAdministration.ValidateMigrationsAsync(Korda.Database.MigrationBundle,System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task NativeWeave.Database.DatabaseAdministration.ValidateMigrationsAsync(NativeWeave.Database.MigrationBundle bundle, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+public System.Threading.Tasks.Task Korda.Database.DatabaseAdministration.ValidateMigrationsAsync(Korda.Database.MigrationBundle bundle, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
 ```
 
 **summary:** Validates checksum, missing/extra history and dirty execution phases without changing schema.
@@ -1368,10 +1368,10 @@ public System.Threading.Tasks.Task NativeWeave.Database.DatabaseAdministration.V
 
 **Inherited type policy:** One independent administrative connection executes at a time per source, with bounded waiting. Every outcome closes that connection before task retirement. It never uses a request session or request transaction. Result counts, strings and nested columns are charged to source buffering and field limits.
 
-## `M:NativeWeave.Database.DatabaseCapabilities.Supports(System.String)`
+## `M:Korda.Database.DatabaseCapabilities.Supports(System.String)`
 
 ```csharp
-public bool NativeWeave.Database.DatabaseCapabilities.Supports(string capability)
+public bool Korda.Database.DatabaseCapabilities.Supports(string capability)
 ```
 
 **summary:** Tests one case-sensitive stable capability name without a native call.
@@ -1384,98 +1384,98 @@ public bool NativeWeave.Database.DatabaseCapabilities.Supports(string capability
 
 **Inherited type policy:** Unknown names return false. A capability name does not authorize a different provider or an arbitrary SQL feature.
 
-## `M:NativeWeave.Database.DatabaseLimits.#ctor`
+## `M:Korda.Database.DatabaseLimits.#ctor`
 
 ```csharp
-public NativeWeave.Database.DatabaseLimits.DatabaseLimits()
+public Korda.Database.DatabaseLimits.DatabaseLimits()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** These are admission and encoded-byte budgets, not measurements of CLR heap or process memory. Provider hard limits also apply. Increasing a value never selects an unbounded fallback.
 
-## `M:NativeWeave.Database.DatabaseLimits.Equals(NativeWeave.Database.DatabaseLimits)`
+## `M:Korda.Database.DatabaseLimits.Equals(Korda.Database.DatabaseLimits)`
 
 ```csharp
-public bool NativeWeave.Database.DatabaseLimits.Equals(NativeWeave.Database.DatabaseLimits? other)
+public bool Korda.Database.DatabaseLimits.Equals(Korda.Database.DatabaseLimits? other)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** These are admission and encoded-byte budgets, not measurements of CLR heap or process memory. Provider hard limits also apply. Increasing a value never selects an unbounded fallback.
 
-## `M:NativeWeave.Database.DatabaseLimits.Equals(System.Object)`
+## `M:Korda.Database.DatabaseLimits.Equals(System.Object)`
 
 ```csharp
-public override bool NativeWeave.Database.DatabaseLimits.Equals(object? obj)
+public override bool Korda.Database.DatabaseLimits.Equals(object? obj)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** These are admission and encoded-byte budgets, not measurements of CLR heap or process memory. Provider hard limits also apply. Increasing a value never selects an unbounded fallback.
 
-## `M:NativeWeave.Database.DatabaseLimits.GetHashCode`
+## `M:Korda.Database.DatabaseLimits.GetHashCode`
 
 ```csharp
-public override int NativeWeave.Database.DatabaseLimits.GetHashCode()
+public override int Korda.Database.DatabaseLimits.GetHashCode()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** These are admission and encoded-byte budgets, not measurements of CLR heap or process memory. Provider hard limits also apply. Increasing a value never selects an unbounded fallback.
 
-## `M:NativeWeave.Database.DatabaseLimits.ToString`
+## `M:Korda.Database.DatabaseLimits.ToString`
 
 ```csharp
-public override string NativeWeave.Database.DatabaseLimits.ToString()
+public override string Korda.Database.DatabaseLimits.ToString()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** These are admission and encoded-byte budgets, not measurements of CLR heap or process memory. Provider hard limits also apply. Increasing a value never selects an unbounded fallback.
 
-## `M:NativeWeave.Database.DatabaseLimits.op_Equality(NativeWeave.Database.DatabaseLimits,NativeWeave.Database.DatabaseLimits)`
+## `M:Korda.Database.DatabaseLimits.op_Equality(Korda.Database.DatabaseLimits,Korda.Database.DatabaseLimits)`
 
 ```csharp
-public static bool NativeWeave.Database.DatabaseLimits.operator ==(NativeWeave.Database.DatabaseLimits? left, NativeWeave.Database.DatabaseLimits? right)
+public static bool Korda.Database.DatabaseLimits.operator ==(Korda.Database.DatabaseLimits? left, Korda.Database.DatabaseLimits? right)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** These are admission and encoded-byte budgets, not measurements of CLR heap or process memory. Provider hard limits also apply. Increasing a value never selects an unbounded fallback.
 
-## `M:NativeWeave.Database.DatabaseLimits.op_Inequality(NativeWeave.Database.DatabaseLimits,NativeWeave.Database.DatabaseLimits)`
+## `M:Korda.Database.DatabaseLimits.op_Inequality(Korda.Database.DatabaseLimits,Korda.Database.DatabaseLimits)`
 
 ```csharp
-public static bool NativeWeave.Database.DatabaseLimits.operator !=(NativeWeave.Database.DatabaseLimits? left, NativeWeave.Database.DatabaseLimits? right)
+public static bool Korda.Database.DatabaseLimits.operator !=(Korda.Database.DatabaseLimits? left, Korda.Database.DatabaseLimits? right)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** These are admission and encoded-byte budgets, not measurements of CLR heap or process memory. Provider hard limits also apply. Increasing a value never selects an unbounded fallback.
 
-## `M:NativeWeave.Database.DatabaseLimits.{Clone}$`
+## `M:Korda.Database.DatabaseLimits.{Clone}$`
 
 ```csharp
-public NativeWeave.Database.DatabaseLimits NativeWeave.Database.DatabaseLimits.<Clone>$()
+public Korda.Database.DatabaseLimits Korda.Database.DatabaseLimits.<Clone>$()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** These are admission and encoded-byte budgets, not measurements of CLR heap or process memory. Provider hard limits also apply. Increasing a value never selects an unbounded fallback.
 
-## `M:NativeWeave.Database.DatabaseProvider.#ctor`
+## `M:Korda.Database.DatabaseProvider.#ctor`
 
 ```csharp
-public NativeWeave.Database.DatabaseProvider.DatabaseProvider()
+public Korda.Database.DatabaseProvider.DatabaseProvider()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
-## `M:NativeWeave.Database.Migration.#ctor(System.Int64,System.String,System.String,NativeWeave.Database.MigrationTransactionMode)`
+## `M:Korda.Database.Migration.#ctor(System.Int64,System.String,System.String,Korda.Database.MigrationTransactionMode)`
 
 ```csharp
-public NativeWeave.Database.Migration.Migration(long Version, string Description, string Sql, NativeWeave.Database.MigrationTransactionMode TransactionMode = NativeWeave.Database.MigrationTransactionMode.Transactional)
+public Korda.Database.Migration.Migration(long Version, string Description, string Sql, Korda.Database.MigrationTransactionMode TransactionMode = Korda.Database.MigrationTransactionMode.Transactional)
 ```
 
 **summary:** Defines one trusted, immutable SQL migration.
@@ -1492,90 +1492,90 @@ public NativeWeave.Database.Migration.Migration(long Version, string Description
 
 **Inherited type policy:** This record retains its strings without native resources. Bundle construction snapshots the collection and performs bounded UTF-8 encoding and hashing; execution is explicit.
 
-## `M:NativeWeave.Database.Migration.Deconstruct(System.Int64@,System.String@,System.String@,NativeWeave.Database.MigrationTransactionMode@)`
+## `M:Korda.Database.Migration.Deconstruct(System.Int64@,System.String@,System.String@,Korda.Database.MigrationTransactionMode@)`
 
 ```csharp
-public void NativeWeave.Database.Migration.Deconstruct(out long Version, out string Description, out string Sql, out NativeWeave.Database.MigrationTransactionMode TransactionMode)
+public void Korda.Database.Migration.Deconstruct(out long Version, out string Description, out string Sql, out Korda.Database.MigrationTransactionMode TransactionMode)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This record retains its strings without native resources. Bundle construction snapshots the collection and performs bounded UTF-8 encoding and hashing; execution is explicit.
 
-## `M:NativeWeave.Database.Migration.Equals(NativeWeave.Database.Migration)`
+## `M:Korda.Database.Migration.Equals(Korda.Database.Migration)`
 
 ```csharp
-public bool NativeWeave.Database.Migration.Equals(NativeWeave.Database.Migration? other)
+public bool Korda.Database.Migration.Equals(Korda.Database.Migration? other)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This record retains its strings without native resources. Bundle construction snapshots the collection and performs bounded UTF-8 encoding and hashing; execution is explicit.
 
-## `M:NativeWeave.Database.Migration.Equals(System.Object)`
+## `M:Korda.Database.Migration.Equals(System.Object)`
 
 ```csharp
-public override bool NativeWeave.Database.Migration.Equals(object? obj)
+public override bool Korda.Database.Migration.Equals(object? obj)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This record retains its strings without native resources. Bundle construction snapshots the collection and performs bounded UTF-8 encoding and hashing; execution is explicit.
 
-## `M:NativeWeave.Database.Migration.GetHashCode`
+## `M:Korda.Database.Migration.GetHashCode`
 
 ```csharp
-public override int NativeWeave.Database.Migration.GetHashCode()
+public override int Korda.Database.Migration.GetHashCode()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This record retains its strings without native resources. Bundle construction snapshots the collection and performs bounded UTF-8 encoding and hashing; execution is explicit.
 
-## `M:NativeWeave.Database.Migration.ToString`
+## `M:Korda.Database.Migration.ToString`
 
 ```csharp
-public override string NativeWeave.Database.Migration.ToString()
+public override string Korda.Database.Migration.ToString()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This record retains its strings without native resources. Bundle construction snapshots the collection and performs bounded UTF-8 encoding and hashing; execution is explicit.
 
-## `M:NativeWeave.Database.Migration.op_Equality(NativeWeave.Database.Migration,NativeWeave.Database.Migration)`
+## `M:Korda.Database.Migration.op_Equality(Korda.Database.Migration,Korda.Database.Migration)`
 
 ```csharp
-public static bool NativeWeave.Database.Migration.operator ==(NativeWeave.Database.Migration? left, NativeWeave.Database.Migration? right)
+public static bool Korda.Database.Migration.operator ==(Korda.Database.Migration? left, Korda.Database.Migration? right)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This record retains its strings without native resources. Bundle construction snapshots the collection and performs bounded UTF-8 encoding and hashing; execution is explicit.
 
-## `M:NativeWeave.Database.Migration.op_Inequality(NativeWeave.Database.Migration,NativeWeave.Database.Migration)`
+## `M:Korda.Database.Migration.op_Inequality(Korda.Database.Migration,Korda.Database.Migration)`
 
 ```csharp
-public static bool NativeWeave.Database.Migration.operator !=(NativeWeave.Database.Migration? left, NativeWeave.Database.Migration? right)
+public static bool Korda.Database.Migration.operator !=(Korda.Database.Migration? left, Korda.Database.Migration? right)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This record retains its strings without native resources. Bundle construction snapshots the collection and performs bounded UTF-8 encoding and hashing; execution is explicit.
 
-## `M:NativeWeave.Database.Migration.{Clone}$`
+## `M:Korda.Database.Migration.{Clone}$`
 
 ```csharp
-public NativeWeave.Database.Migration NativeWeave.Database.Migration.<Clone>$()
+public Korda.Database.Migration Korda.Database.Migration.<Clone>$()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This record retains its strings without native resources. Bundle construction snapshots the collection and performs bounded UTF-8 encoding and hashing; execution is explicit.
 
-## `M:NativeWeave.Database.MigrationBundle.#ctor(NativeWeave.Database.DatabaseProvider,System.Collections.Generic.IReadOnlyList{NativeWeave.Database.Migration})`
+## `M:Korda.Database.MigrationBundle.#ctor(Korda.Database.DatabaseProvider,System.Collections.Generic.IReadOnlyList{Korda.Database.Migration})`
 
 ```csharp
-public NativeWeave.Database.MigrationBundle.MigrationBundle(NativeWeave.Database.DatabaseProvider provider, System.Collections.Generic.IReadOnlyList<NativeWeave.Database.Migration> migrations)
+public Korda.Database.MigrationBundle.MigrationBundle(Korda.Database.DatabaseProvider provider, System.Collections.Generic.IReadOnlyList<Korda.Database.Migration> migrations)
 ```
 
 **summary:** Creates an immutable snapshot and validates versions, strings, modes and finite encoding limits.
@@ -1592,90 +1592,90 @@ public NativeWeave.Database.MigrationBundle.MigrationBundle(NativeWeave.Database
 
 **Inherited type policy:** Construction performs no native load or database I/O. Its SHA-256 identity covers the canonical kind12 provider and entry sequence before the hash field is added. Each entry separately contains SQL SHA-256; the native ledger preserves the existing SQLx-compatible SHA-384 checksum. Scripts must be trusted deployment artifacts.
 
-## `M:NativeWeave.Database.MigrationOptions.#ctor`
+## `M:Korda.Database.MigrationOptions.#ctor`
 
 ```csharp
-public NativeWeave.Database.MigrationOptions.MigrationOptions()
+public Korda.Database.MigrationOptions.MigrationOptions()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This immutable managed value owns no connection or native resources. An administrative call snapshots its scalar settings before admission.
 
-## `M:NativeWeave.Database.MigrationOptions.Equals(NativeWeave.Database.MigrationOptions)`
+## `M:Korda.Database.MigrationOptions.Equals(Korda.Database.MigrationOptions)`
 
 ```csharp
-public bool NativeWeave.Database.MigrationOptions.Equals(NativeWeave.Database.MigrationOptions? other)
+public bool Korda.Database.MigrationOptions.Equals(Korda.Database.MigrationOptions? other)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This immutable managed value owns no connection or native resources. An administrative call snapshots its scalar settings before admission.
 
-## `M:NativeWeave.Database.MigrationOptions.Equals(System.Object)`
+## `M:Korda.Database.MigrationOptions.Equals(System.Object)`
 
 ```csharp
-public override bool NativeWeave.Database.MigrationOptions.Equals(object? obj)
+public override bool Korda.Database.MigrationOptions.Equals(object? obj)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This immutable managed value owns no connection or native resources. An administrative call snapshots its scalar settings before admission.
 
-## `M:NativeWeave.Database.MigrationOptions.GetHashCode`
+## `M:Korda.Database.MigrationOptions.GetHashCode`
 
 ```csharp
-public override int NativeWeave.Database.MigrationOptions.GetHashCode()
+public override int Korda.Database.MigrationOptions.GetHashCode()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This immutable managed value owns no connection or native resources. An administrative call snapshots its scalar settings before admission.
 
-## `M:NativeWeave.Database.MigrationOptions.ToString`
+## `M:Korda.Database.MigrationOptions.ToString`
 
 ```csharp
-public override string NativeWeave.Database.MigrationOptions.ToString()
+public override string Korda.Database.MigrationOptions.ToString()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This immutable managed value owns no connection or native resources. An administrative call snapshots its scalar settings before admission.
 
-## `M:NativeWeave.Database.MigrationOptions.op_Equality(NativeWeave.Database.MigrationOptions,NativeWeave.Database.MigrationOptions)`
+## `M:Korda.Database.MigrationOptions.op_Equality(Korda.Database.MigrationOptions,Korda.Database.MigrationOptions)`
 
 ```csharp
-public static bool NativeWeave.Database.MigrationOptions.operator ==(NativeWeave.Database.MigrationOptions? left, NativeWeave.Database.MigrationOptions? right)
+public static bool Korda.Database.MigrationOptions.operator ==(Korda.Database.MigrationOptions? left, Korda.Database.MigrationOptions? right)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This immutable managed value owns no connection or native resources. An administrative call snapshots its scalar settings before admission.
 
-## `M:NativeWeave.Database.MigrationOptions.op_Inequality(NativeWeave.Database.MigrationOptions,NativeWeave.Database.MigrationOptions)`
+## `M:Korda.Database.MigrationOptions.op_Inequality(Korda.Database.MigrationOptions,Korda.Database.MigrationOptions)`
 
 ```csharp
-public static bool NativeWeave.Database.MigrationOptions.operator !=(NativeWeave.Database.MigrationOptions? left, NativeWeave.Database.MigrationOptions? right)
+public static bool Korda.Database.MigrationOptions.operator !=(Korda.Database.MigrationOptions? left, Korda.Database.MigrationOptions? right)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This immutable managed value owns no connection or native resources. An administrative call snapshots its scalar settings before admission.
 
-## `M:NativeWeave.Database.MigrationOptions.{Clone}$`
+## `M:Korda.Database.MigrationOptions.{Clone}$`
 
 ```csharp
-public NativeWeave.Database.MigrationOptions NativeWeave.Database.MigrationOptions.<Clone>$()
+public Korda.Database.MigrationOptions Korda.Database.MigrationOptions.<Clone>$()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This immutable managed value owns no connection or native resources. An administrative call snapshots its scalar settings before admission.
 
-## `M:NativeWeave.Database.MigrationReport.#ctor(System.Int32,System.Nullable{System.Int64},System.Boolean)`
+## `M:Korda.Database.MigrationReport.#ctor(System.Int32,System.Nullable{System.Int64},System.Boolean)`
 
 ```csharp
-public NativeWeave.Database.MigrationReport.MigrationReport(int AppliedCount, long? CurrentVersion, bool Completed)
+public Korda.Database.MigrationReport.MigrationReport(int AppliedCount, long? CurrentVersion, bool Completed)
 ```
 
 **summary:** Reports a successfully completed explicit migration call.
@@ -1690,90 +1690,90 @@ public NativeWeave.Database.MigrationReport.MigrationReport(int AppliedCount, lo
 
 **Inherited type policy:** This detached managed value owns no native resource. The administrative connection has retired before task completion; earlier confirmed entries remain committed independently on PostgreSQL.
 
-## `M:NativeWeave.Database.MigrationReport.Deconstruct(System.Int32@,System.Nullable{System.Int64}@,System.Boolean@)`
+## `M:Korda.Database.MigrationReport.Deconstruct(System.Int32@,System.Nullable{System.Int64}@,System.Boolean@)`
 
 ```csharp
-public void NativeWeave.Database.MigrationReport.Deconstruct(out int AppliedCount, out long? CurrentVersion, out bool Completed)
+public void Korda.Database.MigrationReport.Deconstruct(out int AppliedCount, out long? CurrentVersion, out bool Completed)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This detached managed value owns no native resource. The administrative connection has retired before task completion; earlier confirmed entries remain committed independently on PostgreSQL.
 
-## `M:NativeWeave.Database.MigrationReport.Equals(NativeWeave.Database.MigrationReport)`
+## `M:Korda.Database.MigrationReport.Equals(Korda.Database.MigrationReport)`
 
 ```csharp
-public bool NativeWeave.Database.MigrationReport.Equals(NativeWeave.Database.MigrationReport? other)
+public bool Korda.Database.MigrationReport.Equals(Korda.Database.MigrationReport? other)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This detached managed value owns no native resource. The administrative connection has retired before task completion; earlier confirmed entries remain committed independently on PostgreSQL.
 
-## `M:NativeWeave.Database.MigrationReport.Equals(System.Object)`
+## `M:Korda.Database.MigrationReport.Equals(System.Object)`
 
 ```csharp
-public override bool NativeWeave.Database.MigrationReport.Equals(object? obj)
+public override bool Korda.Database.MigrationReport.Equals(object? obj)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This detached managed value owns no native resource. The administrative connection has retired before task completion; earlier confirmed entries remain committed independently on PostgreSQL.
 
-## `M:NativeWeave.Database.MigrationReport.GetHashCode`
+## `M:Korda.Database.MigrationReport.GetHashCode`
 
 ```csharp
-public override int NativeWeave.Database.MigrationReport.GetHashCode()
+public override int Korda.Database.MigrationReport.GetHashCode()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This detached managed value owns no native resource. The administrative connection has retired before task completion; earlier confirmed entries remain committed independently on PostgreSQL.
 
-## `M:NativeWeave.Database.MigrationReport.ToString`
+## `M:Korda.Database.MigrationReport.ToString`
 
 ```csharp
-public override string NativeWeave.Database.MigrationReport.ToString()
+public override string Korda.Database.MigrationReport.ToString()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This detached managed value owns no native resource. The administrative connection has retired before task completion; earlier confirmed entries remain committed independently on PostgreSQL.
 
-## `M:NativeWeave.Database.MigrationReport.op_Equality(NativeWeave.Database.MigrationReport,NativeWeave.Database.MigrationReport)`
+## `M:Korda.Database.MigrationReport.op_Equality(Korda.Database.MigrationReport,Korda.Database.MigrationReport)`
 
 ```csharp
-public static bool NativeWeave.Database.MigrationReport.operator ==(NativeWeave.Database.MigrationReport? left, NativeWeave.Database.MigrationReport? right)
+public static bool Korda.Database.MigrationReport.operator ==(Korda.Database.MigrationReport? left, Korda.Database.MigrationReport? right)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This detached managed value owns no native resource. The administrative connection has retired before task completion; earlier confirmed entries remain committed independently on PostgreSQL.
 
-## `M:NativeWeave.Database.MigrationReport.op_Inequality(NativeWeave.Database.MigrationReport,NativeWeave.Database.MigrationReport)`
+## `M:Korda.Database.MigrationReport.op_Inequality(Korda.Database.MigrationReport,Korda.Database.MigrationReport)`
 
 ```csharp
-public static bool NativeWeave.Database.MigrationReport.operator !=(NativeWeave.Database.MigrationReport? left, NativeWeave.Database.MigrationReport? right)
+public static bool Korda.Database.MigrationReport.operator !=(Korda.Database.MigrationReport? left, Korda.Database.MigrationReport? right)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This detached managed value owns no native resource. The administrative connection has retired before task completion; earlier confirmed entries remain committed independently on PostgreSQL.
 
-## `M:NativeWeave.Database.MigrationReport.{Clone}$`
+## `M:Korda.Database.MigrationReport.{Clone}$`
 
 ```csharp
-public NativeWeave.Database.MigrationReport NativeWeave.Database.MigrationReport.<Clone>$()
+public Korda.Database.MigrationReport Korda.Database.MigrationReport.<Clone>$()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This detached managed value owns no native resource. The administrative connection has retired before task completion; earlier confirmed entries remain committed independently on PostgreSQL.
 
-## `M:NativeWeave.Database.MigrationStatus.#ctor(System.Int64,System.String,System.String,System.Boolean)`
+## `M:Korda.Database.MigrationStatus.#ctor(System.Int64,System.String,System.String,System.Boolean)`
 
 ```csharp
-public NativeWeave.Database.MigrationStatus.MigrationStatus(long Version, string Description, string Checksum, bool Applied)
+public Korda.Database.MigrationStatus.MigrationStatus(long Version, string Description, string Checksum, bool Applied)
 ```
 
 **summary:** Describes one bounded immutable bundle/ledger comparison.
@@ -1790,98 +1790,98 @@ public NativeWeave.Database.MigrationStatus.MigrationStatus(long Version, string
 
 **Inherited type policy:** This detached managed record owns its immutable strings. Native result buffers are released before the task returns; the source bounds aggregate record and UTF-8 byte costs.
 
-## `M:NativeWeave.Database.MigrationStatus.Deconstruct(System.Int64@,System.String@,System.String@,System.Boolean@)`
+## `M:Korda.Database.MigrationStatus.Deconstruct(System.Int64@,System.String@,System.String@,System.Boolean@)`
 
 ```csharp
-public void NativeWeave.Database.MigrationStatus.Deconstruct(out long Version, out string Description, out string Checksum, out bool Applied)
+public void Korda.Database.MigrationStatus.Deconstruct(out long Version, out string Description, out string Checksum, out bool Applied)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This detached managed record owns its immutable strings. Native result buffers are released before the task returns; the source bounds aggregate record and UTF-8 byte costs.
 
-## `M:NativeWeave.Database.MigrationStatus.Equals(NativeWeave.Database.MigrationStatus)`
+## `M:Korda.Database.MigrationStatus.Equals(Korda.Database.MigrationStatus)`
 
 ```csharp
-public bool NativeWeave.Database.MigrationStatus.Equals(NativeWeave.Database.MigrationStatus? other)
+public bool Korda.Database.MigrationStatus.Equals(Korda.Database.MigrationStatus? other)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This detached managed record owns its immutable strings. Native result buffers are released before the task returns; the source bounds aggregate record and UTF-8 byte costs.
 
-## `M:NativeWeave.Database.MigrationStatus.Equals(System.Object)`
+## `M:Korda.Database.MigrationStatus.Equals(System.Object)`
 
 ```csharp
-public override bool NativeWeave.Database.MigrationStatus.Equals(object? obj)
+public override bool Korda.Database.MigrationStatus.Equals(object? obj)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This detached managed record owns its immutable strings. Native result buffers are released before the task returns; the source bounds aggregate record and UTF-8 byte costs.
 
-## `M:NativeWeave.Database.MigrationStatus.GetHashCode`
+## `M:Korda.Database.MigrationStatus.GetHashCode`
 
 ```csharp
-public override int NativeWeave.Database.MigrationStatus.GetHashCode()
+public override int Korda.Database.MigrationStatus.GetHashCode()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This detached managed record owns its immutable strings. Native result buffers are released before the task returns; the source bounds aggregate record and UTF-8 byte costs.
 
-## `M:NativeWeave.Database.MigrationStatus.ToString`
+## `M:Korda.Database.MigrationStatus.ToString`
 
 ```csharp
-public override string NativeWeave.Database.MigrationStatus.ToString()
+public override string Korda.Database.MigrationStatus.ToString()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This detached managed record owns its immutable strings. Native result buffers are released before the task returns; the source bounds aggregate record and UTF-8 byte costs.
 
-## `M:NativeWeave.Database.MigrationStatus.op_Equality(NativeWeave.Database.MigrationStatus,NativeWeave.Database.MigrationStatus)`
+## `M:Korda.Database.MigrationStatus.op_Equality(Korda.Database.MigrationStatus,Korda.Database.MigrationStatus)`
 
 ```csharp
-public static bool NativeWeave.Database.MigrationStatus.operator ==(NativeWeave.Database.MigrationStatus? left, NativeWeave.Database.MigrationStatus? right)
+public static bool Korda.Database.MigrationStatus.operator ==(Korda.Database.MigrationStatus? left, Korda.Database.MigrationStatus? right)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This detached managed record owns its immutable strings. Native result buffers are released before the task returns; the source bounds aggregate record and UTF-8 byte costs.
 
-## `M:NativeWeave.Database.MigrationStatus.op_Inequality(NativeWeave.Database.MigrationStatus,NativeWeave.Database.MigrationStatus)`
+## `M:Korda.Database.MigrationStatus.op_Inequality(Korda.Database.MigrationStatus,Korda.Database.MigrationStatus)`
 
 ```csharp
-public static bool NativeWeave.Database.MigrationStatus.operator !=(NativeWeave.Database.MigrationStatus? left, NativeWeave.Database.MigrationStatus? right)
+public static bool Korda.Database.MigrationStatus.operator !=(Korda.Database.MigrationStatus? left, Korda.Database.MigrationStatus? right)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This detached managed record owns its immutable strings. Native result buffers are released before the task returns; the source bounds aggregate record and UTF-8 byte costs.
 
-## `M:NativeWeave.Database.MigrationStatus.{Clone}$`
+## `M:Korda.Database.MigrationStatus.{Clone}$`
 
 ```csharp
-public NativeWeave.Database.MigrationStatus NativeWeave.Database.MigrationStatus.<Clone>$()
+public Korda.Database.MigrationStatus Korda.Database.MigrationStatus.<Clone>$()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This detached managed record owns its immutable strings. Native result buffers are released before the task returns; the source bounds aggregate record and UTF-8 byte costs.
 
-## `M:NativeWeave.Database.MigrationTransactionMode.#ctor`
+## `M:Korda.Database.MigrationTransactionMode.#ctor`
 
 ```csharp
-public NativeWeave.Database.MigrationTransactionMode.MigrationTransactionMode()
+public Korda.Database.MigrationTransactionMode.MigrationTransactionMode()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
-## `M:NativeWeave.Database.SchemaColumn.#ctor(System.String,System.String,System.Boolean,System.Boolean)`
+## `M:Korda.Database.SchemaColumn.#ctor(System.String,System.String,System.Boolean,System.Boolean)`
 
 ```csharp
-public NativeWeave.Database.SchemaColumn.SchemaColumn(string Name, string StoreType, bool IsNullable, bool IsPrimaryKey)
+public Korda.Database.SchemaColumn.SchemaColumn(string Name, string StoreType, bool IsNullable, bool IsPrimaryKey)
 ```
 
 **summary:** Describes a provider catalog column without exposing a provider row object.
@@ -1898,90 +1898,90 @@ public NativeWeave.Database.SchemaColumn.SchemaColumn(string Name, string StoreT
 
 **Inherited type policy:** This detached immutable record retains its names and type strings. Each column counts toward the same source result-row and encoded-byte limits as its parent table.
 
-## `M:NativeWeave.Database.SchemaColumn.Deconstruct(System.String@,System.String@,System.Boolean@,System.Boolean@)`
+## `M:Korda.Database.SchemaColumn.Deconstruct(System.String@,System.String@,System.Boolean@,System.Boolean@)`
 
 ```csharp
-public void NativeWeave.Database.SchemaColumn.Deconstruct(out string Name, out string StoreType, out bool IsNullable, out bool IsPrimaryKey)
+public void Korda.Database.SchemaColumn.Deconstruct(out string Name, out string StoreType, out bool IsNullable, out bool IsPrimaryKey)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This detached immutable record retains its names and type strings. Each column counts toward the same source result-row and encoded-byte limits as its parent table.
 
-## `M:NativeWeave.Database.SchemaColumn.Equals(NativeWeave.Database.SchemaColumn)`
+## `M:Korda.Database.SchemaColumn.Equals(Korda.Database.SchemaColumn)`
 
 ```csharp
-public bool NativeWeave.Database.SchemaColumn.Equals(NativeWeave.Database.SchemaColumn? other)
+public bool Korda.Database.SchemaColumn.Equals(Korda.Database.SchemaColumn? other)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This detached immutable record retains its names and type strings. Each column counts toward the same source result-row and encoded-byte limits as its parent table.
 
-## `M:NativeWeave.Database.SchemaColumn.Equals(System.Object)`
+## `M:Korda.Database.SchemaColumn.Equals(System.Object)`
 
 ```csharp
-public override bool NativeWeave.Database.SchemaColumn.Equals(object? obj)
+public override bool Korda.Database.SchemaColumn.Equals(object? obj)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This detached immutable record retains its names and type strings. Each column counts toward the same source result-row and encoded-byte limits as its parent table.
 
-## `M:NativeWeave.Database.SchemaColumn.GetHashCode`
+## `M:Korda.Database.SchemaColumn.GetHashCode`
 
 ```csharp
-public override int NativeWeave.Database.SchemaColumn.GetHashCode()
+public override int Korda.Database.SchemaColumn.GetHashCode()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This detached immutable record retains its names and type strings. Each column counts toward the same source result-row and encoded-byte limits as its parent table.
 
-## `M:NativeWeave.Database.SchemaColumn.ToString`
+## `M:Korda.Database.SchemaColumn.ToString`
 
 ```csharp
-public override string NativeWeave.Database.SchemaColumn.ToString()
+public override string Korda.Database.SchemaColumn.ToString()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This detached immutable record retains its names and type strings. Each column counts toward the same source result-row and encoded-byte limits as its parent table.
 
-## `M:NativeWeave.Database.SchemaColumn.op_Equality(NativeWeave.Database.SchemaColumn,NativeWeave.Database.SchemaColumn)`
+## `M:Korda.Database.SchemaColumn.op_Equality(Korda.Database.SchemaColumn,Korda.Database.SchemaColumn)`
 
 ```csharp
-public static bool NativeWeave.Database.SchemaColumn.operator ==(NativeWeave.Database.SchemaColumn? left, NativeWeave.Database.SchemaColumn? right)
+public static bool Korda.Database.SchemaColumn.operator ==(Korda.Database.SchemaColumn? left, Korda.Database.SchemaColumn? right)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This detached immutable record retains its names and type strings. Each column counts toward the same source result-row and encoded-byte limits as its parent table.
 
-## `M:NativeWeave.Database.SchemaColumn.op_Inequality(NativeWeave.Database.SchemaColumn,NativeWeave.Database.SchemaColumn)`
+## `M:Korda.Database.SchemaColumn.op_Inequality(Korda.Database.SchemaColumn,Korda.Database.SchemaColumn)`
 
 ```csharp
-public static bool NativeWeave.Database.SchemaColumn.operator !=(NativeWeave.Database.SchemaColumn? left, NativeWeave.Database.SchemaColumn? right)
+public static bool Korda.Database.SchemaColumn.operator !=(Korda.Database.SchemaColumn? left, Korda.Database.SchemaColumn? right)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This detached immutable record retains its names and type strings. Each column counts toward the same source result-row and encoded-byte limits as its parent table.
 
-## `M:NativeWeave.Database.SchemaColumn.{Clone}$`
+## `M:Korda.Database.SchemaColumn.{Clone}$`
 
 ```csharp
-public NativeWeave.Database.SchemaColumn NativeWeave.Database.SchemaColumn.<Clone>$()
+public Korda.Database.SchemaColumn Korda.Database.SchemaColumn.<Clone>$()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This detached immutable record retains its names and type strings. Each column counts toward the same source result-row and encoded-byte limits as its parent table.
 
-## `M:NativeWeave.Database.SchemaTable.#ctor(System.String,System.String,System.Collections.Generic.IReadOnlyList{NativeWeave.Database.SchemaColumn})`
+## `M:Korda.Database.SchemaTable.#ctor(System.String,System.String,System.Collections.Generic.IReadOnlyList{Korda.Database.SchemaColumn})`
 
 ```csharp
-public NativeWeave.Database.SchemaTable.SchemaTable(string? Schema, string Name, System.Collections.Generic.IReadOnlyList<NativeWeave.Database.SchemaColumn> Columns)
+public Korda.Database.SchemaTable.SchemaTable(string? Schema, string Name, System.Collections.Generic.IReadOnlyList<Korda.Database.SchemaColumn> Columns)
 ```
 
 **summary:** Describes a table and an immutable, ordinally ordered column snapshot.
@@ -1996,90 +1996,90 @@ public NativeWeave.Database.SchemaTable.SchemaTable(string? Schema, string Name,
 
 **Inherited type policy:** Administration returns a detached read-only column list with no native lease. Table names and all nested columns share the source buffering budget; no further database access is lazy.
 
-## `M:NativeWeave.Database.SchemaTable.Deconstruct(System.String@,System.String@,System.Collections.Generic.IReadOnlyList{NativeWeave.Database.SchemaColumn}@)`
+## `M:Korda.Database.SchemaTable.Deconstruct(System.String@,System.String@,System.Collections.Generic.IReadOnlyList{Korda.Database.SchemaColumn}@)`
 
 ```csharp
-public void NativeWeave.Database.SchemaTable.Deconstruct(out string? Schema, out string Name, out System.Collections.Generic.IReadOnlyList<NativeWeave.Database.SchemaColumn> Columns)
+public void Korda.Database.SchemaTable.Deconstruct(out string? Schema, out string Name, out System.Collections.Generic.IReadOnlyList<Korda.Database.SchemaColumn> Columns)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** Administration returns a detached read-only column list with no native lease. Table names and all nested columns share the source buffering budget; no further database access is lazy.
 
-## `M:NativeWeave.Database.SchemaTable.Equals(NativeWeave.Database.SchemaTable)`
+## `M:Korda.Database.SchemaTable.Equals(Korda.Database.SchemaTable)`
 
 ```csharp
-public bool NativeWeave.Database.SchemaTable.Equals(NativeWeave.Database.SchemaTable? other)
+public bool Korda.Database.SchemaTable.Equals(Korda.Database.SchemaTable? other)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** Administration returns a detached read-only column list with no native lease. Table names and all nested columns share the source buffering budget; no further database access is lazy.
 
-## `M:NativeWeave.Database.SchemaTable.Equals(System.Object)`
+## `M:Korda.Database.SchemaTable.Equals(System.Object)`
 
 ```csharp
-public override bool NativeWeave.Database.SchemaTable.Equals(object? obj)
+public override bool Korda.Database.SchemaTable.Equals(object? obj)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** Administration returns a detached read-only column list with no native lease. Table names and all nested columns share the source buffering budget; no further database access is lazy.
 
-## `M:NativeWeave.Database.SchemaTable.GetHashCode`
+## `M:Korda.Database.SchemaTable.GetHashCode`
 
 ```csharp
-public override int NativeWeave.Database.SchemaTable.GetHashCode()
+public override int Korda.Database.SchemaTable.GetHashCode()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** Administration returns a detached read-only column list with no native lease. Table names and all nested columns share the source buffering budget; no further database access is lazy.
 
-## `M:NativeWeave.Database.SchemaTable.ToString`
+## `M:Korda.Database.SchemaTable.ToString`
 
 ```csharp
-public override string NativeWeave.Database.SchemaTable.ToString()
+public override string Korda.Database.SchemaTable.ToString()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** Administration returns a detached read-only column list with no native lease. Table names and all nested columns share the source buffering budget; no further database access is lazy.
 
-## `M:NativeWeave.Database.SchemaTable.op_Equality(NativeWeave.Database.SchemaTable,NativeWeave.Database.SchemaTable)`
+## `M:Korda.Database.SchemaTable.op_Equality(Korda.Database.SchemaTable,Korda.Database.SchemaTable)`
 
 ```csharp
-public static bool NativeWeave.Database.SchemaTable.operator ==(NativeWeave.Database.SchemaTable? left, NativeWeave.Database.SchemaTable? right)
+public static bool Korda.Database.SchemaTable.operator ==(Korda.Database.SchemaTable? left, Korda.Database.SchemaTable? right)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** Administration returns a detached read-only column list with no native lease. Table names and all nested columns share the source buffering budget; no further database access is lazy.
 
-## `M:NativeWeave.Database.SchemaTable.op_Inequality(NativeWeave.Database.SchemaTable,NativeWeave.Database.SchemaTable)`
+## `M:Korda.Database.SchemaTable.op_Inequality(Korda.Database.SchemaTable,Korda.Database.SchemaTable)`
 
 ```csharp
-public static bool NativeWeave.Database.SchemaTable.operator !=(NativeWeave.Database.SchemaTable? left, NativeWeave.Database.SchemaTable? right)
+public static bool Korda.Database.SchemaTable.operator !=(Korda.Database.SchemaTable? left, Korda.Database.SchemaTable? right)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** Administration returns a detached read-only column list with no native lease. Table names and all nested columns share the source buffering budget; no further database access is lazy.
 
-## `M:NativeWeave.Database.SchemaTable.{Clone}$`
+## `M:Korda.Database.SchemaTable.{Clone}$`
 
 ```csharp
-public NativeWeave.Database.SchemaTable NativeWeave.Database.SchemaTable.<Clone>$()
+public Korda.Database.SchemaTable Korda.Database.SchemaTable.<Clone>$()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** Administration returns a detached read-only column list with no native lease. Table names and all nested columns share the source buffering budget; no further database access is lazy.
 
-## `M:NativeWeave.Query.CommonTable`1.Create(NativeWeave.Data.Table{`0},NativeWeave.Query.QuerySelection{`0},System.Boolean)`
+## `M:Korda.Query.CommonTable`1.Create(Korda.Data.Table{`0},Korda.Query.QuerySelection{`0},System.Boolean)`
 
 ```csharp
-public static NativeWeave.Query.CommonTable<T> NativeWeave.Query.CommonTable<T>.Create(NativeWeave.Data.Table<T> declaredShape, NativeWeave.Query.QuerySelection<T> body, bool recursive = false)
+public static Korda.Query.CommonTable<T> Korda.Query.CommonTable<T>.Create(Korda.Data.Table<T> declaredShape, Korda.Query.QuerySelection<T> body, bool recursive = false)
 ```
 
 **summary:** Clones a native selected body into the declared shape; recursive mode requires a validated anchor/member UNION.
@@ -2104,10 +2104,10 @@ public static NativeWeave.Query.CommonTable<T> NativeWeave.Query.CommonTable<T>.
 
 **Inherited type policy:** The snapshot is bound to one source and a declared static row shape. With imports a native retained reference. Disposal prevents new imports and does not mutate previously imported snapshots. Recursive creation requires one validated anchor/member self-reference.
 
-## `M:NativeWeave.Query.CommonTable`1.Dispose`
+## `M:Korda.Query.CommonTable`1.Dispose`
 
 ```csharp
-public void NativeWeave.Query.CommonTable<T>.Dispose()
+public void Korda.Query.CommonTable<T>.Dispose()
 ```
 
 **summary:** Prevents new CTE imports and releases this native snapshot reference.
@@ -2116,30 +2116,30 @@ public void NativeWeave.Query.CommonTable<T>.Dispose()
 
 **Inherited type policy:** The snapshot is bound to one source and a declared static row shape. With imports a native retained reference. Disposal prevents new imports and does not mutate previously imported snapshots. Recursive creation requires one validated anchor/member self-reference.
 
-## `M:NativeWeave.Query.FrameBoundary.#ctor`
+## `M:Korda.Query.FrameBoundary.#ctor`
 
 ```csharp
-public NativeWeave.Query.FrameBoundary.FrameBoundary()
+public Korda.Query.FrameBoundary.FrameBoundary()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** Only these ROWS endpoints are supported. Reversed or unsupported bounds fail before native state publication; finite numeric PRECEDING/FOLLOWING frames are not declared.
 
-## `M:NativeWeave.Query.JoinPredicate`2.#ctor`
+## `M:Korda.Query.JoinPredicate`2.#ctor`
 
 ```csharp
-public NativeWeave.Query.JoinPredicate<TLeft, TRight>.JoinPredicate()
+public Korda.Query.JoinPredicate<TLeft, TRight>.JoinPredicate()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** Use only inside the synchronous JOIN callback. Provisional right-side expressions are invalidated on commit or abort. Values and nullability stay exact; explicitly lift a non-null parent key to compare a nullable foreign key.
 
-## `M:NativeWeave.Query.JoinPredicate`2.Left``1(NativeWeave.Data.Column{`0,``0})`
+## `M:Korda.Query.JoinPredicate`2.Left``1(Korda.Data.Column{`0,``0})`
 
 ```csharp
-public NativeWeave.Query.SqlExpression<T> NativeWeave.Query.JoinPredicate<TLeft, TRight>.Left<T>(NativeWeave.Data.Column<TLeft, T> column)
+public Korda.Query.SqlExpression<T> Korda.Query.JoinPredicate<TLeft, TRight>.Left<T>(Korda.Data.Column<TLeft, T> column)
 ```
 
 **summary:** Reads a root-table column during the synchronous ON callback.
@@ -2162,10 +2162,10 @@ public NativeWeave.Query.SqlExpression<T> NativeWeave.Query.JoinPredicate<TLeft,
 
 **Inherited type policy:** Use only inside the synchronous JOIN callback. Provisional right-side expressions are invalidated on commit or abort. Values and nullability stay exact; explicitly lift a non-null parent key to compare a nullable foreign key.
 
-## `M:NativeWeave.Query.JoinPredicate`2.Right``1(NativeWeave.Data.Column{`1,``0})`
+## `M:Korda.Query.JoinPredicate`2.Right``1(Korda.Data.Column{`1,``0})`
 
 ```csharp
-public NativeWeave.Query.SqlExpression<T> NativeWeave.Query.JoinPredicate<TLeft, TRight>.Right<T>(NativeWeave.Data.Column<TRight, T> column)
+public Korda.Query.SqlExpression<T> Korda.Query.JoinPredicate<TLeft, TRight>.Right<T>(Korda.Data.Column<TRight, T> column)
 ```
 
 **summary:** Reads a provisional joined column; the resulting ON token expires on commit or abort.
@@ -2188,50 +2188,50 @@ public NativeWeave.Query.SqlExpression<T> NativeWeave.Query.JoinPredicate<TLeft,
 
 **Inherited type policy:** Use only inside the synchronous JOIN callback. Provisional right-side expressions are invalidated on commit or abort. Values and nullability stay exact; explicitly lift a non-null parent key to compare a nullable foreign key.
 
-## `M:NativeWeave.Query.JoinedTable`1.#ctor`
+## `M:Korda.Query.JoinedTable`1.#ctor`
 
 ```csharp
-public NativeWeave.Query.JoinedTable<TEntity>.JoinedTable()
+public Korda.Query.JoinedTable<TEntity>.JoinedTable()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** The alias is a borrowed token, not an independently disposable query. Default aliases and aliases from another query reject, even if the CLR entity type matches.
 
-## `M:NativeWeave.Query.LeftJoinedTable`1.#ctor`
+## `M:Korda.Query.LeftJoinedTable`1.#ctor`
 
 ```csharp
-public NativeWeave.Query.LeftJoinedTable<TEntity>.LeftJoinedTable()
+public Korda.Query.LeftJoinedTable<TEntity>.LeftJoinedTable()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** Use NullableValue or NullableReference to project its columns and HasMatch to distinguish absence. No default scalar sentinel or implicit object graph is introduced. Its query owns the alias lifetime.
 
-## `M:NativeWeave.Query.LockWait.#ctor`
+## `M:Korda.Query.LockWait.#ctor`
 
 ```csharp
-public NativeWeave.Query.LockWait.LockWait()
+public Korda.Query.LockWait.LockWait()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** Controls PostgreSQL row-lock conflicts within the same transaction and total query deadline; it does not enable transparent retries.
 
-## `M:NativeWeave.Query.NullOrder.#ctor`
+## `M:Korda.Query.NullOrder.#ctor`
 
 ```csharp
-public NativeWeave.Query.NullOrder.NullOrder()
+public Korda.Query.NullOrder.NullOrder()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** Both providers render explicit SQL NULL placement. Ordering alone supplies no uniqueness or snapshot guarantee.
 
-## `M:NativeWeave.Query.PreparedQuery`1.AsAsyncEnumerable(NativeWeave.Database.DataSession,NativeWeave.Query.QueryParameters,System.Threading.CancellationToken)`
+## `M:Korda.Query.PreparedQuery`1.AsAsyncEnumerable(Korda.Database.DataSession,Korda.Query.QueryParameters,System.Threading.CancellationToken)`
 
 ```csharp
-public System.Collections.Generic.IAsyncEnumerable<T> NativeWeave.Query.PreparedQuery<T>.AsAsyncEnumerable(NativeWeave.Database.DataSession session, NativeWeave.Query.QueryParameters? parameters = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+public System.Collections.Generic.IAsyncEnumerable<T> Korda.Query.PreparedQuery<T>.AsAsyncEnumerable(Korda.Database.DataSession session, Korda.Query.QueryParameters? parameters = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
 ```
 
 **summary:** Snapshots exact parameter values now and creates one independent lazy native stream.
@@ -2260,10 +2260,10 @@ public System.Collections.Generic.IAsyncEnumerable<T> NativeWeave.Query.Prepared
 
 **Inherited type policy:** Concurrent execution uses separate sessions from the same source. Disposing prevents new dispatch; accepted native operations retain their plan independently and complete safely.
 
-## `M:NativeWeave.Query.PreparedQuery`1.Dispose`
+## `M:Korda.Query.PreparedQuery`1.Dispose`
 
 ```csharp
-public void NativeWeave.Query.PreparedQuery<T>.Dispose()
+public void Korda.Query.PreparedQuery<T>.Dispose()
 ```
 
 **summary:** Prevents new execution and releases this plan reference without cancelling accepted operations.
@@ -2272,10 +2272,10 @@ public void NativeWeave.Query.PreparedQuery<T>.Dispose()
 
 **Inherited type policy:** Concurrent execution uses separate sessions from the same source. Disposing prevents new dispatch; accepted native operations retain their plan independently and complete safely.
 
-## `M:NativeWeave.Query.PreparedQuery`1.ToListAsync(NativeWeave.Database.DataSession,NativeWeave.Query.QueryParameters,System.Threading.CancellationToken)`
+## `M:Korda.Query.PreparedQuery`1.ToListAsync(Korda.Database.DataSession,Korda.Query.QueryParameters,System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<T>> NativeWeave.Query.PreparedQuery<T>.ToListAsync(NativeWeave.Database.DataSession session, NativeWeave.Query.QueryParameters? parameters = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+public System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<T>> Korda.Query.PreparedQuery<T>.ToListAsync(Korda.Database.DataSession session, Korda.Query.QueryParameters? parameters = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
 ```
 
 **summary:** Snapshots the exact declared parameter set before await and executes a bounded owned list.
@@ -2304,10 +2304,10 @@ public System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<T>> 
 
 **Inherited type policy:** Concurrent execution uses separate sessions from the same source. Disposing prevents new dispatch; accepted native operations retain their plan independently and complete safely.
 
-## `M:NativeWeave.Query.ProjectionBuilder`1.Add``1(NativeWeave.Query.SqlExpression{``0},System.String)`
+## `M:Korda.Query.ProjectionBuilder`1.Add``1(Korda.Query.SqlExpression{``0},System.String)`
 
 ```csharp
-public NativeWeave.Data.ResultColumn<TValue> NativeWeave.Query.ProjectionBuilder<T>.Add<TValue>(NativeWeave.Query.SqlExpression<TValue> expression, string alias)
+public Korda.Data.ResultColumn<TValue> Korda.Query.ProjectionBuilder<T>.Add<TValue>(Korda.Query.SqlExpression<TValue> expression, string alias)
 ```
 
 **summary:** Adds an exact same-query scalar and unique result alias, returning its projection token.
@@ -2332,10 +2332,10 @@ public NativeWeave.Data.ResultColumn<TValue> NativeWeave.Query.ProjectionBuilder
 
 **Inherited type policy:** Fields must come from its exact live query. Build freezes field order, unique names, codec/nullability and the direct materializer; later Add or Build rejects. RowReader validates the full shape before the callback, and escaping DTO values own their data.
 
-## `M:NativeWeave.Query.ProjectionBuilder`1.Build(NativeWeave.Data.RowMaterializer{`0})`
+## `M:Korda.Query.ProjectionBuilder`1.Build(Korda.Data.RowMaterializer{`0})`
 
 ```csharp
-public NativeWeave.Data.Projection<T> NativeWeave.Query.ProjectionBuilder<T>.Build(NativeWeave.Data.RowMaterializer<T> materializer)
+public Korda.Data.Projection<T> Korda.Query.ProjectionBuilder<T>.Build(Korda.Data.RowMaterializer<T> materializer)
 ```
 
 **summary:** Consumes the builder and freezes a direct AOT-visible materializer; it does not execute SQL.
@@ -2356,20 +2356,20 @@ public NativeWeave.Data.Projection<T> NativeWeave.Query.ProjectionBuilder<T>.Bui
 
 **Inherited type policy:** Fields must come from its exact live query. Build freezes field order, unique names, codec/nullability and the direct materializer; later Add or Build rejects. RowReader validates the full shape before the callback, and escaping DTO values own their data.
 
-## `M:NativeWeave.Query.QueryParameter`1.#ctor`
+## `M:Korda.Query.QueryParameter`1.#ctor`
 
 ```csharp
-public NativeWeave.Query.QueryParameter<T>.QueryParameter()
+public Korda.Query.QueryParameter<T>.QueryParameter()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** Parameter IDs are monotonically allocated within a source generation, independently of query expression tokens. A copied parameter remains an identity; it owns no native arena or value, and only declared/imported plans may execute it.
 
-## `M:NativeWeave.Query.QueryParameters.#ctor`
+## `M:Korda.Query.QueryParameters.#ctor`
 
 ```csharp
-public NativeWeave.Query.QueryParameters.QueryParameters()
+public Korda.Query.QueryParameters.QueryParameters()
 ```
 
 **summary:** Creates an empty explicit parameter set.
@@ -2378,10 +2378,10 @@ public NativeWeave.Query.QueryParameters.QueryParameters()
 
 **Inherited type policy:** Set snapshots each encoded value before returning. A terminal copies the complete finite set before its first await; later Set calls do not change admitted execution. Missing, extra, foreign or codec-incompatible identities reject before native dispatch. No global parameter dictionary exists.
 
-## `M:NativeWeave.Query.QueryParameters.Set``1(NativeWeave.Query.QueryParameter{``0},``0)`
+## `M:Korda.Query.QueryParameters.Set``1(Korda.Query.QueryParameter{``0},``0)`
 
 ```csharp
-public NativeWeave.Query.QueryParameters NativeWeave.Query.QueryParameters.Set<T>(NativeWeave.Query.QueryParameter<T> parameter, T value)
+public Korda.Query.QueryParameters Korda.Query.QueryParameters.Set<T>(Korda.Query.QueryParameter<T> parameter, T value)
 ```
 
 **summary:** Copies or replaces one typed parameter value; default or conflicting source identities reject.
@@ -2406,20 +2406,20 @@ public NativeWeave.Query.QueryParameters NativeWeave.Query.QueryParameters.Set<T
 
 **Inherited type policy:** Set snapshots each encoded value before returning. A terminal copies the complete finite set before its first await; later Set calls do not change admitted execution. Missing, extra, foreign or codec-incompatible identities reject before native dispatch. No global parameter dictionary exists.
 
-## `M:NativeWeave.Query.QueryRow`1.#ctor`
+## `M:Korda.Query.QueryRow`1.#ctor`
 
 ```csharp
-public NativeWeave.Query.QueryRow<TEntity>.QueryRow()
+public Korda.Query.QueryRow<TEntity>.QueryRow()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This borrowed proxy retains its query association. Default, foreign, closed or sealed owners reject. Each operation forwards immediately to a finite native arena; no managed SQL tree or captured callback is retained.
 
-## `M:NativeWeave.Query.QueryRow`1.Equal``1(NativeWeave.Data.Column{`0,``0},``0)`
+## `M:Korda.Query.QueryRow`1.Equal``1(Korda.Data.Column{`0,``0},``0)`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.QueryRow<TEntity>.Equal<T>(NativeWeave.Data.Column<TEntity, T> column, T value)
+public Korda.Query.SqlPredicate Korda.Query.QueryRow<TEntity>.Equal<T>(Korda.Data.Column<TEntity, T> column, T value)
 ```
 
 **summary:** Snapshots a typed value and creates native SQL equality.
@@ -2444,10 +2444,10 @@ public NativeWeave.Query.SqlPredicate NativeWeave.Query.QueryRow<TEntity>.Equal<
 
 **Inherited type policy:** This borrowed proxy retains its query association. Default, foreign, closed or sealed owners reject. Each operation forwards immediately to a finite native arena; no managed SQL tree or captured callback is retained.
 
-## `M:NativeWeave.Query.QueryRow`1.Get``1(NativeWeave.Data.Column{`0,``0})`
+## `M:Korda.Query.QueryRow`1.Get``1(Korda.Data.Column{`0,``0})`
 
 ```csharp
-public NativeWeave.Query.SqlExpression<T> NativeWeave.Query.QueryRow<TEntity>.Get<T>(NativeWeave.Data.Column<TEntity, T> column)
+public Korda.Query.SqlExpression<T> Korda.Query.QueryRow<TEntity>.Get<T>(Korda.Data.Column<TEntity, T> column)
 ```
 
 **summary:** Creates an immediate native expression for an exact root-table column.
@@ -2470,10 +2470,10 @@ public NativeWeave.Query.SqlExpression<T> NativeWeave.Query.QueryRow<TEntity>.Ge
 
 **Inherited type policy:** This borrowed proxy retains its query association. Default, foreign, closed or sealed owners reject. Each operation forwards immediately to a finite native arena; no managed SQL tree or captured callback is retained.
 
-## `M:NativeWeave.Query.QueryRow`1.GreaterThanOrEqual``1(NativeWeave.Data.Column{`0,``0},``0)`
+## `M:Korda.Query.QueryRow`1.GreaterThanOrEqual``1(Korda.Data.Column{`0,``0},``0)`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.QueryRow<TEntity>.GreaterThanOrEqual<T>(NativeWeave.Data.Column<TEntity, T> column, T value)
+public Korda.Query.SqlPredicate Korda.Query.QueryRow<TEntity>.GreaterThanOrEqual<T>(Korda.Data.Column<TEntity, T> column, T value)
 ```
 
 **summary:** Snapshots a typed lower bound and creates a native comparison.
@@ -2498,10 +2498,10 @@ public NativeWeave.Query.SqlPredicate NativeWeave.Query.QueryRow<TEntity>.Greate
 
 **Inherited type policy:** This borrowed proxy retains its query association. Default, foreign, closed or sealed owners reject. Each operation forwards immediately to a finite native arena; no managed SQL tree or captured callback is retained.
 
-## `M:NativeWeave.Query.QueryRow`1.IsNotNull``1(NativeWeave.Data.Column{`0,``0})`
+## `M:Korda.Query.QueryRow`1.IsNotNull``1(Korda.Data.Column{`0,``0})`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.QueryRow<TEntity>.IsNotNull<T>(NativeWeave.Data.Column<TEntity, T> column)
+public Korda.Query.SqlPredicate Korda.Query.QueryRow<TEntity>.IsNotNull<T>(Korda.Data.Column<TEntity, T> column)
 ```
 
 **summary:** Tests the exact root column for SQL non-NULL.
@@ -2524,10 +2524,10 @@ public NativeWeave.Query.SqlPredicate NativeWeave.Query.QueryRow<TEntity>.IsNotN
 
 **Inherited type policy:** This borrowed proxy retains its query association. Default, foreign, closed or sealed owners reject. Each operation forwards immediately to a finite native arena; no managed SQL tree or captured callback is retained.
 
-## `M:NativeWeave.Query.QueryRow`1.IsNull``1(NativeWeave.Data.Column{`0,``0})`
+## `M:Korda.Query.QueryRow`1.IsNull``1(Korda.Data.Column{`0,``0})`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.QueryRow<TEntity>.IsNull<T>(NativeWeave.Data.Column<TEntity, T> column)
+public Korda.Query.SqlPredicate Korda.Query.QueryRow<TEntity>.IsNull<T>(Korda.Data.Column<TEntity, T> column)
 ```
 
 **summary:** Tests the exact root column for SQL NULL.
@@ -2550,20 +2550,20 @@ public NativeWeave.Query.SqlPredicate NativeWeave.Query.QueryRow<TEntity>.IsNull
 
 **Inherited type policy:** This borrowed proxy retains its query association. Default, foreign, closed or sealed owners reject. Each operation forwards immediately to a finite native arena; no managed SQL tree or captured callback is retained.
 
-## `M:NativeWeave.Query.QuerySelection`1.#ctor`
+## `M:Korda.Query.QuerySelection`1.#ctor`
 
 ```csharp
-public NativeWeave.Query.QuerySelection<T>.QuerySelection()
+public Korda.Query.QuerySelection<T>.QuerySelection()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** This borrowed view is valid only while its projection remains current in the live query. The first execution or Prepare seals the owner synchronously. Dispose the owning query after enumeration; early exit, failure and cancellation await actual native retirement.
 
-## `M:NativeWeave.Query.QuerySelection`1.AsAsyncEnumerable(System.Threading.CancellationToken)`
+## `M:Korda.Query.QuerySelection`1.AsAsyncEnumerable(System.Threading.CancellationToken)`
 
 ```csharp
-public System.Collections.Generic.IAsyncEnumerable<T> NativeWeave.Query.QuerySelection<T>.AsAsyncEnumerable(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+public System.Collections.Generic.IAsyncEnumerable<T> Korda.Query.QuerySelection<T>.AsAsyncEnumerable(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
 ```
 
 **summary:** Seals synchronously and creates a one-shot bounded stream whose first MoveNext dispatches.
@@ -2588,10 +2588,10 @@ public System.Collections.Generic.IAsyncEnumerable<T> NativeWeave.Query.QuerySel
 
 **Inherited type policy:** This borrowed view is valid only while its projection remains current in the live query. The first execution or Prepare seals the owner synchronously. Dispose the owning query after enumeration; early exit, failure and cancellation await actual native retirement.
 
-## `M:NativeWeave.Query.QuerySelection`1.Combine(NativeWeave.Query.QuerySelection{`0},NativeWeave.Query.SetOperation)`
+## `M:Korda.Query.QuerySelection`1.Combine(Korda.Query.QuerySelection{`0},Korda.Query.SetOperation)`
 
 ```csharp
-public NativeWeave.Query.QuerySelection<T> NativeWeave.Query.QuerySelection<T>.Combine(NativeWeave.Query.QuerySelection<T> other, NativeWeave.Query.SetOperation operation = NativeWeave.Query.SetOperation.UnionAll)
+public Korda.Query.QuerySelection<T> Korda.Query.QuerySelection<T>.Combine(Korda.Query.QuerySelection<T> other, Korda.Query.SetOperation operation = Korda.Query.SetOperation.UnionAll)
 ```
 
 **summary:** Appends a native set operation using a frozen same-source selection; the other query remains mutable.
@@ -2614,10 +2614,10 @@ public NativeWeave.Query.QuerySelection<T> NativeWeave.Query.QuerySelection<T>.C
 
 **Inherited type policy:** This borrowed view is valid only while its projection remains current in the live query. The first execution or Prepare seals the owner synchronously. Dispose the owning query after enumeration; early exit, failure and cancellation await actual native retirement.
 
-## `M:NativeWeave.Query.QuerySelection`1.FirstAsync(System.Threading.CancellationToken)`
+## `M:Korda.Query.QuerySelection`1.FirstAsync(System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task<T> NativeWeave.Query.QuerySelection<T>.FirstAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+public System.Threading.Tasks.Task<T> Korda.Query.QuerySelection<T>.FirstAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
 ```
 
 **summary:** Reads at most one business row and retires the cursor; absence throws.
@@ -2642,10 +2642,10 @@ public System.Threading.Tasks.Task<T> NativeWeave.Query.QuerySelection<T>.FirstA
 
 **Inherited type policy:** This borrowed view is valid only while its projection remains current in the live query. The first execution or Prepare seals the owner synchronously. Dispose the owning query after enumeration; early exit, failure and cancellation await actual native retirement.
 
-## `M:NativeWeave.Query.QuerySelection`1.FirstOrDefaultAsync(System.Threading.CancellationToken)`
+## `M:Korda.Query.QuerySelection`1.FirstOrDefaultAsync(System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task<T?> NativeWeave.Query.QuerySelection<T>.FirstOrDefaultAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+public System.Threading.Tasks.Task<T?> Korda.Query.QuerySelection<T>.FirstOrDefaultAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
 ```
 
 **summary:** Reads at most one business row, returning default(T) on absence.
@@ -2670,10 +2670,10 @@ public System.Threading.Tasks.Task<T?> NativeWeave.Query.QuerySelection<T>.First
 
 **Inherited type policy:** This borrowed view is valid only while its projection remains current in the live query. The first execution or Prepare seals the owner synchronously. Dispose the owning query after enumeration; early exit, failure and cancellation await actual native retirement.
 
-## `M:NativeWeave.Query.QuerySelection`1.Prepare`
+## `M:Korda.Query.QuerySelection`1.Prepare`
 
 ```csharp
-public NativeWeave.Query.PreparedQuery<T> NativeWeave.Query.QuerySelection<T>.Prepare()
+public Korda.Query.PreparedQuery<T> Korda.Query.QuerySelection<T>.Prepare()
 ```
 
 **summary:** Seals and transfers an immutable source-bound native plan for independent parameter snapshots.
@@ -2692,10 +2692,10 @@ public NativeWeave.Query.PreparedQuery<T> NativeWeave.Query.QuerySelection<T>.Pr
 
 **Inherited type policy:** This borrowed view is valid only while its projection remains current in the live query. The first execution or Prepare seals the owner synchronously. Dispose the owning query after enumeration; early exit, failure and cancellation await actual native retirement.
 
-## `M:NativeWeave.Query.QuerySelection`1.SingleAsync(System.Threading.CancellationToken)`
+## `M:Korda.Query.QuerySelection`1.SingleAsync(System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task<T> NativeWeave.Query.QuerySelection<T>.SingleAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+public System.Threading.Tasks.Task<T> Korda.Query.QuerySelection<T>.SingleAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
 ```
 
 **summary:** Reads at most two business rows and requires exactly one, with cleanup on either cardinality failure.
@@ -2720,10 +2720,10 @@ public System.Threading.Tasks.Task<T> NativeWeave.Query.QuerySelection<T>.Single
 
 **Inherited type policy:** This borrowed view is valid only while its projection remains current in the live query. The first execution or Prepare seals the owner synchronously. Dispose the owning query after enumeration; early exit, failure and cancellation await actual native retirement.
 
-## `M:NativeWeave.Query.QuerySelection`1.SingleOrDefaultAsync(System.Threading.CancellationToken)`
+## `M:Korda.Query.QuerySelection`1.SingleOrDefaultAsync(System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task<T?> NativeWeave.Query.QuerySelection<T>.SingleOrDefaultAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+public System.Threading.Tasks.Task<T?> Korda.Query.QuerySelection<T>.SingleOrDefaultAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
 ```
 
 **summary:** Requires at most one business row and returns default(T) when absent.
@@ -2748,10 +2748,10 @@ public System.Threading.Tasks.Task<T?> NativeWeave.Query.QuerySelection<T>.Singl
 
 **Inherited type policy:** This borrowed view is valid only while its projection remains current in the live query. The first execution or Prepare seals the owner synchronously. Dispose the owning query after enumeration; early exit, failure and cancellation await actual native retirement.
 
-## `M:NativeWeave.Query.QuerySelection`1.ToArrayAsync(System.Threading.CancellationToken)`
+## `M:Korda.Query.QuerySelection`1.ToArrayAsync(System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task<T[]> NativeWeave.Query.QuerySelection<T>.ToArrayAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+public System.Threading.Tasks.Task<T[]> Korda.Query.QuerySelection<T>.ToArrayAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
 ```
 
 **summary:** Seals once and returns a bounded owned array after native cursor retirement.
@@ -2776,10 +2776,10 @@ public System.Threading.Tasks.Task<T[]> NativeWeave.Query.QuerySelection<T>.ToAr
 
 **Inherited type policy:** This borrowed view is valid only while its projection remains current in the live query. The first execution or Prepare seals the owner synchronously. Dispose the owning query after enumeration; early exit, failure and cancellation await actual native retirement.
 
-## `M:NativeWeave.Query.QuerySelection`1.ToListAsync(System.Threading.CancellationToken)`
+## `M:Korda.Query.QuerySelection`1.ToListAsync(System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<T>> NativeWeave.Query.QuerySelection<T>.ToListAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+public System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<T>> Korda.Query.QuerySelection<T>.ToListAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
 ```
 
 **summary:** Seals once and returns a bounded owned list after native cursor retirement.
@@ -2804,10 +2804,10 @@ public System.Threading.Tasks.Task<System.Collections.Generic.IReadOnlyList<T>> 
 
 **Inherited type policy:** This borrowed view is valid only while its projection remains current in the live query. The first execution or Prepare seals the owner synchronously. Dispose the owning query after enumeration; early exit, failure and cancellation await actual native retirement.
 
-## `M:NativeWeave.Query.QuerySelection`1.ToSql`
+## `M:Korda.Query.QuerySelection`1.ToSql`
 
 ```csharp
-public string NativeWeave.Query.QuerySelection<T>.ToSql()
+public string Korda.Query.QuerySelection<T>.ToSql()
 ```
 
 **summary:** Renders a bounded native clone with placeholders and no parameter values; does not execute or seal.
@@ -2826,10 +2826,10 @@ public string NativeWeave.Query.QuerySelection<T>.ToSql()
 
 **Inherited type policy:** This borrowed view is valid only while its projection remains current in the live query. The first execution or Prepare seals the owner synchronously. Dispose the owning query after enumeration; early exit, failure and cancellation await actual native retirement.
 
-## `M:NativeWeave.Query.Query`1.AnyAsync(System.Threading.CancellationToken)`
+## `M:Korda.Query.Query`1.AnyAsync(System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task<bool> NativeWeave.Query.Query<TEntity>.AnyAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+public System.Threading.Tasks.Task<bool> Korda.Query.Query<TEntity>.AnyAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
 ```
 
 **summary:** Performs native EXISTS over the fully composed query.
@@ -2854,10 +2854,10 @@ public System.Threading.Tasks.Task<bool> NativeWeave.Query.Query<TEntity>.AnyAsy
 
 **Inherited type policy:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
-## `M:NativeWeave.Query.Query`1.Clone`
+## `M:Korda.Query.Query`1.Clone`
 
 ```csharp
-public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.Clone()
+public Korda.Query.Query<TEntity> Korda.Query.Query<TEntity>.Clone()
 ```
 
 **summary:** Creates an explicit deep native mutable clone; existing expression/alias proxies remain bound to this query.
@@ -2876,10 +2876,10 @@ public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.Clone()
 
 **Inherited type policy:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
-## `M:NativeWeave.Query.Query`1.Column``1(NativeWeave.Data.Column{`0,``0})`
+## `M:Korda.Query.Query`1.Column``1(Korda.Data.Column{`0,``0})`
 
 ```csharp
-public NativeWeave.Query.SqlExpression<T> NativeWeave.Query.Query<TEntity>.Column<T>(NativeWeave.Data.Column<TEntity, T> column)
+public Korda.Query.SqlExpression<T> Korda.Query.Query<TEntity>.Column<T>(Korda.Data.Column<TEntity, T> column)
 ```
 
 **summary:** Creates an immediate root-column native scalar token.
@@ -2902,10 +2902,10 @@ public NativeWeave.Query.SqlExpression<T> NativeWeave.Query.Query<TEntity>.Colum
 
 **Inherited type policy:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
-## `M:NativeWeave.Query.Query`1.Column``2(NativeWeave.Query.JoinedTable{``0},NativeWeave.Data.Column{``0,``1})`
+## `M:Korda.Query.Query`1.Column``2(Korda.Query.JoinedTable{``0},Korda.Data.Column{``0,``1})`
 
 ```csharp
-public NativeWeave.Query.SqlExpression<T> NativeWeave.Query.Query<TEntity>.Column<TJoin, T>(NativeWeave.Query.JoinedTable<TJoin> table, NativeWeave.Data.Column<TJoin, T> column) where TJoin : class
+public Korda.Query.SqlExpression<T> Korda.Query.Query<TEntity>.Column<TJoin, T>(Korda.Query.JoinedTable<TJoin> table, Korda.Data.Column<TJoin, T> column) where TJoin : class
 ```
 
 **summary:** Creates a scalar from an exact same-query inner-join alias and table.
@@ -2932,10 +2932,10 @@ public NativeWeave.Query.SqlExpression<T> NativeWeave.Query.Query<TEntity>.Colum
 
 **Inherited type policy:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
-## `M:NativeWeave.Query.Query`1.CountAsync(System.Threading.CancellationToken)`
+## `M:Korda.Query.Query`1.CountAsync(System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task<long> NativeWeave.Query.Query<TEntity>.CountAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+public System.Threading.Tasks.Task<long> Korda.Query.Query<TEntity>.CountAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
 ```
 
 **summary:** Counts the fully composed native result without fetching DTOs into managed memory.
@@ -2960,10 +2960,10 @@ public System.Threading.Tasks.Task<long> NativeWeave.Query.Query<TEntity>.CountA
 
 **Inherited type policy:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
-## `M:NativeWeave.Query.Query`1.CountRows`
+## `M:Korda.Query.Query`1.CountRows`
 
 ```csharp
-public NativeWeave.Query.SqlExpression<long> NativeWeave.Query.Query<TEntity>.CountRows()
+public Korda.Query.SqlExpression<long> Korda.Query.Query<TEntity>.CountRows()
 ```
 
 **summary:** Creates a native COUNT(*) aggregate with exact Int64 result metadata.
@@ -2982,10 +2982,10 @@ public NativeWeave.Query.SqlExpression<long> NativeWeave.Query.Query<TEntity>.Co
 
 **Inherited type policy:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
-## `M:NativeWeave.Query.Query`1.DeleteAsync(System.Threading.CancellationToken)`
+## `M:Korda.Query.Query`1.DeleteAsync(System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task<long> NativeWeave.Query.Query<TEntity>.DeleteAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+public System.Threading.Tasks.Task<long> Korda.Query.Query<TEntity>.DeleteAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
 ```
 
 **summary:** Executes a filtered native DELETE; missing filters and unsupported joined/grouped writes reject.
@@ -3010,10 +3010,10 @@ public System.Threading.Tasks.Task<long> NativeWeave.Query.Query<TEntity>.Delete
 
 **Inherited type policy:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
-## `M:NativeWeave.Query.Query`1.Dispose`
+## `M:Korda.Query.Query`1.Dispose`
 
 ```csharp
-public void NativeWeave.Query.Query<TEntity>.Dispose()
+public void Korda.Query.Query<TEntity>.Dispose()
 ```
 
 **summary:** Closes query admission, requests any active cursor stop and releases the native arena reference.
@@ -3022,10 +3022,10 @@ public void NativeWeave.Query.Query<TEntity>.Dispose()
 
 **Inherited type policy:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
-## `M:NativeWeave.Query.Query`1.Distinct`
+## `M:Korda.Query.Query`1.Distinct`
 
 ```csharp
-public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.Distinct()
+public Korda.Query.Query<TEntity> Korda.Query.Query<TEntity>.Distinct()
 ```
 
 **summary:** Applies native SQL DISTINCT to the selected shape.
@@ -3044,10 +3044,10 @@ public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.Distinc
 
 **Inherited type policy:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
-## `M:NativeWeave.Query.Query`1.Exists``1(NativeWeave.Query.QuerySelection{``0})`
+## `M:Korda.Query.Query`1.Exists``1(Korda.Query.QuerySelection{``0})`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.Query<TEntity>.Exists<T>(NativeWeave.Query.QuerySelection<T> subquery)
+public Korda.Query.SqlPredicate Korda.Query.Query<TEntity>.Exists<T>(Korda.Query.QuerySelection<T> subquery)
 ```
 
 **summary:** Snapshots a same-source selection into a native EXISTS condition.
@@ -3070,10 +3070,10 @@ public NativeWeave.Query.SqlPredicate NativeWeave.Query.Query<TEntity>.Exists<T>
 
 **Inherited type policy:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
-## `M:NativeWeave.Query.Query`1.ForUpdate(NativeWeave.Query.RowLockMode,NativeWeave.Query.LockWait)`
+## `M:Korda.Query.Query`1.ForUpdate(Korda.Query.RowLockMode,Korda.Query.LockWait)`
 
 ```csharp
-public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.ForUpdate(NativeWeave.Query.RowLockMode mode = NativeWeave.Query.RowLockMode.Update, NativeWeave.Query.LockWait wait = NativeWeave.Query.LockWait.Wait)
+public Korda.Query.Query<TEntity> Korda.Query.Query<TEntity>.ForUpdate(Korda.Query.RowLockMode mode = Korda.Query.RowLockMode.Update, Korda.Query.LockWait wait = Korda.Query.LockWait.Wait)
 ```
 
 **summary:** Applies an admitted PostgreSQL row lock; execution requires an explicit active transaction.
@@ -3096,10 +3096,10 @@ public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.ForUpda
 
 **Inherited type policy:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
-## `M:NativeWeave.Query.Query`1.GroupBy``1(NativeWeave.Query.SqlExpression{``0})`
+## `M:Korda.Query.Query`1.GroupBy``1(Korda.Query.SqlExpression{``0})`
 
 ```csharp
-public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.GroupBy<T>(NativeWeave.Query.SqlExpression<T> expression)
+public Korda.Query.Query<TEntity> Korda.Query.Query<TEntity>.GroupBy<T>(Korda.Query.SqlExpression<T> expression)
 ```
 
 **summary:** Appends a native grouping key.
@@ -3122,10 +3122,10 @@ public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.GroupBy
 
 **Inherited type policy:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
-## `M:NativeWeave.Query.Query`1.HasMatch``1(NativeWeave.Query.LeftJoinedTable{``0})`
+## `M:Korda.Query.Query`1.HasMatch``1(Korda.Query.LeftJoinedTable{``0})`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.Query<TEntity>.HasMatch<TJoin>(NativeWeave.Query.LeftJoinedTable<TJoin> table) where TJoin : class
+public Korda.Query.SqlPredicate Korda.Query.Query<TEntity>.HasMatch<TJoin>(Korda.Query.LeftJoinedTable<TJoin> table) where TJoin : class
 ```
 
 **summary:** Tests the native explicit LEFT JOIN match marker, independently from nullable child data.
@@ -3148,10 +3148,10 @@ public NativeWeave.Query.SqlPredicate NativeWeave.Query.Query<TEntity>.HasMatch<
 
 **Inherited type policy:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
-## `M:NativeWeave.Query.Query`1.Having(NativeWeave.Query.SqlPredicate)`
+## `M:Korda.Query.Query`1.Having(Korda.Query.SqlPredicate)`
 
 ```csharp
-public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.Having(NativeWeave.Query.SqlPredicate predicate)
+public Korda.Query.Query<TEntity> Korda.Query.Query<TEntity>.Having(Korda.Query.SqlPredicate predicate)
 ```
 
 **summary:** Appends a same-query native group predicate.
@@ -3172,10 +3172,10 @@ public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.Having(
 
 **Inherited type policy:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
-## `M:NativeWeave.Query.Query`1.InnerJoin``1(NativeWeave.Data.Table{``0},System.String,System.Func{NativeWeave.Query.JoinPredicate{`0,``0},NativeWeave.Query.SqlPredicate})`
+## `M:Korda.Query.Query`1.InnerJoin``1(Korda.Data.Table{``0},System.String,System.Func{Korda.Query.JoinPredicate{`0,``0},Korda.Query.SqlPredicate})`
 
 ```csharp
-public NativeWeave.Query.JoinedTable<TJoin> NativeWeave.Query.Query<TEntity>.InnerJoin<TJoin>(NativeWeave.Data.Table<TJoin> table, string alias, System.Func<NativeWeave.Query.JoinPredicate<TEntity, TJoin>, NativeWeave.Query.SqlPredicate> on) where TJoin : class
+public Korda.Query.JoinedTable<TJoin> Korda.Query.Query<TEntity>.InnerJoin<TJoin>(Korda.Data.Table<TJoin> table, string alias, System.Func<Korda.Query.JoinPredicate<TEntity, TJoin>, Korda.Query.SqlPredicate> on) where TJoin : class
 ```
 
 **summary:** Reserves, builds and atomically commits an explicit native INNER JOIN ON clause.
@@ -3202,10 +3202,10 @@ public NativeWeave.Query.JoinedTable<TJoin> NativeWeave.Query.Query<TEntity>.Inn
 
 **Inherited type policy:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
-## `M:NativeWeave.Query.Query`1.LeftJoin``1(NativeWeave.Data.Table{``0},System.String,System.Func{NativeWeave.Query.JoinPredicate{`0,``0},NativeWeave.Query.SqlPredicate})`
+## `M:Korda.Query.Query`1.LeftJoin``1(Korda.Data.Table{``0},System.String,System.Func{Korda.Query.JoinPredicate{`0,``0},Korda.Query.SqlPredicate})`
 
 ```csharp
-public NativeWeave.Query.LeftJoinedTable<TJoin> NativeWeave.Query.Query<TEntity>.LeftJoin<TJoin>(NativeWeave.Data.Table<TJoin> table, string alias, System.Func<NativeWeave.Query.JoinPredicate<TEntity, TJoin>, NativeWeave.Query.SqlPredicate> on) where TJoin : class
+public Korda.Query.LeftJoinedTable<TJoin> Korda.Query.Query<TEntity>.LeftJoin<TJoin>(Korda.Data.Table<TJoin> table, string alias, System.Func<Korda.Query.JoinPredicate<TEntity, TJoin>, Korda.Query.SqlPredicate> on) where TJoin : class
 ```
 
 **summary:** Commits a native LEFT JOIN and returns a nullable-only projected alias.
@@ -3232,10 +3232,10 @@ public NativeWeave.Query.LeftJoinedTable<TJoin> NativeWeave.Query.Query<TEntity>
 
 **Inherited type policy:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
-## `M:NativeWeave.Query.Query`1.NullableReference``2(NativeWeave.Query.LeftJoinedTable{``0},NativeWeave.Data.Column{``0,``1})`
+## `M:Korda.Query.Query`1.NullableReference``2(Korda.Query.LeftJoinedTable{``0},Korda.Data.Column{``0,``1})`
 
 ```csharp
-public NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.Query<TEntity>.NullableReference<TJoin, T>(NativeWeave.Query.LeftJoinedTable<TJoin> table, NativeWeave.Data.Column<TJoin, T> column) where TJoin : class where T : class?
+public Korda.Query.SqlExpression<T?> Korda.Query.Query<TEntity>.NullableReference<TJoin, T>(Korda.Query.LeftJoinedTable<TJoin> table, Korda.Data.Column<TJoin, T> column) where TJoin : class where T : class?
 ```
 
 **summary:** Reads a reference column through a LEFT JOIN with explicit nullable result metadata.
@@ -3262,10 +3262,10 @@ public NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.Query<TEntity>.Null
 
 **Inherited type policy:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
-## `M:NativeWeave.Query.Query`1.NullableValue``2(NativeWeave.Query.LeftJoinedTable{``0},NativeWeave.Data.Column{``0,System.Nullable{``1}})`
+## `M:Korda.Query.Query`1.NullableValue``2(Korda.Query.LeftJoinedTable{``0},Korda.Data.Column{``0,System.Nullable{``1}})`
 
 ```csharp
-public NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.Query<TEntity>.NullableValue<TJoin, T>(NativeWeave.Query.LeftJoinedTable<TJoin> table, NativeWeave.Data.Column<TJoin, T?> column) where TJoin : class where T : struct
+public Korda.Query.SqlExpression<T?> Korda.Query.Query<TEntity>.NullableValue<TJoin, T>(Korda.Query.LeftJoinedTable<TJoin> table, Korda.Data.Column<TJoin, T?> column) where TJoin : class where T : struct
 ```
 
 **summary:** Preserves an already nullable value column through a LEFT JOIN.
@@ -3292,10 +3292,10 @@ public NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.Query<TEntity>.Null
 
 **Inherited type policy:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
-## `M:NativeWeave.Query.Query`1.NullableValue``2(NativeWeave.Query.LeftJoinedTable{``0},NativeWeave.Data.Column{``0,``1})`
+## `M:Korda.Query.Query`1.NullableValue``2(Korda.Query.LeftJoinedTable{``0},Korda.Data.Column{``0,``1})`
 
 ```csharp
-public NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.Query<TEntity>.NullableValue<TJoin, T>(NativeWeave.Query.LeftJoinedTable<TJoin> table, NativeWeave.Data.Column<TJoin, T> column) where TJoin : class where T : struct
+public Korda.Query.SqlExpression<T?> Korda.Query.Query<TEntity>.NullableValue<TJoin, T>(Korda.Query.LeftJoinedTable<TJoin> table, Korda.Data.Column<TJoin, T> column) where TJoin : class where T : struct
 ```
 
 **summary:** Reads a non-null value column through a LEFT JOIN as an explicitly nullable scalar.
@@ -3322,10 +3322,10 @@ public NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.Query<TEntity>.Null
 
 **Inherited type policy:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
-## `M:NativeWeave.Query.Query`1.OrderBy``1(NativeWeave.Data.Column{`0,``0},NativeWeave.Query.SortDirection,NativeWeave.Query.NullOrder)`
+## `M:Korda.Query.Query`1.OrderBy``1(Korda.Data.Column{`0,``0},Korda.Query.SortDirection,Korda.Query.NullOrder)`
 
 ```csharp
-public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.OrderBy<T>(NativeWeave.Data.Column<TEntity, T> column, NativeWeave.Query.SortDirection direction = NativeWeave.Query.SortDirection.Ascending, NativeWeave.Query.NullOrder nullOrder = NativeWeave.Query.NullOrder.Last)
+public Korda.Query.Query<TEntity> Korda.Query.Query<TEntity>.OrderBy<T>(Korda.Data.Column<TEntity, T> column, Korda.Query.SortDirection direction = Korda.Query.SortDirection.Ascending, Korda.Query.NullOrder nullOrder = Korda.Query.NullOrder.Last)
 ```
 
 **summary:** Replaces native ordering with the exact root column and explicit NULL policy.
@@ -3352,10 +3352,10 @@ public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.OrderBy
 
 **Inherited type policy:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
-## `M:NativeWeave.Query.Query`1.OrderBy``1(NativeWeave.Query.SqlExpression{``0},NativeWeave.Query.SortDirection,NativeWeave.Query.NullOrder)`
+## `M:Korda.Query.Query`1.OrderBy``1(Korda.Query.SqlExpression{``0},Korda.Query.SortDirection,Korda.Query.NullOrder)`
 
 ```csharp
-public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.OrderBy<T>(NativeWeave.Query.SqlExpression<T> expression, NativeWeave.Query.SortDirection direction = NativeWeave.Query.SortDirection.Ascending, NativeWeave.Query.NullOrder nullOrder = NativeWeave.Query.NullOrder.Last)
+public Korda.Query.Query<TEntity> Korda.Query.Query<TEntity>.OrderBy<T>(Korda.Query.SqlExpression<T> expression, Korda.Query.SortDirection direction = Korda.Query.SortDirection.Ascending, Korda.Query.NullOrder nullOrder = Korda.Query.NullOrder.Last)
 ```
 
 **summary:** Replaces native ordering with the same-query expression and explicit NULL policy.
@@ -3382,10 +3382,10 @@ public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.OrderBy
 
 **Inherited type policy:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
-## `M:NativeWeave.Query.Query`1.ParameterValue``1(NativeWeave.Query.QueryParameter{``0})`
+## `M:Korda.Query.Query`1.ParameterValue``1(Korda.Query.QueryParameter{``0})`
 
 ```csharp
-public NativeWeave.Query.SqlExpression<T> NativeWeave.Query.Query<TEntity>.ParameterValue<T>(NativeWeave.Query.QueryParameter<T> parameter)
+public Korda.Query.SqlExpression<T> Korda.Query.Query<TEntity>.ParameterValue<T>(Korda.Query.QueryParameter<T> parameter)
 ```
 
 **summary:** Creates a native reference to an identity already declared or imported into this query.
@@ -3408,10 +3408,10 @@ public NativeWeave.Query.SqlExpression<T> NativeWeave.Query.Query<TEntity>.Param
 
 **Inherited type policy:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
-## `M:NativeWeave.Query.Query`1.Parameter``1(System.String,NativeWeave.Data.ValueCodec{``0})`
+## `M:Korda.Query.Query`1.Parameter``1(System.String,Korda.Data.ValueCodec{``0})`
 
 ```csharp
-public NativeWeave.Query.QueryParameter<T> NativeWeave.Query.Query<TEntity>.Parameter<T>(string name, NativeWeave.Data.ValueCodec<T> codec)
+public Korda.Query.QueryParameter<T> Korda.Query.Query<TEntity>.Parameter<T>(string name, Korda.Data.ValueCodec<T> codec)
 ```
 
 **summary:** Allocates one nonrecycled source-generation parameter identity and declares it in this query.
@@ -3436,10 +3436,10 @@ public NativeWeave.Query.QueryParameter<T> NativeWeave.Query.Query<TEntity>.Para
 
 **Inherited type policy:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
-## `M:NativeWeave.Query.Query`1.Projection``1`
+## `M:Korda.Query.Query`1.Projection``1`
 
 ```csharp
-public NativeWeave.Query.ProjectionBuilder<T> NativeWeave.Query.Query<TEntity>.Projection<T>()
+public Korda.Query.ProjectionBuilder<T> Korda.Query.Query<TEntity>.Projection<T>()
 ```
 
 **summary:** Starts an explicit typed DTO projection in this query.
@@ -3460,10 +3460,10 @@ public NativeWeave.Query.ProjectionBuilder<T> NativeWeave.Query.Query<TEntity>.P
 
 **Inherited type policy:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
-## `M:NativeWeave.Query.Query`1.SeekAfter``1(NativeWeave.Data.Column{`0,``0},``0)`
+## `M:Korda.Query.Query`1.SeekAfter``1(Korda.Data.Column{`0,``0},``0)`
 
 ```csharp
-public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.SeekAfter<T>(NativeWeave.Data.Column<TEntity, T> uniqueOrderKey, T value)
+public Korda.Query.Query<TEntity> Korda.Query.Query<TEntity>.SeekAfter<T>(Korda.Data.Column<TEntity, T> uniqueOrderKey, T value)
 ```
 
 **summary:** Appends strict keyset comparison for one non-null unique ascending root key.
@@ -3488,10 +3488,10 @@ public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.SeekAft
 
 **Inherited type policy:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
-## `M:NativeWeave.Query.Query`1.SelectAll`
+## `M:Korda.Query.Query`1.SelectAll`
 
 ```csharp
-public NativeWeave.Query.QuerySelection<TEntity> NativeWeave.Query.Query<TEntity>.SelectAll()
+public Korda.Query.QuerySelection<TEntity> Korda.Query.Query<TEntity>.SelectAll()
 ```
 
 **summary:** Selects only root-table columns in the static entity constructor order.
@@ -3510,10 +3510,10 @@ public NativeWeave.Query.QuerySelection<TEntity> NativeWeave.Query.Query<TEntity
 
 **Inherited type policy:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
-## `M:NativeWeave.Query.Query`1.Select``1(NativeWeave.Data.Projection{``0})`
+## `M:Korda.Query.Query`1.Select``1(Korda.Data.Projection{``0})`
 
 ```csharp
-public NativeWeave.Query.QuerySelection<T> NativeWeave.Query.Query<TEntity>.Select<T>(NativeWeave.Data.Projection<T> projection)
+public Korda.Query.QuerySelection<T> Korda.Query.Query<TEntity>.Select<T>(Korda.Data.Projection<T> projection)
 ```
 
 **summary:** Selects a projection built by this exact query, or the root table's static row descriptor.
@@ -3536,10 +3536,10 @@ public NativeWeave.Query.QuerySelection<T> NativeWeave.Query.Query<TEntity>.Sele
 
 **Inherited type policy:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
-## `M:NativeWeave.Query.Query`1.Select``1(NativeWeave.Query.SqlExpression{``0})`
+## `M:Korda.Query.Query`1.Select``1(Korda.Query.SqlExpression{``0})`
 
 ```csharp
-public NativeWeave.Query.QuerySelection<T> NativeWeave.Query.Query<TEntity>.Select<T>(NativeWeave.Query.SqlExpression<T> expression)
+public Korda.Query.QuerySelection<T> Korda.Query.Query<TEntity>.Select<T>(Korda.Query.SqlExpression<T> expression)
 ```
 
 **summary:** Selects one same-query native expression through its exact static codec.
@@ -3562,10 +3562,10 @@ public NativeWeave.Query.QuerySelection<T> NativeWeave.Query.Query<TEntity>.Sele
 
 **Inherited type policy:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
-## `M:NativeWeave.Query.Query`1.Select``3(NativeWeave.Query.SqlExpression{``0},NativeWeave.Query.SqlExpression{``1},System.Func{``0,``1,``2})`
+## `M:Korda.Query.Query`1.Select``3(Korda.Query.SqlExpression{``0},Korda.Query.SqlExpression{``1},System.Func{``0,``1,``2})`
 
 ```csharp
-public NativeWeave.Query.QuerySelection<TOut> NativeWeave.Query.Query<TEntity>.Select<T1, T2, TOut>(NativeWeave.Query.SqlExpression<T1> first, NativeWeave.Query.SqlExpression<T2> second, System.Func<T1, T2, TOut> materializer)
+public Korda.Query.QuerySelection<TOut> Korda.Query.Query<TEntity>.Select<T1, T2, TOut>(Korda.Query.SqlExpression<T1> first, Korda.Query.SqlExpression<T2> second, System.Func<T1, T2, TOut> materializer)
 ```
 
 **summary:** Selects two native expressions into an AOT-visible direct DTO factory.
@@ -3596,10 +3596,10 @@ public NativeWeave.Query.QuerySelection<TOut> NativeWeave.Query.Query<TEntity>.S
 
 **Inherited type policy:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
-## `M:NativeWeave.Query.Query`1.Skip(System.Int32)`
+## `M:Korda.Query.Query`1.Skip(System.Int32)`
 
 ```csharp
-public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.Skip(int count)
+public Korda.Query.Query<TEntity> Korda.Query.Query<TEntity>.Skip(int count)
 ```
 
 **summary:** Sets a finite nonnegative offset only with known unique ordering.
@@ -3620,10 +3620,10 @@ public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.Skip(in
 
 **Inherited type policy:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
-## `M:NativeWeave.Query.Query`1.Take(System.Int32)`
+## `M:Korda.Query.Query`1.Take(System.Int32)`
 
 ```csharp
-public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.Take(int count)
+public Korda.Query.Query<TEntity> Korda.Query.Query<TEntity>.Take(int count)
 ```
 
 **summary:** Sets a finite nonnegative native row limit; without order the selected rows are nondeterministic.
@@ -3644,10 +3644,10 @@ public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.Take(in
 
 **Inherited type policy:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
-## `M:NativeWeave.Query.Query`1.ThenBy``1(NativeWeave.Data.Column{`0,``0},NativeWeave.Query.SortDirection,NativeWeave.Query.NullOrder)`
+## `M:Korda.Query.Query`1.ThenBy``1(Korda.Data.Column{`0,``0},Korda.Query.SortDirection,Korda.Query.NullOrder)`
 
 ```csharp
-public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.ThenBy<T>(NativeWeave.Data.Column<TEntity, T> column, NativeWeave.Query.SortDirection direction = NativeWeave.Query.SortDirection.Ascending, NativeWeave.Query.NullOrder nullOrder = NativeWeave.Query.NullOrder.Last)
+public Korda.Query.Query<TEntity> Korda.Query.Query<TEntity>.ThenBy<T>(Korda.Data.Column<TEntity, T> column, Korda.Query.SortDirection direction = Korda.Query.SortDirection.Ascending, Korda.Query.NullOrder nullOrder = Korda.Query.NullOrder.Last)
 ```
 
 **summary:** Appends a root-column order after an existing order.
@@ -3674,10 +3674,10 @@ public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.ThenBy<
 
 **Inherited type policy:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
-## `M:NativeWeave.Query.Query`1.ThenBy``1(NativeWeave.Query.SqlExpression{``0},NativeWeave.Query.SortDirection,NativeWeave.Query.NullOrder)`
+## `M:Korda.Query.Query`1.ThenBy``1(Korda.Query.SqlExpression{``0},Korda.Query.SortDirection,Korda.Query.NullOrder)`
 
 ```csharp
-public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.ThenBy<T>(NativeWeave.Query.SqlExpression<T> expression, NativeWeave.Query.SortDirection direction = NativeWeave.Query.SortDirection.Ascending, NativeWeave.Query.NullOrder nullOrder = NativeWeave.Query.NullOrder.Last)
+public Korda.Query.Query<TEntity> Korda.Query.Query<TEntity>.ThenBy<T>(Korda.Query.SqlExpression<T> expression, Korda.Query.SortDirection direction = Korda.Query.SortDirection.Ascending, Korda.Query.NullOrder nullOrder = Korda.Query.NullOrder.Last)
 ```
 
 **summary:** Appends a same-query expression after an existing order.
@@ -3704,10 +3704,10 @@ public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.ThenBy<
 
 **Inherited type policy:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
-## `M:NativeWeave.Query.Query`1.UpdateAsync(NativeWeave.Data.Changes{`0},System.Threading.CancellationToken)`
+## `M:Korda.Query.Query`1.UpdateAsync(Korda.Data.Changes{`0},System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task<long> NativeWeave.Query.Query<TEntity>.UpdateAsync(NativeWeave.Data.Changes<TEntity> changes, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+public System.Threading.Tasks.Task<long> Korda.Query.Query<TEntity>.UpdateAsync(Korda.Data.Changes<TEntity> changes, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
 ```
 
 **summary:** Snapshots explicit typed changes and performs a filtered native set-based UPDATE.
@@ -3734,10 +3734,10 @@ public System.Threading.Tasks.Task<long> NativeWeave.Query.Query<TEntity>.Update
 
 **Inherited type policy:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
-## `M:NativeWeave.Query.Query`1.UpdateAsync(System.Action{NativeWeave.Query.UpdateSetters{`0}},System.Threading.CancellationToken)`
+## `M:Korda.Query.Query`1.UpdateAsync(System.Action{Korda.Query.UpdateSetters{`0}},System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task<long> NativeWeave.Query.Query<TEntity>.UpdateAsync(System.Action<NativeWeave.Query.UpdateSetters<TEntity>> setters, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+public System.Threading.Tasks.Task<long> Korda.Query.Query<TEntity>.UpdateAsync(System.Action<Korda.Query.UpdateSetters<TEntity>> setters, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
 ```
 
 **summary:** Runs a synchronous typed setter callback, then applies complete native assignments and a filtered UPDATE.
@@ -3764,10 +3764,10 @@ public System.Threading.Tasks.Task<long> NativeWeave.Query.Query<TEntity>.Update
 
 **Inherited type policy:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
-## `M:NativeWeave.Query.Query`1.Value``1(``0,NativeWeave.Data.ValueCodec{``0})`
+## `M:Korda.Query.Query`1.Value``1(``0,Korda.Data.ValueCodec{``0})`
 
 ```csharp
-public NativeWeave.Query.SqlExpression<T> NativeWeave.Query.Query<TEntity>.Value<T>(T value, NativeWeave.Data.ValueCodec<T> codec)
+public Korda.Query.SqlExpression<T> Korda.Query.Query<TEntity>.Value<T>(T value, Korda.Data.ValueCodec<T> codec)
 ```
 
 **summary:** Immediately snapshots a typed literal into the native arena.
@@ -3792,10 +3792,10 @@ public NativeWeave.Query.SqlExpression<T> NativeWeave.Query.Query<TEntity>.Value
 
 **Inherited type policy:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
-## `M:NativeWeave.Query.Query`1.Where(NativeWeave.Query.SqlPredicate)`
+## `M:Korda.Query.Query`1.Where(Korda.Query.SqlPredicate)`
 
 ```csharp
-public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.Where(NativeWeave.Query.SqlPredicate predicate)
+public Korda.Query.Query<TEntity> Korda.Query.Query<TEntity>.Where(Korda.Query.SqlPredicate predicate)
 ```
 
 **summary:** Appends a same-query native predicate with AND.
@@ -3816,10 +3816,10 @@ public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.Where(N
 
 **Inherited type policy:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
-## `M:NativeWeave.Query.Query`1.Where(System.Func{NativeWeave.Query.QueryRow{`0},NativeWeave.Query.SqlPredicate})`
+## `M:Korda.Query.Query`1.Where(System.Func{Korda.Query.QueryRow{`0},Korda.Query.SqlPredicate})`
 
 ```csharp
-public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.Where(System.Func<NativeWeave.Query.QueryRow<TEntity>, NativeWeave.Query.SqlPredicate> predicate)
+public Korda.Query.Query<TEntity> Korda.Query.Query<TEntity>.Where(System.Func<Korda.Query.QueryRow<TEntity>, Korda.Query.SqlPredicate> predicate)
 ```
 
 **summary:** Invokes the typed callback synchronously once, then attaches its complete native predicate.
@@ -3840,10 +3840,10 @@ public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.Where(S
 
 **Inherited type policy:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
-## `M:NativeWeave.Query.Query`1.WhereEqual``1(NativeWeave.Data.Column{`0,``0},``0)`
+## `M:Korda.Query.Query`1.WhereEqual``1(Korda.Data.Column{`0,``0},``0)`
 
 ```csharp
-public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.WhereEqual<T>(NativeWeave.Data.Column<TEntity, T> column, T value)
+public Korda.Query.Query<TEntity> Korda.Query.Query<TEntity>.WhereEqual<T>(Korda.Data.Column<TEntity, T> column, T value)
 ```
 
 **summary:** Snapshots the value and appends root-column equality without a predicate delegate.
@@ -3868,10 +3868,10 @@ public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.WhereEq
 
 **Inherited type policy:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
-## `M:NativeWeave.Query.Query`1.WhereGreaterThanOrEqual``1(NativeWeave.Data.Column{`0,``0},``0)`
+## `M:Korda.Query.Query`1.WhereGreaterThanOrEqual``1(Korda.Data.Column{`0,``0},``0)`
 
 ```csharp
-public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.WhereGreaterThanOrEqual<T>(NativeWeave.Data.Column<TEntity, T> column, T value)
+public Korda.Query.Query<TEntity> Korda.Query.Query<TEntity>.WhereGreaterThanOrEqual<T>(Korda.Data.Column<TEntity, T> column, T value)
 ```
 
 **summary:** Snapshots the value and appends an inclusive native lower bound.
@@ -3896,10 +3896,10 @@ public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.WhereGr
 
 **Inherited type policy:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
-## `M:NativeWeave.Query.Query`1.WhereIf(System.Boolean,System.Func{NativeWeave.Query.QueryRow{`0},NativeWeave.Query.SqlPredicate})`
+## `M:Korda.Query.Query`1.WhereIf(System.Boolean,System.Func{Korda.Query.QueryRow{`0},Korda.Query.SqlPredicate})`
 
 ```csharp
-public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.WhereIf(bool condition, System.Func<NativeWeave.Query.QueryRow<TEntity>, NativeWeave.Query.SqlPredicate> predicate)
+public Korda.Query.Query<TEntity> Korda.Query.Query<TEntity>.WhereIf(bool condition, System.Func<Korda.Query.QueryRow<TEntity>, Korda.Query.SqlPredicate> predicate)
 ```
 
 **summary:** Invokes and attaches the callback only when the condition is true; false binds no captured values.
@@ -3922,10 +3922,10 @@ public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.WhereIf
 
 **Inherited type policy:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
-## `M:NativeWeave.Query.Query`1.WhereIsNotNull``1(NativeWeave.Data.Column{`0,``0})`
+## `M:Korda.Query.Query`1.WhereIsNotNull``1(Korda.Data.Column{`0,``0})`
 
 ```csharp
-public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.WhereIsNotNull<T>(NativeWeave.Data.Column<TEntity, T> column)
+public Korda.Query.Query<TEntity> Korda.Query.Query<TEntity>.WhereIsNotNull<T>(Korda.Data.Column<TEntity, T> column)
 ```
 
 **summary:** Appends an explicit root-column IS NOT NULL predicate.
@@ -3948,10 +3948,10 @@ public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.WhereIs
 
 **Inherited type policy:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
-## `M:NativeWeave.Query.Query`1.WhereIsNull``1(NativeWeave.Data.Column{`0,``0})`
+## `M:Korda.Query.Query`1.WhereIsNull``1(Korda.Data.Column{`0,``0})`
 
 ```csharp
-public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.WhereIsNull<T>(NativeWeave.Data.Column<TEntity, T> column)
+public Korda.Query.Query<TEntity> Korda.Query.Query<TEntity>.WhereIsNull<T>(Korda.Data.Column<TEntity, T> column)
 ```
 
 **summary:** Appends an explicit root-column IS NULL predicate.
@@ -3974,10 +3974,10 @@ public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.WhereIs
 
 **Inherited type policy:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
-## `M:NativeWeave.Query.Query`1.Window`
+## `M:Korda.Query.Query`1.Window`
 
 ```csharp
-public NativeWeave.Query.WindowDefinition NativeWeave.Query.Query<TEntity>.Window()
+public Korda.Query.WindowDefinition Korda.Query.Query<TEntity>.Window()
 ```
 
 **summary:** Creates finite query-owned native window state.
@@ -3996,10 +3996,10 @@ public NativeWeave.Query.WindowDefinition NativeWeave.Query.Query<TEntity>.Windo
 
 **Inherited type policy:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
-## `M:NativeWeave.Query.Query`1.WithTimeout(System.TimeSpan)`
+## `M:Korda.Query.Query`1.WithTimeout(System.TimeSpan)`
 
 ```csharp
-public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.WithTimeout(System.TimeSpan timeout)
+public Korda.Query.Query<TEntity> Korda.Query.Query<TEntity>.WithTimeout(System.TimeSpan timeout)
 ```
 
 **summary:** Snapshots a finite total execution/cursor timeout; zero expires before dispatch.
@@ -4020,10 +4020,10 @@ public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.WithTim
 
 **Inherited type policy:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
-## `M:NativeWeave.Query.Query`1.With``1(NativeWeave.Query.CommonTable{``0})`
+## `M:Korda.Query.Query`1.With``1(Korda.Query.CommonTable{``0})`
 
 ```csharp
-public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.With<TCte>(NativeWeave.Query.CommonTable<TCte> commonTable) where TCte : class
+public Korda.Query.Query<TEntity> Korda.Query.Query<TEntity>.With<TCte>(Korda.Query.CommonTable<TCte> commonTable) where TCte : class
 ```
 
 **summary:** Attaches a frozen same-source native CTE and its exact immutable parameter identities.
@@ -4046,40 +4046,40 @@ public NativeWeave.Query.Query<TEntity> NativeWeave.Query.Query<TEntity>.With<TC
 
 **Inherited type policy:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
-## `M:NativeWeave.Query.RowLockMode.#ctor`
+## `M:Korda.Query.RowLockMode.#ctor`
 
 ```csharp
-public NativeWeave.Query.RowLockMode.RowLockMode()
+public Korda.Query.RowLockMode.RowLockMode()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** Available only on PostgreSQL with an explicit live transaction. SQLite rejects the operation before provider dispatch.
 
-## `M:NativeWeave.Query.SetOperation.#ctor`
+## `M:Korda.Query.SetOperation.#ctor`
 
 ```csharp
-public NativeWeave.Query.SetOperation.SetOperation()
+public Korda.Query.SetOperation.SetOperation()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** Operands must have the same source, field order, aliases, codecs and nullability. The native engine snapshots the right operand; SQL duplicate and NULL semantics apply.
 
-## `M:NativeWeave.Query.SortDirection.#ctor`
+## `M:Korda.Query.SortDirection.#ctor`
 
 ```csharp
-public NativeWeave.Query.SortDirection.SortDirection()
+public Korda.Query.SortDirection.SortDirection()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** The native query validates each enum value before mutation. Direction is explicit; it does not change SQL NULL ordering.
 
-## `M:NativeWeave.Query.SqlArithmeticExtensions.Add``1(NativeWeave.Query.SqlExpression{System.Nullable{``0}},NativeWeave.Query.SqlExpression{System.Nullable{``0}})`
+## `M:Korda.Query.SqlArithmeticExtensions.Add``1(Korda.Query.SqlExpression{System.Nullable{``0}},Korda.Query.SqlExpression{System.Nullable{``0}})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlArithmeticExtensions.Add<T>(this NativeWeave.Query.SqlExpression<T?> expression, NativeWeave.Query.SqlExpression<T?> value) where T : struct, System.Numerics.INumber<T>
+public static Korda.Query.SqlExpression<T?> Korda.Query.SqlArithmeticExtensions.Add<T>(this Korda.Query.SqlExpression<T?> expression, Korda.Query.SqlExpression<T?> value) where T : struct, System.Numerics.INumber<T>
 ```
 
 **summary:** Performs native numeric add with explicit SQL NULL propagation.
@@ -4104,10 +4104,10 @@ public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlArithmeti
 
 **Inherited type policy:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
-## `M:NativeWeave.Query.SqlArithmeticExtensions.Add``1(NativeWeave.Query.SqlExpression{System.Nullable{``0}},``0)`
+## `M:Korda.Query.SqlArithmeticExtensions.Add``1(Korda.Query.SqlExpression{System.Nullable{``0}},``0)`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlArithmeticExtensions.Add<T>(this NativeWeave.Query.SqlExpression<T?> expression, T value) where T : struct, System.Numerics.INumber<T>
+public static Korda.Query.SqlExpression<T?> Korda.Query.SqlArithmeticExtensions.Add<T>(this Korda.Query.SqlExpression<T?> expression, T value) where T : struct, System.Numerics.INumber<T>
 ```
 
 **summary:** Performs native numeric add with explicit SQL NULL propagation.
@@ -4132,10 +4132,10 @@ public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlArithmeti
 
 **Inherited type policy:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
-## `M:NativeWeave.Query.SqlArithmeticExtensions.Add``1(NativeWeave.Query.SqlExpression{``0},NativeWeave.Query.SqlExpression{``0})`
+## `M:Korda.Query.SqlArithmeticExtensions.Add``1(Korda.Query.SqlExpression{``0},Korda.Query.SqlExpression{``0})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlArithmeticExtensions.Add<T>(this NativeWeave.Query.SqlExpression<T> expression, NativeWeave.Query.SqlExpression<T> value) where T : System.Numerics.INumber<T>
+public static Korda.Query.SqlExpression<T> Korda.Query.SqlArithmeticExtensions.Add<T>(this Korda.Query.SqlExpression<T> expression, Korda.Query.SqlExpression<T> value) where T : System.Numerics.INumber<T>
 ```
 
 **summary:** Performs native numeric add with explicit SQL NULL propagation.
@@ -4160,10 +4160,10 @@ public static NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlArithmetic
 
 **Inherited type policy:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
-## `M:NativeWeave.Query.SqlArithmeticExtensions.Add``1(NativeWeave.Query.SqlExpression{``0},``0)`
+## `M:Korda.Query.SqlArithmeticExtensions.Add``1(Korda.Query.SqlExpression{``0},``0)`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlArithmeticExtensions.Add<T>(this NativeWeave.Query.SqlExpression<T> expression, T value) where T : System.Numerics.INumber<T>
+public static Korda.Query.SqlExpression<T> Korda.Query.SqlArithmeticExtensions.Add<T>(this Korda.Query.SqlExpression<T> expression, T value) where T : System.Numerics.INumber<T>
 ```
 
 **summary:** Performs native numeric add with explicit SQL NULL propagation.
@@ -4188,10 +4188,10 @@ public static NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlArithmetic
 
 **Inherited type policy:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
-## `M:NativeWeave.Query.SqlArithmeticExtensions.Divide``1(NativeWeave.Query.SqlExpression{System.Nullable{``0}},NativeWeave.Query.SqlExpression{System.Nullable{``0}})`
+## `M:Korda.Query.SqlArithmeticExtensions.Divide``1(Korda.Query.SqlExpression{System.Nullable{``0}},Korda.Query.SqlExpression{System.Nullable{``0}})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlArithmeticExtensions.Divide<T>(this NativeWeave.Query.SqlExpression<T?> expression, NativeWeave.Query.SqlExpression<T?> value) where T : struct, System.Numerics.INumber<T>
+public static Korda.Query.SqlExpression<T?> Korda.Query.SqlArithmeticExtensions.Divide<T>(this Korda.Query.SqlExpression<T?> expression, Korda.Query.SqlExpression<T?> value) where T : struct, System.Numerics.INumber<T>
 ```
 
 **summary:** Performs native numeric divide with explicit SQL NULL propagation.
@@ -4216,10 +4216,10 @@ public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlArithmeti
 
 **Inherited type policy:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
-## `M:NativeWeave.Query.SqlArithmeticExtensions.Divide``1(NativeWeave.Query.SqlExpression{System.Nullable{``0}},``0)`
+## `M:Korda.Query.SqlArithmeticExtensions.Divide``1(Korda.Query.SqlExpression{System.Nullable{``0}},``0)`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlArithmeticExtensions.Divide<T>(this NativeWeave.Query.SqlExpression<T?> expression, T value) where T : struct, System.Numerics.INumber<T>
+public static Korda.Query.SqlExpression<T?> Korda.Query.SqlArithmeticExtensions.Divide<T>(this Korda.Query.SqlExpression<T?> expression, T value) where T : struct, System.Numerics.INumber<T>
 ```
 
 **summary:** Performs native numeric divide with explicit SQL NULL propagation.
@@ -4244,10 +4244,10 @@ public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlArithmeti
 
 **Inherited type policy:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
-## `M:NativeWeave.Query.SqlArithmeticExtensions.Divide``1(NativeWeave.Query.SqlExpression{``0},NativeWeave.Query.SqlExpression{``0})`
+## `M:Korda.Query.SqlArithmeticExtensions.Divide``1(Korda.Query.SqlExpression{``0},Korda.Query.SqlExpression{``0})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlArithmeticExtensions.Divide<T>(this NativeWeave.Query.SqlExpression<T> expression, NativeWeave.Query.SqlExpression<T> value) where T : System.Numerics.INumber<T>
+public static Korda.Query.SqlExpression<T> Korda.Query.SqlArithmeticExtensions.Divide<T>(this Korda.Query.SqlExpression<T> expression, Korda.Query.SqlExpression<T> value) where T : System.Numerics.INumber<T>
 ```
 
 **summary:** Performs native numeric divide with explicit SQL NULL propagation.
@@ -4272,10 +4272,10 @@ public static NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlArithmetic
 
 **Inherited type policy:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
-## `M:NativeWeave.Query.SqlArithmeticExtensions.Divide``1(NativeWeave.Query.SqlExpression{``0},``0)`
+## `M:Korda.Query.SqlArithmeticExtensions.Divide``1(Korda.Query.SqlExpression{``0},``0)`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlArithmeticExtensions.Divide<T>(this NativeWeave.Query.SqlExpression<T> expression, T value) where T : System.Numerics.INumber<T>
+public static Korda.Query.SqlExpression<T> Korda.Query.SqlArithmeticExtensions.Divide<T>(this Korda.Query.SqlExpression<T> expression, T value) where T : System.Numerics.INumber<T>
 ```
 
 **summary:** Performs native numeric divide with explicit SQL NULL propagation.
@@ -4300,10 +4300,10 @@ public static NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlArithmetic
 
 **Inherited type policy:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
-## `M:NativeWeave.Query.SqlArithmeticExtensions.Multiply``1(NativeWeave.Query.SqlExpression{System.Nullable{``0}},NativeWeave.Query.SqlExpression{System.Nullable{``0}})`
+## `M:Korda.Query.SqlArithmeticExtensions.Multiply``1(Korda.Query.SqlExpression{System.Nullable{``0}},Korda.Query.SqlExpression{System.Nullable{``0}})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlArithmeticExtensions.Multiply<T>(this NativeWeave.Query.SqlExpression<T?> expression, NativeWeave.Query.SqlExpression<T?> value) where T : struct, System.Numerics.INumber<T>
+public static Korda.Query.SqlExpression<T?> Korda.Query.SqlArithmeticExtensions.Multiply<T>(this Korda.Query.SqlExpression<T?> expression, Korda.Query.SqlExpression<T?> value) where T : struct, System.Numerics.INumber<T>
 ```
 
 **summary:** Performs native numeric multiply with explicit SQL NULL propagation.
@@ -4328,10 +4328,10 @@ public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlArithmeti
 
 **Inherited type policy:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
-## `M:NativeWeave.Query.SqlArithmeticExtensions.Multiply``1(NativeWeave.Query.SqlExpression{System.Nullable{``0}},``0)`
+## `M:Korda.Query.SqlArithmeticExtensions.Multiply``1(Korda.Query.SqlExpression{System.Nullable{``0}},``0)`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlArithmeticExtensions.Multiply<T>(this NativeWeave.Query.SqlExpression<T?> expression, T value) where T : struct, System.Numerics.INumber<T>
+public static Korda.Query.SqlExpression<T?> Korda.Query.SqlArithmeticExtensions.Multiply<T>(this Korda.Query.SqlExpression<T?> expression, T value) where T : struct, System.Numerics.INumber<T>
 ```
 
 **summary:** Performs native numeric multiply with explicit SQL NULL propagation.
@@ -4356,10 +4356,10 @@ public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlArithmeti
 
 **Inherited type policy:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
-## `M:NativeWeave.Query.SqlArithmeticExtensions.Multiply``1(NativeWeave.Query.SqlExpression{``0},NativeWeave.Query.SqlExpression{``0})`
+## `M:Korda.Query.SqlArithmeticExtensions.Multiply``1(Korda.Query.SqlExpression{``0},Korda.Query.SqlExpression{``0})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlArithmeticExtensions.Multiply<T>(this NativeWeave.Query.SqlExpression<T> expression, NativeWeave.Query.SqlExpression<T> value) where T : System.Numerics.INumber<T>
+public static Korda.Query.SqlExpression<T> Korda.Query.SqlArithmeticExtensions.Multiply<T>(this Korda.Query.SqlExpression<T> expression, Korda.Query.SqlExpression<T> value) where T : System.Numerics.INumber<T>
 ```
 
 **summary:** Performs native numeric multiply with explicit SQL NULL propagation.
@@ -4384,10 +4384,10 @@ public static NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlArithmetic
 
 **Inherited type policy:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
-## `M:NativeWeave.Query.SqlArithmeticExtensions.Multiply``1(NativeWeave.Query.SqlExpression{``0},``0)`
+## `M:Korda.Query.SqlArithmeticExtensions.Multiply``1(Korda.Query.SqlExpression{``0},``0)`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlArithmeticExtensions.Multiply<T>(this NativeWeave.Query.SqlExpression<T> expression, T value) where T : System.Numerics.INumber<T>
+public static Korda.Query.SqlExpression<T> Korda.Query.SqlArithmeticExtensions.Multiply<T>(this Korda.Query.SqlExpression<T> expression, T value) where T : System.Numerics.INumber<T>
 ```
 
 **summary:** Performs native numeric multiply with explicit SQL NULL propagation.
@@ -4412,10 +4412,10 @@ public static NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlArithmetic
 
 **Inherited type policy:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
-## `M:NativeWeave.Query.SqlArithmeticExtensions.Subtract``1(NativeWeave.Query.SqlExpression{System.Nullable{``0}},NativeWeave.Query.SqlExpression{System.Nullable{``0}})`
+## `M:Korda.Query.SqlArithmeticExtensions.Subtract``1(Korda.Query.SqlExpression{System.Nullable{``0}},Korda.Query.SqlExpression{System.Nullable{``0}})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlArithmeticExtensions.Subtract<T>(this NativeWeave.Query.SqlExpression<T?> expression, NativeWeave.Query.SqlExpression<T?> value) where T : struct, System.Numerics.INumber<T>
+public static Korda.Query.SqlExpression<T?> Korda.Query.SqlArithmeticExtensions.Subtract<T>(this Korda.Query.SqlExpression<T?> expression, Korda.Query.SqlExpression<T?> value) where T : struct, System.Numerics.INumber<T>
 ```
 
 **summary:** Performs native numeric subtract with explicit SQL NULL propagation.
@@ -4440,10 +4440,10 @@ public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlArithmeti
 
 **Inherited type policy:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
-## `M:NativeWeave.Query.SqlArithmeticExtensions.Subtract``1(NativeWeave.Query.SqlExpression{System.Nullable{``0}},``0)`
+## `M:Korda.Query.SqlArithmeticExtensions.Subtract``1(Korda.Query.SqlExpression{System.Nullable{``0}},``0)`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlArithmeticExtensions.Subtract<T>(this NativeWeave.Query.SqlExpression<T?> expression, T value) where T : struct, System.Numerics.INumber<T>
+public static Korda.Query.SqlExpression<T?> Korda.Query.SqlArithmeticExtensions.Subtract<T>(this Korda.Query.SqlExpression<T?> expression, T value) where T : struct, System.Numerics.INumber<T>
 ```
 
 **summary:** Performs native numeric subtract with explicit SQL NULL propagation.
@@ -4468,10 +4468,10 @@ public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlArithmeti
 
 **Inherited type policy:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
-## `M:NativeWeave.Query.SqlArithmeticExtensions.Subtract``1(NativeWeave.Query.SqlExpression{``0},NativeWeave.Query.SqlExpression{``0})`
+## `M:Korda.Query.SqlArithmeticExtensions.Subtract``1(Korda.Query.SqlExpression{``0},Korda.Query.SqlExpression{``0})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlArithmeticExtensions.Subtract<T>(this NativeWeave.Query.SqlExpression<T> expression, NativeWeave.Query.SqlExpression<T> value) where T : System.Numerics.INumber<T>
+public static Korda.Query.SqlExpression<T> Korda.Query.SqlArithmeticExtensions.Subtract<T>(this Korda.Query.SqlExpression<T> expression, Korda.Query.SqlExpression<T> value) where T : System.Numerics.INumber<T>
 ```
 
 **summary:** Performs native numeric subtract with explicit SQL NULL propagation.
@@ -4496,10 +4496,10 @@ public static NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlArithmetic
 
 **Inherited type policy:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
-## `M:NativeWeave.Query.SqlArithmeticExtensions.Subtract``1(NativeWeave.Query.SqlExpression{``0},``0)`
+## `M:Korda.Query.SqlArithmeticExtensions.Subtract``1(Korda.Query.SqlExpression{``0},``0)`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlArithmeticExtensions.Subtract<T>(this NativeWeave.Query.SqlExpression<T> expression, T value) where T : System.Numerics.INumber<T>
+public static Korda.Query.SqlExpression<T> Korda.Query.SqlArithmeticExtensions.Subtract<T>(this Korda.Query.SqlExpression<T> expression, T value) where T : System.Numerics.INumber<T>
 ```
 
 **summary:** Performs native numeric subtract with explicit SQL NULL propagation.
@@ -4524,20 +4524,20 @@ public static NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlArithmetic
 
 **Inherited type policy:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
-## `M:NativeWeave.Query.SqlExpression`1.#ctor`
+## `M:Korda.Query.SqlExpression`1.#ctor`
 
 ```csharp
-public NativeWeave.Query.SqlExpression<T>.SqlExpression()
+public Korda.Query.SqlExpression<T>.SqlExpression()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** No SQL tree or delegate is retained. Values are snapshotted immediately; default and foreign tokens reject.
 
-## `M:NativeWeave.Query.SqlExpression`1.Between(`0,`0)`
+## `M:Korda.Query.SqlExpression`1.Between(`0,`0)`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.Between(T lower, T upper)
+public Korda.Query.SqlPredicate Korda.Query.SqlExpression<T>.Between(T lower, T upper)
 ```
 
 **summary:** Snapshots two bounds and creates native inclusive BETWEEN.
@@ -4560,10 +4560,10 @@ public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.Between
 
 **Inherited type policy:** No SQL tree or delegate is retained. Values are snapshotted immediately; default and foreign tokens reject.
 
-## `M:NativeWeave.Query.SqlExpression`1.Equal(NativeWeave.Query.SqlExpression{`0})`
+## `M:Korda.Query.SqlExpression`1.Equal(Korda.Query.SqlExpression{`0})`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.Equal(NativeWeave.Query.SqlExpression<T> other)
+public Korda.Query.SqlPredicate Korda.Query.SqlExpression<T>.Equal(Korda.Query.SqlExpression<T> other)
 ```
 
 **summary:** Applies native Equal with exact codec/source checks and SQL NULL semantics.
@@ -4584,10 +4584,10 @@ public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.Equal(N
 
 **Inherited type policy:** No SQL tree or delegate is retained. Values are snapshotted immediately; default and foreign tokens reject.
 
-## `M:NativeWeave.Query.SqlExpression`1.Equal(`0)`
+## `M:Korda.Query.SqlExpression`1.Equal(`0)`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.Equal(T value)
+public Korda.Query.SqlPredicate Korda.Query.SqlExpression<T>.Equal(T value)
 ```
 
 **summary:** Applies native Equal with exact codec/source checks and SQL NULL semantics.
@@ -4608,10 +4608,10 @@ public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.Equal(T
 
 **Inherited type policy:** No SQL tree or delegate is retained. Values are snapshotted immediately; default and foreign tokens reject.
 
-## `M:NativeWeave.Query.SqlExpression`1.GreaterThan(NativeWeave.Query.SqlExpression{`0})`
+## `M:Korda.Query.SqlExpression`1.GreaterThan(Korda.Query.SqlExpression{`0})`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.GreaterThan(NativeWeave.Query.SqlExpression<T> other)
+public Korda.Query.SqlPredicate Korda.Query.SqlExpression<T>.GreaterThan(Korda.Query.SqlExpression<T> other)
 ```
 
 **summary:** Applies native GreaterThan with exact codec/source checks and SQL NULL semantics.
@@ -4632,10 +4632,10 @@ public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.Greater
 
 **Inherited type policy:** No SQL tree or delegate is retained. Values are snapshotted immediately; default and foreign tokens reject.
 
-## `M:NativeWeave.Query.SqlExpression`1.GreaterThan(`0)`
+## `M:Korda.Query.SqlExpression`1.GreaterThan(`0)`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.GreaterThan(T value)
+public Korda.Query.SqlPredicate Korda.Query.SqlExpression<T>.GreaterThan(T value)
 ```
 
 **summary:** Applies native GreaterThan with exact codec/source checks and SQL NULL semantics.
@@ -4656,10 +4656,10 @@ public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.Greater
 
 **Inherited type policy:** No SQL tree or delegate is retained. Values are snapshotted immediately; default and foreign tokens reject.
 
-## `M:NativeWeave.Query.SqlExpression`1.GreaterThanOrEqual(NativeWeave.Query.SqlExpression{`0})`
+## `M:Korda.Query.SqlExpression`1.GreaterThanOrEqual(Korda.Query.SqlExpression{`0})`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.GreaterThanOrEqual(NativeWeave.Query.SqlExpression<T> other)
+public Korda.Query.SqlPredicate Korda.Query.SqlExpression<T>.GreaterThanOrEqual(Korda.Query.SqlExpression<T> other)
 ```
 
 **summary:** Applies native GreaterThanOrEqual with exact codec/source checks and SQL NULL semantics.
@@ -4680,10 +4680,10 @@ public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.Greater
 
 **Inherited type policy:** No SQL tree or delegate is retained. Values are snapshotted immediately; default and foreign tokens reject.
 
-## `M:NativeWeave.Query.SqlExpression`1.GreaterThanOrEqual(`0)`
+## `M:Korda.Query.SqlExpression`1.GreaterThanOrEqual(`0)`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.GreaterThanOrEqual(T value)
+public Korda.Query.SqlPredicate Korda.Query.SqlExpression<T>.GreaterThanOrEqual(T value)
 ```
 
 **summary:** Applies native GreaterThanOrEqual with exact codec/source checks and SQL NULL semantics.
@@ -4704,10 +4704,10 @@ public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.Greater
 
 **Inherited type policy:** No SQL tree or delegate is retained. Values are snapshotted immediately; default and foreign tokens reject.
 
-## `M:NativeWeave.Query.SqlExpression`1.In(NativeWeave.Query.QuerySelection{`0})`
+## `M:Korda.Query.SqlExpression`1.In(Korda.Query.QuerySelection{`0})`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.In(NativeWeave.Query.QuerySelection<T> subquery)
+public Korda.Query.SqlPredicate Korda.Query.SqlExpression<T>.In(Korda.Query.QuerySelection<T> subquery)
 ```
 
 **summary:** Snapshots a compatible same-source single-column subquery into native IN.
@@ -4728,10 +4728,10 @@ public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.In(Nati
 
 **Inherited type policy:** No SQL tree or delegate is retained. Values are snapshotted immediately; default and foreign tokens reject.
 
-## `M:NativeWeave.Query.SqlExpression`1.In(System.ReadOnlySpan{`0})`
+## `M:Korda.Query.SqlExpression`1.In(System.ReadOnlySpan{`0})`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.In(System.ReadOnlySpan<T> values)
+public Korda.Query.SqlPredicate Korda.Query.SqlExpression<T>.In(System.ReadOnlySpan<T> values)
 ```
 
 **summary:** Snapshots a finite value span; an empty span yields native FALSE.
@@ -4752,10 +4752,10 @@ public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.In(Syst
 
 **Inherited type policy:** No SQL tree or delegate is retained. Values are snapshotted immediately; default and foreign tokens reject.
 
-## `M:NativeWeave.Query.SqlExpression`1.IsNotNull`
+## `M:Korda.Query.SqlExpression`1.IsNotNull`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.IsNotNull()
+public Korda.Query.SqlPredicate Korda.Query.SqlExpression<T>.IsNotNull()
 ```
 
 **summary:** Tests SQL non-NULL explicitly.
@@ -4774,10 +4774,10 @@ public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.IsNotNu
 
 **Inherited type policy:** No SQL tree or delegate is retained. Values are snapshotted immediately; default and foreign tokens reject.
 
-## `M:NativeWeave.Query.SqlExpression`1.IsNull`
+## `M:Korda.Query.SqlExpression`1.IsNull`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.IsNull()
+public Korda.Query.SqlPredicate Korda.Query.SqlExpression<T>.IsNull()
 ```
 
 **summary:** Tests SQL NULL explicitly without substituting a sentinel.
@@ -4796,10 +4796,10 @@ public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.IsNull(
 
 **Inherited type policy:** No SQL tree or delegate is retained. Values are snapshotted immediately; default and foreign tokens reject.
 
-## `M:NativeWeave.Query.SqlExpression`1.LessThan(NativeWeave.Query.SqlExpression{`0})`
+## `M:Korda.Query.SqlExpression`1.LessThan(Korda.Query.SqlExpression{`0})`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.LessThan(NativeWeave.Query.SqlExpression<T> other)
+public Korda.Query.SqlPredicate Korda.Query.SqlExpression<T>.LessThan(Korda.Query.SqlExpression<T> other)
 ```
 
 **summary:** Applies native LessThan with exact codec/source checks and SQL NULL semantics.
@@ -4820,10 +4820,10 @@ public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.LessTha
 
 **Inherited type policy:** No SQL tree or delegate is retained. Values are snapshotted immediately; default and foreign tokens reject.
 
-## `M:NativeWeave.Query.SqlExpression`1.LessThan(`0)`
+## `M:Korda.Query.SqlExpression`1.LessThan(`0)`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.LessThan(T value)
+public Korda.Query.SqlPredicate Korda.Query.SqlExpression<T>.LessThan(T value)
 ```
 
 **summary:** Applies native LessThan with exact codec/source checks and SQL NULL semantics.
@@ -4844,10 +4844,10 @@ public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.LessTha
 
 **Inherited type policy:** No SQL tree or delegate is retained. Values are snapshotted immediately; default and foreign tokens reject.
 
-## `M:NativeWeave.Query.SqlExpression`1.LessThanOrEqual(NativeWeave.Query.SqlExpression{`0})`
+## `M:Korda.Query.SqlExpression`1.LessThanOrEqual(Korda.Query.SqlExpression{`0})`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.LessThanOrEqual(NativeWeave.Query.SqlExpression<T> other)
+public Korda.Query.SqlPredicate Korda.Query.SqlExpression<T>.LessThanOrEqual(Korda.Query.SqlExpression<T> other)
 ```
 
 **summary:** Applies native LessThanOrEqual with exact codec/source checks and SQL NULL semantics.
@@ -4868,10 +4868,10 @@ public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.LessTha
 
 **Inherited type policy:** No SQL tree or delegate is retained. Values are snapshotted immediately; default and foreign tokens reject.
 
-## `M:NativeWeave.Query.SqlExpression`1.LessThanOrEqual(`0)`
+## `M:Korda.Query.SqlExpression`1.LessThanOrEqual(`0)`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.LessThanOrEqual(T value)
+public Korda.Query.SqlPredicate Korda.Query.SqlExpression<T>.LessThanOrEqual(T value)
 ```
 
 **summary:** Applies native LessThanOrEqual with exact codec/source checks and SQL NULL semantics.
@@ -4892,10 +4892,10 @@ public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.LessTha
 
 **Inherited type policy:** No SQL tree or delegate is retained. Values are snapshotted immediately; default and foreign tokens reject.
 
-## `M:NativeWeave.Query.SqlExpression`1.NotEqual(NativeWeave.Query.SqlExpression{`0})`
+## `M:Korda.Query.SqlExpression`1.NotEqual(Korda.Query.SqlExpression{`0})`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.NotEqual(NativeWeave.Query.SqlExpression<T> other)
+public Korda.Query.SqlPredicate Korda.Query.SqlExpression<T>.NotEqual(Korda.Query.SqlExpression<T> other)
 ```
 
 **summary:** Applies native NotEqual with exact codec/source checks and SQL NULL semantics.
@@ -4916,10 +4916,10 @@ public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.NotEqua
 
 **Inherited type policy:** No SQL tree or delegate is retained. Values are snapshotted immediately; default and foreign tokens reject.
 
-## `M:NativeWeave.Query.SqlExpression`1.NotEqual(`0)`
+## `M:Korda.Query.SqlExpression`1.NotEqual(`0)`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.NotEqual(T value)
+public Korda.Query.SqlPredicate Korda.Query.SqlExpression<T>.NotEqual(T value)
 ```
 
 **summary:** Applies native NotEqual with exact codec/source checks and SQL NULL semantics.
@@ -4940,10 +4940,10 @@ public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.NotEqua
 
 **Inherited type policy:** No SQL tree or delegate is retained. Values are snapshotted immediately; default and foreign tokens reject.
 
-## `M:NativeWeave.Query.SqlExpression`1.NotIn(System.ReadOnlySpan{`0})`
+## `M:Korda.Query.SqlExpression`1.NotIn(System.ReadOnlySpan{`0})`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.NotIn(System.ReadOnlySpan<T> values)
+public Korda.Query.SqlPredicate Korda.Query.SqlExpression<T>.NotIn(System.ReadOnlySpan<T> values)
 ```
 
 **summary:** Snapshots a finite value span; an empty span yields native TRUE.
@@ -4964,10 +4964,10 @@ public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.NotIn(S
 
 **Inherited type policy:** No SQL tree or delegate is retained. Values are snapshotted immediately; default and foreign tokens reject.
 
-## `M:NativeWeave.Query.SqlExpression`1.NullSafeEqual(NativeWeave.Query.SqlExpression{`0})`
+## `M:Korda.Query.SqlExpression`1.NullSafeEqual(Korda.Query.SqlExpression{`0})`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.NullSafeEqual(NativeWeave.Query.SqlExpression<T> other)
+public Korda.Query.SqlPredicate Korda.Query.SqlExpression<T>.NullSafeEqual(Korda.Query.SqlExpression<T> other)
 ```
 
 **summary:** Applies native NullSafeEqual with exact codec/source checks and SQL NULL semantics.
@@ -4988,10 +4988,10 @@ public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.NullSaf
 
 **Inherited type policy:** No SQL tree or delegate is retained. Values are snapshotted immediately; default and foreign tokens reject.
 
-## `M:NativeWeave.Query.SqlExpression`1.NullSafeEqual(`0)`
+## `M:Korda.Query.SqlExpression`1.NullSafeEqual(`0)`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.NullSafeEqual(T value)
+public Korda.Query.SqlPredicate Korda.Query.SqlExpression<T>.NullSafeEqual(T value)
 ```
 
 **summary:** Applies native NullSafeEqual with exact codec/source checks and SQL NULL semantics.
@@ -5012,10 +5012,10 @@ public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlExpression<T>.NullSaf
 
 **Inherited type policy:** No SQL tree or delegate is retained. Values are snapshotted immediately; default and foreign tokens reject.
 
-## `M:NativeWeave.Query.SqlExpression`1.Over(NativeWeave.Query.WindowDefinition)`
+## `M:Korda.Query.SqlExpression`1.Over(Korda.Query.WindowDefinition)`
 
 ```csharp
-public NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlExpression<T>.Over(NativeWeave.Query.WindowDefinition window)
+public Korda.Query.SqlExpression<T> Korda.Query.SqlExpression<T>.Over(Korda.Query.WindowDefinition window)
 ```
 
 **summary:** Snapshots same-query native window state onto an eligible aggregate or rank expression.
@@ -5036,10 +5036,10 @@ public NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlExpression<T>.Ove
 
 **Inherited type policy:** No SQL tree or delegate is retained. Values are snapshotted immediately; default and foreign tokens reject.
 
-## `M:NativeWeave.Query.SqlFunctions.Average(NativeWeave.Query.SqlExpression{System.Decimal})`
+## `M:Korda.Query.SqlFunctions.Average(Korda.Query.SqlExpression{System.Decimal})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<decimal?> NativeWeave.Query.SqlFunctions.Average(NativeWeave.Query.SqlExpression<decimal> expression)
+public static Korda.Query.SqlExpression<decimal?> Korda.Query.SqlFunctions.Average(Korda.Query.SqlExpression<decimal> expression)
 ```
 
 **summary:** Aggregates native decimal inputs to nullable decimal, preserving empty-input NULL and explicit conversion failures.
@@ -5060,10 +5060,10 @@ public static NativeWeave.Query.SqlExpression<decimal?> NativeWeave.Query.SqlFun
 
 **Inherited type policy:** SQL NULL, collation, overflow and conversion semantics remain explicit provider behavior.
 
-## `M:NativeWeave.Query.SqlFunctions.Average(NativeWeave.Query.SqlExpression{System.Double})`
+## `M:Korda.Query.SqlFunctions.Average(Korda.Query.SqlExpression{System.Double})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<double?> NativeWeave.Query.SqlFunctions.Average(NativeWeave.Query.SqlExpression<double> expression)
+public static Korda.Query.SqlExpression<double?> Korda.Query.SqlFunctions.Average(Korda.Query.SqlExpression<double> expression)
 ```
 
 **summary:** Aggregates native double inputs to nullable double, preserving empty-input NULL and explicit conversion failures.
@@ -5084,10 +5084,10 @@ public static NativeWeave.Query.SqlExpression<double?> NativeWeave.Query.SqlFunc
 
 **Inherited type policy:** SQL NULL, collation, overflow and conversion semantics remain explicit provider behavior.
 
-## `M:NativeWeave.Query.SqlFunctions.Average(NativeWeave.Query.SqlExpression{System.Int32})`
+## `M:Korda.Query.SqlFunctions.Average(Korda.Query.SqlExpression{System.Int32})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<double?> NativeWeave.Query.SqlFunctions.Average(NativeWeave.Query.SqlExpression<int> expression)
+public static Korda.Query.SqlExpression<double?> Korda.Query.SqlFunctions.Average(Korda.Query.SqlExpression<int> expression)
 ```
 
 **summary:** Aggregates native int inputs to nullable double, preserving empty-input NULL and explicit conversion failures.
@@ -5108,10 +5108,10 @@ public static NativeWeave.Query.SqlExpression<double?> NativeWeave.Query.SqlFunc
 
 **Inherited type policy:** SQL NULL, collation, overflow and conversion semantics remain explicit provider behavior.
 
-## `M:NativeWeave.Query.SqlFunctions.Average(NativeWeave.Query.SqlExpression{System.Int64})`
+## `M:Korda.Query.SqlFunctions.Average(Korda.Query.SqlExpression{System.Int64})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<double?> NativeWeave.Query.SqlFunctions.Average(NativeWeave.Query.SqlExpression<long> expression)
+public static Korda.Query.SqlExpression<double?> Korda.Query.SqlFunctions.Average(Korda.Query.SqlExpression<long> expression)
 ```
 
 **summary:** Aggregates native long inputs to nullable double, preserving empty-input NULL and explicit conversion failures.
@@ -5132,10 +5132,10 @@ public static NativeWeave.Query.SqlExpression<double?> NativeWeave.Query.SqlFunc
 
 **Inherited type policy:** SQL NULL, collation, overflow and conversion semantics remain explicit provider behavior.
 
-## `M:NativeWeave.Query.SqlFunctions.Average(NativeWeave.Query.SqlExpression{System.Nullable{System.Decimal}})`
+## `M:Korda.Query.SqlFunctions.Average(Korda.Query.SqlExpression{System.Nullable{System.Decimal}})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<decimal?> NativeWeave.Query.SqlFunctions.Average(NativeWeave.Query.SqlExpression<decimal?> expression)
+public static Korda.Query.SqlExpression<decimal?> Korda.Query.SqlFunctions.Average(Korda.Query.SqlExpression<decimal?> expression)
 ```
 
 **summary:** Aggregates native decimal? inputs to nullable decimal, preserving empty-input NULL and explicit conversion failures.
@@ -5156,10 +5156,10 @@ public static NativeWeave.Query.SqlExpression<decimal?> NativeWeave.Query.SqlFun
 
 **Inherited type policy:** SQL NULL, collation, overflow and conversion semantics remain explicit provider behavior.
 
-## `M:NativeWeave.Query.SqlFunctions.Average(NativeWeave.Query.SqlExpression{System.Nullable{System.Double}})`
+## `M:Korda.Query.SqlFunctions.Average(Korda.Query.SqlExpression{System.Nullable{System.Double}})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<double?> NativeWeave.Query.SqlFunctions.Average(NativeWeave.Query.SqlExpression<double?> expression)
+public static Korda.Query.SqlExpression<double?> Korda.Query.SqlFunctions.Average(Korda.Query.SqlExpression<double?> expression)
 ```
 
 **summary:** Aggregates native double? inputs to nullable double, preserving empty-input NULL and explicit conversion failures.
@@ -5180,10 +5180,10 @@ public static NativeWeave.Query.SqlExpression<double?> NativeWeave.Query.SqlFunc
 
 **Inherited type policy:** SQL NULL, collation, overflow and conversion semantics remain explicit provider behavior.
 
-## `M:NativeWeave.Query.SqlFunctions.Average(NativeWeave.Query.SqlExpression{System.Nullable{System.Int32}})`
+## `M:Korda.Query.SqlFunctions.Average(Korda.Query.SqlExpression{System.Nullable{System.Int32}})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<double?> NativeWeave.Query.SqlFunctions.Average(NativeWeave.Query.SqlExpression<int?> expression)
+public static Korda.Query.SqlExpression<double?> Korda.Query.SqlFunctions.Average(Korda.Query.SqlExpression<int?> expression)
 ```
 
 **summary:** Aggregates native int? inputs to nullable double, preserving empty-input NULL and explicit conversion failures.
@@ -5204,10 +5204,10 @@ public static NativeWeave.Query.SqlExpression<double?> NativeWeave.Query.SqlFunc
 
 **Inherited type policy:** SQL NULL, collation, overflow and conversion semantics remain explicit provider behavior.
 
-## `M:NativeWeave.Query.SqlFunctions.Average(NativeWeave.Query.SqlExpression{System.Nullable{System.Int64}})`
+## `M:Korda.Query.SqlFunctions.Average(Korda.Query.SqlExpression{System.Nullable{System.Int64}})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<double?> NativeWeave.Query.SqlFunctions.Average(NativeWeave.Query.SqlExpression<long?> expression)
+public static Korda.Query.SqlExpression<double?> Korda.Query.SqlFunctions.Average(Korda.Query.SqlExpression<long?> expression)
 ```
 
 **summary:** Aggregates native long? inputs to nullable double, preserving empty-input NULL and explicit conversion failures.
@@ -5228,10 +5228,10 @@ public static NativeWeave.Query.SqlExpression<double?> NativeWeave.Query.SqlFunc
 
 **Inherited type policy:** SQL NULL, collation, overflow and conversion semantics remain explicit provider behavior.
 
-## `M:NativeWeave.Query.SqlFunctions.Average(NativeWeave.Query.SqlExpression{System.Nullable{System.Single}})`
+## `M:Korda.Query.SqlFunctions.Average(Korda.Query.SqlExpression{System.Nullable{System.Single}})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<double?> NativeWeave.Query.SqlFunctions.Average(NativeWeave.Query.SqlExpression<float?> expression)
+public static Korda.Query.SqlExpression<double?> Korda.Query.SqlFunctions.Average(Korda.Query.SqlExpression<float?> expression)
 ```
 
 **summary:** Aggregates native float? inputs to nullable double, preserving empty-input NULL and explicit conversion failures.
@@ -5252,10 +5252,10 @@ public static NativeWeave.Query.SqlExpression<double?> NativeWeave.Query.SqlFunc
 
 **Inherited type policy:** SQL NULL, collation, overflow and conversion semantics remain explicit provider behavior.
 
-## `M:NativeWeave.Query.SqlFunctions.Average(NativeWeave.Query.SqlExpression{System.Single})`
+## `M:Korda.Query.SqlFunctions.Average(Korda.Query.SqlExpression{System.Single})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<double?> NativeWeave.Query.SqlFunctions.Average(NativeWeave.Query.SqlExpression<float> expression)
+public static Korda.Query.SqlExpression<double?> Korda.Query.SqlFunctions.Average(Korda.Query.SqlExpression<float> expression)
 ```
 
 **summary:** Aggregates native float inputs to nullable double, preserving empty-input NULL and explicit conversion failures.
@@ -5276,10 +5276,10 @@ public static NativeWeave.Query.SqlExpression<double?> NativeWeave.Query.SqlFunc
 
 **Inherited type policy:** SQL NULL, collation, overflow and conversion semantics remain explicit provider behavior.
 
-## `M:NativeWeave.Query.SqlFunctions.Case``1(NativeWeave.Query.SqlPredicate,NativeWeave.Query.SqlExpression{``0},NativeWeave.Query.SqlExpression{``0})`
+## `M:Korda.Query.SqlFunctions.Case``1(Korda.Query.SqlPredicate,Korda.Query.SqlExpression{``0},Korda.Query.SqlExpression{``0})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlFunctions.Case<T>(NativeWeave.Query.SqlPredicate condition, NativeWeave.Query.SqlExpression<T> whenTrue, NativeWeave.Query.SqlExpression<T> whenFalse)
+public static Korda.Query.SqlExpression<T> Korda.Query.SqlFunctions.Case<T>(Korda.Query.SqlPredicate condition, Korda.Query.SqlExpression<T> whenTrue, Korda.Query.SqlExpression<T> whenFalse)
 ```
 
 **summary:** Creates a native CASE with same-query compatible scalar alternatives.
@@ -5306,10 +5306,10 @@ public static NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlFunctions.
 
 **Inherited type policy:** SQL NULL, collation, overflow and conversion semantics remain explicit provider behavior.
 
-## `M:NativeWeave.Query.SqlFunctions.CoalesceReference``1(NativeWeave.Query.SqlExpression{``0},``0)`
+## `M:Korda.Query.SqlFunctions.CoalesceReference``1(Korda.Query.SqlExpression{``0},``0)`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlFunctions.CoalesceReference<T>(NativeWeave.Query.SqlExpression<T?> expression, T fallback) where T : class
+public static Korda.Query.SqlExpression<T> Korda.Query.SqlFunctions.CoalesceReference<T>(Korda.Query.SqlExpression<T?> expression, T fallback) where T : class
 ```
 
 **summary:** Produces a non-null reference scalar with native SQL COALESCE.
@@ -5334,10 +5334,10 @@ public static NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlFunctions.
 
 **Inherited type policy:** SQL NULL, collation, overflow and conversion semantics remain explicit provider behavior.
 
-## `M:NativeWeave.Query.SqlFunctions.Coalesce``1(NativeWeave.Query.SqlExpression{System.Nullable{``0}},``0)`
+## `M:Korda.Query.SqlFunctions.Coalesce``1(Korda.Query.SqlExpression{System.Nullable{``0}},``0)`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlFunctions.Coalesce<T>(NativeWeave.Query.SqlExpression<T?> expression, T fallback) where T : struct
+public static Korda.Query.SqlExpression<T> Korda.Query.SqlFunctions.Coalesce<T>(Korda.Query.SqlExpression<T?> expression, T fallback) where T : struct
 ```
 
 **summary:** Produces a non-null scalar with native SQL COALESCE and an explicitly copied fallback.
@@ -5362,10 +5362,10 @@ public static NativeWeave.Query.SqlExpression<T> NativeWeave.Query.SqlFunctions.
 
 **Inherited type policy:** SQL NULL, collation, overflow and conversion semantics remain explicit provider behavior.
 
-## `M:NativeWeave.Query.SqlFunctions.Count``1(NativeWeave.Query.SqlExpression{``0},System.Boolean)`
+## `M:Korda.Query.SqlFunctions.Count``1(Korda.Query.SqlExpression{``0},System.Boolean)`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<long> NativeWeave.Query.SqlFunctions.Count<T>(NativeWeave.Query.SqlExpression<T> expression, bool distinct = false)
+public static Korda.Query.SqlExpression<long> Korda.Query.SqlFunctions.Count<T>(Korda.Query.SqlExpression<T> expression, bool distinct = false)
 ```
 
 **summary:** Counts non-null native values, optionally using DISTINCT, with exact Int64 result metadata.
@@ -5390,10 +5390,10 @@ public static NativeWeave.Query.SqlExpression<long> NativeWeave.Query.SqlFunctio
 
 **Inherited type policy:** SQL NULL, collation, overflow and conversion semantics remain explicit provider behavior.
 
-## `M:NativeWeave.Query.SqlFunctions.MaxNullableText(NativeWeave.Query.SqlExpression{System.String})`
+## `M:Korda.Query.SqlFunctions.MaxNullableText(Korda.Query.SqlExpression{System.String})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<string?> NativeWeave.Query.SqlFunctions.MaxNullableText(NativeWeave.Query.SqlExpression<string?> expression)
+public static Korda.Query.SqlExpression<string?> Korda.Query.SqlFunctions.MaxNullableText(Korda.Query.SqlExpression<string?> expression)
 ```
 
 **summary:** Returns native text maximum under SQL collation with empty-input NULL.
@@ -5414,10 +5414,10 @@ public static NativeWeave.Query.SqlExpression<string?> NativeWeave.Query.SqlFunc
 
 **Inherited type policy:** SQL NULL, collation, overflow and conversion semantics remain explicit provider behavior.
 
-## `M:NativeWeave.Query.SqlFunctions.MaxText(NativeWeave.Query.SqlExpression{System.String})`
+## `M:Korda.Query.SqlFunctions.MaxText(Korda.Query.SqlExpression{System.String})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<string?> NativeWeave.Query.SqlFunctions.MaxText(NativeWeave.Query.SqlExpression<string> expression)
+public static Korda.Query.SqlExpression<string?> Korda.Query.SqlFunctions.MaxText(Korda.Query.SqlExpression<string> expression)
 ```
 
 **summary:** Returns native text maximum under SQL collation with empty-input NULL.
@@ -5438,10 +5438,10 @@ public static NativeWeave.Query.SqlExpression<string?> NativeWeave.Query.SqlFunc
 
 **Inherited type policy:** SQL NULL, collation, overflow and conversion semantics remain explicit provider behavior.
 
-## `M:NativeWeave.Query.SqlFunctions.Max``1(NativeWeave.Query.SqlExpression{System.Nullable{``0}})`
+## `M:Korda.Query.SqlFunctions.Max``1(Korda.Query.SqlExpression{System.Nullable{``0}})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlFunctions.Max<T>(NativeWeave.Query.SqlExpression<T?> expression) where T : struct
+public static Korda.Query.SqlExpression<T?> Korda.Query.SqlFunctions.Max<T>(Korda.Query.SqlExpression<T?> expression) where T : struct
 ```
 
 **summary:** Returns the native maximum with the exact scalar codec and empty-input SQL NULL.
@@ -5464,10 +5464,10 @@ public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlFunctions
 
 **Inherited type policy:** SQL NULL, collation, overflow and conversion semantics remain explicit provider behavior.
 
-## `M:NativeWeave.Query.SqlFunctions.Max``1(NativeWeave.Query.SqlExpression{``0})`
+## `M:Korda.Query.SqlFunctions.Max``1(Korda.Query.SqlExpression{``0})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlFunctions.Max<T>(NativeWeave.Query.SqlExpression<T> expression) where T : struct
+public static Korda.Query.SqlExpression<T?> Korda.Query.SqlFunctions.Max<T>(Korda.Query.SqlExpression<T> expression) where T : struct
 ```
 
 **summary:** Returns the native maximum with the exact scalar codec and empty-input SQL NULL.
@@ -5490,10 +5490,10 @@ public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlFunctions
 
 **Inherited type policy:** SQL NULL, collation, overflow and conversion semantics remain explicit provider behavior.
 
-## `M:NativeWeave.Query.SqlFunctions.MinNullableText(NativeWeave.Query.SqlExpression{System.String})`
+## `M:Korda.Query.SqlFunctions.MinNullableText(Korda.Query.SqlExpression{System.String})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<string?> NativeWeave.Query.SqlFunctions.MinNullableText(NativeWeave.Query.SqlExpression<string?> expression)
+public static Korda.Query.SqlExpression<string?> Korda.Query.SqlFunctions.MinNullableText(Korda.Query.SqlExpression<string?> expression)
 ```
 
 **summary:** Returns native text minimum under SQL collation with empty-input NULL.
@@ -5514,10 +5514,10 @@ public static NativeWeave.Query.SqlExpression<string?> NativeWeave.Query.SqlFunc
 
 **Inherited type policy:** SQL NULL, collation, overflow and conversion semantics remain explicit provider behavior.
 
-## `M:NativeWeave.Query.SqlFunctions.MinText(NativeWeave.Query.SqlExpression{System.String})`
+## `M:Korda.Query.SqlFunctions.MinText(Korda.Query.SqlExpression{System.String})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<string?> NativeWeave.Query.SqlFunctions.MinText(NativeWeave.Query.SqlExpression<string> expression)
+public static Korda.Query.SqlExpression<string?> Korda.Query.SqlFunctions.MinText(Korda.Query.SqlExpression<string> expression)
 ```
 
 **summary:** Returns native text minimum under SQL collation with empty-input NULL.
@@ -5538,10 +5538,10 @@ public static NativeWeave.Query.SqlExpression<string?> NativeWeave.Query.SqlFunc
 
 **Inherited type policy:** SQL NULL, collation, overflow and conversion semantics remain explicit provider behavior.
 
-## `M:NativeWeave.Query.SqlFunctions.Min``1(NativeWeave.Query.SqlExpression{System.Nullable{``0}})`
+## `M:Korda.Query.SqlFunctions.Min``1(Korda.Query.SqlExpression{System.Nullable{``0}})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlFunctions.Min<T>(NativeWeave.Query.SqlExpression<T?> expression) where T : struct
+public static Korda.Query.SqlExpression<T?> Korda.Query.SqlFunctions.Min<T>(Korda.Query.SqlExpression<T?> expression) where T : struct
 ```
 
 **summary:** Returns the native minimum with the exact scalar codec and empty-input SQL NULL.
@@ -5564,10 +5564,10 @@ public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlFunctions
 
 **Inherited type policy:** SQL NULL, collation, overflow and conversion semantics remain explicit provider behavior.
 
-## `M:NativeWeave.Query.SqlFunctions.Min``1(NativeWeave.Query.SqlExpression{``0})`
+## `M:Korda.Query.SqlFunctions.Min``1(Korda.Query.SqlExpression{``0})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlFunctions.Min<T>(NativeWeave.Query.SqlExpression<T> expression) where T : struct
+public static Korda.Query.SqlExpression<T?> Korda.Query.SqlFunctions.Min<T>(Korda.Query.SqlExpression<T> expression) where T : struct
 ```
 
 **summary:** Returns the native minimum with the exact scalar codec and empty-input SQL NULL.
@@ -5590,10 +5590,10 @@ public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlFunctions
 
 **Inherited type policy:** SQL NULL, collation, overflow and conversion semantics remain explicit provider behavior.
 
-## `M:NativeWeave.Query.SqlFunctions.Rank(NativeWeave.Query.WindowDefinition)`
+## `M:Korda.Query.SqlFunctions.Rank(Korda.Query.WindowDefinition)`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<long> NativeWeave.Query.SqlFunctions.Rank(NativeWeave.Query.WindowDefinition window)
+public static Korda.Query.SqlExpression<long> Korda.Query.SqlFunctions.Rank(Korda.Query.WindowDefinition window)
 ```
 
 **summary:** Snapshots a native window into an exact Int64 RANK expression.
@@ -5614,10 +5614,10 @@ public static NativeWeave.Query.SqlExpression<long> NativeWeave.Query.SqlFunctio
 
 **Inherited type policy:** SQL NULL, collation, overflow and conversion semantics remain explicit provider behavior.
 
-## `M:NativeWeave.Query.SqlFunctions.RowNumber(NativeWeave.Query.WindowDefinition)`
+## `M:Korda.Query.SqlFunctions.RowNumber(Korda.Query.WindowDefinition)`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<long> NativeWeave.Query.SqlFunctions.RowNumber(NativeWeave.Query.WindowDefinition window)
+public static Korda.Query.SqlExpression<long> Korda.Query.SqlFunctions.RowNumber(Korda.Query.WindowDefinition window)
 ```
 
 **summary:** Snapshots a native window into an exact Int64 ROW_NUMBER expression.
@@ -5638,10 +5638,10 @@ public static NativeWeave.Query.SqlExpression<long> NativeWeave.Query.SqlFunctio
 
 **Inherited type policy:** SQL NULL, collation, overflow and conversion semantics remain explicit provider behavior.
 
-## `M:NativeWeave.Query.SqlFunctions.Sum(NativeWeave.Query.SqlExpression{System.Decimal})`
+## `M:Korda.Query.SqlFunctions.Sum(Korda.Query.SqlExpression{System.Decimal})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<decimal?> NativeWeave.Query.SqlFunctions.Sum(NativeWeave.Query.SqlExpression<decimal> expression)
+public static Korda.Query.SqlExpression<decimal?> Korda.Query.SqlFunctions.Sum(Korda.Query.SqlExpression<decimal> expression)
 ```
 
 **summary:** Aggregates native decimal inputs to nullable decimal, preserving empty-input NULL and explicit conversion failures.
@@ -5662,10 +5662,10 @@ public static NativeWeave.Query.SqlExpression<decimal?> NativeWeave.Query.SqlFun
 
 **Inherited type policy:** SQL NULL, collation, overflow and conversion semantics remain explicit provider behavior.
 
-## `M:NativeWeave.Query.SqlFunctions.Sum(NativeWeave.Query.SqlExpression{System.Double})`
+## `M:Korda.Query.SqlFunctions.Sum(Korda.Query.SqlExpression{System.Double})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<double?> NativeWeave.Query.SqlFunctions.Sum(NativeWeave.Query.SqlExpression<double> expression)
+public static Korda.Query.SqlExpression<double?> Korda.Query.SqlFunctions.Sum(Korda.Query.SqlExpression<double> expression)
 ```
 
 **summary:** Aggregates native double inputs to nullable double, preserving empty-input NULL and explicit conversion failures.
@@ -5686,10 +5686,10 @@ public static NativeWeave.Query.SqlExpression<double?> NativeWeave.Query.SqlFunc
 
 **Inherited type policy:** SQL NULL, collation, overflow and conversion semantics remain explicit provider behavior.
 
-## `M:NativeWeave.Query.SqlFunctions.Sum(NativeWeave.Query.SqlExpression{System.Int32})`
+## `M:Korda.Query.SqlFunctions.Sum(Korda.Query.SqlExpression{System.Int32})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<long?> NativeWeave.Query.SqlFunctions.Sum(NativeWeave.Query.SqlExpression<int> expression)
+public static Korda.Query.SqlExpression<long?> Korda.Query.SqlFunctions.Sum(Korda.Query.SqlExpression<int> expression)
 ```
 
 **summary:** Aggregates native int inputs to nullable long, preserving empty-input NULL and explicit conversion failures.
@@ -5710,10 +5710,10 @@ public static NativeWeave.Query.SqlExpression<long?> NativeWeave.Query.SqlFuncti
 
 **Inherited type policy:** SQL NULL, collation, overflow and conversion semantics remain explicit provider behavior.
 
-## `M:NativeWeave.Query.SqlFunctions.Sum(NativeWeave.Query.SqlExpression{System.Int64})`
+## `M:Korda.Query.SqlFunctions.Sum(Korda.Query.SqlExpression{System.Int64})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<long?> NativeWeave.Query.SqlFunctions.Sum(NativeWeave.Query.SqlExpression<long> expression)
+public static Korda.Query.SqlExpression<long?> Korda.Query.SqlFunctions.Sum(Korda.Query.SqlExpression<long> expression)
 ```
 
 **summary:** Aggregates native long inputs to nullable long, preserving empty-input NULL and explicit conversion failures.
@@ -5734,10 +5734,10 @@ public static NativeWeave.Query.SqlExpression<long?> NativeWeave.Query.SqlFuncti
 
 **Inherited type policy:** SQL NULL, collation, overflow and conversion semantics remain explicit provider behavior.
 
-## `M:NativeWeave.Query.SqlFunctions.Sum(NativeWeave.Query.SqlExpression{System.Nullable{System.Decimal}})`
+## `M:Korda.Query.SqlFunctions.Sum(Korda.Query.SqlExpression{System.Nullable{System.Decimal}})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<decimal?> NativeWeave.Query.SqlFunctions.Sum(NativeWeave.Query.SqlExpression<decimal?> expression)
+public static Korda.Query.SqlExpression<decimal?> Korda.Query.SqlFunctions.Sum(Korda.Query.SqlExpression<decimal?> expression)
 ```
 
 **summary:** Aggregates native decimal? inputs to nullable decimal, preserving empty-input NULL and explicit conversion failures.
@@ -5758,10 +5758,10 @@ public static NativeWeave.Query.SqlExpression<decimal?> NativeWeave.Query.SqlFun
 
 **Inherited type policy:** SQL NULL, collation, overflow and conversion semantics remain explicit provider behavior.
 
-## `M:NativeWeave.Query.SqlFunctions.Sum(NativeWeave.Query.SqlExpression{System.Nullable{System.Double}})`
+## `M:Korda.Query.SqlFunctions.Sum(Korda.Query.SqlExpression{System.Nullable{System.Double}})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<double?> NativeWeave.Query.SqlFunctions.Sum(NativeWeave.Query.SqlExpression<double?> expression)
+public static Korda.Query.SqlExpression<double?> Korda.Query.SqlFunctions.Sum(Korda.Query.SqlExpression<double?> expression)
 ```
 
 **summary:** Aggregates native double? inputs to nullable double, preserving empty-input NULL and explicit conversion failures.
@@ -5782,10 +5782,10 @@ public static NativeWeave.Query.SqlExpression<double?> NativeWeave.Query.SqlFunc
 
 **Inherited type policy:** SQL NULL, collation, overflow and conversion semantics remain explicit provider behavior.
 
-## `M:NativeWeave.Query.SqlFunctions.Sum(NativeWeave.Query.SqlExpression{System.Nullable{System.Int32}})`
+## `M:Korda.Query.SqlFunctions.Sum(Korda.Query.SqlExpression{System.Nullable{System.Int32}})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<long?> NativeWeave.Query.SqlFunctions.Sum(NativeWeave.Query.SqlExpression<int?> expression)
+public static Korda.Query.SqlExpression<long?> Korda.Query.SqlFunctions.Sum(Korda.Query.SqlExpression<int?> expression)
 ```
 
 **summary:** Aggregates native int? inputs to nullable long, preserving empty-input NULL and explicit conversion failures.
@@ -5806,10 +5806,10 @@ public static NativeWeave.Query.SqlExpression<long?> NativeWeave.Query.SqlFuncti
 
 **Inherited type policy:** SQL NULL, collation, overflow and conversion semantics remain explicit provider behavior.
 
-## `M:NativeWeave.Query.SqlFunctions.Sum(NativeWeave.Query.SqlExpression{System.Nullable{System.Int64}})`
+## `M:Korda.Query.SqlFunctions.Sum(Korda.Query.SqlExpression{System.Nullable{System.Int64}})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<long?> NativeWeave.Query.SqlFunctions.Sum(NativeWeave.Query.SqlExpression<long?> expression)
+public static Korda.Query.SqlExpression<long?> Korda.Query.SqlFunctions.Sum(Korda.Query.SqlExpression<long?> expression)
 ```
 
 **summary:** Aggregates native long? inputs to nullable long, preserving empty-input NULL and explicit conversion failures.
@@ -5830,10 +5830,10 @@ public static NativeWeave.Query.SqlExpression<long?> NativeWeave.Query.SqlFuncti
 
 **Inherited type policy:** SQL NULL, collation, overflow and conversion semantics remain explicit provider behavior.
 
-## `M:NativeWeave.Query.SqlFunctions.Sum(NativeWeave.Query.SqlExpression{System.Nullable{System.Single}})`
+## `M:Korda.Query.SqlFunctions.Sum(Korda.Query.SqlExpression{System.Nullable{System.Single}})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<double?> NativeWeave.Query.SqlFunctions.Sum(NativeWeave.Query.SqlExpression<float?> expression)
+public static Korda.Query.SqlExpression<double?> Korda.Query.SqlFunctions.Sum(Korda.Query.SqlExpression<float?> expression)
 ```
 
 **summary:** Aggregates native float? inputs to nullable double, preserving empty-input NULL and explicit conversion failures.
@@ -5854,10 +5854,10 @@ public static NativeWeave.Query.SqlExpression<double?> NativeWeave.Query.SqlFunc
 
 **Inherited type policy:** SQL NULL, collation, overflow and conversion semantics remain explicit provider behavior.
 
-## `M:NativeWeave.Query.SqlFunctions.Sum(NativeWeave.Query.SqlExpression{System.Single})`
+## `M:Korda.Query.SqlFunctions.Sum(Korda.Query.SqlExpression{System.Single})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<double?> NativeWeave.Query.SqlFunctions.Sum(NativeWeave.Query.SqlExpression<float> expression)
+public static Korda.Query.SqlExpression<double?> Korda.Query.SqlFunctions.Sum(Korda.Query.SqlExpression<float> expression)
 ```
 
 **summary:** Aggregates native float inputs to nullable double, preserving empty-input NULL and explicit conversion failures.
@@ -5878,10 +5878,10 @@ public static NativeWeave.Query.SqlExpression<double?> NativeWeave.Query.SqlFunc
 
 **Inherited type policy:** SQL NULL, collation, overflow and conversion semantics remain explicit provider behavior.
 
-## `M:NativeWeave.Query.SqlNullabilityExtensions.AsNullableReference``1(NativeWeave.Query.SqlExpression{``0})`
+## `M:Korda.Query.SqlNullabilityExtensions.AsNullableReference``1(Korda.Query.SqlExpression{``0})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlNullabilityExtensions.AsNullableReference<T>(this NativeWeave.Query.SqlExpression<T> expression) where T : class
+public static Korda.Query.SqlExpression<T?> Korda.Query.SqlNullabilityExtensions.AsNullableReference<T>(this Korda.Query.SqlExpression<T> expression) where T : class
 ```
 
 **summary:** Returns a fresh same-query nullable reference token; already-nullable metadata rejects.
@@ -5904,10 +5904,10 @@ public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlNullabili
 
 **Inherited type policy:** These forward-only native metadata lifts preserve the SQL value and codec configuration. They do not emit a sentinel, COALESCE or reverse conversion. Default/foreign owners reject, and repeating a reference lift rejects its already nullable descriptor.
 
-## `M:NativeWeave.Query.SqlNullabilityExtensions.AsNullable``1(NativeWeave.Query.SqlExpression{``0})`
+## `M:Korda.Query.SqlNullabilityExtensions.AsNullable``1(Korda.Query.SqlExpression{``0})`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlNullabilityExtensions.AsNullable<T>(this NativeWeave.Query.SqlExpression<T> expression) where T : struct
+public static Korda.Query.SqlExpression<T?> Korda.Query.SqlNullabilityExtensions.AsNullable<T>(this Korda.Query.SqlExpression<T> expression) where T : struct
 ```
 
 **summary:** Returns a fresh same-query nullable scalar token, preserving the exact value and codec.
@@ -5930,20 +5930,20 @@ public static NativeWeave.Query.SqlExpression<T?> NativeWeave.Query.SqlNullabili
 
 **Inherited type policy:** These forward-only native metadata lifts preserve the SQL value and codec configuration. They do not emit a sentinel, COALESCE or reverse conversion. Default/foreign owners reject, and repeating a reference lift rejects its already nullable descriptor.
 
-## `M:NativeWeave.Query.SqlPredicate.#ctor`
+## `M:Korda.Query.SqlPredicate.#ctor`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate.SqlPredicate()
+public Korda.Query.SqlPredicate.SqlPredicate()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
 **Inherited type policy:** Boolean composition uses SQL three-valued logic and performs one direct native operation.
 
-## `M:NativeWeave.Query.SqlPredicate.And(NativeWeave.Query.SqlPredicate)`
+## `M:Korda.Query.SqlPredicate.And(Korda.Query.SqlPredicate)`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlPredicate.And(NativeWeave.Query.SqlPredicate other)
+public Korda.Query.SqlPredicate Korda.Query.SqlPredicate.And(Korda.Query.SqlPredicate other)
 ```
 
 **summary:** Combines same-query conditions with native AND.
@@ -5964,10 +5964,10 @@ public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlPredicate.And(NativeW
 
 **Inherited type policy:** Boolean composition uses SQL three-valued logic and performs one direct native operation.
 
-## `M:NativeWeave.Query.SqlPredicate.Not`
+## `M:Korda.Query.SqlPredicate.Not`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlPredicate.Not()
+public Korda.Query.SqlPredicate Korda.Query.SqlPredicate.Not()
 ```
 
 **summary:** Negates this condition using native SQL NOT.
@@ -5986,10 +5986,10 @@ public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlPredicate.Not()
 
 **Inherited type policy:** Boolean composition uses SQL three-valued logic and performs one direct native operation.
 
-## `M:NativeWeave.Query.SqlPredicate.Or(NativeWeave.Query.SqlPredicate)`
+## `M:Korda.Query.SqlPredicate.Or(Korda.Query.SqlPredicate)`
 
 ```csharp
-public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlPredicate.Or(NativeWeave.Query.SqlPredicate other)
+public Korda.Query.SqlPredicate Korda.Query.SqlPredicate.Or(Korda.Query.SqlPredicate other)
 ```
 
 **summary:** Combines same-query conditions with native OR.
@@ -6010,10 +6010,10 @@ public NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlPredicate.Or(NativeWe
 
 **Inherited type policy:** Boolean composition uses SQL three-valued logic and performs one direct native operation.
 
-## `M:NativeWeave.Query.SqlStringExtensions.Collate(NativeWeave.Query.SqlExpression{System.String},System.String)`
+## `M:Korda.Query.SqlStringExtensions.Collate(Korda.Query.SqlExpression{System.String},System.String)`
 
 ```csharp
-public static NativeWeave.Query.SqlExpression<string> NativeWeave.Query.SqlStringExtensions.Collate(this NativeWeave.Query.SqlExpression<string> expression, string collation)
+public static Korda.Query.SqlExpression<string> Korda.Query.SqlStringExtensions.Collate(this Korda.Query.SqlExpression<string> expression, string collation)
 ```
 
 **summary:** Applies only a collation admitted by the provider's fixed allowlist.
@@ -6036,10 +6036,10 @@ public static NativeWeave.Query.SqlExpression<string> NativeWeave.Query.SqlStrin
 
 **Inherited type policy:** Literal-pattern methods snapshot and escape the supplied text before native SQL rendering; LikePattern deliberately accepts SQL wildcards. Collate resolves an exact provider allowlist, never arbitrary SQL. NULL behavior follows SQL three-valued logic.
 
-## `M:NativeWeave.Query.SqlStringExtensions.ContainsLiteral(NativeWeave.Query.SqlExpression{System.String},System.String)`
+## `M:Korda.Query.SqlStringExtensions.ContainsLiteral(Korda.Query.SqlExpression{System.String},System.String)`
 
 ```csharp
-public static NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlStringExtensions.ContainsLiteral(this NativeWeave.Query.SqlExpression<string> expression, string value)
+public static Korda.Query.SqlPredicate Korda.Query.SqlStringExtensions.ContainsLiteral(this Korda.Query.SqlExpression<string> expression, string value)
 ```
 
 **summary:** Escapes wildcard characters and binds a literal contains pattern.
@@ -6062,10 +6062,10 @@ public static NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlStringExtensio
 
 **Inherited type policy:** Literal-pattern methods snapshot and escape the supplied text before native SQL rendering; LikePattern deliberately accepts SQL wildcards. Collate resolves an exact provider allowlist, never arbitrary SQL. NULL behavior follows SQL three-valued logic.
 
-## `M:NativeWeave.Query.SqlStringExtensions.ContainsNullableLiteral(NativeWeave.Query.SqlExpression{System.String},System.String)`
+## `M:Korda.Query.SqlStringExtensions.ContainsNullableLiteral(Korda.Query.SqlExpression{System.String},System.String)`
 
 ```csharp
-public static NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlStringExtensions.ContainsNullableLiteral(this NativeWeave.Query.SqlExpression<string?> expression, string value)
+public static Korda.Query.SqlPredicate Korda.Query.SqlStringExtensions.ContainsNullableLiteral(this Korda.Query.SqlExpression<string?> expression, string value)
 ```
 
 **summary:** Escapes literal wildcard characters and searches nullable SQL text.
@@ -6088,10 +6088,10 @@ public static NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlStringExtensio
 
 **Inherited type policy:** Literal-pattern methods snapshot and escape the supplied text before native SQL rendering; LikePattern deliberately accepts SQL wildcards. Collate resolves an exact provider allowlist, never arbitrary SQL. NULL behavior follows SQL three-valued logic.
 
-## `M:NativeWeave.Query.SqlStringExtensions.EndsWithLiteral(NativeWeave.Query.SqlExpression{System.String},System.String)`
+## `M:Korda.Query.SqlStringExtensions.EndsWithLiteral(Korda.Query.SqlExpression{System.String},System.String)`
 
 ```csharp
-public static NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlStringExtensions.EndsWithLiteral(this NativeWeave.Query.SqlExpression<string> expression, string value)
+public static Korda.Query.SqlPredicate Korda.Query.SqlStringExtensions.EndsWithLiteral(this Korda.Query.SqlExpression<string> expression, string value)
 ```
 
 **summary:** Escapes wildcard characters and binds a literal suffix pattern.
@@ -6114,10 +6114,10 @@ public static NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlStringExtensio
 
 **Inherited type policy:** Literal-pattern methods snapshot and escape the supplied text before native SQL rendering; LikePattern deliberately accepts SQL wildcards. Collate resolves an exact provider allowlist, never arbitrary SQL. NULL behavior follows SQL three-valued logic.
 
-## `M:NativeWeave.Query.SqlStringExtensions.Like(NativeWeave.Query.SqlExpression{System.String},System.String,System.Char)`
+## `M:Korda.Query.SqlStringExtensions.Like(Korda.Query.SqlExpression{System.String},System.String,System.Char)`
 
 ```csharp
-public static NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlStringExtensions.Like(this NativeWeave.Query.SqlExpression<string> expression, string pattern, char escape = '\\')
+public static Korda.Query.SqlPredicate Korda.Query.SqlStringExtensions.Like(this Korda.Query.SqlExpression<string> expression, string pattern, char escape = '\\')
 ```
 
 **summary:** Binds the supplied raw SQL LIKE pattern with an explicit escape character.
@@ -6142,10 +6142,10 @@ public static NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlStringExtensio
 
 **Inherited type policy:** Literal-pattern methods snapshot and escape the supplied text before native SQL rendering; LikePattern deliberately accepts SQL wildcards. Collate resolves an exact provider allowlist, never arbitrary SQL. NULL behavior follows SQL three-valued logic.
 
-## `M:NativeWeave.Query.SqlStringExtensions.LikeNullable(NativeWeave.Query.SqlExpression{System.String},System.String,System.Char)`
+## `M:Korda.Query.SqlStringExtensions.LikeNullable(Korda.Query.SqlExpression{System.String},System.String,System.Char)`
 
 ```csharp
-public static NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlStringExtensions.LikeNullable(this NativeWeave.Query.SqlExpression<string?> expression, string pattern, char escape = '\\')
+public static Korda.Query.SqlPredicate Korda.Query.SqlStringExtensions.LikeNullable(this Korda.Query.SqlExpression<string?> expression, string pattern, char escape = '\\')
 ```
 
 **summary:** Uses an explicit raw LIKE pattern against nullable SQL text.
@@ -6170,10 +6170,10 @@ public static NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlStringExtensio
 
 **Inherited type policy:** Literal-pattern methods snapshot and escape the supplied text before native SQL rendering; LikePattern deliberately accepts SQL wildcards. Collate resolves an exact provider allowlist, never arbitrary SQL. NULL behavior follows SQL three-valued logic.
 
-## `M:NativeWeave.Query.SqlStringExtensions.StartsWithLiteral(NativeWeave.Query.SqlExpression{System.String},System.String)`
+## `M:Korda.Query.SqlStringExtensions.StartsWithLiteral(Korda.Query.SqlExpression{System.String},System.String)`
 
 ```csharp
-public static NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlStringExtensions.StartsWithLiteral(this NativeWeave.Query.SqlExpression<string> expression, string value)
+public static Korda.Query.SqlPredicate Korda.Query.SqlStringExtensions.StartsWithLiteral(this Korda.Query.SqlExpression<string> expression, string value)
 ```
 
 **summary:** Escapes wildcard characters and binds a literal prefix pattern.
@@ -6196,10 +6196,10 @@ public static NativeWeave.Query.SqlPredicate NativeWeave.Query.SqlStringExtensio
 
 **Inherited type policy:** Literal-pattern methods snapshot and escape the supplied text before native SQL rendering; LikePattern deliberately accepts SQL wildcards. Collate resolves an exact provider allowlist, never arbitrary SQL. NULL behavior follows SQL three-valued logic.
 
-## `M:NativeWeave.Query.UpdateSetters`1.Set``1(NativeWeave.Data.Column{`0,``0},NativeWeave.Query.SqlExpression{``0})`
+## `M:Korda.Query.UpdateSetters`1.Set``1(Korda.Data.Column{`0,``0},Korda.Query.SqlExpression{``0})`
 
 ```csharp
-public NativeWeave.Query.UpdateSetters<TEntity> NativeWeave.Query.UpdateSetters<TEntity>.Set<T>(NativeWeave.Data.Column<TEntity, T> column, NativeWeave.Query.SqlExpression<T> value)
+public Korda.Query.UpdateSetters<TEntity> Korda.Query.UpdateSetters<TEntity>.Set<T>(Korda.Data.Column<TEntity, T> column, Korda.Query.SqlExpression<T> value)
 ```
 
 **summary:** Stages a compatible same-query expression; assignments attach only after the callback succeeds.
@@ -6224,10 +6224,10 @@ public NativeWeave.Query.UpdateSetters<TEntity> NativeWeave.Query.UpdateSetters<
 
 **Inherited type policy:** The owner is valid only during the synchronous update callback. Each scalar is snapshotted immediately; duplicate, generated and primary-key assignments reject. Assignment clauses attach after callback success; no tracked entity or managed SQL expression tree is created.
 
-## `M:NativeWeave.Query.UpdateSetters`1.Set``1(NativeWeave.Data.Column{`0,``0},``0)`
+## `M:Korda.Query.UpdateSetters`1.Set``1(Korda.Data.Column{`0,``0},``0)`
 
 ```csharp
-public NativeWeave.Query.UpdateSetters<TEntity> NativeWeave.Query.UpdateSetters<TEntity>.Set<T>(NativeWeave.Data.Column<TEntity, T> column, T value)
+public Korda.Query.UpdateSetters<TEntity> Korda.Query.UpdateSetters<TEntity>.Set<T>(Korda.Data.Column<TEntity, T> column, T value)
 ```
 
 **summary:** Copies a typed value for a nonkey, nongenerated root-column assignment.
@@ -6252,10 +6252,10 @@ public NativeWeave.Query.UpdateSetters<TEntity> NativeWeave.Query.UpdateSetters<
 
 **Inherited type policy:** The owner is valid only during the synchronous update callback. Each scalar is snapshotted immediately; duplicate, generated and primary-key assignments reject. Assignment clauses attach after callback success; no tracked entity or managed SQL expression tree is created.
 
-## `M:NativeWeave.Query.WindowDefinition.OrderBy``1(NativeWeave.Query.SqlExpression{``0},NativeWeave.Query.SortDirection,NativeWeave.Query.NullOrder)`
+## `M:Korda.Query.WindowDefinition.OrderBy``1(Korda.Query.SqlExpression{``0},Korda.Query.SortDirection,Korda.Query.NullOrder)`
 
 ```csharp
-public NativeWeave.Query.WindowDefinition NativeWeave.Query.WindowDefinition.OrderBy<T>(NativeWeave.Query.SqlExpression<T> expression, NativeWeave.Query.SortDirection direction = NativeWeave.Query.SortDirection.Ascending, NativeWeave.Query.NullOrder nullOrder = NativeWeave.Query.NullOrder.Last)
+public Korda.Query.WindowDefinition Korda.Query.WindowDefinition.OrderBy<T>(Korda.Query.SqlExpression<T> expression, Korda.Query.SortDirection direction = Korda.Query.SortDirection.Ascending, Korda.Query.NullOrder nullOrder = Korda.Query.NullOrder.Last)
 ```
 
 **summary:** Appends native ordering with explicit direction and SQL NULL placement.
@@ -6282,10 +6282,10 @@ public NativeWeave.Query.WindowDefinition NativeWeave.Query.WindowDefinition.Ord
 
 **Inherited type policy:** The owning query bounds lifetime and concurrent access. Rank, RowNumber and Over snapshot native window state immediately; subsequent mutation cannot change existing expressions. Defaults and limits follow the provider capability contract.
 
-## `M:NativeWeave.Query.WindowDefinition.PartitionBy``1(NativeWeave.Query.SqlExpression{``0})`
+## `M:Korda.Query.WindowDefinition.PartitionBy``1(Korda.Query.SqlExpression{``0})`
 
 ```csharp
-public NativeWeave.Query.WindowDefinition NativeWeave.Query.WindowDefinition.PartitionBy<T>(NativeWeave.Query.SqlExpression<T> expression)
+public Korda.Query.WindowDefinition Korda.Query.WindowDefinition.PartitionBy<T>(Korda.Query.SqlExpression<T> expression)
 ```
 
 **summary:** Appends a same-query native partition expression.
@@ -6308,10 +6308,10 @@ public NativeWeave.Query.WindowDefinition NativeWeave.Query.WindowDefinition.Par
 
 **Inherited type policy:** The owning query bounds lifetime and concurrent access. Rank, RowNumber and Over snapshot native window state immediately; subsequent mutation cannot change existing expressions. Defaults and limits follow the provider capability contract.
 
-## `M:NativeWeave.Query.WindowDefinition.RowsBetween(NativeWeave.Query.FrameBoundary,NativeWeave.Query.FrameBoundary)`
+## `M:Korda.Query.WindowDefinition.RowsBetween(Korda.Query.FrameBoundary,Korda.Query.FrameBoundary)`
 
 ```csharp
-public NativeWeave.Query.WindowDefinition NativeWeave.Query.WindowDefinition.RowsBetween(NativeWeave.Query.FrameBoundary start, NativeWeave.Query.FrameBoundary end)
+public Korda.Query.WindowDefinition Korda.Query.WindowDefinition.RowsBetween(Korda.Query.FrameBoundary start, Korda.Query.FrameBoundary end)
 ```
 
 **summary:** Sets one supported ROWS frame; invalid endpoints reject before publication.
@@ -6334,130 +6334,130 @@ public NativeWeave.Query.WindowDefinition NativeWeave.Query.WindowDefinition.Row
 
 **Inherited type policy:** The owning query bounds lifetime and concurrent access. Rank, RowNumber and Over snapshot native window state immediately; subsequent mutation cannot change existing expressions. Defaults and limits follow the provider capability contract.
 
-## `P:NativeWeave.Database.BulkOptions.Atomicity`
+## `P:Korda.Database.BulkOptions.Atomicity`
 
 ```csharp
-public NativeWeave.Database.BulkAtomicity NativeWeave.Database.BulkOptions.Atomicity { get; init; }
+public Korda.Database.BulkAtomicity Korda.Database.BulkOptions.Atomicity { get; init; }
 ```
 
 **summary:** Gets the atomicity policy; whole-operation atomicity is the default.
 
 **Inherited type policy:** This managed configuration owns no native resource. A bulk operation reads its immutable values at admission, then lowers the requested row count to source byte, node and parameter limits.
 
-## `P:NativeWeave.Database.BulkOptions.BatchSize`
+## `P:Korda.Database.BulkOptions.BatchSize`
 
 ```csharp
-public int NativeWeave.Database.BulkOptions.BatchSize { get; init; }
+public int Korda.Database.BulkOptions.BatchSize { get; init; }
 ```
 
 **summary:** Gets the requested positive maximum rows per batch; byte, node and parameter limits can lower it.
 
 **Inherited type policy:** This managed configuration owns no native resource. A bulk operation reads its immutable values at admission, then lowers the requested row count to source byte, node and parameter limits.
 
-## `P:NativeWeave.Database.BulkProgress.CompletedBatches`
+## `P:Korda.Database.BulkProgress.CompletedBatches`
 
 ```csharp
-public int NativeWeave.Database.BulkProgress.CompletedBatches { get; init; }
+public int Korda.Database.BulkProgress.CompletedBatches { get; init; }
 ```
 
 **summary:** The fully acknowledged batch count.
 
 **Inherited type policy:** The original admitted bulk exception retains this managed snapshot after cleanup. Counts describe previously completed batches, which All may have rolled back; they do not prove current-batch effects or authorize replay. The record owns no native resource and remains readable after session/source disposal.
 
-## `P:NativeWeave.Database.BulkProgress.CompletedBatchesCommitted`
+## `P:Korda.Database.BulkProgress.CompletedBatchesCommitted`
 
 ```csharp
-public bool NativeWeave.Database.BulkProgress.CompletedBatchesCommitted { get; init; }
+public bool Korda.Database.BulkProgress.CompletedBatchesCommitted { get; init; }
 ```
 
 **summary:** True only for confirmed preceding PerBatch commits.
 
 **Inherited type policy:** The original admitted bulk exception retains this managed snapshot after cleanup. Counts describe previously completed batches, which All may have rolled back; they do not prove current-batch effects or authorize replay. The record owns no native resource and remains readable after session/source disposal.
 
-## `P:NativeWeave.Database.BulkProgress.CurrentTransactionOutcome`
+## `P:Korda.Database.BulkProgress.CurrentTransactionOutcome`
 
 ```csharp
-public NativeWeave.Database.TransactionOutcome NativeWeave.Database.BulkProgress.CurrentTransactionOutcome { get; init; }
+public Korda.Database.TransactionOutcome Korda.Database.BulkProgress.CurrentTransactionOutcome { get; init; }
 ```
 
 **summary:** Actual transaction knowledge, retaining Unknown independently.
 
 **Inherited type policy:** The original admitted bulk exception retains this managed snapshot after cleanup. Counts describe previously completed batches, which All may have rolled back; they do not prove current-batch effects or authorize replay. The record owns no native resource and remains readable after session/source disposal.
 
-## `P:NativeWeave.Database.BulkProgress.RowsAffectedInCompletedBatches`
+## `P:Korda.Database.BulkProgress.RowsAffectedInCompletedBatches`
 
 ```csharp
-public long NativeWeave.Database.BulkProgress.RowsAffectedInCompletedBatches { get; init; }
+public long Korda.Database.BulkProgress.RowsAffectedInCompletedBatches { get; init; }
 ```
 
 **summary:** Affected rows only in fully acknowledged preceding batches.
 
 **Inherited type policy:** The original admitted bulk exception retains this managed snapshot after cleanup. Counts describe previously completed batches, which All may have rolled back; they do not prove current-batch effects or authorize replay. The record owns no native resource and remains readable after session/source disposal.
 
-## `P:NativeWeave.Database.BulkResult.Batches`
+## `P:Korda.Database.BulkResult.Batches`
 
 ```csharp
-public int NativeWeave.Database.BulkResult.Batches { get; init; }
+public int Korda.Database.BulkResult.Batches { get; init; }
 ```
 
 **summary:** The number of fully acknowledged batches.
 
 **Inherited type policy:** The owned immutable result contains only acknowledged counts and an ownership observation. Constructing it allocates one managed record; it retains no session, transaction, cursor or native buffer.
 
-## `P:NativeWeave.Database.BulkResult.CommittedByOperation`
+## `P:Korda.Database.BulkResult.CommittedByOperation`
 
 ```csharp
-public bool NativeWeave.Database.BulkResult.CommittedByOperation { get; init; }
+public bool Korda.Database.BulkResult.CommittedByOperation { get; init; }
 ```
 
 **summary:** True only when this operation confirmed its own commit or commits.
 
 **Inherited type policy:** The owned immutable result contains only acknowledged counts and an ownership observation. Constructing it allocates one managed record; it retains no session, transaction, cursor or native buffer.
 
-## `P:NativeWeave.Database.BulkResult.RowsAffected`
+## `P:Korda.Database.BulkResult.RowsAffected`
 
 ```csharp
-public long NativeWeave.Database.BulkResult.RowsAffected { get; init; }
+public long Korda.Database.BulkResult.RowsAffected { get; init; }
 ```
 
 **summary:** The sum of acknowledged provider counts.
 
 **Inherited type policy:** The owned immutable result contains only acknowledged counts and an ownership observation. Constructing it allocates one managed record; it retains no session, transaction, cursor or native buffer.
 
-## `P:NativeWeave.Database.DataSession.Cleanup`
+## `P:Korda.Database.DataSession.Cleanup`
 
 ```csharp
-public NativeWeave.Database.DatabaseCloseResult NativeWeave.Database.DataSession.Cleanup { get; }
+public Korda.Database.DatabaseCloseResult Korda.Database.DataSession.Cleanup { get; }
 ```
 
 **summary:** Gets the current cleanup observation, retained after disposal.
 
 **Inherited type policy:** A cursor and transaction control retain the same session gate. A session is not a concurrent command queue. Every query maps synchronously into owned CLR values and joins cleanup before its public Task completes.
 
-## `P:NativeWeave.Database.DataSession.Source`
+## `P:Korda.Database.DataSession.Source`
 
 ```csharp
-public NativeWeave.Database.DataSource NativeWeave.Database.DataSession.Source { get; }
+public Korda.Database.DataSource Korda.Database.DataSession.Source { get; }
 ```
 
 **summary:** Gets the creating data source, retained while this physical session remains owned.
 
 **Inherited type policy:** A cursor and transaction control retain the same session gate. A session is not a concurrent command queue. Every query maps synchronously into owned CLR values and joins cleanup before its public Task completes.
 
-## `P:NativeWeave.Database.DataSession.Transaction`
+## `P:Korda.Database.DataSession.Transaction`
 
 ```csharp
-public NativeWeave.Database.DataTransaction? NativeWeave.Database.DataSession.Transaction { get; }
+public Korda.Database.DataTransaction? Korda.Database.DataSession.Transaction { get; }
 ```
 
 **summary:** Gets the last active transaction, or null after its native state has closed.
 
 **Inherited type policy:** A cursor and transaction control retain the same session gate. A session is not a concurrent command queue. Every query maps synchronously into owned CLR values and joins cleanup before its public Task completes.
 
-## `P:NativeWeave.Database.DataSource.Administration`
+## `P:Korda.Database.DataSource.Administration`
 
 ```csharp
-public NativeWeave.Database.DatabaseAdministration NativeWeave.Database.DataSource.Administration { get; }
+public Korda.Database.DatabaseAdministration Korda.Database.DataSource.Administration { get; }
 ```
 
 **summary:** Gets the explicit administration facade without opening a database connection.
@@ -6468,312 +6468,312 @@ public NativeWeave.Database.DatabaseAdministration NativeWeave.Database.DataSour
 
 **Inherited type policy:** Sources support concurrent independent session opens. Closing rejects new work and retains every admitted native operation until real retirement. Dispose requests cleanup; DisposeAsync joins local safety.
 
-## `P:NativeWeave.Database.DataSource.Capabilities`
+## `P:Korda.Database.DataSource.Capabilities`
 
 ```csharp
-public NativeWeave.Database.DatabaseCapabilities NativeWeave.Database.DataSource.Capabilities { get; }
+public Korda.Database.DatabaseCapabilities Korda.Database.DataSource.Capabilities { get; }
 ```
 
 **summary:** Gets the actual negotiated provider capability snapshot.
 
 **Inherited type policy:** Sources support concurrent independent session opens. Closing rejects new work and retains every admitted native operation until real retirement. Dispose requests cleanup; DisposeAsync joins local safety.
 
-## `P:NativeWeave.Database.DataSource.Cleanup`
+## `P:Korda.Database.DataSource.Cleanup`
 
 ```csharp
-public NativeWeave.Database.DatabaseCloseResult NativeWeave.Database.DataSource.Cleanup { get; }
+public Korda.Database.DatabaseCloseResult Korda.Database.DataSource.Cleanup { get; }
 ```
 
 **summary:** Gets the current cleanup observation, retained after disposal.
 
 **Inherited type policy:** Sources support concurrent independent session opens. Closing rejects new work and retains every admitted native operation until real retirement. Dispose requests cleanup; DisposeAsync joins local safety.
 
-## `P:NativeWeave.Database.DataSource.Limits`
+## `P:Korda.Database.DataSource.Limits`
 
 ```csharp
-public NativeWeave.Database.DatabaseLimits NativeWeave.Database.DataSource.Limits { get; }
+public Korda.Database.DatabaseLimits Korda.Database.DataSource.Limits { get; }
 ```
 
 **summary:** Gets the immutable source limits.
 
 **Inherited type policy:** Sources support concurrent independent session opens. Closing rejects new work and retains every admitted native operation until real retirement. Dispose requests cleanup; DisposeAsync joins local safety.
 
-## `P:NativeWeave.Database.DataSource.Name`
+## `P:Korda.Database.DataSource.Name`
 
 ```csharp
-public string NativeWeave.Database.DataSource.Name { get; }
+public string Korda.Database.DataSource.Name { get; }
 ```
 
 **summary:** Gets the immutable noncredential diagnostic name.
 
 **Inherited type policy:** Sources support concurrent independent session opens. Closing rejects new work and retains every admitted native operation until real retirement. Dispose requests cleanup; DisposeAsync joins local safety.
 
-## `P:NativeWeave.Database.DataSource.Provider`
+## `P:Korda.Database.DataSource.Provider`
 
 ```csharp
-public NativeWeave.Database.DatabaseProvider NativeWeave.Database.DataSource.Provider { get; }
+public Korda.Database.DatabaseProvider Korda.Database.DataSource.Provider { get; }
 ```
 
 **summary:** Gets the selected native provider.
 
 **Inherited type policy:** Sources support concurrent independent session opens. Closing rejects new work and retains every admitted native operation until real retirement. Dispose requests cleanup; DisposeAsync joins local safety.
 
-## `P:NativeWeave.Database.DatabaseCapabilities.Names`
+## `P:Korda.Database.DatabaseCapabilities.Names`
 
 ```csharp
-public System.Collections.Generic.IReadOnlyList<string> NativeWeave.Database.DatabaseCapabilities.Names { get; }
+public System.Collections.Generic.IReadOnlyList<string> Korda.Database.DatabaseCapabilities.Names { get; }
 ```
 
 **summary:** Gets the immutable ordinal capability-name snapshot.
 
 **Inherited type policy:** Unknown names return false. A capability name does not authorize a different provider or an arbitrary SQL feature.
 
-## `P:NativeWeave.Database.DatabaseCapabilities.Profile`
+## `P:Korda.Database.DatabaseCapabilities.Profile`
 
 ```csharp
-public string NativeWeave.Database.DatabaseCapabilities.Profile { get; }
+public string Korda.Database.DatabaseCapabilities.Profile { get; }
 ```
 
 **summary:** Gets the stable selected semantic profile.
 
 **Inherited type policy:** Unknown names return false. A capability name does not authorize a different provider or an arbitrary SQL feature.
 
-## `P:NativeWeave.Database.DatabaseCapabilities.Provider`
+## `P:Korda.Database.DatabaseCapabilities.Provider`
 
 ```csharp
-public NativeWeave.Database.DatabaseProvider NativeWeave.Database.DatabaseCapabilities.Provider { get; }
+public Korda.Database.DatabaseProvider Korda.Database.DatabaseCapabilities.Provider { get; }
 ```
 
 **summary:** Gets the selected provider.
 
 **Inherited type policy:** Unknown names return false. A capability name does not authorize a different provider or an arbitrary SQL feature.
 
-## `P:NativeWeave.Database.DatabaseLimits.AdmissionTimeout`
+## `P:Korda.Database.DatabaseLimits.AdmissionTimeout`
 
 ```csharp
-public System.TimeSpan NativeWeave.Database.DatabaseLimits.AdmissionTimeout { get; init; }
+public System.TimeSpan Korda.Database.DatabaseLimits.AdmissionTimeout { get; init; }
 ```
 
 **summary:** Gets the positive finite pool admission timeout; defaults to fifteen seconds.
 
 **Inherited type policy:** These are admission and encoded-byte budgets, not measurements of CLR heap or process memory. Provider hard limits also apply. Increasing a value never selects an unbounded fallback.
 
-## `P:NativeWeave.Database.DatabaseLimits.CommandTimeout`
+## `P:Korda.Database.DatabaseLimits.CommandTimeout`
 
 ```csharp
-public System.TimeSpan NativeWeave.Database.DatabaseLimits.CommandTimeout { get; init; }
+public System.TimeSpan Korda.Database.DatabaseLimits.CommandTimeout { get; init; }
 ```
 
 **summary:** Gets the positive default total command timeout; defaults to thirty seconds.
 
 **Inherited type policy:** These are admission and encoded-byte budgets, not measurements of CLR heap or process memory. Provider hard limits also apply. Increasing a value never selects an unbounded fallback.
 
-## `P:NativeWeave.Database.DatabaseLimits.MaxBatchBytes`
+## `P:Korda.Database.DatabaseLimits.MaxBatchBytes`
 
 ```csharp
-public long NativeWeave.Database.DatabaseLimits.MaxBatchBytes { get; init; }
+public long Korda.Database.DatabaseLimits.MaxBatchBytes { get; init; }
 ```
 
 **summary:** Gets the entire encoded batch budget including descriptors; defaults to 1 MiB.
 
 **Inherited type policy:** These are admission and encoded-byte budgets, not measurements of CLR heap or process memory. Provider hard limits also apply. Increasing a value never selects an unbounded fallback.
 
-## `P:NativeWeave.Database.DatabaseLimits.MaxBatchRows`
+## `P:Korda.Database.DatabaseLimits.MaxBatchRows`
 
 ```csharp
-public int NativeWeave.Database.DatabaseLimits.MaxBatchRows { get; init; }
+public int Korda.Database.DatabaseLimits.MaxBatchRows { get; init; }
 ```
 
 **summary:** Gets the maximum rows in one transferred batch; defaults to 256.
 
 **Inherited type policy:** These are admission and encoded-byte budgets, not measurements of CLR heap or process memory. Provider hard limits also apply. Increasing a value never selects an unbounded fallback.
 
-## `P:NativeWeave.Database.DatabaseLimits.MaxBufferedBytes`
+## `P:Korda.Database.DatabaseLimits.MaxBufferedBytes`
 
 ```csharp
-public long NativeWeave.Database.DatabaseLimits.MaxBufferedBytes { get; init; }
+public long Korda.Database.DatabaseLimits.MaxBufferedBytes { get; init; }
 ```
 
 **summary:** Gets the buffered encoded-byte budget; defaults to 16 MiB. Zero prohibits buffered demand.
 
 **Inherited type policy:** These are admission and encoded-byte budgets, not measurements of CLR heap or process memory. Provider hard limits also apply. Increasing a value never selects an unbounded fallback.
 
-## `P:NativeWeave.Database.DatabaseLimits.MaxBufferedRows`
+## `P:Korda.Database.DatabaseLimits.MaxBufferedRows`
 
 ```csharp
-public int NativeWeave.Database.DatabaseLimits.MaxBufferedRows { get; init; }
+public int Korda.Database.DatabaseLimits.MaxBufferedRows { get; init; }
 ```
 
 **summary:** Gets the maximum buffered result rows; defaults to 10,000. Zero prohibits buffered demand.
 
 **Inherited type policy:** These are admission and encoded-byte budgets, not measurements of CLR heap or process memory. Provider hard limits also apply. Increasing a value never selects an unbounded fallback.
 
-## `P:NativeWeave.Database.DatabaseLimits.MaxConnections`
+## `P:Korda.Database.DatabaseLimits.MaxConnections`
 
 ```csharp
-public int NativeWeave.Database.DatabaseLimits.MaxConnections { get; init; }
+public int Korda.Database.DatabaseLimits.MaxConnections { get; init; }
 ```
 
 **summary:** Gets the maximum simultaneous physical sessions; defaults to 32.
 
 **Inherited type policy:** These are admission and encoded-byte budgets, not measurements of CLR heap or process memory. Provider hard limits also apply. Increasing a value never selects an unbounded fallback.
 
-## `P:NativeWeave.Database.DatabaseLimits.MaxFieldBytes`
+## `P:Korda.Database.DatabaseLimits.MaxFieldBytes`
 
 ```csharp
-public long NativeWeave.Database.DatabaseLimits.MaxFieldBytes { get; init; }
+public long Korda.Database.DatabaseLimits.MaxFieldBytes { get; init; }
 ```
 
 **summary:** Gets the general field byte limit; defaults to 8 MiB. An inline field must also fit its batch.
 
 **Inherited type policy:** These are admission and encoded-byte budgets, not measurements of CLR heap or process memory. Provider hard limits also apply. Increasing a value never selects an unbounded fallback.
 
-## `P:NativeWeave.Database.DatabaseLimits.MaxParameterBytes`
+## `P:Korda.Database.DatabaseLimits.MaxParameterBytes`
 
 ```csharp
-public long NativeWeave.Database.DatabaseLimits.MaxParameterBytes { get; init; }
+public long Korda.Database.DatabaseLimits.MaxParameterBytes { get; init; }
 ```
 
 **summary:** Gets the total encoded parameter budget; defaults to 4 MiB.
 
 **Inherited type policy:** These are admission and encoded-byte budgets, not measurements of CLR heap or process memory. Provider hard limits also apply. Increasing a value never selects an unbounded fallback.
 
-## `P:NativeWeave.Database.DatabaseLimits.MaxParameters`
+## `P:Korda.Database.DatabaseLimits.MaxParameters`
 
 ```csharp
-public int NativeWeave.Database.DatabaseLimits.MaxParameters { get; init; }
+public int Korda.Database.DatabaseLimits.MaxParameters { get; init; }
 ```
 
 **summary:** Gets the maximum typed parameters per operation; defaults to 999.
 
 **Inherited type policy:** These are admission and encoded-byte budgets, not measurements of CLR heap or process memory. Provider hard limits also apply. Increasing a value never selects an unbounded fallback.
 
-## `P:NativeWeave.Database.DatabaseLimits.MaxPreparedPlanBytes`
+## `P:Korda.Database.DatabaseLimits.MaxPreparedPlanBytes`
 
 ```csharp
-public long NativeWeave.Database.DatabaseLimits.MaxPreparedPlanBytes { get; init; }
+public long Korda.Database.DatabaseLimits.MaxPreparedPlanBytes { get; init; }
 ```
 
 **summary:** Gets the source-owned prepared shape byte limit; defaults to 8 MiB.
 
 **Inherited type policy:** These are admission and encoded-byte budgets, not measurements of CLR heap or process memory. Provider hard limits also apply. Increasing a value never selects an unbounded fallback.
 
-## `P:NativeWeave.Database.DatabaseLimits.MaxPreparedPlans`
+## `P:Korda.Database.DatabaseLimits.MaxPreparedPlans`
 
 ```csharp
-public int NativeWeave.Database.DatabaseLimits.MaxPreparedPlans { get; init; }
+public int Korda.Database.DatabaseLimits.MaxPreparedPlans { get; init; }
 ```
 
 **summary:** Gets the source-owned prepared shape entry limit; defaults to 128.
 
 **Inherited type policy:** These are admission and encoded-byte budgets, not measurements of CLR heap or process memory. Provider hard limits also apply. Increasing a value never selects an unbounded fallback.
 
-## `P:NativeWeave.Database.DatabaseLimits.MaxQueryDepth`
+## `P:Korda.Database.DatabaseLimits.MaxQueryDepth`
 
 ```csharp
-public int NativeWeave.Database.DatabaseLimits.MaxQueryDepth { get; init; }
+public int Korda.Database.DatabaseLimits.MaxQueryDepth { get; init; }
 ```
 
 **summary:** Gets the maximum native query depth; defaults to 64.
 
 **Inherited type policy:** These are admission and encoded-byte budgets, not measurements of CLR heap or process memory. Provider hard limits also apply. Increasing a value never selects an unbounded fallback.
 
-## `P:NativeWeave.Database.DatabaseLimits.MaxQueryNodes`
+## `P:Korda.Database.DatabaseLimits.MaxQueryNodes`
 
 ```csharp
-public int NativeWeave.Database.DatabaseLimits.MaxQueryNodes { get; init; }
+public int Korda.Database.DatabaseLimits.MaxQueryNodes { get; init; }
 ```
 
 **summary:** Gets the maximum query and registration nodes; defaults to 4,096.
 
 **Inherited type policy:** These are admission and encoded-byte budgets, not measurements of CLR heap or process memory. Provider hard limits also apply. Increasing a value never selects an unbounded fallback.
 
-## `P:NativeWeave.Database.DatabaseLimits.MaxWaiters`
+## `P:Korda.Database.DatabaseLimits.MaxWaiters`
 
 ```csharp
-public int NativeWeave.Database.DatabaseLimits.MaxWaiters { get; init; }
+public int Korda.Database.DatabaseLimits.MaxWaiters { get; init; }
 ```
 
 **summary:** Gets the maximum bounded session waiters; defaults to 128.
 
 **Inherited type policy:** These are admission and encoded-byte budgets, not measurements of CLR heap or process memory. Provider hard limits also apply. Increasing a value never selects an unbounded fallback.
 
-## `P:NativeWeave.Database.Migration.Description`
+## `P:Korda.Database.Migration.Description`
 
 ```csharp
-public string NativeWeave.Database.Migration.Description { get; init; }
+public string Korda.Database.Migration.Description { get; init; }
 ```
 
 **summary:** A nonempty diagnostic description without credentials.
 
 **Inherited type policy:** This record retains its strings without native resources. Bundle construction snapshots the collection and performs bounded UTF-8 encoding and hashing; execution is explicit.
 
-## `P:NativeWeave.Database.Migration.Sql`
+## `P:Korda.Database.Migration.Sql`
 
 ```csharp
-public string NativeWeave.Database.Migration.Sql { get; init; }
+public string Korda.Database.Migration.Sql { get; init; }
 ```
 
 **summary:** Exact Unicode SQL; UTF-8 bytes are checksummed without newline normalization.
 
 **Inherited type policy:** This record retains its strings without native resources. Bundle construction snapshots the collection and performs bounded UTF-8 encoding and hashing; execution is explicit.
 
-## `P:NativeWeave.Database.Migration.TransactionMode`
+## `P:Korda.Database.Migration.TransactionMode`
 
 ```csharp
-public NativeWeave.Database.MigrationTransactionMode NativeWeave.Database.Migration.TransactionMode { get; init; }
+public Korda.Database.MigrationTransactionMode Korda.Database.Migration.TransactionMode { get; init; }
 ```
 
 **summary:** Transactional by default; explicit transaction-control statements are rejected.
 
 **Inherited type policy:** This record retains its strings without native resources. Bundle construction snapshots the collection and performs bounded UTF-8 encoding and hashing; execution is explicit.
 
-## `P:NativeWeave.Database.Migration.Version`
+## `P:Korda.Database.Migration.Version`
 
 ```csharp
-public long NativeWeave.Database.Migration.Version { get; init; }
+public long Korda.Database.Migration.Version { get; init; }
 ```
 
 **summary:** A positive version, strictly ascending within its bundle.
 
 **Inherited type policy:** This record retains its strings without native resources. Bundle construction snapshots the collection and performs bounded UTF-8 encoding and hashing; execution is explicit.
 
-## `P:NativeWeave.Database.MigrationBundle.ContentHash`
+## `P:Korda.Database.MigrationBundle.ContentHash`
 
 ```csharp
-public string NativeWeave.Database.MigrationBundle.ContentHash { get; }
+public string Korda.Database.MigrationBundle.ContentHash { get; }
 ```
 
 **summary:** Gets the lowercase SHA-256 of the canonical provider and immutable entry sequence.
 
 **Inherited type policy:** Construction performs no native load or database I/O. Its SHA-256 identity covers the canonical kind12 provider and entry sequence before the hash field is added. Each entry separately contains SQL SHA-256; the native ledger preserves the existing SQLx-compatible SHA-384 checksum. Scripts must be trusted deployment artifacts.
 
-## `P:NativeWeave.Database.MigrationOptions.AllowNonTransactional`
+## `P:Korda.Database.MigrationOptions.AllowNonTransactional`
 
 ```csharp
-public bool NativeWeave.Database.MigrationOptions.AllowNonTransactional { get; init; }
+public bool Korda.Database.MigrationOptions.AllowNonTransactional { get; init; }
 ```
 
 **summary:** Gets whether explicitly nontransactional PostgreSQL entries may execute or be resumed.
 
-**remarks:** A new call is explicit replay of the identical script after an unfinished phase. The script must handle any previously completed effects. NativeWeave never retries a write within the call.
+**remarks:** A new call is explicit replay of the identical script after an unfinished phase. The script must handle any previously completed effects. Korda never retries a write within the call.
 
 **Inherited type policy:** This immutable managed value owns no connection or native resources. An administrative call snapshots its scalar settings before admission.
 
-## `P:NativeWeave.Database.MigrationOptions.LockTimeout`
+## `P:Korda.Database.MigrationOptions.LockTimeout`
 
 ```csharp
-public System.TimeSpan NativeWeave.Database.MigrationOptions.LockTimeout { get; init; }
+public System.TimeSpan Korda.Database.MigrationOptions.LockTimeout { get; init; }
 ```
 
 **summary:** Gets the positive finite administrative writer/advisory-lock wait, defaulting to thirty seconds.
 
 **Inherited type policy:** This immutable managed value owns no connection or native resources. An administrative call snapshots its scalar settings before admission.
 
-## `P:NativeWeave.Database.MigrationOptions.TargetVersion`
+## `P:Korda.Database.MigrationOptions.TargetVersion`
 
 ```csharp
-public long? NativeWeave.Database.MigrationOptions.TargetVersion { get; init; }
+public long? Korda.Database.MigrationOptions.TargetVersion { get; init; }
 ```
 
 **summary:** Gets the last version eligible for forward application; null selects the complete bundle.
@@ -6782,150 +6782,150 @@ public long? NativeWeave.Database.MigrationOptions.TargetVersion { get; init; }
 
 **Inherited type policy:** This immutable managed value owns no connection or native resources. An administrative call snapshots its scalar settings before admission.
 
-## `P:NativeWeave.Database.MigrationReport.AppliedCount`
+## `P:Korda.Database.MigrationReport.AppliedCount`
 
 ```csharp
-public int NativeWeave.Database.MigrationReport.AppliedCount { get; init; }
+public int Korda.Database.MigrationReport.AppliedCount { get; init; }
 ```
 
 **summary:** The number applied by this invocation.
 
 **Inherited type policy:** This detached managed value owns no native resource. The administrative connection has retired before task completion; earlier confirmed entries remain committed independently on PostgreSQL.
 
-## `P:NativeWeave.Database.MigrationReport.Completed`
+## `P:Korda.Database.MigrationReport.Completed`
 
 ```csharp
-public bool NativeWeave.Database.MigrationReport.Completed { get; init; }
+public bool Korda.Database.MigrationReport.Completed { get; init; }
 ```
 
 **summary:** True on success; failures throw and retain their original error.
 
 **Inherited type policy:** This detached managed value owns no native resource. The administrative connection has retired before task completion; earlier confirmed entries remain committed independently on PostgreSQL.
 
-## `P:NativeWeave.Database.MigrationReport.CurrentVersion`
+## `P:Korda.Database.MigrationReport.CurrentVersion`
 
 ```csharp
-public long? NativeWeave.Database.MigrationReport.CurrentVersion { get; init; }
+public long? Korda.Database.MigrationReport.CurrentVersion { get; init; }
 ```
 
 **summary:** The last confirmed applied version, or null for an empty database.
 
 **Inherited type policy:** This detached managed value owns no native resource. The administrative connection has retired before task completion; earlier confirmed entries remain committed independently on PostgreSQL.
 
-## `P:NativeWeave.Database.MigrationStatus.Applied`
+## `P:Korda.Database.MigrationStatus.Applied`
 
 ```csharp
-public bool NativeWeave.Database.MigrationStatus.Applied { get; init; }
+public bool Korda.Database.MigrationStatus.Applied { get; init; }
 ```
 
 **summary:** True only when the successful retained migration ledger contains this exact migration.
 
 **Inherited type policy:** This detached managed record owns its immutable strings. Native result buffers are released before the task returns; the source bounds aggregate record and UTF-8 byte costs.
 
-## `P:NativeWeave.Database.MigrationStatus.Checksum`
+## `P:Korda.Database.MigrationStatus.Checksum`
 
 ```csharp
-public string NativeWeave.Database.MigrationStatus.Checksum { get; init; }
+public string Korda.Database.MigrationStatus.Checksum { get; init; }
 ```
 
 **summary:** The lowercase hexadecimal SQLx-compatible SHA-384 checksum, distinct from the bundle hash.
 
 **Inherited type policy:** This detached managed record owns its immutable strings. Native result buffers are released before the task returns; the source bounds aggregate record and UTF-8 byte costs.
 
-## `P:NativeWeave.Database.MigrationStatus.Description`
+## `P:Korda.Database.MigrationStatus.Description`
 
 ```csharp
-public string NativeWeave.Database.MigrationStatus.Description { get; init; }
+public string Korda.Database.MigrationStatus.Description { get; init; }
 ```
 
 **summary:** The immutable bundle description.
 
 **Inherited type policy:** This detached managed record owns its immutable strings. Native result buffers are released before the task returns; the source bounds aggregate record and UTF-8 byte costs.
 
-## `P:NativeWeave.Database.MigrationStatus.Version`
+## `P:Korda.Database.MigrationStatus.Version`
 
 ```csharp
-public long NativeWeave.Database.MigrationStatus.Version { get; init; }
+public long Korda.Database.MigrationStatus.Version { get; init; }
 ```
 
 **summary:** The positive migration version.
 
 **Inherited type policy:** This detached managed record owns its immutable strings. Native result buffers are released before the task returns; the source bounds aggregate record and UTF-8 byte costs.
 
-## `P:NativeWeave.Database.SchemaColumn.IsNullable`
+## `P:Korda.Database.SchemaColumn.IsNullable`
 
 ```csharp
-public bool NativeWeave.Database.SchemaColumn.IsNullable { get; init; }
+public bool Korda.Database.SchemaColumn.IsNullable { get; init; }
 ```
 
 **summary:** Whether the provider permits SQL NULL.
 
 **Inherited type policy:** This detached immutable record retains its names and type strings. Each column counts toward the same source result-row and encoded-byte limits as its parent table.
 
-## `P:NativeWeave.Database.SchemaColumn.IsPrimaryKey`
+## `P:Korda.Database.SchemaColumn.IsPrimaryKey`
 
 ```csharp
-public bool NativeWeave.Database.SchemaColumn.IsPrimaryKey { get; init; }
+public bool Korda.Database.SchemaColumn.IsPrimaryKey { get; init; }
 ```
 
 **summary:** Whether the column participates in a primary key.
 
 **Inherited type policy:** This detached immutable record retains its names and type strings. Each column counts toward the same source result-row and encoded-byte limits as its parent table.
 
-## `P:NativeWeave.Database.SchemaColumn.Name`
+## `P:Korda.Database.SchemaColumn.Name`
 
 ```csharp
-public string NativeWeave.Database.SchemaColumn.Name { get; init; }
+public string Korda.Database.SchemaColumn.Name { get; init; }
 ```
 
 **summary:** The exact store column name.
 
 **Inherited type policy:** This detached immutable record retains its names and type strings. Each column counts toward the same source result-row and encoded-byte limits as its parent table.
 
-## `P:NativeWeave.Database.SchemaColumn.StoreType`
+## `P:Korda.Database.SchemaColumn.StoreType`
 
 ```csharp
-public string NativeWeave.Database.SchemaColumn.StoreType { get; init; }
+public string Korda.Database.SchemaColumn.StoreType { get; init; }
 ```
 
 **summary:** The provider's declared/formatted type.
 
 **Inherited type policy:** This detached immutable record retains its names and type strings. Each column counts toward the same source result-row and encoded-byte limits as its parent table.
 
-## `P:NativeWeave.Database.SchemaTable.Columns`
+## `P:Korda.Database.SchemaTable.Columns`
 
 ```csharp
-public System.Collections.Generic.IReadOnlyList<NativeWeave.Database.SchemaColumn> NativeWeave.Database.SchemaTable.Columns { get; init; }
+public System.Collections.Generic.IReadOnlyList<Korda.Database.SchemaColumn> Korda.Database.SchemaTable.Columns { get; init; }
 ```
 
 **summary:** The bounded columns in native catalog ordinal order.
 
 **Inherited type policy:** Administration returns a detached read-only column list with no native lease. Table names and all nested columns share the source buffering budget; no further database access is lazy.
 
-## `P:NativeWeave.Database.SchemaTable.Name`
+## `P:Korda.Database.SchemaTable.Name`
 
 ```csharp
-public string NativeWeave.Database.SchemaTable.Name { get; init; }
+public string Korda.Database.SchemaTable.Name { get; init; }
 ```
 
 **summary:** The exact table name.
 
 **Inherited type policy:** Administration returns a detached read-only column list with no native lease. Table names and all nested columns share the source buffering budget; no further database access is lazy.
 
-## `P:NativeWeave.Database.SchemaTable.Schema`
+## `P:Korda.Database.SchemaTable.Schema`
 
 ```csharp
-public string? NativeWeave.Database.SchemaTable.Schema { get; init; }
+public string? Korda.Database.SchemaTable.Schema { get; init; }
 ```
 
 **summary:** The admitted provider schema; SQLite reports main.
 
 **Inherited type policy:** Administration returns a detached read-only column list with no native lease. Table names and all nested columns share the source buffering budget; no further database access is lazy.
 
-## `P:NativeWeave.Query.Query`1.Row`
+## `P:Korda.Query.Query`1.Row`
 
 ```csharp
-public NativeWeave.Query.QueryRow<TEntity> NativeWeave.Query.Query<TEntity>.Row { get; }
+public Korda.Query.QueryRow<TEntity> Korda.Query.Query<TEntity>.Row { get; }
 ```
 
 **summary:** Gets the live typed root-column proxy.
@@ -6934,38 +6934,38 @@ public NativeWeave.Query.QueryRow<TEntity> NativeWeave.Query.Query<TEntity>.Row 
 
 **Inherited type policy:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
-## `T:NativeWeave.Database.BulkAtomicity`
+## `T:Korda.Database.BulkAtomicity`
 
 ```csharp
-public enum NativeWeave.Database.BulkAtomicity : int
+public enum Korda.Database.BulkAtomicity : int
 ```
 
 **summary:** Selects whole-operation atomicity or explicitly independent committed batches.
 
-## `T:NativeWeave.Database.BulkFailure`
+## `T:Korda.Database.BulkFailure`
 
 ```csharp
-public static class NativeWeave.Database.BulkFailure
+public static class Korda.Database.BulkFailure
 ```
 
 **summary:** Reads immutable bulk progress without replacing or wrapping the original exception.
 
 **remarks:** The helper reads one exact typed Exception.Data entry without native calls, allocation of a wrapper, recursive error traversal or inference from cancellation. The returned snapshot can outlive all native owners.
 
-## `T:NativeWeave.Database.BulkOptions`
+## `T:Korda.Database.BulkOptions`
 
 ```csharp
-public sealed record class NativeWeave.Database.BulkOptions : System.IEquatable<NativeWeave.Database.BulkOptions>
+public sealed record class Korda.Database.BulkOptions : System.IEquatable<Korda.Database.BulkOptions>
 ```
 
 **summary:** Immutable finite input batching and explicit transaction ownership policy.
 
 **remarks:** This managed configuration owns no native resource. A bulk operation reads its immutable values at admission, then lowers the requested row count to source byte, node and parameter limits.
 
-## `T:NativeWeave.Database.BulkProgress`
+## `T:Korda.Database.BulkProgress`
 
 ```csharp
-public sealed record class NativeWeave.Database.BulkProgress : System.IEquatable<NativeWeave.Database.BulkProgress>
+public sealed record class Korda.Database.BulkProgress : System.IEquatable<Korda.Database.BulkProgress>
 ```
 
 **summary:** Immutable progress at failure, distinct from uncertain current-batch effects or later rollback.
@@ -6980,10 +6980,10 @@ public sealed record class NativeWeave.Database.BulkProgress : System.IEquatable
 
 **remarks:** The original admitted bulk exception retains this managed snapshot after cleanup. Counts describe previously completed batches, which All may have rolled back; they do not prove current-batch effects or authorize replay. The record owns no native resource and remains readable after session/source disposal.
 
-## `T:NativeWeave.Database.BulkResult`
+## `T:Korda.Database.BulkResult`
 
 ```csharp
-public sealed record class NativeWeave.Database.BulkResult : System.IEquatable<NativeWeave.Database.BulkResult>
+public sealed record class Korda.Database.BulkResult : System.IEquatable<Korda.Database.BulkResult>
 ```
 
 **summary:** The acknowledged result of all admitted batches.
@@ -6996,10 +6996,10 @@ public sealed record class NativeWeave.Database.BulkResult : System.IEquatable<N
 
 **remarks:** The owned immutable result contains only acknowledged counts and an ownership observation. Constructing it allocates one managed record; it retains no session, transaction, cursor or native buffer.
 
-## `T:NativeWeave.Database.ConflictTarget`1`
+## `T:Korda.Database.ConflictTarget`1`
 
 ```csharp
-public sealed class NativeWeave.Database.ConflictTarget<TEntity> where TEntity : class
+public sealed class Korda.Database.ConflictTarget<TEntity> where TEntity : class
 ```
 
 **summary:** An immutable explicit unique-column or PostgreSQL constraint target for one atomic upsert.
@@ -7008,78 +7008,78 @@ public sealed class NativeWeave.Database.ConflictTarget<TEntity> where TEntity :
 
 **remarks:** Construction performs no schema query. The native database checks that the selected unique constraint exists.
 
-## `T:NativeWeave.Database.DataSession`
+## `T:Korda.Database.DataSession`
 
 ```csharp
-public sealed class NativeWeave.Database.DataSession : System.IDisposable, System.IAsyncDisposable
+public sealed class Korda.Database.DataSession : System.IDisposable, System.IAsyncDisposable
 ```
 
 **summary:** Owns one physical native session with fail-fast single-command admission.
 
 **remarks:** A cursor and transaction control retain the same session gate. A session is not a concurrent command queue. Every query maps synchronously into owned CLR values and joins cleanup before its public Task completes.
 
-## `T:NativeWeave.Database.DataSource`
+## `T:Korda.Database.DataSource`
 
 ```csharp
-public sealed class NativeWeave.Database.DataSource : System.IDisposable, System.IAsyncDisposable
+public sealed class Korda.Database.DataSource : System.IDisposable, System.IAsyncDisposable
 ```
 
 **summary:** Owns one lazy C++ connection pool, bounded runtime and source-generation metadata registry.
 
 **remarks:** Sources support concurrent independent session opens. Closing rejects new work and retains every admitted native operation until real retirement. Dispose requests cleanup; DisposeAsync joins local safety.
 
-## `T:NativeWeave.Database.DataSourceBuilder`
+## `T:Korda.Database.DataSourceBuilder`
 
 ```csharp
-public sealed class NativeWeave.Database.DataSourceBuilder
+public sealed class Korda.Database.DataSourceBuilder
 ```
 
 **summary:** A single-writer builder for one explicitly selected native database engine.
 
 **remarks:** Configuration snapshots values. Build negotiates the packaged module and creates a lazy native pool; it opens no database connection. Independent builds create independent source generations.
 
-## `T:NativeWeave.Database.DatabaseAdministration`
+## `T:Korda.Database.DatabaseAdministration`
 
 ```csharp
-public sealed class NativeWeave.Database.DatabaseAdministration
+public sealed class Korda.Database.DatabaseAdministration
 ```
 
 **summary:** Runs explicit trusted migration and catalog operations through the native provider.
 
 **remarks:** One independent administrative connection executes at a time per source, with bounded waiting. Every outcome closes that connection before task retirement. It never uses a request session or request transaction. Result counts, strings and nested columns are charged to source buffering and field limits.
 
-## `T:NativeWeave.Database.DatabaseCapabilities`
+## `T:Korda.Database.DatabaseCapabilities`
 
 ```csharp
-public sealed class NativeWeave.Database.DatabaseCapabilities
+public sealed class Korda.Database.DatabaseCapabilities
 ```
 
 **summary:** An immutable snapshot of the capabilities actually negotiated for this provider module.
 
 **remarks:** Unknown names return false. A capability name does not authorize a different provider or an arbitrary SQL feature.
 
-## `T:NativeWeave.Database.DatabaseLimits`
+## `T:Korda.Database.DatabaseLimits`
 
 ```csharp
-public sealed record class NativeWeave.Database.DatabaseLimits : System.IEquatable<NativeWeave.Database.DatabaseLimits>
+public sealed record class Korda.Database.DatabaseLimits : System.IEquatable<Korda.Database.DatabaseLimits>
 ```
 
 **summary:** Immutable finite limits snapshotted by a data source before native creation.
 
 **remarks:** These are admission and encoded-byte budgets, not measurements of CLR heap or process memory. Provider hard limits also apply. Increasing a value never selects an unbounded fallback.
 
-## `T:NativeWeave.Database.DatabaseProvider`
+## `T:Korda.Database.DatabaseProvider`
 
 ```csharp
-public enum NativeWeave.Database.DatabaseProvider : int
+public enum Korda.Database.DatabaseProvider : int
 ```
 
 **summary:** The selected independently packaged C++ database provider.
 
-## `T:NativeWeave.Database.Migration`
+## `T:Korda.Database.Migration`
 
 ```csharp
-public sealed record class NativeWeave.Database.Migration : System.IEquatable<NativeWeave.Database.Migration>
+public sealed record class Korda.Database.Migration : System.IEquatable<Korda.Database.Migration>
 ```
 
 **summary:** Defines one trusted, immutable SQL migration.
@@ -7094,30 +7094,30 @@ public sealed record class NativeWeave.Database.Migration : System.IEquatable<Na
 
 **param TransactionMode:** Transactional by default; explicit transaction-control statements are rejected.
 
-## `T:NativeWeave.Database.MigrationBundle`
+## `T:Korda.Database.MigrationBundle`
 
 ```csharp
-public sealed class NativeWeave.Database.MigrationBundle
+public sealed class Korda.Database.MigrationBundle
 ```
 
 **summary:** Snapshots a strictly ordered, provider-bound set of explicit SQL scripts.
 
 **remarks:** Construction performs no native load or database I/O. Its SHA-256 identity covers the canonical kind12 provider and entry sequence before the hash field is added. Each entry separately contains SQL SHA-256; the native ledger preserves the existing SQLx-compatible SHA-384 checksum. Scripts must be trusted deployment artifacts.
 
-## `T:NativeWeave.Database.MigrationOptions`
+## `T:Korda.Database.MigrationOptions`
 
 ```csharp
-public sealed record class NativeWeave.Database.MigrationOptions : System.IEquatable<NativeWeave.Database.MigrationOptions>
+public sealed record class Korda.Database.MigrationOptions : System.IEquatable<Korda.Database.MigrationOptions>
 ```
 
 **summary:** Controls one explicit forward migration call.
 
 **remarks:** This immutable managed value owns no connection or native resources. An administrative call snapshots its scalar settings before admission.
 
-## `T:NativeWeave.Database.MigrationReport`
+## `T:Korda.Database.MigrationReport`
 
 ```csharp
-public sealed record class NativeWeave.Database.MigrationReport : System.IEquatable<NativeWeave.Database.MigrationReport>
+public sealed record class Korda.Database.MigrationReport : System.IEquatable<Korda.Database.MigrationReport>
 ```
 
 **summary:** Reports a successfully completed explicit migration call.
@@ -7130,10 +7130,10 @@ public sealed record class NativeWeave.Database.MigrationReport : System.IEquata
 
 **param Completed:** True on success; failures throw and retain their original error.
 
-## `T:NativeWeave.Database.MigrationStatus`
+## `T:Korda.Database.MigrationStatus`
 
 ```csharp
-public sealed record class NativeWeave.Database.MigrationStatus : System.IEquatable<NativeWeave.Database.MigrationStatus>
+public sealed record class Korda.Database.MigrationStatus : System.IEquatable<Korda.Database.MigrationStatus>
 ```
 
 **summary:** Describes one bounded immutable bundle/ledger comparison.
@@ -7148,18 +7148,18 @@ public sealed record class NativeWeave.Database.MigrationStatus : System.IEquata
 
 **param Applied:** True only when the successful retained migration ledger contains this exact migration.
 
-## `T:NativeWeave.Database.MigrationTransactionMode`
+## `T:Korda.Database.MigrationTransactionMode`
 
 ```csharp
-public enum NativeWeave.Database.MigrationTransactionMode : int
+public enum Korda.Database.MigrationTransactionMode : int
 ```
 
 **summary:** Selects native transactional execution or explicitly resumable PostgreSQL execution.
 
-## `T:NativeWeave.Database.SchemaColumn`
+## `T:Korda.Database.SchemaColumn`
 
 ```csharp
-public sealed record class NativeWeave.Database.SchemaColumn : System.IEquatable<NativeWeave.Database.SchemaColumn>
+public sealed record class Korda.Database.SchemaColumn : System.IEquatable<Korda.Database.SchemaColumn>
 ```
 
 **summary:** Describes a provider catalog column without exposing a provider row object.
@@ -7174,10 +7174,10 @@ public sealed record class NativeWeave.Database.SchemaColumn : System.IEquatable
 
 **param IsPrimaryKey:** Whether the column participates in a primary key.
 
-## `T:NativeWeave.Database.SchemaTable`
+## `T:Korda.Database.SchemaTable`
 
 ```csharp
-public sealed record class NativeWeave.Database.SchemaTable : System.IEquatable<NativeWeave.Database.SchemaTable>
+public sealed record class Korda.Database.SchemaTable : System.IEquatable<Korda.Database.SchemaTable>
 ```
 
 **summary:** Describes a table and an immutable, ordinally ordered column snapshot.
@@ -7190,10 +7190,10 @@ public sealed record class NativeWeave.Database.SchemaTable : System.IEquatable<
 
 **param Columns:** The bounded columns in native catalog ordinal order.
 
-## `T:NativeWeave.Query.CommonTable`1`
+## `T:Korda.Query.CommonTable`1`
 
 ```csharp
-public sealed class NativeWeave.Query.CommonTable<T> : System.IDisposable where T : class
+public sealed class Korda.Query.CommonTable<T> : System.IDisposable where T : class
 ```
 
 **summary:** A frozen native CTE with an explicit declared row shape and source identity.
@@ -7202,20 +7202,20 @@ public sealed class NativeWeave.Query.CommonTable<T> : System.IDisposable where 
 
 **remarks:** The snapshot is bound to one source and a declared static row shape. With imports a native retained reference. Disposal prevents new imports and does not mutate previously imported snapshots. Recursive creation requires one validated anchor/member self-reference.
 
-## `T:NativeWeave.Query.FrameBoundary`
+## `T:Korda.Query.FrameBoundary`
 
 ```csharp
-public enum NativeWeave.Query.FrameBoundary : int
+public enum Korda.Query.FrameBoundary : int
 ```
 
 **summary:** Supported finite window-frame endpoint choices.
 
 **remarks:** Only these ROWS endpoints are supported. Reversed or unsupported bounds fail before native state publication; finite numeric PRECEDING/FOLLOWING frames are not declared.
 
-## `T:NativeWeave.Query.JoinPredicate`2`
+## `T:Korda.Query.JoinPredicate`2`
 
 ```csharp
-public readonly struct NativeWeave.Query.JoinPredicate<TLeft, TRight> where TLeft : class where TRight : class
+public readonly struct Korda.Query.JoinPredicate<TLeft, TRight> where TLeft : class where TRight : class
 ```
 
 **summary:** A synchronous native JOIN ON proxy; both sides retain their declared nullability.
@@ -7226,10 +7226,10 @@ public readonly struct NativeWeave.Query.JoinPredicate<TLeft, TRight> where TLef
 
 **remarks:** Use only inside the synchronous JOIN callback. Provisional right-side expressions are invalidated on commit or abort. Values and nullability stay exact; explicitly lift a non-null parent key to compare a nullable foreign key.
 
-## `T:NativeWeave.Query.JoinedTable`1`
+## `T:Korda.Query.JoinedTable`1`
 
 ```csharp
-public readonly struct NativeWeave.Query.JoinedTable<TEntity> where TEntity : class
+public readonly struct Korda.Query.JoinedTable<TEntity> where TEntity : class
 ```
 
 **summary:** An opaque inner-join alias belonging to exactly one native query and table.
@@ -7238,10 +7238,10 @@ public readonly struct NativeWeave.Query.JoinedTable<TEntity> where TEntity : cl
 
 **remarks:** The alias is a borrowed token, not an independently disposable query. Default aliases and aliases from another query reject, even if the CLR entity type matches.
 
-## `T:NativeWeave.Query.LeftJoinedTable`1`
+## `T:Korda.Query.LeftJoinedTable`1`
 
 ```csharp
-public readonly struct NativeWeave.Query.LeftJoinedTable<TEntity> where TEntity : class
+public readonly struct Korda.Query.LeftJoinedTable<TEntity> where TEntity : class
 ```
 
 **summary:** An opaque left-join alias whose projected columns require explicit nullable reads.
@@ -7250,30 +7250,30 @@ public readonly struct NativeWeave.Query.LeftJoinedTable<TEntity> where TEntity 
 
 **remarks:** Use NullableValue or NullableReference to project its columns and HasMatch to distinguish absence. No default scalar sentinel or implicit object graph is introduced. Its query owns the alias lifetime.
 
-## `T:NativeWeave.Query.LockWait`
+## `T:Korda.Query.LockWait`
 
 ```csharp
-public enum NativeWeave.Query.LockWait : int
+public enum Korda.Query.LockWait : int
 ```
 
 **summary:** PostgreSQL row-lock conflict behavior.
 
 **remarks:** Controls PostgreSQL row-lock conflicts within the same transaction and total query deadline; it does not enable transparent retries.
 
-## `T:NativeWeave.Query.NullOrder`
+## `T:Korda.Query.NullOrder`
 
 ```csharp
-public enum NativeWeave.Query.NullOrder : int
+public enum Korda.Query.NullOrder : int
 ```
 
 **summary:** Explicit SQL NULL placement.
 
 **remarks:** Both providers render explicit SQL NULL placement. Ordering alone supplies no uniqueness or snapshot guarantee.
 
-## `T:NativeWeave.Query.PreparedQuery`1`
+## `T:Korda.Query.PreparedQuery`1`
 
 ```csharp
-public sealed class NativeWeave.Query.PreparedQuery<T> : System.IDisposable
+public sealed class Korda.Query.PreparedQuery<T> : System.IDisposable
 ```
 
 **summary:** An immutable source-bound native query plan with independent execution values and cursor owners.
@@ -7282,10 +7282,10 @@ public sealed class NativeWeave.Query.PreparedQuery<T> : System.IDisposable
 
 **remarks:** Concurrent execution uses separate sessions from the same source. Disposing prevents new dispatch; accepted native operations retain their plan independently and complete safely.
 
-## `T:NativeWeave.Query.ProjectionBuilder`1`
+## `T:Korda.Query.ProjectionBuilder`1`
 
 ```csharp
-public sealed class NativeWeave.Query.ProjectionBuilder<T>
+public sealed class Korda.Query.ProjectionBuilder<T>
 ```
 
 **summary:** A query-scoped static projection builder that freezes typed result tokens and a direct constructor.
@@ -7294,10 +7294,10 @@ public sealed class NativeWeave.Query.ProjectionBuilder<T>
 
 **remarks:** Fields must come from its exact live query. Build freezes field order, unique names, codec/nullability and the direct materializer; later Add or Build rejects. RowReader validates the full shape before the callback, and escaping DTO values own their data.
 
-## `T:NativeWeave.Query.QueryParameter`1`
+## `T:Korda.Query.QueryParameter`1`
 
 ```csharp
-public readonly struct NativeWeave.Query.QueryParameter<T>
+public readonly struct Korda.Query.QueryParameter<T>
 ```
 
 **summary:** An immutable source-generation parameter identity, distinct from a query-arena expression.
@@ -7306,20 +7306,20 @@ public readonly struct NativeWeave.Query.QueryParameter<T>
 
 **remarks:** Parameter IDs are monotonically allocated within a source generation, independently of query expression tokens. A copied parameter remains an identity; it owns no native arena or value, and only declared/imported plans may execute it.
 
-## `T:NativeWeave.Query.QueryParameters`
+## `T:Korda.Query.QueryParameters`
 
 ```csharp
-public sealed class NativeWeave.Query.QueryParameters
+public sealed class Korda.Query.QueryParameters
 ```
 
 **summary:** A finite explicit parameter set; each Set copies its value and each execution takes a separate snapshot.
 
 **remarks:** Set snapshots each encoded value before returning. A terminal copies the complete finite set before its first await; later Set calls do not change admitted execution. Missing, extra, foreign or codec-incompatible identities reject before native dispatch. No global parameter dictionary exists.
 
-## `T:NativeWeave.Query.QueryRow`1`
+## `T:Korda.Query.QueryRow`1`
 
 ```csharp
-public readonly struct NativeWeave.Query.QueryRow<TEntity> where TEntity : class
+public readonly struct Korda.Query.QueryRow<TEntity> where TEntity : class
 ```
 
 **summary:** A stack-independent typed root-table proxy that belongs to one live native query.
@@ -7328,10 +7328,10 @@ public readonly struct NativeWeave.Query.QueryRow<TEntity> where TEntity : class
 
 **remarks:** This borrowed proxy retains its query association. Default, foreign, closed or sealed owners reject. Each operation forwards immediately to a finite native arena; no managed SQL tree or captured callback is retained.
 
-## `T:NativeWeave.Query.QuerySelection`1`
+## `T:Korda.Query.QuerySelection`1`
 
 ```csharp
-public readonly struct NativeWeave.Query.QuerySelection<T>
+public readonly struct Korda.Query.QuerySelection<T>
 ```
 
 **summary:** A borrowed typed view of a native query's current selection; it owns no second arena.
@@ -7340,10 +7340,10 @@ public readonly struct NativeWeave.Query.QuerySelection<T>
 
 **remarks:** This borrowed view is valid only while its projection remains current in the live query. The first execution or Prepare seals the owner synchronously. Dispose the owning query after enumeration; early exit, failure and cancellation await actual native retirement.
 
-## `T:NativeWeave.Query.Query`1`
+## `T:Korda.Query.Query`1`
 
 ```csharp
-public sealed class NativeWeave.Query.Query<TEntity> : System.IDisposable where TEntity : class
+public sealed class Korda.Query.Query<TEntity> : System.IDisposable where TEntity : class
 ```
 
 **summary:** One mutable, source-bound native query arena with a strongly typed application facade.
@@ -7352,50 +7352,50 @@ public sealed class NativeWeave.Query.Query<TEntity> : System.IDisposable where 
 
 **remarks:** Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
-## `T:NativeWeave.Query.RowLockMode`
+## `T:Korda.Query.RowLockMode`
 
 ```csharp
-public enum NativeWeave.Query.RowLockMode : int
+public enum Korda.Query.RowLockMode : int
 ```
 
 **summary:** PostgreSQL row lock strength requiring an explicit transaction.
 
 **remarks:** Available only on PostgreSQL with an explicit live transaction. SQLite rejects the operation before provider dispatch.
 
-## `T:NativeWeave.Query.SetOperation`
+## `T:Korda.Query.SetOperation`
 
 ```csharp
-public enum NativeWeave.Query.SetOperation : int
+public enum Korda.Query.SetOperation : int
 ```
 
 **summary:** Native SQL set operation with exact compatible projection types.
 
 **remarks:** Operands must have the same source, field order, aliases, codecs and nullability. The native engine snapshots the right operand; SQL duplicate and NULL semantics apply.
 
-## `T:NativeWeave.Query.SortDirection`
+## `T:Korda.Query.SortDirection`
 
 ```csharp
-public enum NativeWeave.Query.SortDirection : int
+public enum Korda.Query.SortDirection : int
 ```
 
 **summary:** Native SQL ordering direction.
 
 **remarks:** The native query validates each enum value before mutation. Direction is explicit; it does not change SQL NULL ordering.
 
-## `T:NativeWeave.Query.SqlArithmeticExtensions`
+## `T:Korda.Query.SqlArithmeticExtensions`
 
 ```csharp
-public static class NativeWeave.Query.SqlArithmeticExtensions
+public static class Korda.Query.SqlArithmeticExtensions
 ```
 
 **summary:** Statically numeric native SQL arithmetic; overflow, precision and division remain provider semantics.
 
 **remarks:** Operators require compatible same-query numeric codecs and preserve declared SQL NULL propagation. The native engine owns provider arithmetic and checked result conversion; unsupported codecs fail explicitly. No CLR arithmetic delegate is executed for database rows.
 
-## `T:NativeWeave.Query.SqlExpression`1`
+## `T:Korda.Query.SqlExpression`1`
 
 ```csharp
-public readonly struct NativeWeave.Query.SqlExpression<T>
+public readonly struct Korda.Query.SqlExpression<T>
 ```
 
 **summary:** An opaque query-owned scalar token with its exact static codec and SQL nullability.
@@ -7404,50 +7404,50 @@ public readonly struct NativeWeave.Query.SqlExpression<T>
 
 **remarks:** No SQL tree or delegate is retained. Values are snapshotted immediately; default and foreign tokens reject.
 
-## `T:NativeWeave.Query.SqlFunctions`
+## `T:Korda.Query.SqlFunctions`
 
 ```csharp
-public static class NativeWeave.Query.SqlFunctions
+public static class Korda.Query.SqlFunctions
 ```
 
 **summary:** Static typed native aggregates, ranking and conditional scalar composition.
 
 **remarks:** SQL NULL, collation, overflow and conversion semantics remain explicit provider behavior.
 
-## `T:NativeWeave.Query.SqlNullabilityExtensions`
+## `T:Korda.Query.SqlNullabilityExtensions`
 
 ```csharp
-public static class NativeWeave.Query.SqlNullabilityExtensions
+public static class Korda.Query.SqlNullabilityExtensions
 ```
 
 **summary:** Explicit one-way SQL nullability lifts; no SQL cast, coalesce or new parameter is emitted.
 
 **remarks:** These forward-only native metadata lifts preserve the SQL value and codec configuration. They do not emit a sentinel, COALESCE or reverse conversion. Default/foreign owners reject, and repeating a reference lift rejects its already nullable descriptor.
 
-## `T:NativeWeave.Query.SqlPredicate`
+## `T:Korda.Query.SqlPredicate`
 
 ```csharp
-public readonly struct NativeWeave.Query.SqlPredicate
+public readonly struct Korda.Query.SqlPredicate
 ```
 
 **summary:** An opaque same-query native SQL condition; default predicates reject.
 
 **remarks:** Boolean composition uses SQL three-valued logic and performs one direct native operation.
 
-## `T:NativeWeave.Query.SqlStringExtensions`
+## `T:Korda.Query.SqlStringExtensions`
 
 ```csharp
-public static class NativeWeave.Query.SqlStringExtensions
+public static class Korda.Query.SqlStringExtensions
 ```
 
 **summary:** Explicit SQL string pattern and allowlisted collation operations; no CLR culture comparison.
 
 **remarks:** Literal-pattern methods snapshot and escape the supplied text before native SQL rendering; LikePattern deliberately accepts SQL wildcards. Collate resolves an exact provider allowlist, never arbitrary SQL. NULL behavior follows SQL three-valued logic.
 
-## `T:NativeWeave.Query.UpdateSetters`1`
+## `T:Korda.Query.UpdateSetters`1`
 
 ```csharp
-public sealed class NativeWeave.Query.UpdateSetters<TEntity> where TEntity : class
+public sealed class Korda.Query.UpdateSetters<TEntity> where TEntity : class
 ```
 
 **summary:** A callback-scoped typed assignment collector; scalar expressions are built natively immediately.
@@ -7456,10 +7456,10 @@ public sealed class NativeWeave.Query.UpdateSetters<TEntity> where TEntity : cla
 
 **remarks:** The owner is valid only during the synchronous update callback. Each scalar is snapshotted immediately; duplicate, generated and primary-key assignments reject. Assignment clauses attach after callback success; no tracked entity or managed SQL expression tree is created.
 
-## `T:NativeWeave.Query.WindowDefinition`
+## `T:Korda.Query.WindowDefinition`
 
 ```csharp
-public sealed class NativeWeave.Query.WindowDefinition
+public sealed class Korda.Query.WindowDefinition
 ```
 
 **summary:** Finite mutable native window state; each Over/rank call snapshots its current definition.

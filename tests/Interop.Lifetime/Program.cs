@@ -1,5 +1,5 @@
 using System.Runtime.CompilerServices;
-using NativeWeave.Interop.Lifetime;
+using Korda.Interop.Lifetime;
 
 internal static class Program
 {

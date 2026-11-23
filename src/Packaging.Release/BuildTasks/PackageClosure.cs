@@ -5,7 +5,7 @@ using System.Text.RegularExpressions;
 using Microsoft.Build.Framework;
 using Microsoft.Build.Utilities;
 
-namespace NativeWeave.Packaging;
+namespace Korda.Packaging;
 
 /// <summary>Validates a restored owned-package closure and produces SDK-selected native output records.</summary>
 /// <remarks>This is an MSBuild host task, never an application runtime dependency. Each invocation is independent. It reads bounded package metadata, hashes native files and performs no network, restore, native compilation or native loading.</remarks>
@@ -175,11 +175,11 @@ public sealed class PackageClosure : Microsoft.Build.Utilities.Task
             int separator = library.Name.LastIndexOf('/');
             Require(separator > 0, "NWPKG001", "Malformed restored package identity.");
             string id = library.Name[..separator], version = library.Name[(separator + 1)..];
-            if (!id.StartsWith("NativeWeave.", StringComparison.OrdinalIgnoreCase) && !expected.ContainsKey(id))
+            if (!id.StartsWith("Korda.", StringComparison.OrdinalIgnoreCase) && !expected.ContainsKey(id))
                 continue;
             Require(actual.TryAdd(id, version), "NWPKG001", "Multiple resolved versions of an owned package.");
         }
-        Require(actual.Count == expected.Count, "NWPKG001", "Missing or undeclared NativeWeave packages. Align the full owned-package closure.");
+        Require(actual.Count == expected.Count, "NWPKG001", "Missing or undeclared Korda packages. Align the full owned-package closure.");
         foreach ((string id, Package package) in expected)
             Require(actual.TryGetValue(id, out string? version) && version == package.Version,
                 "NWPKG001", $"{id} resolved {actual.GetValueOrDefault(id, "<missing>")}; required {package.Version}. Direct overrides and suppressed NuGet warnings cannot change this closure.");
@@ -192,7 +192,7 @@ public sealed class PackageClosure : Microsoft.Build.Utilities.Task
                 var edges = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
                 if (resolved.Value.TryGetProperty("dependencies", out JsonElement dependencies))
                     foreach (JsonProperty edge in dependencies.EnumerateObject())
-                        if (expected.ContainsKey(edge.Name) || edge.Name.StartsWith("NativeWeave.", StringComparison.OrdinalIgnoreCase))
+                        if (expected.ContainsKey(edge.Name) || edge.Name.StartsWith("Korda.", StringComparison.OrdinalIgnoreCase))
                             edges.Add(edge.Name, edge.Value.GetString()!);
                 Require(edges.Count == package.Dependencies.Count && package.Dependencies.All(x => edges.GetValueOrDefault(x.Key) == "[" + x.Value + "]"),
                     "NWPKG001", $"Restored owned dependency edges of {package.Id} differ from the exact [V] closure.");
@@ -238,7 +238,7 @@ public sealed class PackageClosure : Microsoft.Build.Utilities.Task
                     writer.WriteEndObject();
                 }
                 Require(bytes.Length <= 16384, "NWPKG002", "Native output record exceeds 16 KiB.");
-                string name = $"NativeWeave.{native.Engine}.assets.json";
+                string name = $"Korda.{native.Engine}.assets.json";
                 string path = Path.Combine(OutputDirectory, name);
                 pending.Add((path, bytes.ToArray()));
                 var record = new TaskItem(path);

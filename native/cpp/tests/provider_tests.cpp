@@ -254,7 +254,7 @@ ProviderOptions postgres_options(const char* name = "NW_PG_URL")
     // NOLINTNEXTLINE(concurrency-mt-unsafe)
     if (const auto* root = std::getenv("NW_PG_ROOT"))
         result.root_certificate = root;
-    result.application_name = "NativeWeaveCppProviderRegression";
+    result.application_name = "KordaCppProviderRegression";
     return result;
 }
 

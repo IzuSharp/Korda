@@ -1,163 +1,163 @@
-# NativeWeave.Database transaction API reference
+# Korda.Database transaction API reference
 
 Generated from the compiled product assembly and its XML comments by `tests/Data.Transactions/ApiCheck`. B05 transaction scope; native coordinator execution is separate from downstream B04 host composition.
 
-## `F:NativeWeave.Database.CleanupStatus.Failed`
+## `F:Korda.Database.CleanupStatus.Failed`
 
 ```csharp
-NativeWeave.Database.CleanupStatus.Failed = 4
+Korda.Database.CleanupStatus.Failed = 4
 ```
 
 **summary:** Cleanup failed; the diagnostic and local retirement observations remain separate.
 
-## `F:NativeWeave.Database.CleanupStatus.NotStarted`
+## `F:Korda.Database.CleanupStatus.NotStarted`
 
 ```csharp
-NativeWeave.Database.CleanupStatus.NotStarted = 0
+Korda.Database.CleanupStatus.NotStarted = 0
 ```
 
 **summary:** No cleanup has started.
 
-## `F:NativeWeave.Database.CleanupStatus.Pending`
+## `F:Korda.Database.CleanupStatus.Pending`
 
 ```csharp
-NativeWeave.Database.CleanupStatus.Pending = 1
+Korda.Database.CleanupStatus.Pending = 1
 ```
 
 **summary:** Native obligations still run or retirement has not been observed.
 
-## `F:NativeWeave.Database.CleanupStatus.RollbackUnconfirmed`
+## `F:Korda.Database.CleanupStatus.RollbackUnconfirmed`
 
 ```csharp
-NativeWeave.Database.CleanupStatus.RollbackUnconfirmed = 3
+Korda.Database.CleanupStatus.RollbackUnconfirmed = 3
 ```
 
 **summary:** Rollback was not confirmed; this does not imply any COMMIT attempt.
 
-## `F:NativeWeave.Database.CleanupStatus.Succeeded`
+## `F:Korda.Database.CleanupStatus.Succeeded`
 
 ```csharp
-NativeWeave.Database.CleanupStatus.Succeeded = 2
+Korda.Database.CleanupStatus.Succeeded = 2
 ```
 
 **summary:** The requested cleanup completed safely.
 
-## `F:NativeWeave.Database.ConnectionDisposition.Discarded`
+## `F:Korda.Database.ConnectionDisposition.Discarded`
 
 ```csharp
-NativeWeave.Database.ConnectionDisposition.Discarded = 3
+Korda.Database.ConnectionDisposition.Discarded = 3
 ```
 
 **summary:** The physical connection is removed from reuse.
 
-## `F:NativeWeave.Database.ConnectionDisposition.ProviderResetPending`
+## `F:Korda.Database.ConnectionDisposition.ProviderResetPending`
 
 ```csharp
-NativeWeave.Database.ConnectionDisposition.ProviderResetPending = 1
+Korda.Database.ConnectionDisposition.ProviderResetPending = 1
 ```
 
 **summary:** Only known, serialized provider maintenance remains before the next business command.
 
-## `F:NativeWeave.Database.ConnectionDisposition.Quarantined`
+## `F:Korda.Database.ConnectionDisposition.Quarantined`
 
 ```csharp
-NativeWeave.Database.ConnectionDisposition.Quarantined = 2
+Korda.Database.ConnectionDisposition.Quarantined = 2
 ```
 
 **summary:** Protocol or ownership is untrusted; another tenant cannot borrow the connection.
 
-## `F:NativeWeave.Database.ConnectionDisposition.Usable`
+## `F:Korda.Database.ConnectionDisposition.Usable`
 
 ```csharp
-NativeWeave.Database.ConnectionDisposition.Usable = 0
+Korda.Database.ConnectionDisposition.Usable = 0
 ```
 
 **summary:** The protocol and session are confirmed reusable.
 
-## `F:NativeWeave.Database.TransactionOutcome.Committed`
+## `F:Korda.Database.TransactionOutcome.Committed`
 
 ```csharp
-NativeWeave.Database.TransactionOutcome.Committed = 1
+Korda.Database.TransactionOutcome.Committed = 1
 ```
 
 **summary:** The provider confirmed commit.
 
-## `F:NativeWeave.Database.TransactionOutcome.InProgress`
+## `F:Korda.Database.TransactionOutcome.InProgress`
 
 ```csharp
-NativeWeave.Database.TransactionOutcome.InProgress = 0
+Korda.Database.TransactionOutcome.InProgress = 0
 ```
 
 **summary:** No trusted terminal effect has been established, including an unconfirmed rollback.
 
-## `F:NativeWeave.Database.TransactionOutcome.RolledBack`
+## `F:Korda.Database.TransactionOutcome.RolledBack`
 
 ```csharp
-NativeWeave.Database.TransactionOutcome.RolledBack = 2
+Korda.Database.TransactionOutcome.RolledBack = 2
 ```
 
 **summary:** The provider confirmed rollback.
 
-## `F:NativeWeave.Database.TransactionOutcome.Unknown`
+## `F:Korda.Database.TransactionOutcome.Unknown`
 
 ```csharp
-NativeWeave.Database.TransactionOutcome.Unknown = 3
+Korda.Database.TransactionOutcome.Unknown = 3
 ```
 
 **summary:** Commit may have occurred; cleanup cannot replace identity-bound recovery evidence.
 
-## `F:NativeWeave.Database.TransactionState.Active`
+## `F:Korda.Database.TransactionState.Active`
 
 ```csharp
-NativeWeave.Database.TransactionState.Active = 0
+Korda.Database.TransactionState.Active = 0
 ```
 
 **summary:** Ordinary transaction operations may be admitted.
 
-## `F:NativeWeave.Database.TransactionState.Closed`
+## `F:Korda.Database.TransactionState.Closed`
 
 ```csharp
-NativeWeave.Database.TransactionState.Closed = 4
+Korda.Database.TransactionState.Closed = 4
 ```
 
 **summary:** No additional transaction business operation may start.
 
-## `F:NativeWeave.Database.TransactionState.CommitInFlight`
+## `F:Korda.Database.TransactionState.CommitInFlight`
 
 ```csharp
-NativeWeave.Database.TransactionState.CommitInFlight = 2
+Korda.Database.TransactionState.CommitInFlight = 2
 ```
 
 **summary:** Commit has crossed the conservative dispatch boundary.
 
-## `F:NativeWeave.Database.TransactionState.Failed`
+## `F:Korda.Database.TransactionState.Failed`
 
 ```csharp
-NativeWeave.Database.TransactionState.Failed = 1
+Korda.Database.TransactionState.Failed = 1
 ```
 
 **summary:** The transaction requires rollback or supported savepoint recovery; commit is prohibited.
 
-## `F:NativeWeave.Database.TransactionState.RollbackInFlight`
+## `F:Korda.Database.TransactionState.RollbackInFlight`
 
 ```csharp
-NativeWeave.Database.TransactionState.RollbackInFlight = 3
+Korda.Database.TransactionState.RollbackInFlight = 3
 ```
 
 **summary:** Rollback has been admitted on the original session.
 
-## `M:NativeWeave.Database.CleanupStatus.#ctor`
+## `M:Korda.Database.CleanupStatus.#ctor`
 
 ```csharp
-public NativeWeave.Database.CleanupStatus.CleanupStatus()
+public Korda.Database.CleanupStatus.CleanupStatus()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
-## `M:NativeWeave.Database.CommitOutcomeUnknownException.#ctor(System.String,System.String,System.String,System.UInt64)`
+## `M:Korda.Database.CommitOutcomeUnknownException.#ctor(System.String,System.String,System.String,System.UInt64)`
 
 ```csharp
-public NativeWeave.Database.CommitOutcomeUnknownException.CommitOutcomeUnknownException(string message, string? recoveryKey, string? providerCode = null, ulong correlationId = 0)
+public Korda.Database.CommitOutcomeUnknownException.CommitOutcomeUnknownException(string message, string? recoveryKey, string? providerCode = null, ulong correlationId = 0)
 ```
 
 **summary:** Creates an immutable uncertain-outcome failure.
@@ -172,18 +172,18 @@ public NativeWeave.Database.CommitOutcomeUnknownException.CommitOutcomeUnknownEx
 
 **exception:** is null.
 
-## `M:NativeWeave.Database.ConnectionDisposition.#ctor`
+## `M:Korda.Database.ConnectionDisposition.#ctor`
 
 ```csharp
-public NativeWeave.Database.ConnectionDisposition.ConnectionDisposition()
+public Korda.Database.ConnectionDisposition.ConnectionDisposition()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
-## `M:NativeWeave.Database.DataTransaction.CloseAsync(System.TimeSpan,System.Threading.CancellationToken)`
+## `M:Korda.Database.DataTransaction.CloseAsync(System.TimeSpan,System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task<NativeWeave.Database.DatabaseCloseResult> NativeWeave.Database.DataTransaction.CloseAsync(System.TimeSpan waitBudget, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+public System.Threading.Tasks.Task<Korda.Database.DatabaseCloseResult> Korda.Database.DataTransaction.CloseAsync(System.TimeSpan waitBudget, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
 ```
 
 **summary:** Closes admission and waits for at most the supplied budget while the engine retains cleanup ownership.
@@ -200,10 +200,10 @@ public System.Threading.Tasks.Task<NativeWeave.Database.DatabaseCloseResult> Nat
 
 **remarks:** A finite HTTP response path can use this result without immediately joining indefinitely through await using.
 
-## `M:NativeWeave.Database.DataTransaction.CommitAsync(System.Threading.CancellationToken)`
+## `M:Korda.Database.DataTransaction.CommitAsync(System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task NativeWeave.Database.DataTransaction.CommitAsync(System.Threading.CancellationToken admissionToken = default(System.Threading.CancellationToken))
+public System.Threading.Tasks.Task Korda.Database.DataTransaction.CommitAsync(System.Threading.CancellationToken admissionToken = default(System.Threading.CancellationToken))
 ```
 
 **summary:** Commits once; successful completion means a trustworthy native Committed outcome.
@@ -220,10 +220,10 @@ public System.Threading.Tasks.Task NativeWeave.Database.DataTransaction.CommitAs
 
 **remarks:** After admission, the independent commit deadline applies. The engine retains an in-flight call after deadline expiration; request cancellation never converts a possible commit into cancellation.
 
-## `M:NativeWeave.Database.DataTransaction.CreateSavepointAsync(System.Threading.CancellationToken)`
+## `M:Korda.Database.DataTransaction.CreateSavepointAsync(System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task<NativeWeave.Database.Savepoint> NativeWeave.Database.DataTransaction.CreateSavepointAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+public System.Threading.Tasks.Task<Korda.Database.Savepoint> Korda.Database.DataTransaction.CreateSavepointAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
 ```
 
 **summary:** Creates a tracked native savepoint on this transaction's physical session.
@@ -238,20 +238,20 @@ public System.Threading.Tasks.Task<NativeWeave.Database.Savepoint> NativeWeave.D
 
 **remarks:** Savepoints are LIFO. Creation allocates one managed wrapper and one bounded native stack entry; it never starts or commits a separate outer transaction.
 
-## `M:NativeWeave.Database.DataTransaction.Dispose`
+## `M:Korda.Database.DataTransaction.Dispose`
 
 ```csharp
-public void NativeWeave.Database.DataTransaction.Dispose()
+public void Korda.Database.DataTransaction.Dispose()
 ```
 
 **summary:** Closes admission and transfers remaining work to the retained engine cleanup owner without blocking.
 
 **remarks:** This is a request, not proof of local safety or rollback. Repeated disposal is idempotent.
 
-## `M:NativeWeave.Database.DataTransaction.DisposeAsync`
+## `M:Korda.Database.DataTransaction.DisposeAsync`
 
 ```csharp
-public System.Threading.Tasks.ValueTask NativeWeave.Database.DataTransaction.DisposeAsync()
+public System.Threading.Tasks.ValueTask Korda.Database.DataTransaction.DisposeAsync()
 ```
 
 **summary:** Closes admission and joins actual local retirement without replacing an earlier business error.
@@ -260,10 +260,10 @@ public System.Threading.Tasks.ValueTask NativeWeave.Database.DataTransaction.Dis
 
 **remarks:** This join can outlive the configured cleanup deadline. Cleanup errors stay in Cleanup; explicit RollbackAsync reports its own error. Unknown remains separately recoverable.
 
-## `M:NativeWeave.Database.DataTransaction.RollbackAsync(System.Threading.CancellationToken)`
+## `M:Korda.Database.DataTransaction.RollbackAsync(System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task NativeWeave.Database.DataTransaction.RollbackAsync(System.Threading.CancellationToken admissionToken = default(System.Threading.CancellationToken))
+public System.Threading.Tasks.Task Korda.Database.DataTransaction.RollbackAsync(System.Threading.CancellationToken admissionToken = default(System.Threading.CancellationToken))
 ```
 
 **summary:** Requests rollback on the original native session using independent cleanup policy.
@@ -278,10 +278,10 @@ public System.Threading.Tasks.Task NativeWeave.Database.DataTransaction.Rollback
 
 **exception:** The scope is busy, closed or invalid for rollback.
 
-## `M:NativeWeave.Database.DatabaseCleanupException.#ctor(System.String,NativeWeave.Database.DatabaseCloseResult)`
+## `M:Korda.Database.DatabaseCleanupException.#ctor(System.String,Korda.Database.DatabaseCloseResult)`
 
 ```csharp
-public NativeWeave.Database.DatabaseCleanupException.DatabaseCleanupException(string message, NativeWeave.Database.DatabaseCloseResult cleanup)
+public Korda.Database.DatabaseCleanupException.DatabaseCleanupException(string message, Korda.Database.DatabaseCloseResult cleanup)
 ```
 
 **summary:** Creates an explicit cleanup failure from its immutable observation.
@@ -292,10 +292,10 @@ public NativeWeave.Database.DatabaseCleanupException.DatabaseCleanupException(st
 
 **exception:** or is null.
 
-## `M:NativeWeave.Database.DatabaseCloseResult.#ctor(NativeWeave.Database.CleanupStatus,System.UInt64,System.String,System.Boolean,NativeWeave.Database.ConnectionDisposition,System.Boolean)`
+## `M:Korda.Database.DatabaseCloseResult.#ctor(Korda.Database.CleanupStatus,System.UInt64,System.String,System.Boolean,Korda.Database.ConnectionDisposition,System.Boolean)`
 
 ```csharp
-public NativeWeave.Database.DatabaseCloseResult.DatabaseCloseResult(NativeWeave.Database.CleanupStatus Status, ulong CorrelationId, string? ProviderCode, bool LocalResourcesReleased, NativeWeave.Database.ConnectionDisposition ConnectionDisposition, bool DeadlineExceeded)
+public Korda.Database.DatabaseCloseResult.DatabaseCloseResult(Korda.Database.CleanupStatus Status, ulong CorrelationId, string? ProviderCode, bool LocalResourcesReleased, Korda.Database.ConnectionDisposition ConnectionDisposition, bool DeadlineExceeded)
 ```
 
 **summary:** An immutable cleanup observation that remains usable after native resources retire.
@@ -312,74 +312,74 @@ public NativeWeave.Database.DatabaseCloseResult.DatabaseCloseResult(NativeWeave.
 
 **param DeadlineExceeded:** Whether a cleanup deadline elapsed; expiration never forces resource release.
 
-## `M:NativeWeave.Database.DatabaseCloseResult.Deconstruct(NativeWeave.Database.CleanupStatus@,System.UInt64@,System.String@,System.Boolean@,NativeWeave.Database.ConnectionDisposition@,System.Boolean@)`
+## `M:Korda.Database.DatabaseCloseResult.Deconstruct(Korda.Database.CleanupStatus@,System.UInt64@,System.String@,System.Boolean@,Korda.Database.ConnectionDisposition@,System.Boolean@)`
 
 ```csharp
-public void NativeWeave.Database.DatabaseCloseResult.Deconstruct(out NativeWeave.Database.CleanupStatus Status, out ulong CorrelationId, out string? ProviderCode, out bool LocalResourcesReleased, out NativeWeave.Database.ConnectionDisposition ConnectionDisposition, out bool DeadlineExceeded)
+public void Korda.Database.DatabaseCloseResult.Deconstruct(out Korda.Database.CleanupStatus Status, out ulong CorrelationId, out string? ProviderCode, out bool LocalResourcesReleased, out Korda.Database.ConnectionDisposition ConnectionDisposition, out bool DeadlineExceeded)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
-## `M:NativeWeave.Database.DatabaseCloseResult.Equals(NativeWeave.Database.DatabaseCloseResult)`
+## `M:Korda.Database.DatabaseCloseResult.Equals(Korda.Database.DatabaseCloseResult)`
 
 ```csharp
-public bool NativeWeave.Database.DatabaseCloseResult.Equals(NativeWeave.Database.DatabaseCloseResult? other)
+public bool Korda.Database.DatabaseCloseResult.Equals(Korda.Database.DatabaseCloseResult? other)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
-## `M:NativeWeave.Database.DatabaseCloseResult.Equals(System.Object)`
+## `M:Korda.Database.DatabaseCloseResult.Equals(System.Object)`
 
 ```csharp
-public override bool NativeWeave.Database.DatabaseCloseResult.Equals(object? obj)
+public override bool Korda.Database.DatabaseCloseResult.Equals(object? obj)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
-## `M:NativeWeave.Database.DatabaseCloseResult.GetHashCode`
+## `M:Korda.Database.DatabaseCloseResult.GetHashCode`
 
 ```csharp
-public override int NativeWeave.Database.DatabaseCloseResult.GetHashCode()
+public override int Korda.Database.DatabaseCloseResult.GetHashCode()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
-## `M:NativeWeave.Database.DatabaseCloseResult.ToString`
+## `M:Korda.Database.DatabaseCloseResult.ToString`
 
 ```csharp
-public override string NativeWeave.Database.DatabaseCloseResult.ToString()
+public override string Korda.Database.DatabaseCloseResult.ToString()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
-## `M:NativeWeave.Database.DatabaseCloseResult.op_Equality(NativeWeave.Database.DatabaseCloseResult,NativeWeave.Database.DatabaseCloseResult)`
+## `M:Korda.Database.DatabaseCloseResult.op_Equality(Korda.Database.DatabaseCloseResult,Korda.Database.DatabaseCloseResult)`
 
 ```csharp
-public static bool NativeWeave.Database.DatabaseCloseResult.operator ==(NativeWeave.Database.DatabaseCloseResult? left, NativeWeave.Database.DatabaseCloseResult? right)
+public static bool Korda.Database.DatabaseCloseResult.operator ==(Korda.Database.DatabaseCloseResult? left, Korda.Database.DatabaseCloseResult? right)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
-## `M:NativeWeave.Database.DatabaseCloseResult.op_Inequality(NativeWeave.Database.DatabaseCloseResult,NativeWeave.Database.DatabaseCloseResult)`
+## `M:Korda.Database.DatabaseCloseResult.op_Inequality(Korda.Database.DatabaseCloseResult,Korda.Database.DatabaseCloseResult)`
 
 ```csharp
-public static bool NativeWeave.Database.DatabaseCloseResult.operator !=(NativeWeave.Database.DatabaseCloseResult? left, NativeWeave.Database.DatabaseCloseResult? right)
+public static bool Korda.Database.DatabaseCloseResult.operator !=(Korda.Database.DatabaseCloseResult? left, Korda.Database.DatabaseCloseResult? right)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
-## `M:NativeWeave.Database.DatabaseCloseResult.{Clone}$`
+## `M:Korda.Database.DatabaseCloseResult.{Clone}$`
 
 ```csharp
-public NativeWeave.Database.DatabaseCloseResult NativeWeave.Database.DatabaseCloseResult.<Clone>$()
+public Korda.Database.DatabaseCloseResult Korda.Database.DatabaseCloseResult.<Clone>$()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
-## `M:NativeWeave.Database.Savepoint.DisposeAsync`
+## `M:Korda.Database.Savepoint.DisposeAsync`
 
 ```csharp
-public System.Threading.Tasks.ValueTask NativeWeave.Database.Savepoint.DisposeAsync()
+public System.Threading.Tasks.ValueTask Korda.Database.Savepoint.DisposeAsync()
 ```
 
 **summary:** Rolls back to and releases an unreleased top savepoint, then joins its native safety.
@@ -388,10 +388,10 @@ public System.Threading.Tasks.ValueTask NativeWeave.Database.Savepoint.DisposeAs
 
 **remarks:** Non-top disposal records invalid-state cleanup and closes outer admission without reordering SQL. It never touches a subsequently reused connection or implicitly commits post-savepoint changes.
 
-## `M:NativeWeave.Database.Savepoint.ReleaseAsync(System.Threading.CancellationToken)`
+## `M:Korda.Database.Savepoint.ReleaseAsync(System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task NativeWeave.Database.Savepoint.ReleaseAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+public System.Threading.Tasks.Task Korda.Database.Savepoint.ReleaseAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
 ```
 
 **summary:** Releases only this top savepoint without committing the caller-owned outer transaction.
@@ -404,10 +404,10 @@ public System.Threading.Tasks.Task NativeWeave.Database.Savepoint.ReleaseAsync(S
 
 **exception:** The scope is stale, non-top, failed, busy or closed.
 
-## `M:NativeWeave.Database.Savepoint.RollbackAsync(System.Threading.CancellationToken)`
+## `M:Korda.Database.Savepoint.RollbackAsync(System.Threading.CancellationToken)`
 
 ```csharp
-public System.Threading.Tasks.Task NativeWeave.Database.Savepoint.RollbackAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+public System.Threading.Tasks.Task Korda.Database.Savepoint.RollbackAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
 ```
 
 **summary:** Rolls back to the current top savepoint and retains it for a subsequent release.
@@ -420,286 +420,286 @@ public System.Threading.Tasks.Task NativeWeave.Database.Savepoint.RollbackAsync(
 
 **exception:** The scope is stale, non-top, busy, closed or the provider rejected recovery.
 
-## `M:NativeWeave.Database.TransactionOptions.#ctor`
+## `M:Korda.Database.TransactionOptions.#ctor`
 
 ```csharp
-public NativeWeave.Database.TransactionOptions.TransactionOptions()
+public Korda.Database.TransactionOptions.TransactionOptions()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
-## `M:NativeWeave.Database.TransactionOptions.Equals(NativeWeave.Database.TransactionOptions)`
+## `M:Korda.Database.TransactionOptions.Equals(Korda.Database.TransactionOptions)`
 
 ```csharp
-public bool NativeWeave.Database.TransactionOptions.Equals(NativeWeave.Database.TransactionOptions? other)
+public bool Korda.Database.TransactionOptions.Equals(Korda.Database.TransactionOptions? other)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
-## `M:NativeWeave.Database.TransactionOptions.Equals(System.Object)`
+## `M:Korda.Database.TransactionOptions.Equals(System.Object)`
 
 ```csharp
-public override bool NativeWeave.Database.TransactionOptions.Equals(object? obj)
+public override bool Korda.Database.TransactionOptions.Equals(object? obj)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
-## `M:NativeWeave.Database.TransactionOptions.GetHashCode`
+## `M:Korda.Database.TransactionOptions.GetHashCode`
 
 ```csharp
-public override int NativeWeave.Database.TransactionOptions.GetHashCode()
+public override int Korda.Database.TransactionOptions.GetHashCode()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
-## `M:NativeWeave.Database.TransactionOptions.ToString`
+## `M:Korda.Database.TransactionOptions.ToString`
 
 ```csharp
-public override string NativeWeave.Database.TransactionOptions.ToString()
+public override string Korda.Database.TransactionOptions.ToString()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
-## `M:NativeWeave.Database.TransactionOptions.op_Equality(NativeWeave.Database.TransactionOptions,NativeWeave.Database.TransactionOptions)`
+## `M:Korda.Database.TransactionOptions.op_Equality(Korda.Database.TransactionOptions,Korda.Database.TransactionOptions)`
 
 ```csharp
-public static bool NativeWeave.Database.TransactionOptions.operator ==(NativeWeave.Database.TransactionOptions? left, NativeWeave.Database.TransactionOptions? right)
+public static bool Korda.Database.TransactionOptions.operator ==(Korda.Database.TransactionOptions? left, Korda.Database.TransactionOptions? right)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
-## `M:NativeWeave.Database.TransactionOptions.op_Inequality(NativeWeave.Database.TransactionOptions,NativeWeave.Database.TransactionOptions)`
+## `M:Korda.Database.TransactionOptions.op_Inequality(Korda.Database.TransactionOptions,Korda.Database.TransactionOptions)`
 
 ```csharp
-public static bool NativeWeave.Database.TransactionOptions.operator !=(NativeWeave.Database.TransactionOptions? left, NativeWeave.Database.TransactionOptions? right)
+public static bool Korda.Database.TransactionOptions.operator !=(Korda.Database.TransactionOptions? left, Korda.Database.TransactionOptions? right)
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
-## `M:NativeWeave.Database.TransactionOptions.{Clone}$`
+## `M:Korda.Database.TransactionOptions.{Clone}$`
 
 ```csharp
-public NativeWeave.Database.TransactionOptions NativeWeave.Database.TransactionOptions.<Clone>$()
+public Korda.Database.TransactionOptions Korda.Database.TransactionOptions.<Clone>$()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
-## `M:NativeWeave.Database.TransactionOutcome.#ctor`
+## `M:Korda.Database.TransactionOutcome.#ctor`
 
 ```csharp
-public NativeWeave.Database.TransactionOutcome.TransactionOutcome()
+public Korda.Database.TransactionOutcome.TransactionOutcome()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
-## `M:NativeWeave.Database.TransactionState.#ctor`
+## `M:Korda.Database.TransactionState.#ctor`
 
 ```csharp
-public NativeWeave.Database.TransactionState.TransactionState()
+public Korda.Database.TransactionState.TransactionState()
 ```
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
-## `P:NativeWeave.Database.CommitOutcomeUnknownException.Outcome`
+## `P:Korda.Database.CommitOutcomeUnknownException.Outcome`
 
 ```csharp
-public NativeWeave.Database.TransactionOutcome NativeWeave.Database.CommitOutcomeUnknownException.Outcome { get; }
+public Korda.Database.TransactionOutcome Korda.Database.CommitOutcomeUnknownException.Outcome { get; }
 ```
 
 **summary:** Gets Unknown independently from whether local resources have since retired.
 
-## `P:NativeWeave.Database.CommitOutcomeUnknownException.RecoveryKey`
+## `P:Korda.Database.CommitOutcomeUnknownException.RecoveryKey`
 
 ```csharp
-public string? NativeWeave.Database.CommitOutcomeUnknownException.RecoveryKey { get; }
+public string? Korda.Database.CommitOutcomeUnknownException.RecoveryKey { get; }
 ```
 
 **summary:** Gets the optional immutable application recovery identity.
 
-## `P:NativeWeave.Database.DataTransaction.Cleanup`
+## `P:Korda.Database.DataTransaction.Cleanup`
 
 ```csharp
-public NativeWeave.Database.DatabaseCloseResult NativeWeave.Database.DataTransaction.Cleanup { get; }
+public Korda.Database.DatabaseCloseResult Korda.Database.DataTransaction.Cleanup { get; }
 ```
 
 **summary:** Gets an immutable cleanup snapshot; Pending never claims that native access has stopped.
 
-## `P:NativeWeave.Database.DataTransaction.CommitAttempted`
+## `P:Korda.Database.DataTransaction.CommitAttempted`
 
 ```csharp
-public bool NativeWeave.Database.DataTransaction.CommitAttempted { get; }
+public bool Korda.Database.DataTransaction.CommitAttempted { get; }
 ```
 
 **summary:** Gets whether commit crossed the conservative native dispatch boundary.
 
-## `P:NativeWeave.Database.DataTransaction.Outcome`
+## `P:Korda.Database.DataTransaction.Outcome`
 
 ```csharp
-public NativeWeave.Database.TransactionOutcome NativeWeave.Database.DataTransaction.Outcome { get; }
+public Korda.Database.TransactionOutcome Korda.Database.DataTransaction.Outcome { get; }
 ```
 
 **summary:** Gets the native knowledge of durable effects; Unknown is not cleared by disposal.
 
-## `P:NativeWeave.Database.DataTransaction.RecoveryKey`
+## `P:Korda.Database.DataTransaction.RecoveryKey`
 
 ```csharp
-public string? NativeWeave.Database.DataTransaction.RecoveryKey { get; }
+public string? Korda.Database.DataTransaction.RecoveryKey { get; }
 ```
 
 **summary:** Gets the optional application recovery identity retained after disposal.
 
-## `P:NativeWeave.Database.DataTransaction.State`
+## `P:Korda.Database.DataTransaction.State`
 
 ```csharp
-public NativeWeave.Database.TransactionState NativeWeave.Database.DataTransaction.State { get; }
+public Korda.Database.TransactionState Korda.Database.DataTransaction.State { get; }
 ```
 
 **summary:** Gets transaction admission state independently from native local retirement.
 
-## `P:NativeWeave.Database.DatabaseCleanupException.Cleanup`
+## `P:Korda.Database.DatabaseCleanupException.Cleanup`
 
 ```csharp
-public NativeWeave.Database.DatabaseCloseResult NativeWeave.Database.DatabaseCleanupException.Cleanup { get; }
+public Korda.Database.DatabaseCloseResult Korda.Database.DatabaseCleanupException.Cleanup { get; }
 ```
 
 **summary:** Gets the immutable cleanup result; it never reclassifies an earlier uncertain commit.
 
-## `P:NativeWeave.Database.DatabaseCloseResult.ConnectionDisposition`
+## `P:Korda.Database.DatabaseCloseResult.ConnectionDisposition`
 
 ```csharp
-public NativeWeave.Database.ConnectionDisposition NativeWeave.Database.DatabaseCloseResult.ConnectionDisposition { get; init; }
+public Korda.Database.ConnectionDisposition Korda.Database.DatabaseCloseResult.ConnectionDisposition { get; init; }
 ```
 
 **summary:** Whether protocol and session state permit reuse.
 
-## `P:NativeWeave.Database.DatabaseCloseResult.CorrelationId`
+## `P:Korda.Database.DatabaseCloseResult.CorrelationId`
 
 ```csharp
-public ulong NativeWeave.Database.DatabaseCloseResult.CorrelationId { get; init; }
+public ulong Korda.Database.DatabaseCloseResult.CorrelationId { get; init; }
 ```
 
 **summary:** The native diagnostic identity, or zero when absent.
 
-## `P:NativeWeave.Database.DatabaseCloseResult.DeadlineExceeded`
+## `P:Korda.Database.DatabaseCloseResult.DeadlineExceeded`
 
 ```csharp
-public bool NativeWeave.Database.DatabaseCloseResult.DeadlineExceeded { get; init; }
+public bool Korda.Database.DatabaseCloseResult.DeadlineExceeded { get; init; }
 ```
 
 **summary:** Whether a cleanup deadline elapsed; expiration never forces resource release.
 
-## `P:NativeWeave.Database.DatabaseCloseResult.LocalResourcesReleased`
+## `P:Korda.Database.DatabaseCloseResult.LocalResourcesReleased`
 
 ```csharp
-public bool NativeWeave.Database.DatabaseCloseResult.LocalResourcesReleased { get; init; }
+public bool Korda.Database.DatabaseCloseResult.LocalResourcesReleased { get; init; }
 ```
 
 **summary:** Whether native accessors and retained parent/callback obligations have actually retired.
 
-## `P:NativeWeave.Database.DatabaseCloseResult.ProviderCode`
+## `P:Korda.Database.DatabaseCloseResult.ProviderCode`
 
 ```csharp
-public string? NativeWeave.Database.DatabaseCloseResult.ProviderCode { get; init; }
+public string? Korda.Database.DatabaseCloseResult.ProviderCode { get; init; }
 ```
 
 **summary:** A bounded provider code without credentials or parameter values.
 
-## `P:NativeWeave.Database.DatabaseCloseResult.Status`
+## `P:Korda.Database.DatabaseCloseResult.Status`
 
 ```csharp
-public NativeWeave.Database.CleanupStatus NativeWeave.Database.DatabaseCloseResult.Status { get; init; }
+public Korda.Database.CleanupStatus Korda.Database.DatabaseCloseResult.Status { get; init; }
 ```
 
 **summary:** The cleanup result, independent from transaction effects.
 
-## `P:NativeWeave.Database.TransactionOptions.CleanupTimeout`
+## `P:Korda.Database.TransactionOptions.CleanupTimeout`
 
 ```csharp
-public System.TimeSpan NativeWeave.Database.TransactionOptions.CleanupTimeout { get; init; }
+public System.TimeSpan Korda.Database.TransactionOptions.CleanupTimeout { get; init; }
 ```
 
 **summary:** Gets the finite, nonnegative cleanup deadline, initially five seconds; native access may outlive its expiration.
 
-## `P:NativeWeave.Database.TransactionOptions.CommitTimeout`
+## `P:Korda.Database.TransactionOptions.CommitTimeout`
 
 ```csharp
-public System.TimeSpan NativeWeave.Database.TransactionOptions.CommitTimeout { get; init; }
+public System.TimeSpan Korda.Database.TransactionOptions.CommitTimeout { get; init; }
 ```
 
 **summary:** Gets the finite, nonnegative commit deadline, initially thirty seconds.
 
-## `P:NativeWeave.Database.TransactionOptions.Isolation`
+## `P:Korda.Database.TransactionOptions.Isolation`
 
 ```csharp
-public System.Data.IsolationLevel? NativeWeave.Database.TransactionOptions.Isolation { get; init; }
+public System.Data.IsolationLevel? Korda.Database.TransactionOptions.Isolation { get; init; }
 ```
 
 **summary:** Gets the exact requested isolation, or null for the provider default: PostgreSQL ReadCommitted or ordinary SQLite Serializable.
 
-## `P:NativeWeave.Database.TransactionOptions.ReadOnly`
+## `P:Korda.Database.TransactionOptions.ReadOnly`
 
 ```csharp
-public bool NativeWeave.Database.TransactionOptions.ReadOnly { get; init; }
+public bool Korda.Database.TransactionOptions.ReadOnly { get; init; }
 ```
 
 **summary:** Gets whether the provider must enforce read-only transaction mode; unsupported profiles reject this request.
 
-## `P:NativeWeave.Database.TransactionOptions.RecoveryKey`
+## `P:Korda.Database.TransactionOptions.RecoveryKey`
 
 ```csharp
-public string? NativeWeave.Database.TransactionOptions.RecoveryKey { get; init; }
+public string? Korda.Database.TransactionOptions.RecoveryKey { get; init; }
 ```
 
 **summary:** Gets an optional application recovery identity; it is retained after disposal and never authorizes automatic retry.
 
-## `T:NativeWeave.Database.CleanupStatus`
+## `T:Korda.Database.CleanupStatus`
 
 ```csharp
-public enum NativeWeave.Database.CleanupStatus : int
+public enum Korda.Database.CleanupStatus : int
 ```
 
 **summary:** The result of cleanup, distinct from transaction outcome.
 
-## `T:NativeWeave.Database.CommitOutcomeUnknownException`
+## `T:Korda.Database.CommitOutcomeUnknownException`
 
 ```csharp
-public sealed class NativeWeave.Database.CommitOutcomeUnknownException : NativeWeave.Data.DatabaseException
+public sealed class Korda.Database.CommitOutcomeUnknownException : Korda.Data.DatabaseException
 ```
 
 **summary:** A possible commit without trustworthy confirmation; cleanup and cancellation do not prove rollback.
 
 **remarks:** Recovery uses the original application identity. This exception never suggests a blind transaction replay.
 
-## `T:NativeWeave.Database.ConnectionDisposition`
+## `T:Korda.Database.ConnectionDisposition`
 
 ```csharp
-public enum NativeWeave.Database.ConnectionDisposition : int
+public enum Korda.Database.ConnectionDisposition : int
 ```
 
 **summary:** Provider evidence about reuse of the original physical session.
 
-## `T:NativeWeave.Database.DataTransaction`
+## `T:Korda.Database.DataTransaction`
 
 ```csharp
-public sealed class NativeWeave.Database.DataTransaction : System.IDisposable, System.IAsyncDisposable
+public sealed class Korda.Database.DataTransaction : System.IDisposable, System.IAsyncDisposable
 ```
 
 **summary:** An exclusive native transaction scope with separately observed outcome and cleanup.
 
 **remarks:** The owning DataSession creates this scope after native BEGIN confirms. Ordinary calls share one session command gate; concurrent transaction operations reject rather than queue. No reflection, managed SQL, physical pool or business retry is introduced. Snapshots and recovery identity survive disposal. The engine retains cleanup work until safety is established, even when a bounded CloseAsync waiter returns Pending.
 
-## `T:NativeWeave.Database.DatabaseCleanupException`
+## `T:Korda.Database.DatabaseCleanupException`
 
 ```csharp
-public sealed class NativeWeave.Database.DatabaseCleanupException : NativeWeave.Data.DatabaseException
+public sealed class Korda.Database.DatabaseCleanupException : Korda.Data.DatabaseException
 ```
 
 **summary:** An explicit rollback/cleanup failure, retaining the cleanup observation separately from business errors.
 
-## `T:NativeWeave.Database.DatabaseCloseResult`
+## `T:Korda.Database.DatabaseCloseResult`
 
 ```csharp
-public sealed record class NativeWeave.Database.DatabaseCloseResult : System.IEquatable<NativeWeave.Database.DatabaseCloseResult>
+public sealed record class Korda.Database.DatabaseCloseResult : System.IEquatable<Korda.Database.DatabaseCloseResult>
 ```
 
 **summary:** An immutable cleanup observation that remains usable after native resources retire.
@@ -716,38 +716,38 @@ public sealed record class NativeWeave.Database.DatabaseCloseResult : System.IEq
 
 **param DeadlineExceeded:** Whether a cleanup deadline elapsed; expiration never forces resource release.
 
-## `T:NativeWeave.Database.Savepoint`
+## `T:Korda.Database.Savepoint`
 
 ```csharp
-public sealed class NativeWeave.Database.Savepoint : System.IAsyncDisposable
+public sealed class Korda.Database.Savepoint : System.IAsyncDisposable
 ```
 
 **summary:** A transaction-generation-bound native savepoint; only the current top may execute an action.
 
 **remarks:** The provider uses its tracked same-session nesting. There is no user SQL identifier or connection escape hatch. Releasing the scope never commits the outer transaction.
 
-## `T:NativeWeave.Database.TransactionOptions`
+## `T:Korda.Database.TransactionOptions`
 
 ```csharp
-public sealed record class NativeWeave.Database.TransactionOptions : System.IEquatable<NativeWeave.Database.TransactionOptions>
+public sealed record class Korda.Database.TransactionOptions : System.IEquatable<Korda.Database.TransactionOptions>
 ```
 
 **summary:** Exact transaction policy, snapshotted before native BEGIN admission.
 
 **remarks:** No engine is initialized by this value. Unsupported isolation or read-only requests fail before BEGIN. Commit and cleanup deadlines are finite and independent from an HTTP/request cancellation token.
 
-## `T:NativeWeave.Database.TransactionOutcome`
+## `T:Korda.Database.TransactionOutcome`
 
 ```csharp
-public enum NativeWeave.Database.TransactionOutcome : int
+public enum Korda.Database.TransactionOutcome : int
 ```
 
 **summary:** Knowledge of database effects, independent from operation completion and local disposal.
 
-## `T:NativeWeave.Database.TransactionState`
+## `T:Korda.Database.TransactionState`
 
 ```csharp
-public enum NativeWeave.Database.TransactionState : int
+public enum Korda.Database.TransactionState : int
 ```
 
 **summary:** Transaction admission state; a closed transaction can still retain native cleanup obligations.

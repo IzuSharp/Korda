@@ -191,7 +191,7 @@ struct Context
     }
     ModelBinding declared(std::string_view name) const
     {
-        auto logical = "NativeWeave.Query.Native.Tests:" + std::string(name);
+        auto logical = "Korda.Query.Native.Tests:" + std::string(name);
         auto table = stable_id({"NWDB-TABLE-ID-v1", logical, {}, name});
         auto id = stable_id({"NWDB-COLUMN-ID-v1", logical, {}, name, "Id"});
         auto json =
@@ -584,7 +584,7 @@ void sql_lexer()
 ModelBinding mutation_model(Profile profile)
 {
     using J = nlohmann::ordered_json;
-    const std::string logical = "NativeWeave.Orm.Relations.Tests:Fixture";
+    const std::string logical = "Korda.Orm.Relations.Tests:Fixture";
     const std::string table = "b14_items";
     auto table_id = stable_id({"NWDB-TABLE-ID-v1", logical, {}, table});
     std::vector<std::uint32_t> ids;

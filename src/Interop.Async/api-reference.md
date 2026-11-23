@@ -1,6 +1,6 @@
 # Internal Task bridge reference
 
-Generated from the compiled NativeWeave.Core assembly and XML by `tests/Interop.Async/ApiCheck`.
+Generated from the compiled Korda.Core assembly and XML by `tests/Interop.Async/ApiCheck`.
 
 A07 adds **zero public types or members**. Exact domain Async methods return `Task<TResult>` and use their own typed native create/start/take ABI. The callback cookie, control leases, terminal latch and retirement coordinator remain internal.
 

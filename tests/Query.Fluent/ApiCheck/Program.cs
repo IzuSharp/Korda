@@ -8,7 +8,7 @@ using System.Xml.Linq;
 string root = Path.GetFullPath(args[0]), design = Path.GetFullPath(args[1]), sdk = Path.GetFullPath(args[2]);
 string output = Path.Combine(root, "src/Data.NativeHost/bin/Release/net11.0");
 var files = Directory.GetFiles(Path.Combine(sdk, "packs/Microsoft.NETCore.App.Ref/11.0.0/ref/net11.0"), "*.dll").ToDictionary(x => Path.GetFileName(x)!, StringComparer.OrdinalIgnoreCase);
-foreach (string path in Directory.GetFiles(output, "*.dll")) if (Path.GetFileName(path) != "NativeWeave.Database.dll") files[Path.GetFileName(path)] = path;
+foreach (string path in Directory.GetFiles(output, "*.dll")) if (Path.GetFileName(path) != "Korda.Database.dll") files[Path.GetFileName(path)] = path;
 
 var references = files.Values.Select(x => MetadataReference.CreateFromFile(x)).ToList();
 var options = new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable, metadataImportOptions: MetadataImportOptions.All);
@@ -17,10 +17,10 @@ var format = new SymbolDisplayFormat(typeQualificationStyle: SymbolDisplayTypeQu
     memberOptions: SymbolDisplayMemberOptions.IncludeAccessibility | SymbolDisplayMemberOptions.IncludeModifiers | SymbolDisplayMemberOptions.IncludeType | SymbolDisplayMemberOptions.IncludeContainingType | SymbolDisplayMemberOptions.IncludeParameters | SymbolDisplayMemberOptions.IncludeConstantValue,
     parameterOptions: SymbolDisplayParameterOptions.IncludeType | SymbolDisplayParameterOptions.IncludeName | SymbolDisplayParameterOptions.IncludeDefaultValue | SymbolDisplayParameterOptions.IncludeOptionalBrackets | SymbolDisplayParameterOptions.IncludeParamsRefOut,
     miscellaneousOptions: SymbolDisplayMiscellaneousOptions.IncludeNullableReferenceTypeModifier | SymbolDisplayMiscellaneousOptions.EscapeKeywordIdentifiers);
-using var policyJson = JsonDocument.Parse(File.ReadAllText(Path.Combine(design, "docs/api/database-symbol-policies.json")));
-var policies = policyJson.RootElement.GetProperty("types").EnumerateObject().Where(x => x.Name.StartsWith("NativeWeave.Query.", StringComparison.Ordinal)).ToDictionary(x => x.Name, x => x.Value);
-var expectedCompilation = CSharpCompilation.Create("PinnedDatabaseDeclarations", [CSharpSyntaxTree.ParseText(File.ReadAllText(Path.Combine(design, "experiments/public-api/NativeWeave.Api.Design/Database.cs")))], references, options);
-var productReferences = references.Append(MetadataReference.CreateFromFile(Path.Combine(output, "NativeWeave.Database.dll"))).ToList();
+using var policyJson = JsonDocument.Parse(File.ReadAllText(Path.Combine(design, "docs/api/database-symbol-policies.json")).Replace("NativeWeave.", "Korda.", StringComparison.Ordinal));
+var policies = policyJson.RootElement.GetProperty("types").EnumerateObject().Where(x => x.Name.StartsWith("Korda.Query.", StringComparison.Ordinal)).ToDictionary(x => x.Name, x => x.Value);
+var expectedCompilation = CSharpCompilation.Create("PinnedDatabaseDeclarations", [CSharpSyntaxTree.ParseText(File.ReadAllText(Path.Combine(design, "experiments/public-api/NativeWeave.Api.Design/Database.cs")).Replace("NativeWeave.", "Korda.", StringComparison.Ordinal))], references, options);
+var productReferences = references.Append(MetadataReference.CreateFromFile(Path.Combine(output, "Korda.Database.dll"))).ToList();
 var productCompilation = CSharpCompilation.Create("ProductServerPublicApi", references: productReferences, options: options);
 static IEnumerable<ISymbol> PublicMembers(INamedTypeSymbol type) => type.GetMembers().Where(s => s.DeclaredAccessibility == Accessibility.Public && s is not IMethodSymbol { MethodKind: MethodKind.PropertyGet or MethodKind.PropertySet or MethodKind.EventAdd or MethodKind.EventRemove }).Prepend(type);
 string Signature(ISymbol s)
@@ -42,7 +42,7 @@ foreach (string name in policies.Keys.Order(StringComparer.Ordinal))
     foreach (var s in PublicMembers(declared)) { expected.Add(s.GetDocumentationCommentId()!, Signature(s)); if (!s.IsImplicitlyDeclared) documented.Add(s.GetDocumentationCommentId()!); }
     foreach (var s in PublicMembers(implemented)) actual.Add(s.GetDocumentationCommentId()!, Signature(s));
 }
-const string sessionName = "NativeWeave.Database.DataSession";
+const string sessionName = "Korda.Database.DataSession";
 var declaredFrom = expectedCompilation.GetTypeByMetadataName(sessionName)!.GetMembers("From").Single();
 var implementedFrom = productCompilation.GetTypeByMetadataName(sessionName)!.GetMembers("From").Single();
 expected.Add(declaredFrom.GetDocumentationCommentId()!, Signature(declaredFrom));
@@ -56,9 +56,9 @@ string baseline = JsonSerializer.Serialize(new { design_commit = "c62cdb8aee833b
 if (args.Contains("--write")) File.WriteAllText(baselinePath, baseline);
 else if (File.ReadAllText(baselinePath) != baseline) throw new Exception("Pinned API baseline drift.");
 
-var docs = XDocument.Load(Path.Combine(output, "NativeWeave.Database.xml")).Descendants("member").ToDictionary(x => x.Attribute("name")!.Value);
+var docs = XDocument.Load(Path.Combine(output, "Korda.Database.xml")).Descendants("member").ToDictionary(x => x.Attribute("name")!.Value);
 string? Remarks(XElement doc) => doc.Element("remarks")?.Value ?? (doc.Element("inheritdoc")?.Attribute("cref")?.Value is { } parent && docs.TryGetValue(parent, out var inherited) ? Remarks(inherited) : null);
-var reference = new System.Text.StringBuilder("# Fluent query API reference\n\nGenerated from the actual compiled public API and XML; compared against the exact pinned design declarations. The public namespace is composed into NativeWeave.Database. All expression and SQL operations use B09/B11 native owners; B01/B12 own static row contracts.\n\n");
+var reference = new System.Text.StringBuilder("# Fluent query API reference\n\nGenerated from the actual compiled public API and XML; compared against the exact pinned design declarations. The public namespace is composed into Korda.Database. All expression and SQL operations use B09/B11 native owners; B01/B12 own static row contracts.\n\n");
 foreach (var pair in actual.Where(x => documented.Contains(x.Key)))
 {
     if (!docs.TryGetValue(pair.Key, out var doc) || doc.Element("summary") is null || string.IsNullOrWhiteSpace(Remarks(doc))) throw new Exception("Missing summary/resolvable remarks: " + pair.Key);
@@ -80,7 +80,7 @@ if (args.Contains("--write")) File.WriteAllText(referencePath, reference.ToStrin
 else if (File.ReadAllText(referencePath) != reference.ToString()) throw new Exception("Generated reference is stale.");
 
 
-var prefix = "#nullable enable\nusing System; using NativeWeave.Data; using NativeWeave.Database; using NativeWeave.Query;\n";
+var prefix = "#nullable enable\nusing System; using Korda.Data; using Korda.Database; using Korda.Query;\n";
 var fixture = "class Person {} class Child {} class Consumer { static void Case(Query<Person> query, Query<Child> children, Column<Person,long> id, Column<Person,long?> optional, Column<Person,string> name, Column<Child,long> childId, JoinedTable<Child> inner, LeftJoinedTable<Child> left) { BODY } }";
 var compileOptions = options.WithGeneralDiagnosticOption(ReportDiagnostic.Error);
 var cases = new (string Name, string Body, bool Valid)[] {

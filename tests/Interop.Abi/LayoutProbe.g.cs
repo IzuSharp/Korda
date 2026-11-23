@@ -2,7 +2,7 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
-using NativeWeave.Interop.Abi;
+using Korda.Interop.Abi;
 internal static unsafe class LayoutProbe
 {
     internal static string Read()

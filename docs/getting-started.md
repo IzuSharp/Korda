@@ -1,11 +1,11 @@
-# Use NativeWeave from C#
+# Use Korda from C#
 
 In your .NET 11 application, install the Linux x64 provider for your database:
 
 ```sh
-dotnet add package NativeWeave.Database.Sqlite --prerelease
+dotnet add package Korda.Database.Sqlite --prerelease
 # For PostgreSQL:
-dotnet add package NativeWeave.Database.PostgreSql --prerelease
+dotnet add package Korda.Database.PostgreSql --prerelease
 ```
 
 Each provider contains the shared managed assemblies, generator, build integration and its precompiled native library in one package. PostgreSQL applications need a reachable database server. For an unpublished development build, the candidate feed is `artifacts/public/feed` and its manifest records the exact versions.

@@ -1,6 +1,6 @@
 # Internal callback registration reference
 
-Generated from the compiled NativeWeave.Core assembly and XML by `tests/Interop.Callbacks/ApiCheck`.
+Generated from the compiled Korda.Core assembly and XML by `tests/Interop.Callbacks/ApiCheck`.
 
 A06 adds **zero public types or members**. Application handlers use their domain's typed managed API; the callback table, strong root, native controls and dispatcher remain internal.
 

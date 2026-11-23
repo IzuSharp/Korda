@@ -2,14 +2,14 @@
 
 > **DB-CPP-01 implementation update.** The public C# examples, signatures and ownership contracts in this guide remain the compatibility inputs. The current maintained native implementation is C++20; its module mapping, direct libpq/sqlite3 execution, Clang/CMake commands and package production are documented in [C++ native implementation](cpp-native.md). Descriptions below of Rust, SQLx, SeaQuery or Tokio internals are retained as the fixed `465cd0f` behavioral reference, not current build dependencies. The named verification entry points now build the ported C++ fixtures and retain their original managed assertions.
 
-`NativeWeave.Data` provides real, strongly typed metadata, value snapshots, row contracts and errors without initializing a native runtime. B01 also owns the shared Rust metadata validator, bounded registry, db-wire/1 representation and kind23 relation definition. These contracts are the single boundary consumed by the later Database tasks; this component does not connect to a database or implement SQL semantics.
+`Korda.Data` provides real, strongly typed metadata, value snapshots, row contracts and errors without initializing a native runtime. B01 also owns the shared Rust metadata validator, bounded registry, db-wire/1 representation and kind23 relation definition. These contracts are the single boundary consumed by the later Database tasks; this component does not connect to a database or implement SQL semantics.
 
 The implementation follows Plan task B01 revision 0.4.0 and Design commit `c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9`, especially `docs/api/database.md` sections 4, 9.1.1, 9.1.2 and 9.2.1. The [compiled API reference](../../src/Data.Abstractions/api-reference.md) is generated from the product assembly and XML. Its 132 symbols are compared to the exact pinned declaration inventory, including generic constraints, nullability, defaults, parameter names and generated record/delegate members.
 
 ## Minimal consumer
 
 ```csharp
-using NativeWeave.Data;
+using Korda.Data;
 
 var builder = new TableBuilder<Student>("Students");
 var id = builder.Column("Id", Codecs.Int64,
@@ -30,7 +30,7 @@ public sealed record Student(long Id, string Name);
 
 These are usable metadata and parameter values; execution is provided by the owning native Database host in B04 and its provider/stream/query tasks. This sample performs no database operation. The executable [minimal and advanced consumer](../../samples/api/data-abstractions/Program.cs) also declares an optional relationship and an independent DTO projection. Run it with ordinary `dotnet run --project samples/api/data-abstractions` after restoring the fixed SDK dependencies.
 
-The component is packed as `NativeWeave.Data`; it has no provider, native asset, reflection serializer, SQL renderer, Server dependency or consumer Cargo target. All implemented APIs use BCL types. The broader planned Data/Core dependency composition remains an A13/A16 integration responsibility when those Core types are actually consumed; this task introduces no fake dependency package.
+The component is packed as `Korda.Data`; it has no provider, native asset, reflection serializer, SQL renderer, Server dependency or consumer Cargo target. All implemented APIs use BCL types. The broader planned Data/Core dependency composition remains an A13/A16 integration responsibility when those Core types are actually consumed; this task introduces no fake dependency package.
 
 ## Exact identities and metadata
 
@@ -72,7 +72,7 @@ The native `MetadataRegistry` is an engine-local component with explicit entry/b
 | Value and result bytes | One 96-byte-header db-wire schema and independent C#/Rust validation/encoding | B07 provider codecs; B06 actual streamed native row owners |
 | Relation definition and key shape | Canonical kind23, pair/configuration validation and exact one-parent key envelope | B09 binding; B14 registration/lifetime and the actual child query |
 | Physical session | Shared Rust `SessionAdmission` declaration with separate command/cleanup entry, protocol disposition and local lifetime | B02/B03 execute; B04 owns host; B05 coordinates transaction outcomes |
-| DatabaseProvider/Limits/Capabilities, DataSourceBuilder/source/session concrete APIs | Exact declaration inputs remain pinned; no duplicate fake owner is published in Data | B04 composes `NativeWeave.Database`; B13 adds query facade |
+| DatabaseProvider/Limits/Capabilities, DataSourceBuilder/source/session concrete APIs | Exact declaration inputs remain pinned; no duplicate fake owner is published in Data | B04 composes `Korda.Database`; B13 adds query facade |
 | Generated mapping | Same manual runtime API and deterministic identity oracle | B10 generator and diagnostics |
 
 The packet's related-type list does not transfer the native host or query assembly into this component. Publishing a throwing `DataSourceBuilder.Build`, a managed fallback, or duplicate Query primitives would violate that ownership. No downstream host success, source disposal, provider transaction effect or end-to-end query is claimed here. Independent `TransactionOutcome`, `ConnectionDisposition` and `LocalLifetime` native contracts keep protocol outcome separate from reuse and retirement.

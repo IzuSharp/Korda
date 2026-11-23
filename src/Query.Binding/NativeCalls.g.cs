@@ -1,6 +1,6 @@
 // Generated from exact pinned signatures-v1.json; do not edit.
-using NativeWeave.Interop.Abi;
-namespace NativeWeave.Query.Internal;
+using Korda.Interop.Abi;
+namespace Korda.Query.Internal;
 /// <summary>Exact module-local direct calls; the creating engine supplies process-pinned exports.</summary>
 internal sealed unsafe class NativeCalls
 {

@@ -1,6 +1,6 @@
-using NativeWeave.Interop.Async;
+using Korda.Interop.Async;
 
-namespace NativeWeave.Interop.Execution;
+namespace Korda.Interop.Execution;
 
 /// <summary>Observed native worker join and outstanding-owner counters for one engine instance.</summary>
 /// <remarks>The concrete engine's typed close take supplies these values only after its

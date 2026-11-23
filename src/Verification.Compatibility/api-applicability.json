@@ -5,7 +5,7 @@
   "xml_applicability": "No new C# product declarations. Existing EngineLoadOptions XML, exact four-symbol policy and generated reference remain owned by A02; A22 validates actual compiled symbols and runtime defaults.",
   "consumer": "samples/api/verification-compatibility/CompatibilitySample.csproj",
   "compiled_inventory": "A13 ApiReference compiled snapshot format, consumed by compatibility.py api",
-  "test_only_surface": "NativeWeave.Compatibility.Conformance.Contract is an unpublished negative/positive evolution fixture, not a NativeWeave application API.",
+  "test_only_surface": "Korda.Compatibility.Conformance.Contract is an unpublished negative/positive evolution fixture, not a Korda application API.",
   "platform": "linux-x64",
   "unexecuted_platforms": ["win-x64"],
   "resource_applicability": "No A22 domain owner, callback, retained buffer, async operation, cancellation or executor. Existing A02 module stays resident until process exit; rollback is a new process.",

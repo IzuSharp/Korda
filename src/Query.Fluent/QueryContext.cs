@@ -1,11 +1,11 @@
 using System.Security.Cryptography;
 using System.Text;
-using NativeWeave.Data;
-using NativeWeave.Database;
-using NativeWeave.Database.Internal;
-using NativeWeave.Query.Internal;
+using Korda.Data;
+using Korda.Database;
+using Korda.Database.Internal;
+using Korda.Query.Internal;
 
-namespace NativeWeave.Query;
+namespace Korda.Query;
 
 // Owner/metadata orchestration only. Expressions are immediately forwarded to
 // B09/B11; this class contains no managed SQL tree or provider SQL rendering.
@@ -34,7 +34,7 @@ internal sealed class QueryContext : IDisposable
         try { return action(); }
         catch (BindingFailure failure)
         {
-            if (failure.Status == NativeWeave.Interop.Abi.NativeStatus.NotSupported)
+            if (failure.Status == Korda.Interop.Abi.NativeStatus.NotSupported)
                 throw new DatabaseException("The native query operation is unavailable for this provider, codec or shape.", DatabaseErrorKind.UnsupportedCapability, correlationId: failure.Correlation);
             throw HostFailure.Binding(Source.Binding, failure);
         }

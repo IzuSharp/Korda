@@ -5,8 +5,8 @@ Design input: `NativeWeave-Design` commit
 sections 4 and 6, `docs/generators/query-generation.md` section 4, and the
 corresponding exact database symbol policies.
 
-The public types are the existing `NativeWeave.Data` definitions. This module is
-source-composed into `NativeWeave.Database`; it adds no public CLR types, no
+The public types are the existing `Korda.Data` definitions. This module is
+source-composed into `Korda.Database`; it adds no public CLR types, no
 native ABI export and no independent package. The build produces the original
 Data XML alongside the Database facade XML. B13 owns the public Fluent
 `ProjectionBuilder<T>` and `QuerySelection<T>` wrappers over this implementation.

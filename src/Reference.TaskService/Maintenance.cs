@@ -1,8 +1,8 @@
-using NativeWeave.Data;
-using NativeWeave.Database;
-using NativeWeave.Query;
+using Korda.Data;
+using Korda.Database;
+using Korda.Query;
 
-namespace NativeWeave.Reference.TaskService;
+namespace Korda.Reference.TaskService;
 
 internal sealed partial class TaskService
 {

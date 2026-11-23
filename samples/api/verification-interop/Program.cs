@@ -1,5 +1,5 @@
 using System.Runtime.CompilerServices;
-using NativeWeave.Verification.Interop;
+using Korda.Verification.Interop;
 
 if (args.Contains("--require-aot") && RuntimeFeature.IsDynamicCodeSupported) throw new InvalidOperationException("Actual Native AOT execution required.");
 

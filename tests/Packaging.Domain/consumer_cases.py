@@ -32,9 +32,9 @@ FLAGS = ["-p:UseSharedCompilation=false", "-nr:false", "-m:1"]
 # Exact existing A16 Linux executable allowlist, with the same glibc ceiling.
 SYSTEM_DEPENDENCIES = ["libc.so.6", "libgcc_s.so.1", "libm.so.6", "libdl.so.2", "libpthread.so.0", "librt.so.1", "ld-linux-x86-64.so.2"]
 GRAPHS = {
-    "sqlite": (["NativeWeave.Database.Sqlite"], ["SQLITE"], ["sqlite"]),
-    "postgresql": (["NativeWeave.Database.PostgreSql"], ["POSTGRES"], ["postgresql"]),
-    "combined": (["NativeWeave.Database.Sqlite", "NativeWeave.Database.PostgreSql"],
+    "sqlite": (["Korda.Database.Sqlite"], ["SQLITE"], ["sqlite"]),
+    "postgresql": (["Korda.Database.PostgreSql"], ["POSTGRES"], ["postgresql"]),
+    "combined": (["Korda.Database.Sqlite", "Korda.Database.PostgreSql"],
                  ["SQLITE", "POSTGRES"], ["sqlite", "postgresql"]),
 }
 compat = module("b24_consumer_compat", "src/Verification.Compatibility/compatibility.py")
@@ -75,7 +75,7 @@ def config(path, feed=None):
         ET.SubElement(sources, "add", key="nuget.org", value="https://api.nuget.org/v3/index.json")
         mappings = ET.SubElement(root, "packageSourceMapping")
         local = ET.SubElement(mappings, "packageSource", key="domain-local")
-        ET.SubElement(local, "package", pattern="NativeWeave.*")
+        ET.SubElement(local, "package", pattern="Korda.*")
         external = ET.SubElement(mappings, "packageSource", key="nuget.org")
         ET.SubElement(external, "package", pattern="*")
     ET.ElementTree(root).write(path, encoding="utf-8", xml_declaration=True)
@@ -169,7 +169,7 @@ class Consumer:
         self.output.mkdir(parents=True, exist_ok=False)
         self.evidence = output / "evidence"
         self.evidence.mkdir()
-        self.work = Path(tempfile.mkdtemp(prefix="nativeweave-b24-consumer-"))
+        self.work = Path(tempfile.mkdtemp(prefix="korda-b24-consumer-"))
         self.release = json.loads(relative_file(manifest_path.parent, self.manifest[closure]["releaseRecord"]).read_text())
         self.items = {item["id"]: item for item in self.manifest[closure]["packages"]}
         self.packages = {identity: feed / f"{identity}.{item['version']}.nupkg" for identity, item in self.items.items()}
@@ -278,7 +278,7 @@ class Consumer:
                     for item in selected["packages"] if item["id"] in LEAVES}
         records = {}
         for engine, asset in expected.items():
-            path = directory / ("NativeWeave." + engine + ".assets.json")
+            path = directory / ("Korda." + engine + ".assets.json")
             value = json.loads(path.read_text())
             for field, wanted in {"schemaVersion": 1, "engineId": engine, "packageId": asset["facadePackageId"],
                     "packageVersion": asset["facadePackageVersion"], "rid": RID,
@@ -291,18 +291,18 @@ class Consumer:
             records[engine] = {"record": path.name, "recordSha256": sha(path),
                                "relativePath": value["outputPath"], "sha256": sha(native),
                                "facade": value["packageId"], "facadeVersion": value["packageVersion"]}
-        actual = {path.name for path in directory.glob("NativeWeave.*.assets.json")}
-        if actual != {"NativeWeave." + engine + ".assets.json" for engine in expected}:
+        actual = {path.name for path in directory.glob("Korda.*.assets.json")}
+        if actual != {"Korda." + engine + ".assets.json" for engine in expected}:
             raise ValueError("Missing or undeclared domain output record")
         actual_native = {path.relative_to(directory).as_posix() for path in directory.rglob("*.so")}
         if actual_native != {value["relativePath"] for value in records.values()}:
             raise ValueError("Build/publish output contains undeclared native libraries")
         selected_ids = {item["id"] for item in selected["packages"]}
-        for assembly in directory.rglob("NativeWeave.*.dll"):
+        for assembly in directory.rglob("Korda.*.dll"):
             require_database_package(assembly.stem)
             if assembly.stem not in selected_ids:
                 raise ValueError("Output assembly is outside the selected database graph")
-        for compiler in ("NativeWeave.Query.Generator.dll", "NativeWeave.Packaging.Tasks.dll"):
+        for compiler in ("Korda.Query.Generator.dll", "Korda.Packaging.Tasks.dll"):
             if any(directory.rglob(compiler)):
                 raise ValueError("Compiler/package tooling leaked into runtime output: " + compiler)
         return records

@@ -35,7 +35,7 @@ def fetch(lock, destination):
         raise RuntimeError('Set GITHUB_TOKEN with actions:read, or provide --archive with the fixed ZIP.')
     endpoint = 'https://api.github.com/repos/' + lock['repository'] + '/actions/artifacts/' + str(lock['artifact_id'])
     headers = {'Authorization': 'Bearer ' + token, 'Accept': 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'NativeWeave-DB-CPP-01-reference'}
+        'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'Korda-DB-CPP-01-reference'}
     opener = urllib.request.build_opener(NoRedirect)
     with opener.open(urllib.request.Request(endpoint, headers=headers), timeout=60) as response:
         metadata = json.loads(response.read(1024 * 1024))
@@ -71,7 +71,7 @@ def verify_archive(path, lock):
 
 
 def verify_feed(path, lock, archive_hashes):
-    packages, native = identity.package_inputs(path, lock['provider_version'])
+    packages, native = identity.package_inputs(path, lock['provider_version'], prefix='NativeWeave')
     if native != lock['native_sha256']:
         raise ValueError('Reference native assets differ from the fixed accepted hashes.')
     if any(package['repository'].get('commit') != lock['source_commit'] for package in packages.values()):

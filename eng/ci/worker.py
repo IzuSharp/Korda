@@ -42,7 +42,7 @@ def postgres(ctx, required):
                 "-D",
                 data,
                 "-U",
-                "nativeweave",
+                "korda",
                 "-A",
                 "trust",
                 "--no-locale",
@@ -64,8 +64,8 @@ def postgres(ctx, required):
                 "start",
             ]
         )
-        url = f"postgresql://nativeweave@127.0.0.1:{port}/postgres"
-        keys = ("NW_TEST_POSTGRES", "NATIVEWEAVE_TEST_POSTGRES_URL")
+        url = f"postgresql://korda@127.0.0.1:{port}/postgres"
+        keys = ("NW_TEST_POSTGRES", "KORDA_TEST_POSTGRES_URL")
         old = {k: os.environ.get(k) for k in keys}
         os.environ.update(dict.fromkeys(keys, url))
         try:

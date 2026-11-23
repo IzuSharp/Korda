@@ -89,7 +89,7 @@ def main(argv=None):
         "status": "passed" if passed else "inconclusive" if exit_code == 2 else "failed",
         "scope": "Finite SC model tooling; not Native AOT, actual runtime race, domain or release acceptance.",
         "complete_suite": len(selected) == len(models()), "exit_code": exit_code,
-        "source": {"repository": "IzuSharp/NativeWeave", "baseline_commit": head,
+        "source": {"repository": "IzuSharp/Korda", "baseline_commit": head,
                    "scope_has_uncommitted_changes": bool(dirty), "manifest": manifest_path.name,
                    "manifest_sha256": digest(manifest_path)},
         "inputs": design_validation, "refinement": refinement,

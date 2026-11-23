@@ -29,7 +29,7 @@ import xml.etree.ElementTree as ET
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-ASSEMBLY = 'NativeWeave.Migration.Cpp.Consumer'
+ASSEMBLY = 'Korda.Migration.Cpp.Consumer'
 RUST_COMMIT = '465cd0f90e6af05ec50eb581156240377cf0825b'
 ROWS = [provider + '-' + mode for provider in ('sqlite', 'postgresql') for mode in ('aot',)]
 COMMON = ['-m:1', '-nr:false', '-p:UseSharedCompilation=false']
@@ -74,7 +74,8 @@ class Run:
             if self.baseline['abi_inputs_sha256'] != self.abi_inputs:
                 raise ValueError('The frozen public-ABI probes changed between phases.')
         self.directory.mkdir(parents=True)
-        packages, native = identity.package_inputs(args.feed, args.version)
+        self.package_prefix = 'NativeWeave' if args.phase == 'baseline' else 'Korda'
+        packages, native = identity.package_inputs(args.feed, args.version, self.package_prefix)
         if args.phase == 'baseline':
             if native != reference['native_sha256'] or {package['filename']: package['sha256'] for package in packages.values()} != reference['package_sha256']:
                 raise ValueError('Rust package/native hashes differ from reference.lock.json.')
@@ -107,7 +108,7 @@ class Run:
         self.environment['PATH'] = str(traps) + os.pathsep + self.environment.get('PATH', '')
         self.sdk_feed = self.directory / 'sdk-feed'; self.sdk_feed.mkdir()
         for archive in sorted(args.sdk_cache.rglob('*.nupkg')):
-            if archive.name.lower().startswith('nativeweave.'):
+            if archive.name.lower().startswith(('nativeweave.', 'korda.')):
                 continue
             destination = self.sdk_feed / archive.name
             if destination.exists():
@@ -150,6 +151,10 @@ class Run:
             raise AssertionError('Consumer copy differs from the versioned source.')
         if variant:
             shutil.copy2(HERE / 'DtoMapping.v2.cs.txt', directory / 'DtoMapping.cs')
+        if self.args.phase == 'baseline':
+            # Compile the same business logic against the immutable Rust package namespace.
+            for path in [*directory.glob('*.cs'), directory / 'Consumer.csproj']:
+                path.write_text(path.read_text().replace('Korda.', 'NativeWeave.').replace('NativeWeave.Migration.Cpp.Consumer', ASSEMBLY))
         source_hashes = inventory(directory)
         if variant and source_hashes == self.source_hashes:
             raise AssertionError('The DTO change did not alter ordinary C# source.')
@@ -160,17 +165,17 @@ class Run:
         tree = ET.parse(project)
         if any(node.tag in ('Import', 'ProjectReference') for node in tree.iter()):
             raise AssertionError('The consumer may only use ordinary packages.')
-        if {node.attrib['Include'] for node in tree.iter('PackageReference')} != identity.DIRECT_PACKAGES:
+        if {node.attrib['Include'] for node in tree.iter('PackageReference')} != {p.replace('Korda.', self.package_prefix + '.', 1) for p in identity.DIRECT_PACKAGES}:
             raise AssertionError('Unexpected direct package closure.')
         config = ET.Element('configuration'); sources = ET.SubElement(config, 'packageSources')
         ET.SubElement(sources, 'clear')
         ET.SubElement(sources, 'add', key='database', value=str(self.args.feed.resolve()))
         ET.SubElement(sources, 'add', key='sdk', value=str(self.sdk_feed))
         mapping = ET.SubElement(config, 'packageSourceMapping'); ET.SubElement(mapping, 'clear')
-        ET.SubElement(ET.SubElement(mapping, 'packageSource', key='database'), 'package', pattern='NativeWeave.*')
+        ET.SubElement(ET.SubElement(mapping, 'packageSource', key='database'), 'package', pattern=self.package_prefix + '.*')
         ET.SubElement(ET.SubElement(mapping, 'packageSource', key='sdk'), 'package', pattern='*')
         ET.ElementTree(config).write(directory / 'NuGet.Config')
-        version = ['-p:NativeWeavePackageVersion=' + self.args.version]
+        version = ['-p:KordaPackageVersion=' + self.args.version]
         rid = ['-r', 'linux-x64', '-p:PublishAot=true'] if mode == 'aot' else []
         for label, locked in (('restore', '--use-lock-file'), ('locked-restore', '--locked-mode')):
             self.command(name + '-' + label, ['dotnet', 'restore', project, '--configfile', directory / 'NuGet.Config',
@@ -188,7 +193,7 @@ class Run:
             archive, = (cache / item['path']).glob('*.nupkg')
             archives[name_version] = sha(archive)
             package = name_version.rsplit('/', 1)[0]
-            if package.startswith('NativeWeave.'):
+            if package.startswith(self.package_prefix + '.'):
                 expected = self.state['packages'].get(package)
                 if not expected or name_version != package + '/' + expected['version'] or sha(archive) != expected['sha256']:
                     raise AssertionError('Resolved package differs from the frozen feed: ' + name_version)

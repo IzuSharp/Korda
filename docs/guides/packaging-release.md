@@ -8,7 +8,7 @@ The retained release coordinator, MSBuild closure task and SDK native-output tar
 
 Applications reference an exact provider facade package. Its transitive graph selects the database/Core dependencies and independent native leaf at exact versions. Normal restore, build, run and Native AOT publish consume those precompiled bytes; no compiler-host task invokes Rust.
 
-Each facade carries the strict closure metadata, shared `NativeWeave.Packaging.targets` and `NativeWeave.Packaging.Tasks.dll`. The compiler-host assembly is not an application runtime dependency. The ten-symbol task API and XML remain verified by `tests/Packaging.Release/ApiCheck`.
+Each facade carries the strict closure metadata, shared `Korda.Packaging.targets` and `Korda.Packaging.Tasks.dll`. The compiler-host assembly is not an application runtime dependency. The ten-symbol task API and XML remain verified by `tests/Packaging.Release/ApiCheck`.
 
 The task compares the actual project.assets.json package set, normalized exact versions and dependency edges. It checks the SDK-selected native identity, RID, CPU/ABI metadata, canonical paths and SHA-256, then writes bounded native-output records. Build and publish records follow the SDK's actual output layout. Core validates those immutable records and performs runtime ABI negotiation before opening database owners.
 

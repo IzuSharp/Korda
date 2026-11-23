@@ -3,9 +3,9 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
-using NativeWeave.Data;
-using NativeWeave.Interop.Abi;
-using NativeWeave.Query.Internal;
+using Korda.Data;
+using Korda.Interop.Abi;
+using Korda.Query.Internal;
 
 // Maintainer component consumer of the actual B04 module, never a test executor.
 // Query operations use the unmodified B09 vtable and async retirement protocol.
@@ -24,14 +24,14 @@ internal sealed unsafe class Host : IDisposable
     internal Host(string path, uint profile, string connection)
     {
         Profile = profile; _library = NativeLibrary.Load(Path.GetFullPath(path));
-        Calls = new("nativeweave.database.host", symbol => NativeLibrary.TryGetExport(_library, symbol, out var p) ? p : 0);
+        Calls = new("korda.database.host", symbol => NativeLibrary.TryGetExport(_library, symbol, out var p) ? p : 0);
         var limits = ControlRecord.Encode(10,
             U(1, 1), U(2, 8), U(3, 10_000_000_000, 3), U(4, 100), U(5, 1024 * 1024),
             U(6, 16), U(7, 65536), U(8, 32768), U(9, 4096), U(10, 64), U(11, 256),
             U(12, 1024 * 1024), U(13, 16), U(14, 1024 * 1024), U(15, 30_000_000_000, 3));
         var options = profile == 1
             ? ControlRecord.Encode(9, N(1, 3), N(2, 2), N(3, 1), N(4, 0), U(5, 1_000_000_000), N(6, 1))
-            : ControlRecord.Encode(8, N(1, 1), T(3, "NativeWeave.Query.Native.Tests"), U(4, 10_000_000_000, 3));
+            : ControlRecord.Encode(8, N(1, 1), T(3, "Korda.Query.Native.Tests"), U(4, 10_000_000_000, 3));
         var config = ControlRecord.Encode(1, N(1, profile == 1 ? 1u : 0u), T(2, connection), B(3, limits), B(4, options));
         nint raw = 0; var error = BindingChecks.Error();
         fixed (byte* b = config) BindingChecks.Status(Calls.nw_db_source_create_v1(V(b, config.Length), &raw, &error), error);

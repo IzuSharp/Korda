@@ -1,11 +1,11 @@
-using NativeWeave.Data;
-using NativeWeave.Interop;
-using NativeWeave.Interop.Abi;
-using NativeWeave.Interop.Async;
-using NativeWeave.Interop.Lifetime;
-using NativeWeave.Query.Internal;
+using Korda.Data;
+using Korda.Interop;
+using Korda.Interop.Abi;
+using Korda.Interop.Async;
+using Korda.Interop.Lifetime;
+using Korda.Query.Internal;
 
-namespace NativeWeave.Database;
+namespace Korda.Database;
 
 /// <summary>Owns one lazy C++ connection pool, bounded runtime and source-generation metadata registry.</summary>
 /// <remarks>Sources support concurrent independent session opens. Closing rejects new work and retains every

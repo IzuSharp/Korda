@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <AssemblyName>NativeWeave.Compatibility.ApiFixture</AssemblyName>
+    <AssemblyName>Korda.Compatibility.ApiFixture</AssemblyName>
     <AssemblyVersion>1.0.0.0</AssemblyVersion>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <DefineConstants>$(DefineConstants);$(FixtureGeneration)</DefineConstants>

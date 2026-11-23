@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
-using NativeWeave.Interop.Lifetime;
+using Korda.Interop.Lifetime;
 
-namespace NativeWeave.Interop;
+namespace Korda.Interop;
 
 /// <summary>Reads immutable native bytes synchronously while their creating owner is leased.</summary>
 /// <param name="bytes">A read-only view valid only until this delegate returns.</param>

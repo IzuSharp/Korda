@@ -26,12 +26,12 @@ sys.path.insert(0, str(ROOT / "tests"))
 from native_build import prepare as prepare_native, FIXTURES as CPP_FIXTURES
 
 COMPONENTS = {
-    "A01": ("Interop.Abi", "NativeWeave.Interop.Abi.Tests", "nw_abi_conformance"),
-    "A03": ("Interop.Lifetime", "NativeWeave.Interop.Lifetime.Tests", "nativeweave_interop_lifetime"),
-    "A04": ("Interop.Memory", "NativeWeave.Interop.Memory.Tests", "nativeweave_interop_memory"),
-    "A05": ("Interop.Errors", "NativeWeave.Interop.Errors.Tests", "nativeweave_errors_fixture"),
-    "A06": ("Interop.Callbacks", "NativeWeave.Interop.Callbacks.Tests", "nativeweave_interop_callbacks"),
-    "A07": ("Interop.Async", "NativeWeave.Interop.Async.Tests", "nativeweave_interop_async"),
+    "A01": ("Interop.Abi", "Korda.Interop.Abi.Tests", "nw_abi_conformance"),
+    "A03": ("Interop.Lifetime", "Korda.Interop.Lifetime.Tests", "korda_interop_lifetime"),
+    "A04": ("Interop.Memory", "Korda.Interop.Memory.Tests", "korda_interop_memory"),
+    "A05": ("Interop.Errors", "Korda.Interop.Errors.Tests", "korda_errors_fixture"),
+    "A06": ("Interop.Callbacks", "Korda.Interop.Callbacks.Tests", "korda_interop_callbacks"),
+    "A07": ("Interop.Async", "Korda.Interop.Async.Tests", "korda_interop_async"),
 }
 SYSTEM_DEPENDENCIES = ["libc.so.6", "libgcc_s.so.1", "libm.so.6", "libdl.so.2", "libpthread.so.0", "librt.so.1", "ld-linux-x86-64.so.2", "libcrypto.so.3"]
 
@@ -104,21 +104,21 @@ def main():
                 raise ValueError(f"{task} is not integrated; incomplete closure cannot be accepted")
             shutil.copy2(CPP_FIXTURES / f"lib{library}.so", native_dir)
             report["native"].append(inspect(native_dir / f"lib{library}.so", allowed_dependencies=SYSTEM_DEPENDENCIES))
-        run("core-restore", ["dotnet", "restore", ROOT / "src/NativeWeave.Core/NativeWeave.Core.csproj", "--locked-mode", *options])
-        run("core-build", ["dotnet", "build", ROOT / "src/NativeWeave.Core/NativeWeave.Core.csproj", "-c", "Release", "--no-restore", *options])
+        run("core-restore", ["dotnet", "restore", ROOT / "src/Korda.Core/Korda.Core.csproj", "--locked-mode", *options])
+        run("core-build", ["dotnet", "build", ROOT / "src/Korda.Core/Korda.Core.csproj", "-c", "Release", "--no-restore", *options])
         version = "0.1.0-task04.1"
         feed = output / "feed"
         entries = {"LICENSE": ROOT / "LICENSE"}
-        for name in ["NativeWeave.Core", "NativeWeave.Interop.Abi"]:
-            folder = ROOT / ("src/NativeWeave.Core" if name == "NativeWeave.Core" else "src/Interop.Abi") / "bin/Release/net11.0"
+        for name in ["Korda.Core", "Korda.Interop.Abi"]:
+            folder = ROOT / ("src/Korda.Core" if name == "Korda.Core" else "src/Interop.Abi") / "bin/Release/net11.0"
             for suffix in [".dll", ".xml"]:
                 entries["lib/net11.0/" + name + suffix] = folder / (name + suffix)
-        core = pack(feed, "NativeWeave.Core", version, entries)
+        core = pack(feed, "Korda.Core", version, entries)
         native_entries = {"runtimes/linux-x64/native/" + p.name: p for p in native_dir.glob("*.so")}
         native_entries["LICENSE"] = ROOT / "LICENSE"
-        native_package = pack(feed, "NativeWeave.Conformance.Core.Native", version, native_entries)
+        native_package = pack(feed, "Korda.Conformance.Core.Native", version, native_entries)
         report["packages"] = {p.name: sha(p) for p in [core, native_package]}
-        consumer_root = Path(tempfile.mkdtemp(prefix="nativeweave-a14-packaged-"))
+        consumer_root = Path(tempfile.mkdtemp(prefix="korda-a14-packaged-"))
         report["consumer_root"] = str(consumer_root)
         report["outside_source_tree"] = not consumer_root.is_relative_to(ROOT)
         shutil.copy2(ROOT / "global.json", consumer_root)
@@ -154,7 +154,7 @@ def main():
             project_dir.mkdir()
             source_files = copy_sources(ROOT / "tests" / module, project_dir)
             project = project_dir / "Consumer.csproj"
-            project.write_text(f'''<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net11.0</TargetFramework><LangVersion>15.0</LangVersion><OutputType>Exe</OutputType><AssemblyName>{assembly}</AssemblyName><AllowUnsafeBlocks>true</AllowUnsafeBlocks><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings><TreatWarningsAsErrors>true</TreatWarningsAsErrors><IsAotCompatible>true</IsAotCompatible><RestorePackagesWithLockFile>true</RestorePackagesWithLockFile><NuGetLockFilePath Condition="'$(RuntimeIdentifier)' != ''">packages.$(RuntimeIdentifier).lock.json</NuGetLockFilePath></PropertyGroup><ItemGroup><PackageReference Include="NativeWeave.Core" Version="[{version}]"/><PackageReference Include="NativeWeave.Conformance.Core.Native" Version="[{version}]"/></ItemGroup></Project>''')
+            project.write_text(f'''<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net11.0</TargetFramework><LangVersion>15.0</LangVersion><OutputType>Exe</OutputType><AssemblyName>{assembly}</AssemblyName><AllowUnsafeBlocks>true</AllowUnsafeBlocks><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings><TreatWarningsAsErrors>true</TreatWarningsAsErrors><IsAotCompatible>true</IsAotCompatible><RestorePackagesWithLockFile>true</RestorePackagesWithLockFile><NuGetLockFilePath Condition="'$(RuntimeIdentifier)' != ''">packages.$(RuntimeIdentifier).lock.json</NuGetLockFilePath></PropertyGroup><ItemGroup><PackageReference Include="Korda.Core" Version="[{version}]"/><PackageReference Include="Korda.Conformance.Core.Native" Version="[{version}]"/></ItemGroup></Project>''')
             local_options = [*options, *(["-p:NuGetAudit=false"] if args.offline_sdk_cache else [])]
             run(task + "-restore", ["dotnet", "restore", project, *local_options], cwd=consumer_root, env=consumer_env)
             run(task + "-build", ["dotnet", "build", project, "-c", "Release", "--no-restore", *local_options], cwd=consumer_root, env=consumer_env)

@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>Korda.Data.Codecs</AssemblyName>
+    <RootNamespace>Korda.Database.Internal</RootNamespace>
+    <IsAotCompatible>true</IsAotCompatible>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifier)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifier).aot.lock.json</NuGetLockFilePath>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Data.Abstractions/Korda.Data.csproj" />
+    <InternalsVisibleTo Include="Korda.Data.Codecs.Tests" />
+    <InternalsVisibleTo Include="Korda.Database" />
+  </ItemGroup>
+</Project>

@@ -147,7 +147,7 @@ void cursor_end_once()
 void failed_begin_discard()
 {
     auto path = std::filesystem::temp_directory_path() /
-                ("nativeweave-host-review-" + std::to_string(Clock::now().time_since_epoch().count()) + ".sqlite");
+                ("korda-host-review-" + std::to_string(Clock::now().time_since_epoch().count()) + ".sqlite");
     auto config = configuration(path.string());
     config.provider.sqlite_begin = 1;
     auto source = Source::create(config);
@@ -270,7 +270,7 @@ void sqlite_physical_input()
 {
     using Json = nlohmann::ordered_json;
     const auto path = std::filesystem::temp_directory_path() /
-                      ("nativeweave-input-budget-" + std::to_string(Clock::now().time_since_epoch().count()) + ".db");
+                      ("korda-input-budget-" + std::to_string(Clock::now().time_since_epoch().count()) + ".db");
     auto config = configuration(path.string());
     config.limits.connections = 2;
     config.limits.parameter_bytes = 8192;
@@ -286,7 +286,7 @@ void sqlite_physical_input()
         check(rows.size() == 1 && rows[0].size() == 1 && rows[0][0], "independent row count failed");
         return std::stoll(*rows[0][0]);
     };
-    const std::string logical = "NativeWeave.Orm.Relations.Tests:BudgetRow";
+    const std::string logical = "Korda.Orm.Relations.Tests:BudgetRow";
     const std::string table = "b14_budget_rows";
     const auto table_id = stable_id({"NWDB-TABLE-ID-v1", logical, {}, table});
     const std::array<std::string, 4> names{"Id", "Text", "Bytes", "Json"};

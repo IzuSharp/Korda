@@ -25,18 +25,18 @@ if(NW_INTEROP_ONLY)
 endif()
 
 if(NW_BUILD_SQLITE)
-  nw_fixture(nativeweave_sqlite_fixture sqlite.cpp)
-  target_sources(nativeweave_sqlite_fixture PRIVATE
+  nw_fixture(korda_sqlite_fixture sqlite.cpp)
+  target_sources(korda_sqlite_fixture PRIVATE
     "${PROJECT_SOURCE_DIR}/native/cpp/src/query.cpp"
     "${PROJECT_SOURCE_DIR}/native/cpp/src/mutations.cpp"
     "${PROJECT_SOURCE_DIR}/native/cpp/src/scalar.cpp"
     "${PROJECT_SOURCE_DIR}/native/cpp/src/provider.cpp"
     "${PROJECT_SOURCE_DIR}/native/cpp/src/host.cpp"
     "${PROJECT_SOURCE_DIR}/native/cpp/src/administration.cpp")
-  target_compile_definitions(nativeweave_sqlite_fixture PRIVATE NW_HOST_TEST_HOOKS=1 NW_ENABLE_SQLITE=1 NW_ENABLE_POSTGRES=0)
-  target_link_libraries(nativeweave_sqlite_fixture PRIVATE nw_sqlite_engine)
+  target_compile_definitions(korda_sqlite_fixture PRIVATE NW_HOST_TEST_HOOKS=1 NW_ENABLE_SQLITE=1 NW_ENABLE_POSTGRES=0)
+  target_link_libraries(korda_sqlite_fixture PRIVATE nw_sqlite_engine)
   add_executable(nw_sqlite_fixture_tests sqlite_fixture_tests.cpp)
-  target_link_libraries(nw_sqlite_fixture_tests PRIVATE nw_project_options nativeweave_sqlite_fixture)
+  target_link_libraries(nw_sqlite_fixture_tests PRIVATE nw_project_options korda_sqlite_fixture)
   set_target_properties(nw_sqlite_fixture_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${NW_TEST_OUTPUT}")
   add_test(NAME native.sqlite14 COMMAND nw_sqlite_fixture_tests)
   set_tests_properties(native.sqlite14 PROPERTIES TIMEOUT 120 LABELS "native;contract;provider")
@@ -72,10 +72,10 @@ if(NW_BUILD_POSTGRESQL)
       endif()
     endif()
   endfunction()
-  nw_host_fixture(nativeweave_postgres_fixture postgres.cpp)
-  nw_fixture(nativeweave_data_postgres postgres_component.cpp)
+  nw_host_fixture(korda_postgres_fixture postgres.cpp)
+  nw_fixture(korda_data_postgres postgres_component.cpp)
   add_executable(nw_postgres_fixture_tests postgres_fixture_tests.cpp)
-  target_link_libraries(nw_postgres_fixture_tests PRIVATE nw_project_options nativeweave_postgres_fixture)
+  target_link_libraries(nw_postgres_fixture_tests PRIVATE nw_project_options korda_postgres_fixture)
   set_target_properties(nw_postgres_fixture_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${NW_TEST_OUTPUT}")
 endif()
 if(NOT (NW_BUILD_SQLITE AND NW_BUILD_POSTGRESQL))
@@ -130,18 +130,18 @@ add_test(NAME native.host_review COMMAND nw_host_review_tests)
 set_tests_properties(native.contracts native.query native.scalar native.administration native.provider native.host_review
   PROPERTIES TIMEOUT 60 LABELS "native;contract")
 
-nw_fixture(nativeweave_query_binding_fixture query_binding.cpp)
-target_sources(nativeweave_query_binding_fixture PRIVATE "${PROJECT_SOURCE_DIR}/native/cpp/src/query.cpp"
+nw_fixture(korda_query_binding_fixture query_binding.cpp)
+target_sources(korda_query_binding_fixture PRIVATE "${PROJECT_SOURCE_DIR}/native/cpp/src/query.cpp"
   "${PROJECT_SOURCE_DIR}/native/cpp/src/mutations.cpp")
-add_library(nativeweave_verification_interop_c SHARED "${PROJECT_SOURCE_DIR}/src/Verification.Interop/layout.c")
-target_link_libraries(nativeweave_verification_interop_c PRIVATE nw_project_options)
-set_target_properties(nativeweave_verification_interop_c PROPERTIES
+add_library(korda_verification_interop_c SHARED "${PROJECT_SOURCE_DIR}/src/Verification.Interop/layout.c")
+target_link_libraries(korda_verification_interop_c PRIVATE nw_project_options)
+set_target_properties(korda_verification_interop_c PROPERTIES
   C_VISIBILITY_PRESET default LIBRARY_OUTPUT_DIRECTORY "${NW_FIXTURE_OUTPUT}")
 
 # Fault seams exist only in the retained B05/B06 maintainer bridges. The three
 # product Host targets never receive NW_HOST_TEST_HOOKS.
-nw_host_fixture(nativeweave_transactions_fixture transactions.cpp)
-nw_host_fixture(nativeweave_streaming_fixture streaming.cpp)
+nw_host_fixture(korda_transactions_fixture transactions.cpp)
+nw_host_fixture(korda_streaming_fixture streaming.cpp)
 foreach(component IN ITEMS transaction streaming)
   add_executable(nw_${component}_tests ${component}_tests.cpp)
   target_link_libraries(nw_${component}_tests PRIVATE nw_host_test_support)
@@ -173,7 +173,7 @@ endforeach()
 set_tests_properties(native.compatibility.semantics PROPERTIES WILL_FAIL TRUE)
 
 add_executable(nw_database_abi_c database_abi.c)
-target_link_libraries(nw_database_abi_c PRIVATE nativeweave_database_host)
+target_link_libraries(nw_database_abi_c PRIVATE korda_database_host)
 foreach(target IN ITEMS nw_database_abi_c)
   target_link_libraries(${target} PRIVATE nw_project_options)
   set_target_properties(${target} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${NW_TEST_OUTPUT}")
@@ -202,9 +202,9 @@ if(NOT NW_SANITIZERS)
 endif()
 
 add_custom_target(nw_interop_fixtures DEPENDS nw_abi_conformance
-  nativeweave_interop_lifetime nativeweave_interop_memory nativeweave_errors_fixture
-  nativeweave_interop_callbacks nativeweave_interop_async nativeweave_interop_execution
-  nativeweave_verification_interop nativeweave_verification_interop_c
+  korda_interop_lifetime korda_interop_memory korda_errors_fixture
+  korda_interop_callbacks korda_interop_async korda_interop_execution
+  korda_verification_interop korda_verification_interop_c
   nw_async_downstream nw_execution_downstream nw_error_probe nw_error_abort_probe
   nw_abi_layout_c nw_abi_layout_cpp nw_abi_bootstrap_c)
 foreach(variant IN LISTS NW_NEGOTIATION_VARIANTS)
@@ -219,7 +219,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
   target_compile_definitions(nw_interop_fuzz_negative PRIVATE A20_ORACLE_NEGATIVE)
   add_executable(nw_interop_fatal EXCLUDE_FROM_ALL "${PROJECT_SOURCE_DIR}/tests/Verification.Interop/fuzz/fatal.c")
   foreach(target IN ITEMS nw_interop_fuzz nw_interop_fuzz_negative nw_interop_fatal)
-    target_link_libraries(${target} PRIVATE nw_project_options nativeweave_verification_interop)
+    target_link_libraries(${target} PRIVATE nw_project_options korda_verification_interop)
     target_compile_options(${target} PRIVATE -g -O1 -fno-omit-frame-pointer -UNDEBUG)
     set_target_properties(${target} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${NW_TEST_OUTPUT}")
     if(target STREQUAL "nw_interop_fatal")

@@ -19,8 +19,8 @@ from prepare import TASK_PROJECT, inventory, managed_entries, managed_project
 
 compat = module("compatibility", "src/Verification.Compatibility/compatibility.py")
 packer = module("linux_packages", "src/Packaging.Linux/packages.py")
-GENERATOR = "NativeWeave.Query.Generator"
-BUILD_TASK = "NativeWeave.Packaging.Tasks"
+GENERATOR = "Korda.Query.Generator"
+BUILD_TASK = "Korda.Packaging.Tasks"
 OUT = Path("artifacts/public")
 POLICY = ROOT / "tests/Verification.Compatibility/signature-policy.json"
 
@@ -115,12 +115,12 @@ def selected_files(provider, plan, version, manifest):
     name = "runtimes/linux-x64/native/" + asset["path"].name
     entries.update(asset["entries"])
     entries[name] = asset["path"].read_bytes()
-    prop = "NativeWeaveSqliteAssetPath" if provider == "sqlite" else "NativeWeavePostgresAssetPath"
+    prop = "KordaSqliteAssetPath" if provider == "sqlite" else "KordaPostgresAssetPath"
     compile_project(managed_project(identity), version, [f"-p:{prop}={asset['path']}"])
     for entry, file in managed_entries(identity).items():
         entries[entry] = file.read_bytes()
     native = dict(path=name, sha256=asset["sha256"], rid=RID, abi_major=1)
-    entries["nativeweave/manifest.json"] = json_bytes(
+    entries["korda/manifest.json"] = json_bytes(
         dict(
             schemaVersion=1,
             packageId=identity,
@@ -140,13 +140,13 @@ def compose(provider, version, entries, native, commit, fingerprint):
     identity = IDS[provider]
     for notice in ("LICENSE", "THIRD_PARTY_NOTICES.md"):
         entries[notice] = (ROOT / notice).read_bytes()
-    entries["tools/NativeWeave.Packaging.targets"] = (
-        ROOT / "src/Packaging.Release/buildTransitive/NativeWeave.Packaging.targets"
+    entries["tools/Korda.Packaging.targets"] = (
+        ROOT / "src/Packaging.Release/buildTransitive/Korda.Packaging.targets"
     ).read_bytes()
     entries["tools/" + GENERATOR + ".targets"] = (
         ROOT / f"src/Query.Generator/buildTransitive/{GENERATOR}.targets"
     ).read_bytes()
-    entries["nativeweave/public.json"] = json_bytes({"inputs": fingerprint})
+    entries["korda/public.json"] = json_bytes({"inputs": fingerprint})
     descriptor = dict(
         engineId="database." + provider,
         facadePackageId=identity,
@@ -159,7 +159,7 @@ def compose(provider, version, entries, native, commit, fingerprint):
         cpuBaseline="x86-64",
         capabilities={cap: bit for bit, cap in enumerate(DATABASE_CAPABILITIES)},
     )
-    entries["nativeweave/closure.json"] = json_bytes(
+    entries["korda/closure.json"] = json_bytes(
         {
             "schemaVersion": 1,
             "packages": [
@@ -172,10 +172,10 @@ def compose(provider, version, entries, native, commit, fingerprint):
             ],
         }
     )
-    original = json.loads(entries["nativeweave/manifest.json"])
+    original = json.loads(entries["korda/manifest.json"])
     native = {**native, "source_commit": original["sourceCommit"]}
     original.update(packageId=identity, packageVersion=version, packagingProducerCommit=commit)
-    entries["nativeweave/manifest.json"] = json_bytes(original)
+    entries["korda/manifest.json"] = json_bytes(original)
     shared = {n: hashlib.sha256(v).hexdigest() for n, v in shared_files(entries).items()}
     digest = hashlib.sha256(json_bytes(shared)).hexdigest()
     wrapper = (ROOT / "eng/ci/provider.targets").read_text()
@@ -221,7 +221,7 @@ def main():
             entries, native = selected_files(provider, plan, args.version, args.native)
         else:
             entries = published(provider, plan["published"][provider]["version"])
-            info = json.loads(entries["nativeweave/manifest.json"])
+            info = json.loads(entries["korda/manifest.json"])
             native = dict(
                 path=info["nativePath"],
                 sha256=info["nativeSha256"],

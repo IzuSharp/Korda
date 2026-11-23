@@ -1,6 +1,6 @@
 """Bounded, deterministic, sequentially consistent finite-state exploration.
 
-This maintainer tool does not execute a NativeWeave runtime. Model transitions
+This maintainer tool does not execute a Korda runtime. Model transitions
 are atomic specifications, not CLR/Rust instructions or weak-memory events.
 """
 

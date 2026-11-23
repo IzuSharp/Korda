@@ -6,10 +6,10 @@ using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
-using NativeWeave.Interop.Abi;
-using NativeWeave.Interop.Extensibility;
+using Korda.Interop.Abi;
+using Korda.Interop.Extensibility;
 
-namespace NativeWeave.Interop;
+namespace Korda.Interop;
 
 internal static class EngineModuleLoader
 {

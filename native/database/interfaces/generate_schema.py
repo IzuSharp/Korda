@@ -10,7 +10,7 @@ schema = json.loads((base / 'schema-v1.json').read_text())
 values = {k: v for k, v in schema.items() if isinstance(v, int)}
 def pascal(s):
     return ''.join(p.title() for p in s.split('_'))
-cs = '// Generated from native/database/interfaces/schema-v1.json; do not edit.\nnamespace NativeWeave.Data;\ninternal static class WireSchema\n{\n'
+cs = '// Generated from native/database/interfaces/schema-v1.json; do not edit.\nnamespace Korda.Data;\ninternal static class WireSchema\n{\n'
 cpp = '// Generated from native/database/interfaces/schema-v1.json; do not edit.\n#pragma once\n\n#include <array>\n#include <cstddef>\n#include <string_view>\n\nnamespace nw::schema\n{\n'
 for key, value in values.items():
     cs += f'    internal const int {pascal(key)} = {value};\n'

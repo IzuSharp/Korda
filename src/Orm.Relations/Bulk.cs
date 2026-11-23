@@ -1,6 +1,6 @@
-using NativeWeave.Data;
+using Korda.Data;
 
-namespace NativeWeave.Database;
+namespace Korda.Database;
 
 public sealed partial class DataSession
 {
@@ -94,25 +94,25 @@ public sealed partial class DataSession
             if (enumerator is not null)
             {
                 try { await enumerator.DisposeAsync().ConfigureAwait(false); }
-                catch (Exception cleanup) { failure.Data["NativeWeave.Database.BulkInputCleanup.v1"] = cleanup; }
+                catch (Exception cleanup) { failure.Data["Korda.Database.BulkInputCleanup.v1"] = cleanup; }
             }
             if (savepoint is not null)
             {
                 try { await savepoint.BulkRollbackAsync(transactionLease!, CancellationToken.None).ConfigureAwait(false); await savepoint.BulkReleaseAsync(transactionLease!, CancellationToken.None).ConfigureAwait(false); }
-                catch (Exception cleanup) { failure.Data["NativeWeave.Database.BulkCleanup.v1"] = cleanup; }
+                catch (Exception cleanup) { failure.Data["Korda.Database.BulkCleanup.v1"] = cleanup; }
                 try { await savepoint.BulkDisposeAsync(transactionLease!).ConfigureAwait(false); }
-                catch (Exception cleanup) { failure.Data["NativeWeave.Database.BulkCleanup.v1"] = cleanup; }
+                catch (Exception cleanup) { failure.Data["Korda.Database.BulkCleanup.v1"] = cleanup; }
                 lastOutcome = caller!.Outcome;
-                if (caller.Cleanup.Status == CleanupStatus.Failed) failure.Data["NativeWeave.Database.BulkCleanupSnapshot.v1"] = caller.Cleanup;
+                if (caller.Cleanup.Status == CleanupStatus.Failed) failure.Data["Korda.Database.BulkCleanupSnapshot.v1"] = caller.Cleanup;
             }
             if (owned is not null)
             {
                 try { if (owned.Outcome == TransactionOutcome.InProgress) await owned.BulkRollbackAsync(transactionLease!, CancellationToken.None).ConfigureAwait(false); }
-                catch (Exception cleanup) { failure.Data["NativeWeave.Database.BulkCleanup.v1"] = cleanup; }
+                catch (Exception cleanup) { failure.Data["Korda.Database.BulkCleanup.v1"] = cleanup; }
                 try { await owned.DisposeAsync().ConfigureAwait(false); }
-                catch (Exception cleanup) { failure.Data["NativeWeave.Database.BulkCleanup.v1"] = cleanup; }
+                catch (Exception cleanup) { failure.Data["Korda.Database.BulkCleanup.v1"] = cleanup; }
                 lastOutcome = owned.Outcome;
-                if (owned.Cleanup.Status == CleanupStatus.Failed) failure.Data["NativeWeave.Database.BulkCleanupSnapshot.v1"] = owned.Cleanup;
+                if (owned.Cleanup.Status == CleanupStatus.Failed) failure.Data["Korda.Database.BulkCleanupSnapshot.v1"] = owned.Cleanup;
             }
             failure.Data[BulkFailure.Key] = new BulkProgress(affected, batches, atomicity == BulkAtomicity.PerBatch && batches != 0, lastOutcome);
             throw;

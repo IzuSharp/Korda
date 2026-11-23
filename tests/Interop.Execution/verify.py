@@ -67,13 +67,13 @@ def main():
             raise ValueError("Use the fixed .NET SDK 11.0.100.")
         run("clang-version", ["clang", "--version"])
         scopes = ["src/Interop.Execution", "tests/Interop.Execution", "native/interop/execution", "samples/api/interop-execution",
-                  "docs/guides/interop-execution.md", "src/NativeWeave.Core", "src/Interop.Abi", "src/Interop.Negotiation",
+                  "docs/guides/interop-execution.md", "src/Korda.Core", "src/Interop.Abi", "src/Interop.Negotiation",
                   "src/Interop.Lifetime", "src/Interop.Memory", "src/Interop.Errors", "src/Interop.Callbacks", "src/Interop.Async",
                   "native/interop/abi", "native/interop/errors", "native/interop/async",
                   "Directory.Build.props", "Directory.Build.targets", "global.json", *NATIVE_INPUTS]
         paths = run("source-files", ["git", "ls-files", "--cached", "--others", "--exclude-standard", "--", *scopes]).splitlines()
         report["source_sha256"] = {p: sha(ROOT / p) for p in sorted(set(paths)) if (ROOT / p).is_file()}
-        report["native_compiler_provenance"] = prepare_native(run, ["nativeweave_interop_execution", "nw_execution_downstream", "nw_execution_tests"], test_regex=r"^native\.(interop|execution)$")
+        report["native_compiler_provenance"] = prepare_native(run, ["korda_interop_execution", "nw_execution_downstream", "nw_execution_tests"], test_regex=r"^native\.(interop|execution)$")
         downstream = CPP_FIXTURES / "libnw_execution_downstream.so"
         exported = run("downstream-exports", ["nm", "-D", "--defined-only", downstream])
         exports = exported[0] if isinstance(exported, tuple) else exported
@@ -82,14 +82,14 @@ def main():
             raise RuntimeError("Reusable C++ component leaked fixture/helper exports: " + repr(names))
         report["default_downstream_exports"] = names
         report["artifacts"]["default_downstream"] = {"path": str(downstream), "sha256": sha(downstream)}
-        native = CPP_FIXTURES / "libnativeweave_interop_execution.so"
+        native = CPP_FIXTURES / "libkorda_interop_execution.so"
         report["artifacts"]["native"] = {"path": str(native), "sha256": sha(native)}
         run("native-conformance-exports", ["nm", "-D", "--defined-only", native])
         common = ["-p:UseSharedCompilation=false", "-nr:false", "-m:1"]
         restore = ["--locked-mode"] + (["-p:NuGetAudit=false", "--ignore-failed-sources"] if args.offline else [])
         for label, project, assembly in [
-            ("tests", "tests/Interop.Execution/Interop.Execution.Tests.csproj", "NativeWeave.Interop.Execution.Tests"),
-            ("sample", "samples/api/interop-execution/Interop.Execution.Sample.csproj", "NativeWeave.Interop.Execution.Sample")]:
+            ("tests", "tests/Interop.Execution/Interop.Execution.Tests.csproj", "Korda.Interop.Execution.Tests"),
+            ("sample", "samples/api/interop-execution/Interop.Execution.Sample.csproj", "Korda.Interop.Execution.Sample")]:
             run(label + "-restore", ["dotnet", "restore", project, *restore, *common])
             run(label + "-build", ["dotnet", "build", project, "-c", "Release", "--no-restore", *common])
             dll = ROOT / Path(project).parent / "bin/Release/net11.0" / (assembly + ".dll")
@@ -111,8 +111,8 @@ def main():
         run("api-restore", ["dotnet", "restore", project, *restore, *common])
         run("api-build", ["dotnet", "build", project, "-c", "Release", "--no-restore", *common])
         sdk = Path(shutil.which("dotnet")).resolve().parent
-        run("api-xml-reference", ["dotnet", ROOT / "tests/Interop.Execution/ApiCheck/bin/Release/net11.0/NativeWeave.Interop.Execution.ApiCheck.dll",
-                                  ROOT, sdk, ROOT / "src/NativeWeave.Core/bin/Release/net11.0/NativeWeave.Core.dll"])
+        run("api-xml-reference", ["dotnet", ROOT / "tests/Interop.Execution/ApiCheck/bin/Release/net11.0/Korda.Interop.Execution.ApiCheck.dll",
+                                  ROOT, sdk, ROOT / "src/Korda.Core/bin/Release/net11.0/Korda.Core.dll"])
         owned_cs = [p for p in report["source_sha256"] if p.endswith(".cs") and p.startswith(("src/Interop.Execution/", "tests/Interop.Execution/", "samples/api/interop-execution/"))]
         run("managed-format", ["dotnet", "format", "whitespace", ".", "--folder", "--include", *owned_cs, "--verify-no-changes"])
         run("diff-check", ["git", "diff", "--check"])

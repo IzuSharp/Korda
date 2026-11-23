@@ -5,8 +5,8 @@
   "publicApiChange": false,
   "nativeAbiChange": false,
   "consumers": [
-    "NativeWeave.Database.Sqlite",
-    "NativeWeave.Database.PostgreSql"
+    "Korda.Database.Sqlite",
+    "Korda.Database.PostgreSql"
   ],
   "documentation": "tests/Verification.EndToEnd/api-probe.md",
   "historicalSource": "ea5fa528035d025bd7a28698ee7c71194432236c",

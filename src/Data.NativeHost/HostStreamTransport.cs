@@ -1,8 +1,8 @@
 using System.Buffers.Binary;
-using NativeWeave.Database.Internal;
-using NativeWeave.Query.Internal;
+using Korda.Database.Internal;
+using Korda.Query.Internal;
 
-namespace NativeWeave.Database;
+namespace Korda.Database;
 
 internal sealed class HostStreamTransport : IStreamTransport
 {
@@ -30,7 +30,7 @@ internal sealed class HostStreamBatch : IStreamBatch
     internal HostStreamBatch(NativeBuffer owner, int maximum)
     {
         _bytes = owner.Copy(maximum); _owner = owner;
-        if (_bytes.Length < 96) throw new NativeWeave.Data.DatabaseException("Native batch header is incomplete.", NativeWeave.Data.DatabaseErrorKind.ShapeMismatch);
+        if (_bytes.Length < 96) throw new Korda.Data.DatabaseException("Native batch header is incomplete.", Korda.Data.DatabaseErrorKind.ShapeMismatch);
         End = BinaryPrimitives.ReadUInt32LittleEndian(_bytes.AsSpan(56)) == 0;
     }
     public ReadOnlyMemory<byte> Bytes => _bytes ?? throw new ObjectDisposedException(nameof(HostStreamBatch));

@@ -1,18 +1,18 @@
 {
   "design_commit": "c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9",
   "symbols": {
-    "M:NativeWeave.Data.WeaveColumnAttribute.#ctor(System.String)": "public NativeWeave.Data.WeaveColumnAttribute.WeaveColumnAttribute(System.String name)",
-    "M:NativeWeave.Data.WeaveIgnoreAttribute.#ctor": "public NativeWeave.Data.WeaveIgnoreAttribute.WeaveIgnoreAttribute()",
-    "M:NativeWeave.Data.WeaveKeyAttribute.#ctor": "public NativeWeave.Data.WeaveKeyAttribute.WeaveKeyAttribute()",
-    "M:NativeWeave.Data.WeaveTableAttribute.#ctor(System.String)": "public NativeWeave.Data.WeaveTableAttribute.WeaveTableAttribute(System.String name)",
-    "M:NativeWeave.Data.WeaveVersionAttribute.#ctor": "public NativeWeave.Data.WeaveVersionAttribute.WeaveVersionAttribute()",
-    "P:NativeWeave.Data.WeaveColumnAttribute.Generated": "public System.Boolean NativeWeave.Data.WeaveColumnAttribute.Generated | getter=Public;setter=Public;init=True",
-    "P:NativeWeave.Data.WeaveTableAttribute.DescriptorName": "public System.String? NativeWeave.Data.WeaveTableAttribute.DescriptorName | getter=Public;setter=Public;init=True",
-    "P:NativeWeave.Data.WeaveTableAttribute.Schema": "public System.String? NativeWeave.Data.WeaveTableAttribute.Schema | getter=Public;setter=Public;init=True",
-    "T:NativeWeave.Data.WeaveColumnAttribute": "NativeWeave.Data.WeaveColumnAttribute | kind=Class;static=False;sealed=True;abstract=False;base=System.Attribute;interfaces=",
-    "T:NativeWeave.Data.WeaveIgnoreAttribute": "NativeWeave.Data.WeaveIgnoreAttribute | kind=Class;static=False;sealed=True;abstract=False;base=System.Attribute;interfaces=",
-    "T:NativeWeave.Data.WeaveKeyAttribute": "NativeWeave.Data.WeaveKeyAttribute | kind=Class;static=False;sealed=True;abstract=False;base=System.Attribute;interfaces=",
-    "T:NativeWeave.Data.WeaveTableAttribute": "NativeWeave.Data.WeaveTableAttribute | kind=Class;static=False;sealed=True;abstract=False;base=System.Attribute;interfaces=",
-    "T:NativeWeave.Data.WeaveVersionAttribute": "NativeWeave.Data.WeaveVersionAttribute | kind=Class;static=False;sealed=True;abstract=False;base=System.Attribute;interfaces="
+    "M:Korda.Data.WeaveColumnAttribute.#ctor(System.String)": "public Korda.Data.WeaveColumnAttribute.WeaveColumnAttribute(System.String name)",
+    "M:Korda.Data.WeaveIgnoreAttribute.#ctor": "public Korda.Data.WeaveIgnoreAttribute.WeaveIgnoreAttribute()",
+    "M:Korda.Data.WeaveKeyAttribute.#ctor": "public Korda.Data.WeaveKeyAttribute.WeaveKeyAttribute()",
+    "M:Korda.Data.WeaveTableAttribute.#ctor(System.String)": "public Korda.Data.WeaveTableAttribute.WeaveTableAttribute(System.String name)",
+    "M:Korda.Data.WeaveVersionAttribute.#ctor": "public Korda.Data.WeaveVersionAttribute.WeaveVersionAttribute()",
+    "P:Korda.Data.WeaveColumnAttribute.Generated": "public System.Boolean Korda.Data.WeaveColumnAttribute.Generated | getter=Public;setter=Public;init=True",
+    "P:Korda.Data.WeaveTableAttribute.DescriptorName": "public System.String? Korda.Data.WeaveTableAttribute.DescriptorName | getter=Public;setter=Public;init=True",
+    "P:Korda.Data.WeaveTableAttribute.Schema": "public System.String? Korda.Data.WeaveTableAttribute.Schema | getter=Public;setter=Public;init=True",
+    "T:Korda.Data.WeaveColumnAttribute": "Korda.Data.WeaveColumnAttribute | kind=Class;static=False;sealed=True;abstract=False;base=System.Attribute;interfaces=",
+    "T:Korda.Data.WeaveIgnoreAttribute": "Korda.Data.WeaveIgnoreAttribute | kind=Class;static=False;sealed=True;abstract=False;base=System.Attribute;interfaces=",
+    "T:Korda.Data.WeaveKeyAttribute": "Korda.Data.WeaveKeyAttribute | kind=Class;static=False;sealed=True;abstract=False;base=System.Attribute;interfaces=",
+    "T:Korda.Data.WeaveTableAttribute": "Korda.Data.WeaveTableAttribute | kind=Class;static=False;sealed=True;abstract=False;base=System.Attribute;interfaces=",
+    "T:Korda.Data.WeaveVersionAttribute": "Korda.Data.WeaveVersionAttribute | kind=Class;static=False;sealed=True;abstract=False;base=System.Attribute;interfaces="
   }
 }

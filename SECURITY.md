@@ -6,7 +6,7 @@ Before the first public release, security fixes target `main`. CI artifacts and 
 
 ## Report privately
 
-Use [GitHub private vulnerability reporting](https://github.com/IzuSharp/NativeWeave/security/advisories/new) when enabled. Include the affected version/commit, OS/architecture, impact and a minimal reproduction. Do not disclose credentials or vulnerability details in a public issue. If private reporting is unavailable, request a private maintainer contact in an issue without disclosing the issue itself.
+Use [GitHub private vulnerability reporting](https://github.com/IzuSharp/Korda/security/advisories/new) when enabled. Include the affected version/commit, OS/architecture, impact and a minimal reproduction. Do not disclose credentials or vulnerability details in a public issue. If private reporting is unavailable, request a private maintainer contact in an issue without disclosing the issue itself.
 
 ## Current boundary
 

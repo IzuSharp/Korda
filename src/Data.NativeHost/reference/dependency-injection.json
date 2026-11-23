@@ -1,19 +1,19 @@
 {
-  "assembly": "NativeWeave.Database.DependencyInjection, Version=0.1.0.0, Culture=neutral, PublicKeyToken=null",
+  "assembly": "Korda.Database.DependencyInjection, Version=0.1.0.0, Culture=neutral, PublicKeyToken=null",
   "symbols": [
     {
-      "id": "M:Microsoft.Extensions.DependencyInjection.NativeWeaveDatabaseServiceCollectionExtensions.AddKeyedNativeWeaveDatabase(Microsoft.Extensions.DependencyInjection.IServiceCollection,System.String,System.Action{NativeWeave.Database.DataSourceBuilder})",
-      "signature": "public static Microsoft.Extensions.DependencyInjection.IServiceCollection Microsoft.Extensions.DependencyInjection.NativeWeaveDatabaseServiceCollectionExtensions.AddKeyedNativeWeaveDatabase(this Microsoft.Extensions.DependencyInjection.IServiceCollection services, string name, System.Action\u003CNativeWeave.Database.DataSourceBuilder\u003E configure)",
+      "id": "M:Microsoft.Extensions.DependencyInjection.KordaDatabaseServiceCollectionExtensions.AddKeyedKordaDatabase(Microsoft.Extensions.DependencyInjection.IServiceCollection,System.String,System.Action{Korda.Database.DataSourceBuilder})",
+      "signature": "public static Microsoft.Extensions.DependencyInjection.IServiceCollection Microsoft.Extensions.DependencyInjection.KordaDatabaseServiceCollectionExtensions.AddKeyedKordaDatabase(this Microsoft.Extensions.DependencyInjection.IServiceCollection services, string name, System.Action\u003CKorda.Database.DataSourceBuilder\u003E configure)",
       "implicit_member": false
     },
     {
-      "id": "M:Microsoft.Extensions.DependencyInjection.NativeWeaveDatabaseServiceCollectionExtensions.AddNativeWeaveDatabase(Microsoft.Extensions.DependencyInjection.IServiceCollection,System.Action{NativeWeave.Database.DataSourceBuilder})",
-      "signature": "public static Microsoft.Extensions.DependencyInjection.IServiceCollection Microsoft.Extensions.DependencyInjection.NativeWeaveDatabaseServiceCollectionExtensions.AddNativeWeaveDatabase(this Microsoft.Extensions.DependencyInjection.IServiceCollection services, System.Action\u003CNativeWeave.Database.DataSourceBuilder\u003E configure)",
+      "id": "M:Microsoft.Extensions.DependencyInjection.KordaDatabaseServiceCollectionExtensions.AddKordaDatabase(Microsoft.Extensions.DependencyInjection.IServiceCollection,System.Action{Korda.Database.DataSourceBuilder})",
+      "signature": "public static Microsoft.Extensions.DependencyInjection.IServiceCollection Microsoft.Extensions.DependencyInjection.KordaDatabaseServiceCollectionExtensions.AddKordaDatabase(this Microsoft.Extensions.DependencyInjection.IServiceCollection services, System.Action\u003CKorda.Database.DataSourceBuilder\u003E configure)",
       "implicit_member": false
     },
     {
-      "id": "T:Microsoft.Extensions.DependencyInjection.NativeWeaveDatabaseServiceCollectionExtensions",
-      "signature": "public static class Microsoft.Extensions.DependencyInjection.NativeWeaveDatabaseServiceCollectionExtensions",
+      "id": "T:Microsoft.Extensions.DependencyInjection.KordaDatabaseServiceCollectionExtensions",
+      "signature": "public static class Microsoft.Extensions.DependencyInjection.KordaDatabaseServiceCollectionExtensions",
       "implicit_member": false
     }
   ]

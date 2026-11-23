@@ -1,10 +1,10 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using NativeWeave.Interop;
-using NativeWeave.Interop.Abi;
-using NativeWeave.Interop.Async;
-using NativeWeave.Interop.Extensibility;
-using NativeWeave.Interop.Lifetime;
+using Korda.Interop;
+using Korda.Interop.Abi;
+using Korda.Interop.Async;
+using Korda.Interop.Extensibility;
+using Korda.Interop.Lifetime;
 
 internal sealed class OperationHandle : SafeHandle
 {
@@ -50,12 +50,12 @@ internal sealed unsafe class FixtureCalls : AsyncNativeCalls
 
 internal static unsafe partial class Fixture
 {
-    private const string Library = "nativeweave_interop_async";
+    private const string Library = "korda_interop_async";
     [ThreadStatic] internal static bool InNativeCall;
     // Loader metadata is an explicit component fixture, not new A02 acceptance.
-    private static readonly EngineInfo Engine = new(new EnginePackageManifest("interop.async.fixture", "NativeWeave.Core", "0.1.0",
+    private static readonly EngineInfo Engine = new(new EnginePackageManifest("interop.async.fixture", "Korda.Core", "0.1.0",
         new AbiVersion(1, 0), "nw_async_fixture_bootstrap_v1", EngineThreadingModel.EngineLocalAsync,
-        [new NativeAssetDescriptor("linux-x64", "runtimes/linux-x64/native/libnativeweave_interop_async.so", new string('0', 64), "x86-64")], []), "linux-x64", new AbiVersion(1, 0), 0);
+        [new NativeAssetDescriptor("linux-x64", "runtimes/linux-x64/native/libkorda_interop_async.so", new string('0', 64), "x86-64")], []), "linux-x64", new AbiVersion(1, 0), 0);
 
     [LibraryImport(Library, EntryPoint = "nw_async_fixture_create_v1")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]

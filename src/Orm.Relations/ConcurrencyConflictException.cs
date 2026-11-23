@@ -1,4 +1,4 @@
-namespace NativeWeave.Data;
+namespace Korda.Data;
 
 /// <summary>A native optimistic write did not match its exact expected affected-row count.</summary>
 /// <remarks>The original key and expected token predicate ran once in the database. This exception never authorizes a write replay.</remarks>

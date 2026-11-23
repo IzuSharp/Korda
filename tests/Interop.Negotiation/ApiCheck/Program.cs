@@ -10,7 +10,7 @@ if (args.Length < 3) throw new ArgumentException("Usage: ApiCheck <repo-root> <d
 var root = Path.GetFullPath(args[0]); var sdk = Path.GetFullPath(args[1]); var assemblyPath = Path.GetFullPath(args[2]);
 var references = Directory.GetFiles(Path.Combine(sdk, "packs", "Microsoft.NETCore.App.Ref", "11.0.0", "ref", "net11.0"), "*.dll").Select(p => MetadataReference.CreateFromFile(p)).ToList();
 var library = MetadataReference.CreateFromFile(assemblyPath); references.Add(library);
-var compilation = CSharpCompilation.Create("NativeWeave.Interop.Negotiation.ApiCheck", references: references, options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, metadataImportOptions: MetadataImportOptions.All));
+var compilation = CSharpCompilation.Create("Korda.Interop.Negotiation.ApiCheck", references: references, options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, metadataImportOptions: MetadataImportOptions.All));
 var assembly = (IAssemblySymbol)(compilation.GetAssemblyOrModuleSymbol(library) ?? throw new InvalidOperationException("Cannot import assembly"));
 // ECMA metadata does not preserve Roslyn's record-struct classification. Confirm
 // that source-sensitive keyword from the compiled owned source, while checking
@@ -227,7 +227,7 @@ void Add(ISymbol symbol)
 void Walk(INamespaceSymbol ns)
 {
     foreach (var child in ns.GetNamespaceMembers()) Walk(child);
-    foreach (var type in ns.GetTypeMembers().Where(t => t.DeclaredAccessibility == Accessibility.Public)) { if (type.ToDisplayString() is "NativeWeave.Interop.NativeEngineException" or "NativeWeave.Interop.EngineLoadException" or "NativeWeave.Interop.EngineLoadFailure" or "NativeWeave.Interop.NativeBuffer" or "NativeWeave.Interop.NativeBufferReader" or "NativeWeave.Interop.NativeBufferReader<TResult>" or "NativeWeave.Interop.Extensibility.NativeBufferFactory") continue; Add(type); foreach (var member in type.GetMembers()) Add(member); }
+    foreach (var type in ns.GetTypeMembers().Where(t => t.DeclaredAccessibility == Accessibility.Public)) { if (type.ToDisplayString() is "Korda.Interop.NativeEngineException" or "Korda.Interop.EngineLoadException" or "Korda.Interop.EngineLoadFailure" or "Korda.Interop.NativeBuffer" or "Korda.Interop.NativeBufferReader" or "Korda.Interop.NativeBufferReader<TResult>" or "Korda.Interop.Extensibility.NativeBufferFactory") continue; Add(type); foreach (var member in type.GetMembers()) Add(member); }
 }
 Walk(assembly.GlobalNamespace);
 var failures = new List<string>();
@@ -240,7 +240,7 @@ foreach (var key in expected.Keys.Intersect(actual.Keys))
 }
 var xml = XDocument.Load(Path.ChangeExtension(assemblyPath, ".xml"));
 var docs = xml.Descendants("member").ToDictionary(e => e.Attribute("name")!.Value, StringComparer.Ordinal);
-var output = new StringBuilder("# NativeWeave.Interop negotiation API reference\n\nGenerated from the compiled product assembly and its XML comments by `tests/Interop.Negotiation/ApiCheck`. A02 metadata and module preflight only; native domain instances and executor ownership belong to downstream tasks.\n\n");
+var output = new StringBuilder("# Korda.Interop negotiation API reference\n\nGenerated from the compiled product assembly and its XML comments by `tests/Interop.Negotiation/ApiCheck`. A02 metadata and module preflight only; native domain instances and executor ownership belong to downstream tasks.\n\n");
 foreach (var entry in expected.OrderBy(e => e.Key, StringComparer.Ordinal))
 {
     if (!actual.TryGetValue(entry.Key, out var symbol)) continue;

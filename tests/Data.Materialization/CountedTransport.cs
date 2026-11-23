@@ -1,6 +1,6 @@
-using NativeWeave.Data;
-using NativeWeave.Database;
-using NativeWeave.Database.Internal;
+using Korda.Data;
+using Korda.Database;
+using Korda.Database.Internal;
 
 // Test-only accounting wraps the actual B04 transport; it never manufactures a row,
 // terminal callback, native retirement receipt or connection-reuse decision.

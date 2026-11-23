@@ -1,6 +1,6 @@
-using NativeWeave.Data;
+using Korda.Data;
 
-namespace NativeWeave.Reference.TaskService;
+namespace Korda.Reference.TaskService;
 
 internal sealed record OperationResult(string Scope, string RequestKey, string RequestHash, string OperationId, string Tenant, string Principal, string Semantic, long ResponseVersion, long ResponseStatus, byte[] ResponseBytes, long CompletedAt);
 

@@ -1,6 +1,6 @@
 using System.Reflection;
 
-namespace NativeWeave.Interop.Extensibility;
+namespace Korda.Interop.Extensibility;
 
 /// <summary>A maintainer-defined immutable mapping from a capability name to an engine-local ABI bit.</summary>
 /// <param name="Capability">The validated stable capability name.</param>

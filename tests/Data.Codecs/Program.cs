@@ -2,8 +2,8 @@ using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using NativeWeave.Data;
-using NativeWeave.Database.Internal;
+using Korda.Data;
+using Korda.Database.Internal;
 
 var output = Path.GetFullPath(args.Length == 0 ? "artifacts/B07/managed" : args[0]);
 Directory.CreateDirectory(output);

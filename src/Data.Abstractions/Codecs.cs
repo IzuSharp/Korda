@@ -6,7 +6,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization.Metadata;
 
-namespace NativeWeave.Data;
+namespace Korda.Data;
 
 internal sealed record CodecDescriptor(uint Id, string Name, string? Configuration, bool Nullable)
 {

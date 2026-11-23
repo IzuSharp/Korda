@@ -11,7 +11,7 @@ var root = Path.GetFullPath(args[0]); var sdk = Path.GetFullPath(args[1]); var a
 var references = Directory.GetFiles(Path.Combine(sdk, "packs", "Microsoft.NETCore.App.Ref", "11.0.0", "ref", "net11.0"), "*.dll").Select(p => MetadataReference.CreateFromFile(p)).ToList();
 references.AddRange(Directory.GetFiles(Path.GetDirectoryName(assemblyPath)!, "*.dll").Where(p => p != assemblyPath).Select(p => MetadataReference.CreateFromFile(p)));
 var library = MetadataReference.CreateFromFile(assemblyPath); references.Add(library);
-var compilation = CSharpCompilation.Create("NativeWeave.Database.PostgreSql.ApiCheck", references: references, options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, metadataImportOptions: MetadataImportOptions.All));
+var compilation = CSharpCompilation.Create("Korda.Database.PostgreSql.ApiCheck", references: references, options: new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, metadataImportOptions: MetadataImportOptions.All));
 var assembly = (IAssemblySymbol)(compilation.GetAssemblyOrModuleSymbol(library) ?? throw new InvalidOperationException("Cannot import assembly"));
 bool CompilerAttribute(AttributeData a) => a.AttributeClass?.ContainingNamespace.ToDisplayString() is "System.Runtime.CompilerServices" or "System.Diagnostics";
 // A type used in a signature is not a type declaration. In particular, base types,
@@ -228,7 +228,7 @@ foreach (var key in expected.Keys.Intersect(actual.Keys))
 }
 var xml = XDocument.Load(Path.ChangeExtension(assemblyPath, ".xml"));
 var docs = xml.Descendants("member").ToDictionary(e => e.Attribute("name")!.Value, StringComparer.Ordinal);
-var output = new StringBuilder("# NativeWeave.Database.PostgreSql API reference\n\nGenerated from the compiled product assembly and its XML comments by `tests/Data.Postgres/ApiCheck`. Covers provider options, Engine preflight, and the integrated Create/UsePostgreSql data source factories. Exact declarations retain the pinned Design identity in `public-api.expected.json`; the historical B02/B04 ownership slice remains in `downstream-composition.json`.\n\n");
+var output = new StringBuilder("# Korda.Database.PostgreSql API reference\n\nGenerated from the compiled product assembly and its XML comments by `tests/Data.Postgres/ApiCheck`. Covers provider options, Engine preflight, and the integrated Create/UsePostgreSql data source factories. Exact declarations retain the pinned Design identity in `public-api.expected.json`; the historical B02/B04 ownership slice remains in `downstream-composition.json`.\n\n");
 foreach (var entry in expected.OrderBy(e => e.Key, StringComparer.Ordinal))
 {
     if (!actual.TryGetValue(entry.Key, out var symbol)) continue;

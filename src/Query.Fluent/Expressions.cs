@@ -1,9 +1,9 @@
 using System.Numerics;
-using NativeWeave.Data;
-using NativeWeave.Query.Internal;
-using static NativeWeave.Query.QueryContext;
+using Korda.Data;
+using Korda.Query.Internal;
+using static Korda.Query.QueryContext;
 
-namespace NativeWeave.Query;
+namespace Korda.Query;
 
 /// <summary>Native SQL ordering direction.</summary>
 /// <remarks>The native query validates each enum value before mutation. Direction is explicit; it does not change SQL NULL ordering.</remarks>
@@ -104,7 +104,7 @@ public readonly struct SqlPredicate
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public SqlPredicate And(SqlPredicate other) { var owner = Owner; owner.Same(other.Owner); return new(owner, owner.Binary(11, Reference, other.Reference)); }
     /// <summary>Combines same-query conditions with native OR.</summary>
     /// <inheritdoc cref="SqlPredicate"/>
@@ -113,7 +113,7 @@ public readonly struct SqlPredicate
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public SqlPredicate Or(SqlPredicate other) { var owner = Owner; owner.Same(other.Owner); return new(owner, owner.Binary(12, Reference, other.Reference)); }
     /// <summary>Negates this condition using native SQL NOT.</summary>
     /// <inheritdoc cref="SqlPredicate"/>
@@ -121,7 +121,7 @@ public readonly struct SqlPredicate
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public SqlPredicate Not() { var owner = Owner; return new(owner, owner.Unary(3, Reference)); }
 }
 /// <summary>An opaque query-owned scalar token with its exact static codec and SQL nullability.</summary>
@@ -148,7 +148,7 @@ public readonly struct SqlExpression<T>
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public SqlPredicate Equal(T value) => CompareValue(1, value);
     /// <summary>Applies native Equal with exact codec/source checks and SQL NULL semantics.</summary>
     /// <inheritdoc cref="SqlExpression{T}"/>
@@ -157,7 +157,7 @@ public readonly struct SqlExpression<T>
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public SqlPredicate Equal(SqlExpression<T> other) => Compare(1, other);
     /// <summary>Applies native NotEqual with exact codec/source checks and SQL NULL semantics.</summary>
     /// <inheritdoc cref="SqlExpression{T}"/>
@@ -166,7 +166,7 @@ public readonly struct SqlExpression<T>
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public SqlPredicate NotEqual(T value) => CompareValue(2, value);
     /// <summary>Applies native NotEqual with exact codec/source checks and SQL NULL semantics.</summary>
     /// <inheritdoc cref="SqlExpression{T}"/>
@@ -175,7 +175,7 @@ public readonly struct SqlExpression<T>
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public SqlPredicate NotEqual(SqlExpression<T> other) => Compare(2, other);
     /// <summary>Applies native GreaterThan with exact codec/source checks and SQL NULL semantics.</summary>
     /// <inheritdoc cref="SqlExpression{T}"/>
@@ -184,7 +184,7 @@ public readonly struct SqlExpression<T>
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public SqlPredicate GreaterThan(T value) => CompareValue(3, value);
     /// <summary>Applies native GreaterThan with exact codec/source checks and SQL NULL semantics.</summary>
     /// <inheritdoc cref="SqlExpression{T}"/>
@@ -193,7 +193,7 @@ public readonly struct SqlExpression<T>
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public SqlPredicate GreaterThan(SqlExpression<T> other) => Compare(3, other);
     /// <summary>Applies native GreaterThanOrEqual with exact codec/source checks and SQL NULL semantics.</summary>
     /// <inheritdoc cref="SqlExpression{T}"/>
@@ -202,7 +202,7 @@ public readonly struct SqlExpression<T>
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public SqlPredicate GreaterThanOrEqual(T value) => CompareValue(4, value);
     /// <summary>Applies native GreaterThanOrEqual with exact codec/source checks and SQL NULL semantics.</summary>
     /// <inheritdoc cref="SqlExpression{T}"/>
@@ -211,7 +211,7 @@ public readonly struct SqlExpression<T>
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public SqlPredicate GreaterThanOrEqual(SqlExpression<T> other) => Compare(4, other);
     /// <summary>Applies native LessThan with exact codec/source checks and SQL NULL semantics.</summary>
     /// <inheritdoc cref="SqlExpression{T}"/>
@@ -220,7 +220,7 @@ public readonly struct SqlExpression<T>
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public SqlPredicate LessThan(T value) => CompareValue(5, value);
     /// <summary>Applies native LessThan with exact codec/source checks and SQL NULL semantics.</summary>
     /// <inheritdoc cref="SqlExpression{T}"/>
@@ -229,7 +229,7 @@ public readonly struct SqlExpression<T>
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public SqlPredicate LessThan(SqlExpression<T> other) => Compare(5, other);
     /// <summary>Applies native LessThanOrEqual with exact codec/source checks and SQL NULL semantics.</summary>
     /// <inheritdoc cref="SqlExpression{T}"/>
@@ -238,7 +238,7 @@ public readonly struct SqlExpression<T>
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public SqlPredicate LessThanOrEqual(T value) => CompareValue(6, value);
     /// <summary>Applies native LessThanOrEqual with exact codec/source checks and SQL NULL semantics.</summary>
     /// <inheritdoc cref="SqlExpression{T}"/>
@@ -247,7 +247,7 @@ public readonly struct SqlExpression<T>
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public SqlPredicate LessThanOrEqual(SqlExpression<T> other) => Compare(6, other);
     /// <summary>Applies native NullSafeEqual with exact codec/source checks and SQL NULL semantics.</summary>
     /// <inheritdoc cref="SqlExpression{T}"/>
@@ -256,7 +256,7 @@ public readonly struct SqlExpression<T>
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public SqlPredicate NullSafeEqual(T value) => CompareValue(13, value);
     /// <summary>Applies native NullSafeEqual with exact codec/source checks and SQL NULL semantics.</summary>
     /// <inheritdoc cref="SqlExpression{T}"/>
@@ -265,7 +265,7 @@ public readonly struct SqlExpression<T>
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public SqlPredicate NullSafeEqual(SqlExpression<T> other) => Compare(13, other);
     /// <summary>Snapshots two bounds and creates native inclusive BETWEEN.</summary>
     /// <inheritdoc cref="SqlExpression{T}"/>
@@ -275,7 +275,7 @@ public readonly struct SqlExpression<T>
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public SqlPredicate Between(T lower, T upper) => List(3, [lower, upper]);
     /// <summary>Tests SQL NULL explicitly without substituting a sentinel.</summary>
     /// <inheritdoc cref="SqlExpression{T}"/>
@@ -283,7 +283,7 @@ public readonly struct SqlExpression<T>
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public SqlPredicate IsNull() { var owner = Owner; return new(owner, owner.Unary(1, Reference)); }
     /// <summary>Tests SQL non-NULL explicitly.</summary>
     /// <inheritdoc cref="SqlExpression{T}"/>
@@ -291,7 +291,7 @@ public readonly struct SqlExpression<T>
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public SqlPredicate IsNotNull() { var owner = Owner; return new(owner, owner.Unary(2, Reference)); }
     /// <summary>Snapshots a finite value span; an empty span yields native FALSE.</summary>
     /// <inheritdoc cref="SqlExpression{T}"/>
@@ -300,7 +300,7 @@ public readonly struct SqlExpression<T>
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public SqlPredicate In(ReadOnlySpan<T> values) => List(1, values);
     /// <summary>Snapshots a finite value span; an empty span yields native TRUE.</summary>
     /// <inheritdoc cref="SqlExpression{T}"/>
@@ -309,7 +309,7 @@ public readonly struct SqlExpression<T>
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public SqlPredicate NotIn(ReadOnlySpan<T> values) => List(2, values);
     private SqlPredicate List(uint operation, ReadOnlySpan<T> values)
     {
@@ -329,7 +329,7 @@ public readonly struct SqlExpression<T>
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public SqlPredicate In(QuerySelection<T> subquery)
     {
         var owner = Owner; var reference = Reference;
@@ -342,7 +342,7 @@ public readonly struct SqlExpression<T>
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public SqlExpression<T> Over(WindowDefinition window)
     {
         ArgumentNullException.ThrowIfNull(window); var owner = Owner; owner.Same(window.Owner);
@@ -365,7 +365,7 @@ public static class SqlNullabilityExtensions
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public static SqlExpression<T?> AsNullable<T>(this SqlExpression<T> expression) where T : struct
     { var owner = expression.Owner; if (expression.Codec.Descriptor.Nullable) throw new ArgumentException("The expression is already nullable.", nameof(expression)); return new(owner, owner.Unary(4, expression.Reference), Codecs.Nullable(expression.Codec)); }
     /// <summary>Returns a fresh same-query nullable reference token; already-nullable metadata rejects.</summary>
@@ -376,7 +376,7 @@ public static class SqlNullabilityExtensions
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public static SqlExpression<T?> AsNullableReference<T>(this SqlExpression<T> expression) where T : class
     { var owner = expression.Owner; if (expression.Codec.Descriptor.Nullable) throw new ArgumentException("The expression is already nullable.", nameof(expression)); return new(owner, owner.Unary(4, expression.Reference), Codecs.NullableReference(expression.Codec)); }
 }
@@ -393,7 +393,7 @@ public static class SqlArithmeticExtensions
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public static SqlExpression<T> Add<T>(this SqlExpression<T> expression, T value) where T : INumber<T> => expression.Arithmetic(7, value);
     /// <summary>Performs native numeric add with explicit SQL NULL propagation.</summary>
     /// <inheritdoc cref="SqlArithmeticExtensions"/>
@@ -404,7 +404,7 @@ public static class SqlArithmeticExtensions
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public static SqlExpression<T> Add<T>(this SqlExpression<T> expression, SqlExpression<T> value) where T : INumber<T> => expression.Arithmetic(7, value);
     /// <summary>Performs native numeric add with explicit SQL NULL propagation.</summary>
     /// <inheritdoc cref="SqlArithmeticExtensions"/>
@@ -415,7 +415,7 @@ public static class SqlArithmeticExtensions
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public static SqlExpression<T?> Add<T>(this SqlExpression<T?> expression, T value) where T : struct, INumber<T> => expression.Arithmetic(7, value);
     /// <summary>Performs native numeric add with explicit SQL NULL propagation.</summary>
     /// <inheritdoc cref="SqlArithmeticExtensions"/>
@@ -426,7 +426,7 @@ public static class SqlArithmeticExtensions
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public static SqlExpression<T?> Add<T>(this SqlExpression<T?> expression, SqlExpression<T?> value) where T : struct, INumber<T> => expression.Arithmetic(7, value);
     /// <summary>Performs native numeric subtract with explicit SQL NULL propagation.</summary>
     /// <inheritdoc cref="SqlArithmeticExtensions"/>
@@ -437,7 +437,7 @@ public static class SqlArithmeticExtensions
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public static SqlExpression<T> Subtract<T>(this SqlExpression<T> expression, T value) where T : INumber<T> => expression.Arithmetic(8, value);
     /// <summary>Performs native numeric subtract with explicit SQL NULL propagation.</summary>
     /// <inheritdoc cref="SqlArithmeticExtensions"/>
@@ -448,7 +448,7 @@ public static class SqlArithmeticExtensions
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public static SqlExpression<T> Subtract<T>(this SqlExpression<T> expression, SqlExpression<T> value) where T : INumber<T> => expression.Arithmetic(8, value);
     /// <summary>Performs native numeric subtract with explicit SQL NULL propagation.</summary>
     /// <inheritdoc cref="SqlArithmeticExtensions"/>
@@ -459,7 +459,7 @@ public static class SqlArithmeticExtensions
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public static SqlExpression<T?> Subtract<T>(this SqlExpression<T?> expression, T value) where T : struct, INumber<T> => expression.Arithmetic(8, value);
     /// <summary>Performs native numeric subtract with explicit SQL NULL propagation.</summary>
     /// <inheritdoc cref="SqlArithmeticExtensions"/>
@@ -470,7 +470,7 @@ public static class SqlArithmeticExtensions
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public static SqlExpression<T?> Subtract<T>(this SqlExpression<T?> expression, SqlExpression<T?> value) where T : struct, INumber<T> => expression.Arithmetic(8, value);
     /// <summary>Performs native numeric multiply with explicit SQL NULL propagation.</summary>
     /// <inheritdoc cref="SqlArithmeticExtensions"/>
@@ -481,7 +481,7 @@ public static class SqlArithmeticExtensions
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public static SqlExpression<T> Multiply<T>(this SqlExpression<T> expression, T value) where T : INumber<T> => expression.Arithmetic(9, value);
     /// <summary>Performs native numeric multiply with explicit SQL NULL propagation.</summary>
     /// <inheritdoc cref="SqlArithmeticExtensions"/>
@@ -492,7 +492,7 @@ public static class SqlArithmeticExtensions
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public static SqlExpression<T> Multiply<T>(this SqlExpression<T> expression, SqlExpression<T> value) where T : INumber<T> => expression.Arithmetic(9, value);
     /// <summary>Performs native numeric multiply with explicit SQL NULL propagation.</summary>
     /// <inheritdoc cref="SqlArithmeticExtensions"/>
@@ -503,7 +503,7 @@ public static class SqlArithmeticExtensions
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public static SqlExpression<T?> Multiply<T>(this SqlExpression<T?> expression, T value) where T : struct, INumber<T> => expression.Arithmetic(9, value);
     /// <summary>Performs native numeric multiply with explicit SQL NULL propagation.</summary>
     /// <inheritdoc cref="SqlArithmeticExtensions"/>
@@ -514,7 +514,7 @@ public static class SqlArithmeticExtensions
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public static SqlExpression<T?> Multiply<T>(this SqlExpression<T?> expression, SqlExpression<T?> value) where T : struct, INumber<T> => expression.Arithmetic(9, value);
     /// <summary>Performs native numeric divide with explicit SQL NULL propagation.</summary>
     /// <inheritdoc cref="SqlArithmeticExtensions"/>
@@ -525,7 +525,7 @@ public static class SqlArithmeticExtensions
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public static SqlExpression<T> Divide<T>(this SqlExpression<T> expression, T value) where T : INumber<T> => expression.Arithmetic(10, value);
     /// <summary>Performs native numeric divide with explicit SQL NULL propagation.</summary>
     /// <inheritdoc cref="SqlArithmeticExtensions"/>
@@ -536,7 +536,7 @@ public static class SqlArithmeticExtensions
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public static SqlExpression<T> Divide<T>(this SqlExpression<T> expression, SqlExpression<T> value) where T : INumber<T> => expression.Arithmetic(10, value);
     /// <summary>Performs native numeric divide with explicit SQL NULL propagation.</summary>
     /// <inheritdoc cref="SqlArithmeticExtensions"/>
@@ -547,7 +547,7 @@ public static class SqlArithmeticExtensions
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public static SqlExpression<T?> Divide<T>(this SqlExpression<T?> expression, T value) where T : struct, INumber<T> => expression.Arithmetic(10, value);
     /// <summary>Performs native numeric divide with explicit SQL NULL propagation.</summary>
     /// <inheritdoc cref="SqlArithmeticExtensions"/>
@@ -558,7 +558,7 @@ public static class SqlArithmeticExtensions
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public static SqlExpression<T?> Divide<T>(this SqlExpression<T?> expression, SqlExpression<T?> value) where T : struct, INumber<T> => expression.Arithmetic(10, value);
 }
 /// <summary>Explicit SQL string pattern and allowlisted collation operations; no CLR culture comparison.</summary>
@@ -582,7 +582,7 @@ public static class SqlStringExtensions
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public static SqlPredicate ContainsNullableLiteral(this SqlExpression<string?> expression, string value) => Pattern(expression, value, 0, '\\');
     /// <summary>Uses an explicit raw LIKE pattern against nullable SQL text.</summary>
     /// <inheritdoc cref="SqlStringExtensions"/>
@@ -593,7 +593,7 @@ public static class SqlStringExtensions
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public static SqlPredicate LikeNullable(this SqlExpression<string?> expression, string pattern, char escape = '\\') => Pattern(expression, pattern, 3, escape);
     /// <summary>Escapes wildcard characters and binds a literal contains pattern.</summary>
     /// <inheritdoc cref="SqlStringExtensions"/>
@@ -603,7 +603,7 @@ public static class SqlStringExtensions
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public static SqlPredicate ContainsLiteral(this SqlExpression<string> expression, string value) => Pattern(expression, value, 0, '\\');
     /// <summary>Escapes wildcard characters and binds a literal prefix pattern.</summary>
     /// <inheritdoc cref="SqlStringExtensions"/>
@@ -613,7 +613,7 @@ public static class SqlStringExtensions
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public static SqlPredicate StartsWithLiteral(this SqlExpression<string> expression, string value) => Pattern(expression, value, 1, '\\');
     /// <summary>Escapes wildcard characters and binds a literal suffix pattern.</summary>
     /// <inheritdoc cref="SqlStringExtensions"/>
@@ -623,7 +623,7 @@ public static class SqlStringExtensions
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public static SqlPredicate EndsWithLiteral(this SqlExpression<string> expression, string value) => Pattern(expression, value, 2, '\\');
     /// <summary>Binds the supplied raw SQL LIKE pattern with an explicit escape character.</summary>
     /// <inheritdoc cref="SqlStringExtensions"/>
@@ -634,7 +634,7 @@ public static class SqlStringExtensions
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public static SqlPredicate Like(this SqlExpression<string> expression, string pattern, char escape = '\\') => Pattern(expression, pattern, 3, escape);
     /// <summary>Applies only a collation admitted by the provider's fixed allowlist.</summary>
     /// <inheritdoc cref="SqlStringExtensions"/>
@@ -644,7 +644,7 @@ public static class SqlStringExtensions
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
-    /// <exception cref="NativeWeave.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
+    /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public static SqlExpression<string> Collate(this SqlExpression<string> expression, string collation)
     { ArgumentNullException.ThrowIfNull(collation); var owner = expression.Owner; return new(owner, owner.Ref(owner.Clause(16, N(1, 4), U(2, expression.Reference.In(owner.Binding)), Text(3, collation), N(4, '\\'))), expression.Codec); }
 }

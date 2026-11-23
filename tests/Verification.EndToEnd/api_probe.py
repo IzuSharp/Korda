@@ -26,9 +26,9 @@ import xml.etree.ElementTree as ET
 
 
 ROOT = Path(__file__).resolve().parents[2]
-ASSEMBLY = 'NativeWeave.Verification.EndToEnd.ApiProbe'
+ASSEMBLY = 'Korda.Verification.EndToEnd.ApiProbe'
 COMMON = ['-m:1', '-nr:false', '-p:UseSharedCompilation=false']
-DIRECT = {'NativeWeave.Database.Sqlite', 'NativeWeave.Database.PostgreSql'}
+DIRECT = {'Korda.Database.Sqlite', 'Korda.Database.PostgreSql'}
 REQUIRED = [provider + '-' + mode for provider in ('sqlite', 'postgresql') for mode in ('aot',)]
 
 # Shared source/package identity helpers; all runtime observations are produced afresh.
@@ -50,7 +50,7 @@ class Controller:
         if self.output.exists():
             raise ValueError('Use a new output directory; never overwrite an executed attempt.')
         self.source = args.source.resolve() / ('src/Reference.TaskService' if args.fixture == 'reference' else 'src/Verification.EndToEnd/ApiProbe')
-        self.assembly = 'NativeWeave.Reference.TaskService' if args.fixture == 'reference' else ASSEMBLY
+        self.assembly = 'Korda.Reference.TaskService' if args.fixture == 'reference' else ASSEMBLY
         self.project_name = 'Reference.TaskService.csproj' if args.fixture == 'reference' else 'ApiProbe.csproj'
         if self.output.is_relative_to(args.source.resolve()):
             raise ValueError('Independent package consumer output must be outside the source worktree.')
@@ -128,12 +128,12 @@ class Controller:
         ET.SubElement(sources, 'add', key='candidate', value=str(self.feed))
         ET.SubElement(sources, 'add', key='nuget.org', value='https://api.nuget.org/v3/index.json')
         mapping = ET.SubElement(config, 'packageSourceMapping'); ET.SubElement(mapping, 'clear')
-        ET.SubElement(ET.SubElement(mapping, 'packageSource', key='candidate'), 'package', pattern='NativeWeave.*')
+        ET.SubElement(ET.SubElement(mapping, 'packageSource', key='candidate'), 'package', pattern='Korda.*')
         ET.SubElement(ET.SubElement(mapping, 'packageSource', key='nuget.org'), 'package', pattern='*')
         ET.ElementTree(config).write(consumer / 'NuGet.Config')
         self.state.setdefault('consumer_sources', {})[mode] = inventory(consumer)
         rid = ['-r', 'linux-x64', '-p:PublishAot=true'] if mode == 'aot' else []
-        version = ['-p:NativeWeavePackageVersion=' + self.args.version]
+        version = ['-p:KordaPackageVersion=' + self.args.version]
         self.command(mode + '-resolve-candidate', ['dotnet', 'restore', project, '--configfile', consumer / 'NuGet.Config',
             '--disable-parallel', '--use-lock-file', *version, *rid, *COMMON], cwd=consumer)
         self.command(mode + '-locked-restore', ['dotnet', 'restore', project, '--configfile', consumer / 'NuGet.Config',
@@ -155,7 +155,7 @@ class Controller:
                 raise AssertionError('Missing resolved package archive: ' + name)
             archives[name] = sha(files[0])
             package = name.rsplit('/', 1)[0]
-            if package.startswith('NativeWeave.'):
+            if package.startswith('Korda.'):
                 expected = self.state['inputs']['packages'].get(package)
                 if not expected or name != package + '/' + expected['version'] or archives[name] != expected['sha256']:
                     raise AssertionError('Resolved package differs from fixed producer feed: ' + name)

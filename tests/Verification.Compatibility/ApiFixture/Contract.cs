@@ -1,4 +1,4 @@
-namespace NativeWeave.Compatibility.Conformance;
+namespace Korda.Compatibility.Conformance;
 
 /// <summary>Unpublished compiled evolution fixtures, never a product facade.</summary>
 /// <remarks>All calls are synchronous, thread-safe and retain no state or ownership. Scalar operations allocate no memory; Normalize returns its input reference. No native call, cancellation, resource or executor is involved.</remarks>

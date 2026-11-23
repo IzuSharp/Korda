@@ -1,8 +1,8 @@
 using System.Buffers.Binary;
 using System.Text;
-using NativeWeave.Data;
+using Korda.Data;
 
-namespace NativeWeave.Query.Internal;
+namespace Korda.Query.Internal;
 
 /// <summary>Exact immediate kind6/kind13/kind22 fields over B01 encoders; no query tree is accumulated.</summary>
 internal static class OperandEncoding

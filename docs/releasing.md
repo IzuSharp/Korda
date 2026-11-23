@@ -4,7 +4,7 @@ Inspect the committed diff with `python3 eng/ci/impact.py origin/main`. The Pyth
 
 Documentation and CI orchestration changes run the tooling checks. An API snapshot runs the owning API check. A changed provider test builds its selected provider and executes on the Linux runner. Shared package inputs can affect both providers. PRs execute product consumers with Native AOT. C# and Python CodeQL follow the changed languages. Weekly native analysis runs C/C++ CodeQL and clang-tidy.
 
-The public package allowlist contains **NativeWeave.Database.Sqlite** and **NativeWeave.Database.PostgreSql**. Each package includes the shared managed assemblies, build integration, generator, third-party notices and its selected provider library. Internal component packages and HelloWorld receive no new public versions.
+The public package allowlist contains **Korda.Database.Sqlite** and **Korda.Database.PostgreSql**. Each package includes the shared managed assemblies, build integration, generator, third-party notices and its selected provider library. Internal component packages and HelloWorld receive no new public versions.
 
 Each candidate uses `0.1.0-preview.<CI run number>.2`. The PR verifies and retains the exact archive for the integration tree. A merge promotes a successful same-repository PR artifact with matching tree, package selection and eligible version. A missing or expired candidate stops publication. The trusted `release.yml` job verifies the allowlist, checks archive hashes before authentication, polls NuGet indexing every two minutes and executes the signed registry package with Native AOT. The combined consumer runs when both provider candidates are selected.
 

@@ -4,7 +4,7 @@
 
 B05 implements native transaction admission, effect knowledge, savepoints and
 retained cleanup. The exact public scope is `DataTransaction`, `Savepoint`, their
-options, result values and exceptions in `NativeWeave.Database`. The immutable
+options, result values and exceptions in `Korda.Database`. The immutable
 Design input is `c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9`, C-TX-001 0.4.0.
 
 `src/Data.Transactions` is an unreleased build component. It adds no public
@@ -132,7 +132,7 @@ Stale generations cannot touch a later session owner.
 
 ## Provider integration
 
-`nativeweave-data-transactions::TransactionDriver` is an engine-internal Rust seam:
+`korda-data-transactions::TransactionDriver` is an engine-internal Rust seam:
 
 | Hook | Provider responsibility |
 | --- | --- |

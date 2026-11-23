@@ -1,6 +1,6 @@
-using NativeWeave.Interop;
-using NativeWeave.Interop.Async;
-using NativeWeave.Interop.Callbacks;
+using Korda.Interop;
+using Korda.Interop.Async;
+using Korda.Interop.Callbacks;
 
 // Maintainer example: the application-facing domain method creates an exact
 // native operation and returns this Task<NativeBuffer>. No cookie/ABI is public.

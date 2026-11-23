@@ -1,13 +1,13 @@
 using Microsoft.Extensions.DependencyInjection;
 using System.Runtime.CompilerServices;
-using NativeWeave.Data;
-using NativeWeave.Database;
-using NativeWeave.Database.Sqlite;
-using NativeWeave.Database.PostgreSql;
-using NativeWeave.Interop;
-using NativeWeave.Interop.Async;
-using NativeWeave.Interop.Abi;
-using NativeWeave.Query.Internal;
+using Korda.Data;
+using Korda.Database;
+using Korda.Database.Sqlite;
+using Korda.Database.PostgreSql;
+using Korda.Interop;
+using Korda.Interop.Async;
+using Korda.Interop.Abi;
+using Korda.Query.Internal;
 using System.Buffers.Binary;
 
 try { await Suite.Run(); } catch (DatabaseException failure) { Console.Error.WriteLine($"kind={failure.Kind} provider={failure.ProviderCode} correlation={failure.CorrelationId}"); throw; }
@@ -22,7 +22,7 @@ internal static class Suite
     {
         var pg = Environment.GetEnvironmentVariable("NW_TEST_POSTGRES");
         if (string.IsNullOrEmpty(pg)) throw new InvalidOperationException("Set NW_TEST_POSTGRES to the isolated actual PostgreSQL18 test cluster.");
-        var directory = Path.Combine(Path.GetTempPath(), "nativeweave-b04-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(directory);
+        var directory = Path.Combine(Path.GetTempPath(), "korda-b04-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(directory);
         var path = Path.Combine(directory, "host.db");
         var sqlite = new DataSourceBuilder().UseSqlite(path).WithName("b04-sqlite").ConfigureLimits(new DatabaseLimits { MaxConnections = 2, MaxBatchRows = 3 }).Build();
         Check(!File.Exists(path), "Build must not open SQLite");
@@ -151,7 +151,7 @@ internal static class Suite
         using var plan = SqlSubmission.Create(session, SqlCommand.Create("SELECT id,name FROM " + table + " ORDER BY id"), 3, id);
         using var cursor = await session.ExecutePlanAsync(plan, ReadOnlyMemory<byte>.Empty, default);
         var close = new CloseController(source, cursor, cursor.Dispose);
-        Task<NativeWeave.Database.NativeBuffer> Fetch(int rows) => source.Start(() => NativeHost.Fetch(cursor, rows, source.Limits.MaxBatchBytes), operation => NativeHost.TakeBuffer(source.Binding, operation));
+        Task<Korda.Database.NativeBuffer> Fetch(int rows) => source.Start(() => NativeHost.Fetch(cursor, rows, source.Limits.MaxBatchBytes), operation => NativeHost.TakeBuffer(source.Binding, operation));
         try
         {
             using (var first = await Fetch(1))
@@ -167,11 +167,11 @@ internal static class Suite
     private static async Task DependencyInjection(string path)
     {
         var services = new ServiceCollection(); var configurations = 0;
-        services.AddNativeWeaveDatabase(builder => { configurations++; builder.UseSqlite(path); });
-        services.AddKeyedNativeWeaveDatabase("audit", builder => builder.UseSqlite(path));
+        services.AddKordaDatabase(builder => { configurations++; builder.UseSqlite(path); });
+        services.AddKeyedKordaDatabase("audit", builder => builder.UseSqlite(path));
         Check(configurations == 0, "DI configuration waits for owner construction");
-        await Throws<InvalidOperationException>(() => { services.AddNativeWeaveDatabase(_ => { }); return Task.CompletedTask; });
-        await Throws<InvalidOperationException>(() => { services.AddKeyedNativeWeaveDatabase("audit", _ => { }); return Task.CompletedTask; });
+        await Throws<InvalidOperationException>(() => { services.AddKordaDatabase(_ => { }); return Task.CompletedTask; });
+        await Throws<InvalidOperationException>(() => { services.AddKeyedKordaDatabase("audit", _ => { }); return Task.CompletedTask; });
         DataSource first, keyed;
         await using (var provider = services.BuildServiceProvider())
         {

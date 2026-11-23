@@ -1,4 +1,4 @@
-namespace NativeWeave.Data;
+namespace Korda.Data;
 
 /// <summary>Opts a model into deterministic, static table and DTO mapping generation.</summary>
 /// <remarks>The generator reads source symbols and emits the same TableBuilder calls as manual metadata.

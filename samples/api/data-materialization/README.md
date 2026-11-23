@@ -1,7 +1,7 @@
 # Static materialization consumers
 
 `Examples.cs` is the compiled manual path for B12. It uses only public
-`NativeWeave.Data` and `NativeWeave.Database` APIs. The source defines an owned
+`Korda.Data` and `Korda.Database` APIs. The source defines an owned
 record, an explicitly closed generic JSON record, and a static `JsonTypeInfo`
 context. `ReadAsync` materializes a bounded list; `SumAsync` consumes a bounded
 stream. Both are executed against PostgreSQL18 and SQLite by

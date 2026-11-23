@@ -1,7 +1,7 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using NativeWeave.Interop;
-using NativeWeave.Interop.Extensibility;
+using Korda.Interop;
+using Korda.Interop.Extensibility;
 
 if (args.Length < 3)
     throw new ArgumentException("Usage: CompatibilitySample <native-absolute-path> <accepted-sha256> <pass|major|layout|capability|hash|semantics|conflict> [--require-aot]");
@@ -20,7 +20,7 @@ const string generation = "new";
 #else
 const string generation = "old";
 #endif
-var manifest = new EnginePackageManifest("compat", "NativeWeave.Compatibility.Conformance", "0.1.0",
+var manifest = new EnginePackageManifest("compat", "Korda.Compatibility.Conformance", "0.1.0",
     new AbiVersion(1, 0), "nw_compat_get_abi_v1", EngineThreadingModel.Synchronous,
     [new NativeAssetDescriptor("linux-x64", "runtimes/linux-x64/native/libnw_compat.so", hash, "x86-64-v2")], definitions);
 EngineDescriptor descriptor = EnginePackage.CreateDescriptor(manifest, typeof(NativeMethods).Assembly);

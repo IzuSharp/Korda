@@ -1,4 +1,4 @@
-using NativeWeave.Data;
+using Korda.Data;
 
 [WeaveTable("b14_items", DescriptorName = "Items")]
 public sealed partial record Item([property: WeaveKey] long Tenant, [property: WeaveKey] long Id, string? Name, [property: WeaveVersion] long Version);

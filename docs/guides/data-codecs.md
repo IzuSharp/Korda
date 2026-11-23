@@ -4,7 +4,7 @@
 
 ## Scope and application usage
 
-`NativeWeave.Data` owns the public `ValueCodec<T>`, `Codecs`, `SqlParameters`,
+`Korda.Data` owns the public `ValueCodec<T>`, `Codecs`, `SqlParameters`,
 `SqlCommand`, row and relation declarations. B07 implements their internal
 managed parameter snapshot and the single fallible Rust conversion boundary.
 It introduces no public CLR type, database host, connection pool, runtime, SQL
@@ -16,7 +16,7 @@ Use explicit codecs when a value's precision, NULL policy or JSON metadata is
 significant:
 
 ```csharp
-using NativeWeave.Data;
+using Korda.Data;
 
 var parameters = new SqlParameters()
     .Add("id", Guid.Parse("00112233-4455-6677-8899-aabbccddeeff"), Codecs.Guid)
@@ -122,7 +122,7 @@ python3 tests/Data.Codecs/verify.py --postgres-bin /path/to/postgresql/bin
 ```
 
 The verifier requires PostgreSQL binaries or an explicit
-`NATIVEWEAVE_TEST_POSTGRES_URL`. It fails if the service is unavailable. With
+`KORDA_TEST_POSTGRES_URL`. It fails if the service is unavailable. With
 `--postgres-bin` it creates an isolated local test cluster, keeps it alive during
 the fixture, and stops it in `finally`; no persistent service configuration is
 changed. Only an explicitly supplied `--offline-config` disables audit lookup
@@ -153,4 +153,4 @@ Design inputs remain `c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9`, especially
 `docs/api/database.md` §§4.2, 9.1.2 and 9.2.1, C-DB-001 and the public API
 standard. Actual fixed upstream source inspection is recorded in
 `src/Data.Codecs/source-inputs.json`; inspected source is distinct from executed
-NativeWeave component evidence.
+Korda component evidence.

@@ -2,7 +2,7 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text.Json;
 
-namespace NativeWeave.Reference.TaskService;
+namespace Korda.Reference.TaskService;
 
 internal sealed record UploadManifest(long Version, string OperationId, string Tenant, string Principal, string ItemId,
     string RequestKey, long ExpectedVersion, string? ContentHash, long ContentLength, string State, long CreatedAt);

@@ -1,5 +1,5 @@
-using NativeWeave.Data;
-using NativeWeave.Database.Internal;
+using Korda.Data;
+using Korda.Database.Internal;
 
 // Maintainer component sample: the factory uses the test-only native ABI shim.
 // The future public DataSession/QuerySelection owners supply the same adapter seam.

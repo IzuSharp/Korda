@@ -1,5 +1,5 @@
 using System.Runtime.CompilerServices;
-using NativeWeave.Verification.Interop;
+using Korda.Verification.Interop;
 
 if (args.Contains("--require-aot") && RuntimeFeature.IsDynamicCodeSupported) throw new InvalidOperationException("Actual Native AOT execution required.");
 if (args.Length == 2 && args[0] == "--extent") { PropertySuite.ExtentCase(Extent.Parse(args[1])); return 0; }

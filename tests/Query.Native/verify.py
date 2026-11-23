@@ -28,7 +28,7 @@ if sys.platform != 'linux' or platform.machine() != 'x86_64':
 out = a.output.resolve()
 out.mkdir(parents=True, exist_ok=False)
 env = os.environ.copy()
-env.update(DOTNET_CLI_USE_MSBUILD_SERVER='0', MSBUILDUSESERVER='0', NATIVEWEAVE_QUERY_ORACLE_OUTPUT=str(out / 'oracle'))
+env.update(DOTNET_CLI_USE_MSBUILD_SERVER='0', MSBUILDUSESERVER='0', KORDA_QUERY_ORACLE_OUTPUT=str(out / 'oracle'))
 (out / 'oracle').mkdir()
 commands = []
 server = None
@@ -113,7 +113,7 @@ try:
     pg = a.postgres_bin.resolve()
     data = out / 'postgres-data'
     run('postgres-identity', [pg / 'postgres', '--version'])
-    run('postgres-init', [pg / 'initdb', '-D', data, '-U', 'nativeweave', '--auth=trust', '--no-locale', '--encoding=UTF8'])
+    run('postgres-init', [pg / 'initdb', '-D', data, '-U', 'korda', '--auth=trust', '--no-locale', '--encoding=UTF8'])
     with socket.socket() as listener:
         listener.bind(('127.0.0.1', 0))
         port = listener.getsockname()[1]
@@ -128,16 +128,16 @@ try:
     else:
         raise RuntimeError('PostgreSQL startup exceeded its finite deadline.')
     # Host accepts typed TLS policy only; URI query options are intentionally rejected.
-    env['NATIVEWEAVE_TEST_POSTGRES_URL'] = f'postgresql://nativeweave@127.0.0.1:{port}/postgres'
+    env['KORDA_TEST_POSTGRES_URL'] = f'postgresql://korda@127.0.0.1:{port}/postgres'
     common = ['-p:UseSharedCompilation=false', '-nr:false', '-m:1']
     config = ['--configfile', a.nuget_config] if a.nuget_config else []
-    project = 'tests/Query.Native/NativeWeave.Query.Native.Tests.csproj'
+    project = 'tests/Query.Native/Korda.Query.Native.Tests.csproj'
     run('restore-managed', ['dotnet', 'restore', project, '--locked-mode', *config, *common])
     run('build-managed', ['dotnet', 'build', project, '-c', 'Release', '--no-restore', *common])
     run('restore-aot', ['dotnet', 'restore', project, '-r', 'linux-x64', '-p:PublishAot=true', '--locked-mode', *config, *common])
     run('publish-aot', ['dotnet', 'publish', project, '-c', 'Release', '-r', 'linux-x64', '-p:PublishAot=true',
          '-p:IlcTreatWarningsAsErrors=true', '--no-restore', '-o', out / 'aot', *common])
-    executable = out / 'aot/NativeWeave.Query.Native.Tests'
+    executable = out / 'aot/Korda.Query.Native.Tests'
     if executable.read_bytes()[:4] != b'\x7fELF' or executable.with_suffix('.dll').exists():
         raise RuntimeError('Expected an actual standalone Native AOT executable.')
     run('actual-aot-host', [executable, module, out / 'oracle', out / 'aot-results', '--require-aot'])
@@ -155,7 +155,7 @@ try:
     after_host = inputs(a.host_source.resolve(), host_scopes)
     if source != after or host_source != after_host or native_hash != sha(module):
         raise RuntimeError('Acceptance inputs changed during execution.')
-    write('artifact-identities.json', {'native_sha256': native_hash, 'managed_sha256': sha(ROOT / 'tests/Query.Native/bin/Release/net11.0/NativeWeave.Query.Native.Tests.dll'),
+    write('artifact-identities.json', {'native_sha256': native_hash, 'managed_sha256': sha(ROOT / 'tests/Query.Native/bin/Release/net11.0/Korda.Query.Native.Tests.dll'),
           'aot_sha256': sha(executable), 'source_inputs_unchanged': True,
           'oracle_sha256': {f.name: sha(f) for f in (out / 'oracle').iterdir()},
           'separate_distribution_package': False, 'pristine_machine': False})

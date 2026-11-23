@@ -1,7 +1,7 @@
-using NativeWeave.Data;
-using NativeWeave.Interop.Abi;
+using Korda.Data;
+using Korda.Interop.Abi;
 
-namespace NativeWeave.Query.Internal;
+namespace Korda.Query.Internal;
 
 /// <summary>Post-Build registration keeps canonical Table/Relation identities unchanged.</summary>
 /// <remarks>All registration calls borrow immutable bytes synchronously. Models, relations and admitted operations retain native copies.</remarks>

@@ -1,4 +1,0 @@
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup><OutputType>Exe</OutputType><AssemblyName>NativeWeave.Data.Migrations.Sample</AssemblyName><IsAotCompatible>true</IsAotCompatible></PropertyGroup>
-  <ItemGroup><ProjectReference Include="../../../src/Data.Sqlite/NativeWeave.Database.Sqlite.csproj" /><ProjectReference Include="../../../src/Data.Postgres/NativeWeave.Database.PostgreSql.csproj" /></ItemGroup>
-</Project>

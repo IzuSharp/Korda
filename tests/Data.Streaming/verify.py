@@ -89,16 +89,16 @@ def main() -> int:
     common = ["-p:UseSharedCompilation=false", "-nr:false", "-m:1"]
     local_restore = (["--configfile", str(args.offline_config.resolve()), "-p:NuGetAudit=false"]
                      if args.offline_config else [])
-    project = "tests/Data.Streaming/NativeWeave.Data.Streaming.Tests.csproj"
+    project = "tests/Data.Streaming/Korda.Data.Streaming.Tests.csproj"
     api = "tests/Data.Streaming/ApiCheck/ApiCheck.csproj"
     sample = "samples/api/data-streaming/DataStreaming.csproj"
     fixture_dir = args.native_build.resolve() / "fixtures"
-    fixture = fixture_dir / "libnativeweave_streaming_fixture.so"
-    assembly = ROOT / "tests/Data.Streaming/bin/Release/net11.0/NativeWeave.Data.Streaming.Tests.dll"
-    streaming_assembly = ROOT / "src/Data.Streaming/bin/Release/net11.0/NativeWeave.Data.Streaming.dll"
+    fixture = fixture_dir / "libkorda_streaming_fixture.so"
+    assembly = ROOT / "tests/Data.Streaming/bin/Release/net11.0/Korda.Data.Streaming.Tests.dll"
+    streaming_assembly = ROOT / "src/Data.Streaming/bin/Release/net11.0/Korda.Data.Streaming.dll"
     streaming_xml = streaming_assembly.with_suffix(".xml")
-    api_assembly = ROOT / "tests/Data.Streaming/ApiCheck/bin/Release/net11.0/NativeWeave.Data.Streaming.ApiCheck.dll"
-    sample_assembly = ROOT / "samples/api/data-streaming/bin/Release/net11.0/NativeWeave.Data.Streaming.Sample.dll"
+    api_assembly = ROOT / "tests/Data.Streaming/ApiCheck/bin/Release/net11.0/Korda.Data.Streaming.ApiCheck.dll"
+    sample_assembly = ROOT / "samples/api/data-streaming/bin/Release/net11.0/Korda.Data.Streaming.Sample.dll"
     server = None
     server_log = None
     status = "failed"
@@ -125,7 +125,7 @@ def main() -> int:
             (output / "design-check.json").write_text(json.dumps({"revision": revision, "files": checked}, indent=2) + "\n")
 
         provenance = prepare(run, args.native_build,
-                             ["nativeweave_streaming_fixture", "nw_streaming_tests"], r"^native\.streaming$",
+                             ["korda_streaming_fixture", "nw_streaming_tests"], r"^native\.streaming$",
                              [ROOT / "native/cpp/tests/fixtures/streaming.cpp", ROOT / "native/cpp/tests/streaming_tests.cpp"])
         (output / "compiler-provenance.txt").write_text(provenance)
 
@@ -142,13 +142,13 @@ def main() -> int:
         publish = output / "aot"
         run("aot-publish", ["dotnet", "publish", project, "-c", "Release", "-r", "linux-x64",
                             "-p:PublishAot=true", "-p:RestoreLockedMode=true", *local_restore, *common, "-o", str(publish)])
-        executable = publish / "NativeWeave.Data.Streaming.Tests"
+        executable = publish / "Korda.Data.Streaming.Tests"
         native_env = dict(env, LD_LIBRARY_PATH=str(fixture_dir) + (":" + env["LD_LIBRARY_PATH"] if env.get("LD_LIBRARY_PATH") else ""))
         if args.postgres_bin:
             pg = args.postgres_bin.resolve()
             data = output / "postgres-data"
             run("postgres-version", [str(pg / "postgres"), "--version"])
-            run("postgres-init", [str(pg / "initdb"), "-D", str(data), "-U", "nativeweave", "--auth=trust", "--no-locale", "--encoding=UTF8"])
+            run("postgres-init", [str(pg / "initdb"), "-D", str(data), "-U", "korda", "--auth=trust", "--no-locale", "--encoding=UTF8"])
             with socket.socket() as listener:
                 listener.bind(("127.0.0.1", 0))
                 port = listener.getsockname()[1]
@@ -166,14 +166,14 @@ def main() -> int:
                 raise RuntimeError("PostgreSQL startup deadline exceeded.")
             # B02 accepts only typed connection settings. The fixture selects the
             # explicit local-development plaintext policy; URL query overrides are forbidden.
-            native_env["NATIVEWEAVE_TEST_POSTGRES_URL"] = f"postgresql://nativeweave@127.0.0.1:{port}/postgres"
-        elif not native_env.get("NATIVEWEAVE_TEST_POSTGRES_URL"):
-            raise RuntimeError("PostgreSQL binaries or explicit NATIVEWEAVE_TEST_POSTGRES_URL are required.")
+            native_env["KORDA_TEST_POSTGRES_URL"] = f"postgresql://korda@127.0.0.1:{port}/postgres"
+        elif not native_env.get("KORDA_TEST_POSTGRES_URL"):
+            raise RuntimeError("PostgreSQL binaries or explicit KORDA_TEST_POSTGRES_URL are required.")
         run("aot-providers", [str(executable), str(output / "aot-results"), "--require-aot"], native_env)
         sample_dir = output / "sample-aot"
         run("sample-aot-publish", ["dotnet", "publish", sample, "-c", "Release", "-r", "linux-x64",
                                   "-p:PublishAot=true", "-p:RestoreLockedMode=true", "-o", str(sample_dir), *common])
-        sample_exe = sample_dir / "NativeWeave.Data.Streaming.Sample"
+        sample_exe = sample_dir / "Korda.Data.Streaming.Sample"
         run("sample-sqlite", [str(sample_exe), "sqlite"], native_env)
         run("sample-postgresql", [str(sample_exe), "postgresql"], native_env)
 

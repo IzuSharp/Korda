@@ -4,7 +4,7 @@ The current Linux x64 gate is `python3 eng/build.py verify`. It requires committ
 
 It checks CMake and .NET graphs, locked dependencies, clang-format, clang-tidy, native CTest, compiled APIs/XML and the unchanged database executable suites. Provider component tests include actual PostgreSQL TLS/error cases, SQLite behavior, transactions, codecs, streaming and query binding. Composed suites cover Database Host, migrations and process recovery, Fluent queries, DTO mapping, relations/CRUD, cancellation and deterministic retirement.
 
-Mixed reference/end-to-end fixtures directly invoke C# database business methods. Unique nullable/composite relationship, session/stream/transaction lifecycle, lock-conflict and lost-COMMIT-ack assertions remain. These fixtures create no NativeWeave listener or protocol host.
+Mixed reference/end-to-end fixtures directly invoke C# database business methods. Unique nullable/composite relationship, session/stream/transaction lifecycle, lock-conflict and lost-COMMIT-ack assertions remain. These fixtures create no Korda listener or protocol host.
 
 ## Consumer acceptance
 

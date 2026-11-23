@@ -1,4 +1,4 @@
-using NativeWeave.Interop.Callbacks;
+using Korda.Interop.Callbacks;
 
 // Maintainer component example. Applications use a domain's typed managed
 // subscription API; they never supply the private cookie or unmanaged callback.

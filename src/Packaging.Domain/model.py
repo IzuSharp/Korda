@@ -14,25 +14,25 @@ import xml.etree.ElementTree as ET
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[2]
-REPOSITORY = "https://github.com/IzuSharp/NativeWeave"
+REPOSITORY = "https://github.com/IzuSharp/Korda"
 RID = "linux-x64"
 TASK = "DB-CPP-01"
 COMMON = (
-    "NativeWeave.Interop.Abi", "NativeWeave.Core", "NativeWeave.Data",
-    "NativeWeave.Database.Transactions", "NativeWeave.Data.Streaming",
-    "NativeWeave.Query.Binding", "NativeWeave.Query.Generator",
+    "Korda.Interop.Abi", "Korda.Core", "Korda.Data",
+    "Korda.Database.Transactions", "Korda.Data.Streaming",
+    "Korda.Query.Binding", "Korda.Query.Generator",
 )
 MANAGED = {
-    "NativeWeave.Interop.Abi": ("src/Interop.Abi", []),
-    "NativeWeave.Core": ("src/NativeWeave.Core", ["NativeWeave.Interop.Abi"]),
-    "NativeWeave.Data": ("src/Data.Abstractions", []),
-    "NativeWeave.Database.Transactions": ("src/Data.Transactions", ["NativeWeave.Data"]),
-    "NativeWeave.Data.Streaming": ("src/Data.Streaming", ["NativeWeave.Data"]),
-    "NativeWeave.Query.Binding": ("src/Query.Binding", ["NativeWeave.Data", "NativeWeave.Interop.Abi"]),
-    "NativeWeave.Query.Generator": ("src/Query.Generator", []),
-    "NativeWeave.Database": ("src/Data.NativeHost", ["NativeWeave.Core", "NativeWeave.Data", "NativeWeave.Database.Transactions", "NativeWeave.Data.Streaming", "NativeWeave.Query.Binding"]),
-    "NativeWeave.Database.Sqlite": ("src/Data.Sqlite", ["NativeWeave.Core", "NativeWeave.Data", "NativeWeave.Database", "NativeWeave.Query.Generator", "NativeWeave.Database.Sqlite.Native"]),
-    "NativeWeave.Database.PostgreSql": ("src/Data.Postgres", ["NativeWeave.Core", "NativeWeave.Data", "NativeWeave.Database", "NativeWeave.Query.Generator", "NativeWeave.Database.PostgreSql.Native"]),
+    "Korda.Interop.Abi": ("src/Interop.Abi", []),
+    "Korda.Core": ("src/Korda.Core", ["Korda.Interop.Abi"]),
+    "Korda.Data": ("src/Data.Abstractions", []),
+    "Korda.Database.Transactions": ("src/Data.Transactions", ["Korda.Data"]),
+    "Korda.Data.Streaming": ("src/Data.Streaming", ["Korda.Data"]),
+    "Korda.Query.Binding": ("src/Query.Binding", ["Korda.Data", "Korda.Interop.Abi"]),
+    "Korda.Query.Generator": ("src/Query.Generator", []),
+    "Korda.Database": ("src/Data.NativeHost", ["Korda.Core", "Korda.Data", "Korda.Database.Transactions", "Korda.Data.Streaming", "Korda.Query.Binding"]),
+    "Korda.Database.Sqlite": ("src/Data.Sqlite", ["Korda.Core", "Korda.Data", "Korda.Database", "Korda.Query.Generator", "Korda.Database.Sqlite.Native"]),
+    "Korda.Database.PostgreSql": ("src/Data.Postgres", ["Korda.Core", "Korda.Data", "Korda.Database", "Korda.Query.Generator", "Korda.Database.PostgreSql.Native"]),
 }
 DATABASE_CAPABILITIES = [
     "db.metadata.v1", "db.query.v1", "db.transactions.v1", "db.savepoints.v1", "db.streaming.v1",
@@ -43,15 +43,15 @@ DATABASE_CAPABILITIES = [
     "db.scalar-codecs.v1", "db.sql.expert.v1",
 ]
 ENGINES = {
-    "database.sqlite": ("NativeWeave.Database.Sqlite", "libnw_database_sqlite.so", "nw_database_sqlite", DATABASE_CAPABILITIES),
-    "database.postgresql": ("NativeWeave.Database.PostgreSql", "libnw_database_postgresql.so", "nw_database_postgresql", DATABASE_CAPABILITIES),
+    "database.sqlite": ("Korda.Database.Sqlite", "libnw_database_sqlite.so", "nw_database_sqlite", DATABASE_CAPABILITIES),
+    "database.postgresql": ("Korda.Database.PostgreSql", "libnw_database_postgresql.so", "nw_database_postgresql", DATABASE_CAPABILITIES),
 }
 LEAVES = {value[0] + ".Native": engine for engine, value in ENGINES.items()}
 IDS = tuple(sorted(set(MANAGED) | set(LEAVES)))
 CHANGED = tuple(identity for identity in MANAGED if identity not in COMMON)
 RETIRED_PACKAGE_PREFIXES = (
-    "nativeweave.server", "nativeweave.protocols", "nativeweave.engines",
-    "nativeweave.helloworld", "nativeweave.conformance", "nativeweave.verification.extensionproof",
+    "korda.server", "korda.protocols", "korda.engines",
+    "korda.helloworld", "korda.conformance", "korda.verification.extensionproof",
     "grpc.", "google.protobuf", "modelcontextprotocol",
 )
 
@@ -61,8 +61,8 @@ def require_database_package(identity):
     name = identity.lower()
     if name.startswith(RETIRED_PACKAGE_PREFIXES):
         raise ValueError("Retired non-database package is present: " + identity)
-    if name.startswith("nativeweave.") and name not in {item.lower() for item in IDS}:
-        raise ValueError("Undeclared NativeWeave database package: " + identity)
+    if name.startswith("korda.") and name not in {item.lower() for item in IDS}:
+        raise ValueError("Undeclared Korda database package: " + identity)
 
 
 def validate_database_payload(package, expected):
@@ -88,7 +88,7 @@ def validate_database_payload(package, expected):
             raise ValueError("Database package contains an undeclared native asset")
         libraries = {Path(name).name for name in names if name.startswith("lib/") and name.endswith(".dll")}
         expected_libraries = ({expected["id"] + ".dll"}
-                              if expected["id"] in MANAGED and expected["id"] != "NativeWeave.Query.Generator" else set())
+                              if expected["id"] in MANAGED and expected["id"] != "Korda.Query.Generator" else set())
         if libraries != expected_libraries:
             raise ValueError("Database package contains an undeclared runtime assembly")
     return {"dependencies": dependencies, "managedRuntimeAssemblies": sorted(libraries), "nativeAssets": sorted(native)}

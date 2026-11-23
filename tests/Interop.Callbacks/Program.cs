@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
 using System.Runtime.CompilerServices;
-using NativeWeave.Interop.Abi;
-using NativeWeave.Interop.Callbacks;
+using Korda.Interop.Abi;
+using Korda.Interop.Callbacks;
 
 internal sealed class ManualScheduler : ICallbackScheduler
 {
@@ -213,7 +213,7 @@ internal static class Program
         Check(Fixture.Emit(registration, [7, 8, 9]) == NativeStatus.CallbackFailed, "Byte capacity must reject before acceptance.");
         Check(registration.Snapshot.RetainedBytes == 0, "Failure must discard pending owned copies.");
         await Complete(registration, scheduler);
-        try { await registration.Completion; } catch (NativeWeave.Interop.NativeEngineException) { }
+        try { await registration.Completion; } catch (Korda.Interop.NativeEngineException) { }
         Check(handled == 1, "Overflow-close dispatched discarded data.");
 
         var itemScheduler = new ManualScheduler();
@@ -223,7 +223,7 @@ internal static class Program
         Check(Fixture.Emit(itemBound, []) == NativeStatus.Ok, "Zero-byte event rejected.");
         Check(Fixture.Emit(itemBound, []) == NativeStatus.CallbackFailed, "Zero-byte events bypassed item capacity.");
         await Complete(itemBound, itemScheduler);
-        try { await itemBound.Completion; } catch (NativeWeave.Interop.NativeEngineException) { }
+        try { await itemBound.Completion; } catch (Korda.Interop.NativeEngineException) { }
     }
 
     private static async Task NativeSourceAndControlDrain()

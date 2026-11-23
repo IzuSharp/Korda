@@ -1,5 +1,5 @@
 // Generated from native/database/interfaces/schema-v1.json; do not edit.
-namespace NativeWeave.Data;
+namespace Korda.Data;
 internal static class WireSchema
 {
     internal const int SchemaVersion = 1;

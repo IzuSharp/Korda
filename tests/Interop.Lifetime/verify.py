@@ -46,15 +46,15 @@ def main():
         for label,cmd in [("dotnet",["dotnet","--version"]),("cmake",["cmake","--version"]),("ninja",["ninja","--version"]),("clang",["clang","--version"])]: run(label,cmd)
         paths = run("source-files",["git","ls-files","--cached","--others","--exclude-standard","--",
                     "src/Interop.Lifetime","tests/Interop.Lifetime","native/interop/lifetime","samples/api/interop-lifetime",
-                    "docs/guides/interop-lifetime.md","src/NativeWeave.Core","src/Interop.Abi","native/interop/abi","native/interop/errors",
+                    "docs/guides/interop-lifetime.md","src/Korda.Core","src/Interop.Abi","native/interop/abi","native/interop/errors",
                     "Directory.Build.props","global.json",*NATIVE_INPUTS]).splitlines()
         report["source_sha256"] = {p:sha(ROOT/p) for p in sorted(set(paths)) if (ROOT/p).is_file()}
-        report["native_compiler_provenance"] = prepare_native(run, ["nativeweave_interop_lifetime"])
-        native = CPP_FIXTURES / "libnativeweave_interop_lifetime.so"
+        report["native_compiler_provenance"] = prepare_native(run, ["korda_interop_lifetime"])
+        native = CPP_FIXTURES / "libkorda_interop_lifetime.so"
         report["artifacts"]["native"] = {"path":str(native),"sha256":sha(native)}
         common = ["-p:UseSharedCompilation=false","-nr:false","-m:1"]
-        for label,project,assembly in [("tests","tests/Interop.Lifetime/Interop.Lifetime.Tests.csproj","NativeWeave.Interop.Lifetime.Tests"),
-                                      ("sample","samples/api/interop-lifetime/Interop.Lifetime.Sample.csproj","NativeWeave.Interop.Lifetime.Sample")]:
+        for label,project,assembly in [("tests","tests/Interop.Lifetime/Interop.Lifetime.Tests.csproj","Korda.Interop.Lifetime.Tests"),
+                                      ("sample","samples/api/interop-lifetime/Interop.Lifetime.Sample.csproj","Korda.Interop.Lifetime.Sample")]:
             run(label+"-restore",["dotnet","restore",project,"--locked-mode",*common])
             run(label+"-build",["dotnet","build",project,"-c","Release","--no-restore",*common])
             dll=ROOT/Path(project).parent/"bin/Release/net11.0"/(assembly+".dll")
@@ -69,7 +69,7 @@ def main():
         run("api-restore",["dotnet","restore",project,"--locked-mode",*common])
         run("api-build",["dotnet","build",project,"-c","Release","--no-restore",*common])
         sdk=Path(shutil.which("dotnet")).resolve().parent
-        run("api-xml-reference",["dotnet",ROOT/"tests/Interop.Lifetime/ApiCheck/bin/Release/net11.0/NativeWeave.Interop.Lifetime.ApiCheck.dll",ROOT,sdk,ROOT/"src/NativeWeave.Core/bin/Release/net11.0/NativeWeave.Core.dll"])
+        run("api-xml-reference",["dotnet",ROOT/"tests/Interop.Lifetime/ApiCheck/bin/Release/net11.0/Korda.Interop.Lifetime.ApiCheck.dll",ROOT,sdk,ROOT/"src/Korda.Core/bin/Release/net11.0/Korda.Core.dll"])
         run("diff-check",["git","diff","--check"])
         for path,digest in report["source_sha256"].items():
             if sha(ROOT/path)!=digest: raise RuntimeError("Source changed during verification: "+path)

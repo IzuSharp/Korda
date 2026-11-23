@@ -2,12 +2,12 @@
 
 > **DB-CPP-01 implementation update.** The public C# examples, signatures and ownership contracts in this guide remain the compatibility inputs. The current maintained native implementation is C++20; its module mapping, direct libpq/sqlite3 execution, Clang/CMake commands and package production are documented in [C++ native implementation](cpp-native.md). Descriptions below of Rust, SQLx, SeaQuery or Tokio internals are retained as the fixed `465cd0f` behavioral reference, not current build dependencies. The named verification entry points now build the ported C++ fixtures and retain their original managed assertions.
 
-`NativeWeave.Database.PostgreSql` supplies the PostgreSQL factory and builder
+`Korda.Database.PostgreSql` supplies the PostgreSQL factory and builder
 extension for the complete [Database Host](data-nativehost.md). Its candidate
 package depends on the shared database facade and the independent
-`NativeWeave.Database.PostgreSql.Native` asset package. An ordinary C# application
+`Korda.Database.PostgreSql.Native` asset package. An ordinary C# application
 uses PackageReference and the precompiled asset, without a Rust toolchain or
-NativeWeave server/protocol package.
+Korda server/protocol package.
 
 The retained B02 PostgreSQL adapter uses SQLx 0.9.0 and the canonical B01/B07
 contracts. The native component accepts an existing SQLx pool lease and engine
@@ -36,15 +36,15 @@ worker runtime or database connection; the module remains resident.
 | Threading model | `EngineLocalAsync` |
 | Bootstrap | `nw_database_postgresql_get_abi_v1` |
 | Linux x64 asset | `libnw_database_postgresql.so` |
-| Generated output record | `NativeWeave.database.postgresql.assets.json` |
+| Generated output record | `Korda.database.postgresql.assets.json` |
 
 The bootstrap reports **24** capabilities: every name defined in
 [`DatabaseEngineProfile`](../../src/Data.NativeHost/DatabaseOptions.cs) except
 `db.decimal.text.v1`. This includes `db.query.v1`, transactions/savepoints,
 streaming, migrations, schema reading, relations, `db.row-lock.v1` and
 `db.decimal.numeric.v1`. In the fixed Rust reference, this advertised mask is composed by the
-[native query profile](https://github.com/IzuSharp/NativeWeave/blob/465cd0f90e6af05ec50eb581156240377cf0825b/native/database/host/src/query.rs) and
-[Host bootstrap](https://github.com/IzuSharp/NativeWeave/blob/465cd0f90e6af05ec50eb581156240377cf0825b/native/database/host/src/abi.rs). The private B02 component's
+[native query profile](https://github.com/IzuSharp/Korda/blob/465cd0f90e6af05ec50eb581156240377cf0825b/native/database/host/src/query.rs) and
+[Host bootstrap](https://github.com/IzuSharp/Korda/blob/465cd0f90e6af05ec50eb581156240377cf0825b/native/database/host/src/abi.rs). The private B02 component's
 `postgres.component.v1` bootstrap remains a component-test input; it is not the
 public provider descriptor or the packaged Database Host.
 
@@ -52,11 +52,11 @@ The current compiled inventory contains **15** exact symbols, including these
 existing factories:
 
 ```csharp
-public static NativeWeave.Database.DataSource Create(
+public static Korda.Database.DataSource Create(
     string connectionString, Action<PostgreSqlOptions>? configure = null);
 
-public static NativeWeave.Database.DataSourceBuilder UsePostgreSql(
-    this NativeWeave.Database.DataSourceBuilder builder,
+public static Korda.Database.DataSourceBuilder UsePostgreSql(
+    this Korda.Database.DataSourceBuilder builder,
     string connectionString, Action<PostgreSqlOptions>? configure = null);
 ```
 
@@ -77,8 +77,8 @@ not pending declarations or design stubs.
 ## Configuration and preflight
 
 ```csharp
-using NativeWeave.Database.PostgreSql;
-using NativeWeave.Interop;
+using Korda.Database.PostgreSql;
+using Korda.Interop;
 
 // Inspection is optional and opens no database connection.
 EngineDescriptor descriptor = PostgreSqlDataSource.Engine;
@@ -87,7 +87,7 @@ var information = descriptor.Inspect();
 await using var source = PostgreSqlDataSource.Create(
     "postgresql://orders@db.example.test/orders", options =>
 {
-    options.RootCertificatePath = "/etc/nativeweave/postgres-root.pem";
+    options.RootCertificatePath = "/etc/korda/postgres-root.pem";
     options.ApplicationName = "Orders";
     options.ConnectTimeout = TimeSpan.FromSeconds(15);
     // VerifyFull is already the default.
@@ -103,8 +103,8 @@ and `db.query.v1` capability verification.
 The maintainer project hashes an actual precompiled native asset into its `obj`
 compile input and emits its exact output-location record. The default source input
 is `target/release/libnw_database_postgresql.so`. The maintainer properties
-`NativeWeavePostgresAssetPath`, `NativeWeavePostgresRuntimeIdentifier`, and
-`NativeWeavePostgresAssetName` select explicit existing-asset inputs. Its default
+`KordaPostgresAssetPath`, `KordaPostgresRuntimeIdentifier`, and
+`KordaPostgresAssetName` select explicit existing-asset inputs. Its default
 ordinary/AOT output path is
 `runtimes/linux-x64/native/libnw_database_postgresql.so`. Missing
 input is a build error, never a zero-hash placeholder. No machine-specific ELF hash

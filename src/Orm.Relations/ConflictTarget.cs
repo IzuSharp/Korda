@@ -1,6 +1,6 @@
-using NativeWeave.Data;
+using Korda.Data;
 
-namespace NativeWeave.Database;
+namespace Korda.Database;
 
 /// <summary>An immutable explicit unique-column or PostgreSQL constraint target for one atomic upsert.</summary>
 /// <typeparam name="TEntity">The statically described entity class.</typeparam>

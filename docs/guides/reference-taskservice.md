@@ -4,7 +4,7 @@
 
 Reference.TaskService is a finite database verification fixture, not a server. Its C# business methods retain typed idempotent create/replay, pagination, recovery, optimistic CRUD and transactional outbox work over PostgreSQL and SQLite. Attachment/blob and cleanup scenarios retain database consistency assertions.
 
-The fixture has no NativeWeave Server, HTTP/gRPC routing or protocol dependency. Ordinary hosts can call the same kind of C# business method using their own standard hosting stack.
+The fixture has no Korda Server, HTTP/gRPC routing or protocol dependency. Ordinary hosts can call the same kind of C# business method using their own standard hosting stack.
 
 Run the package driver against a current database candidate:
 

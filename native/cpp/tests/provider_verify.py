@@ -103,7 +103,7 @@ def main():
         urls = {}
         for name, tls in [("valid", True), ("expired", True), ("plain", False)]:
             data = output / f"pg-{name}"
-            run(f"init-{name}", [pg / "initdb", "-D", data, "-U", "nativeweave", "--auth=trust", "--no-locale", "--encoding=UTF8"])
+            run(f"init-{name}", [pg / "initdb", "-D", data, "-U", "korda", "--auth=trust", "--no-locale", "--encoding=UTF8"])
             with socket.socket() as sock:
                 sock.bind(("127.0.0.1", 0))
                 port = sock.getsockname()[1]
@@ -122,7 +122,7 @@ def main():
                 time.sleep(0.05)
             else:
                 raise RuntimeError("PostgreSQL startup deadline expired")
-            urls[name] = f"postgresql://nativeweave@localhost:{port}/postgres"
+            urls[name] = f"postgresql://korda@localhost:{port}/postgres"
         (output / "server-topology.json").write_text(json.dumps({"endpoints": urls, "postgres_sha256": digest(pg / "postgres"), "test_binary_sha256": digest(args.binary.resolve())}, indent=2) + "\n")
         run("provider", [args.binary.resolve()], {"NW_PG_URL": urls["valid"], "NW_PG_EXPIRED_URL": urls["expired"], "NW_PG_PLAIN_URL": urls["plain"],
                                                    "NW_PG_ROOT": str(certs / "root.pem"), "NW_PG_UNTRUSTED_ROOT": str(certs / "untrusted.pem")})

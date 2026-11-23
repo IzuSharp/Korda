@@ -1,12 +1,12 @@
 using System.Buffers.Binary;
-using NativeWeave.Data;
+using Korda.Data;
 
-namespace NativeWeave.Database;
+namespace Korda.Database;
 
 /// <summary>Kind7 followed by one self-sized kind15, without a new enclosing wire schema.</summary>
 internal static class BulkErrorPayload
 {
-    internal const string NativeKey = "NativeWeave.Database.NativeBulkProgress.v1";
+    internal const string NativeKey = "Korda.Database.NativeBulkProgress.v1";
     internal static ReadOnlySpan<byte> Read(ReadOnlySpan<byte> payload, out BulkProgress? progress)
     {
         progress = null;

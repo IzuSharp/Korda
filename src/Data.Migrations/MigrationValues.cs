@@ -1,8 +1,8 @@
 using System.Collections.Generic;
 using System.Security.Cryptography;
-using NativeWeave.Data;
+using Korda.Data;
 
-namespace NativeWeave.Database;
+namespace Korda.Database;
 
 /// <summary>Selects native transactional execution or explicitly resumable PostgreSQL execution.</summary>
 public enum MigrationTransactionMode
@@ -89,7 +89,7 @@ public sealed record MigrationOptions
     public TimeSpan LockTimeout { get; init; } = TimeSpan.FromSeconds(30);
     /// <summary>Gets whether explicitly nontransactional PostgreSQL entries may execute or be resumed.</summary>
     /// <remarks>A new call is explicit replay of the identical script after an unfinished phase. The script must
-    /// handle any previously completed effects. NativeWeave never retries a write within the call.</remarks>
+    /// handle any previously completed effects. Korda never retries a write within the call.</remarks>
     public bool AllowNonTransactional { get; init; }
 }
 /// <summary>Describes one bounded immutable bundle/ledger comparison.</summary>

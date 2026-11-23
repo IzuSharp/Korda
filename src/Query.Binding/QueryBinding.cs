@@ -1,6 +1,6 @@
-using NativeWeave.Interop.Abi;
+using Korda.Interop.Abi;
 
-namespace NativeWeave.Query.Internal;
+namespace Korda.Query.Internal;
 
 /// <summary>A generation-bearing expression reference, never a native pointer or managed SQL node.</summary>
 internal readonly record struct ExpressionReference(QueryBinding? Owner, ulong Value)

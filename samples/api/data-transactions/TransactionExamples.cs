@@ -1,6 +1,6 @@
-using NativeWeave.Database;
+using Korda.Database;
 
-namespace NativeWeave.Samples.Transactions;
+namespace Korda.Samples.Transactions;
 
 // The owning DataSession (B04) supplies a confirmed transaction. These natural
 // consumers use only the exact public B05 surface; the component harness invokes

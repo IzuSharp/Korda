@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>Korda.Data</AssemblyName>
+    <RootNamespace>Korda.Data</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IsAotCompatible>true</IsAotCompatible>
+    <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifiers)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifiers).aot.lock.json</NuGetLockFilePath>
+    <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifier)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifier).aot.lock.json</NuGetLockFilePath>
+    <IsPackable>true</IsPackable>
+    <PackageId>Korda.Data</PackageId>
+    <Description>Strongly typed Korda data descriptors and shared wire contracts. No database runtime is loaded.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../Query.Generator/Runtime/**/*.cs" />
+    <Compile Include="../Orm.Relations/ConcurrencyConflictException.cs" />
+    <InternalsVisibleTo Include="Korda.Orm.Relations.Tests" />
+    <InternalsVisibleTo Include="Korda.Query.Generator.Tests" />
+    <InternalsVisibleTo Include="Korda.Data.Tests" />
+    <InternalsVisibleTo Include="Korda.Database" />
+    <InternalsVisibleTo Include="Korda.Data.Streaming" />
+    <InternalsVisibleTo Include="Korda.Data.Streaming.Tests" />
+    <InternalsVisibleTo Include="Korda.Data.Streaming.Sample" />
+    <InternalsVisibleTo Include="Korda.Database.PostgreSql" />
+    <InternalsVisibleTo Include="Korda.Database.Sqlite" />
+    <InternalsVisibleTo Include="Korda.Data.Codecs" />
+    <InternalsVisibleTo Include="Korda.Data.Codecs.Tests" />
+    <InternalsVisibleTo Include="Korda.Query.Binding" />
+    <InternalsVisibleTo Include="Korda.Query.Binding.Tests" />
+    <InternalsVisibleTo Include="Korda.Query.Binding.Sample" />
+    <InternalsVisibleTo Include="Korda.Query.Native.Tests" />
+    <InternalsVisibleTo Include="Korda.Data.Materialization.Tests" />
+  </ItemGroup>
+</Project>

@@ -1,9 +1,9 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
-using NativeWeave.Interop.Extensibility;
+using Korda.Interop.Extensibility;
 
-namespace NativeWeave.Interop;
+namespace Korda.Interop;
 
 /// <summary>Identifies the incompatible major and compatible minor versions of a native C ABI.</summary>
 /// <param name="Major">The representation and semantics version; manifests reject zero.</param>

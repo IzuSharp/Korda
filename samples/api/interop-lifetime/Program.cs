@@ -1,4 +1,4 @@
-using NativeWeave.Interop.Lifetime;
+using Korda.Interop.Lifetime;
 
 // Minimal maintainer consumer: applications receive their domain's typed owner.
 using (NativeResourceOwner owner = Fixture.New(7))

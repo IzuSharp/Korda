@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <AssemblyName>NativeWeave.Compatibility.Sample</AssemblyName>
+    <AssemblyName>Korda.Compatibility.Sample</AssemblyName>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <IsAotCompatible>true</IsAotCompatible>
     <DefineConstants Condition="'$(CompatibilityGeneration)' == 'new'">$(DefineConstants);NEW_MANAGED</DefineConstants>
@@ -9,6 +9,6 @@
     <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifier)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifier).aot.lock.json</NuGetLockFilePath>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../../../src/NativeWeave.Core/NativeWeave.Core.csproj" />
+    <ProjectReference Include="../../../src/Korda.Core/Korda.Core.csproj" />
   </ItemGroup>
 </Project>

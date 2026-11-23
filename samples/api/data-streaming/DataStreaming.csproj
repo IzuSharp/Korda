@@ -1,13 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <AssemblyName>NativeWeave.Data.Streaming.Sample</AssemblyName>
+    <AssemblyName>Korda.Data.Streaming.Sample</AssemblyName>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <NuGetLockFilePath Condition="'$(PublishAot)' == 'true'">$(MSBuildProjectDirectory)/packages.linux-x64.aot.lock.json</NuGetLockFilePath>
     <IsAotCompatible>true</IsAotCompatible>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../../../src/Data.Streaming/NativeWeave.Data.Streaming.csproj" />
+    <ProjectReference Include="../../../src/Data.Streaming/Korda.Data.Streaming.csproj" />
     <Compile Include="../../../tests/Data.Streaming/NativeFixtureTransport.cs" Link="NativeFixtureTransport.cs" />
   </ItemGroup>
 </Project>

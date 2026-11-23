@@ -1,8 +1,8 @@
-using NativeWeave.Data;
-using NativeWeave.Database.Internal;
-using NativeWeave.Query.Internal;
+using Korda.Data;
+using Korda.Database.Internal;
+using Korda.Query.Internal;
 
-namespace NativeWeave.Database;
+namespace Korda.Database;
 
 public sealed partial class DataSource
 {

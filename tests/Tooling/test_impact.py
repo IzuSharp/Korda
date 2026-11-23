@@ -32,7 +32,7 @@ class OwnershipTests(unittest.TestCase):
                 "gpu": {"sources": ["gpu/"]},
                 "qt": {
                     "sources": ["qt/"],
-                    "package": "NativeWeave.Qt",
+                    "package": "Korda.Qt",
                     "pack": ["pack"],
                     "consume": ["consume"],
                 },

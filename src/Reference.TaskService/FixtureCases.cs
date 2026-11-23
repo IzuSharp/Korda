@@ -1,9 +1,9 @@
 using System.Text;
 using System.Text.Json;
-using NativeWeave.Data;
-using NativeWeave.Database;
+using Korda.Data;
+using Korda.Database;
 
-namespace NativeWeave.Reference.TaskService;
+namespace Korda.Reference.TaskService;
 
 /// <summary>Internal finite scenarios preserve application database invariants without a transport host.</summary>
 internal sealed class FixtureCases(ServiceConfiguration configuration, TaskService service, OutboxWorker outbox, BlobStore blobs)

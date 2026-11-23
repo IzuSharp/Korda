@@ -1,7 +1,7 @@
-using NativeWeave.Database.Sqlite;
-using NativeWeave.Interop;
+using Korda.Database.Sqlite;
+using Korda.Interop;
 
-namespace NativeWeave.Sqlite.Samples;
+namespace Korda.Sqlite.Samples;
 
 /// <summary>Compiled component configuration consumers, reused by actual JIT/AOT verification.</summary>
 internal static class SqliteExamples

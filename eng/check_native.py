@@ -9,8 +9,8 @@ import re
 import subprocess
 from cpp_toolchain import ROOT, LOCK, sha
 
-GENERATED = {'native/interop/abi/include/nativeweave_abi_v1.h',
-             'native/database/binding/nativeweave_database_binding_v1.h',
+GENERATED = {'native/interop/abi/include/korda_abi_v1.h',
+             'native/database/binding/korda_database_binding_v1.h',
              'tests/Interop.Abi/native/layout.c', 'tests/Interop.Abi/native/layout.cpp'}
 
 
@@ -45,7 +45,7 @@ def main():
             if path not in tracked or path.suffix not in ('.c', '.cc', '.cpp', '.cxx'):
                 continue
             previous = selected.get(path)
-            if previous is None or 'nativeweave_database_host.dir' in row.get('command', ' '.join(row.get('arguments', []))):
+            if previous is None or 'korda_database_host.dir' in row.get('command', ' '.join(row.get('arguments', []))):
                 selected[path] = row
         if not selected:
             raise RuntimeError('No tracked translation units found in the compilation database')

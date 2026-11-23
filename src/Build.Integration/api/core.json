@@ -1,5 +1,5 @@
 {
-  "assembly": "src/NativeWeave.Core/bin/Release/net11.0/NativeWeave.Core.dll",
+  "assembly": "src/Korda.Core/bin/Release/net11.0/Korda.Core.dll",
   "sources": [
     "src/Interop.Negotiation",
     "src/Interop.Errors",
@@ -11,7 +11,7 @@
     "src/Interop.Errors/public-api.expected.json",
     "src/Interop.Memory/public-api.expected.json"
   ],
-  "title": "NativeWeave Core component API",
-  "scope": "Implemented Linux component snapshot: A02 metadata/preflight, A03 internal lifetime, A04 immutable buffers and A05 errors. NativeWeave.Core is not a publicly released package at this checkpoint; no full Host or all-platform acceptance is implied.",
+  "title": "Korda Core component API",
+  "scope": "Implemented Linux component snapshot: A02 metadata/preflight, A03 internal lifetime, A04 immutable buffers and A05 errors. Korda.Core is not a publicly released package at this checkpoint; no full Host or all-platform acceptance is implied.",
   "output": "artifacts/docs/core/api-reference.md"
 }

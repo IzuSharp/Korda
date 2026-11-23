@@ -1,7 +1,7 @@
-using NativeWeave.Data;
-using NativeWeave.Query.Internal;
+using Korda.Data;
+using Korda.Query.Internal;
 
-namespace NativeWeave.Database.Internal;
+namespace Korda.Database.Internal;
 
 /// <summary>Builds one immutable static result shape and its same-query expression bindings.</summary>
 /// <remarks>This is the shared implementation behind B13's ProjectionBuilder. It retains only

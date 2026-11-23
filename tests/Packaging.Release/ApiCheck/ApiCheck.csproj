@@ -1,10 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <AssemblyName>NativeWeave.Packaging.ApiCheck</AssemblyName>
+    <AssemblyName>Korda.Packaging.ApiCheck</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../../../src/Packaging.Release/BuildTasks/NativeWeave.Packaging.Tasks.csproj" />
+    <ProjectReference Include="../../../src/Packaging.Release/BuildTasks/Korda.Packaging.Tasks.csproj" />
     <Reference Include="Microsoft.Build.Framework" HintPath="$(MSBuildBinPath)/Microsoft.Build.Framework.dll" />
     <Reference Include="Microsoft.Build.Utilities.Core" HintPath="$(MSBuildBinPath)/Microsoft.Build.Utilities.Core.dll" />
   </ItemGroup>

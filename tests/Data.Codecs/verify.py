@@ -41,7 +41,7 @@ def main() -> int:
         for path in sorted((ROOT / scope).rglob('*')):
             if path.is_file() and not any(p in ('bin', 'obj', '__pycache__') for p in path.relative_to(ROOT).parts):
                 inputs.append({'path': str(path.relative_to(ROOT)), 'sha256': sha(path)})
-    for name in ('CMakeLists.txt', 'CMakePresets.json', '.clang-format', '.clang-tidy', 'global.json', 'src/Data.Abstractions/NativeWeave.Data.csproj', 'docs/guides/data-codecs.md'):
+    for name in ('CMakeLists.txt', 'CMakePresets.json', '.clang-format', '.clang-tidy', 'global.json', 'src/Data.Abstractions/Korda.Data.csproj', 'docs/guides/data-codecs.md'):
         path = ROOT / name
         if path.exists(): inputs.append({'path': name, 'sha256': sha(path)})
     source = {'head': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(), 'files': inputs, 'tree_dirty': bool(subprocess.check_output(['git','status','--porcelain'],cwd=ROOT,text=True).strip())}
@@ -62,10 +62,10 @@ def main() -> int:
 
     common = ['-p:UseSharedCompilation=false', '-nr:false', '-m:1']
     restore = ['--locked-mode'] + (['--configfile', str(args.offline_config.resolve()), '-p:NuGetAudit=false'] if args.offline_config else [])
-    project = 'tests/Data.Codecs/NativeWeave.Data.Codecs.Tests.csproj'
+    project = 'tests/Data.Codecs/Korda.Data.Codecs.Tests.csproj'
     api = 'tests/Data.Codecs/ApiCheck/ApiCheck.csproj'
     sample = 'samples/api/data-codecs/DataCodecs.csproj'
-    assembly = ROOT / 'tests/Data.Codecs/bin/Release/net11.0/NativeWeave.Data.Codecs.Tests.dll'
+    assembly = ROOT / 'tests/Data.Codecs/bin/Release/net11.0/Korda.Data.Codecs.Tests.dll'
     server = None
     server_log = None
     status = 'failed'
@@ -81,15 +81,15 @@ def main() -> int:
         aot = output / 'aot-vectors'
         publish = output / 'aot'
         run('aot-publish', ['dotnet', 'publish', project, '-c', 'Release', '-r', 'linux-x64', '-p:PublishAot=true', '-p:RestoreLockedMode=true', *restore[1:], *common, '-o', str(publish)])
-        executable = publish / 'NativeWeave.Data.Codecs.Tests'
+        executable = publish / 'Korda.Data.Codecs.Tests'
         run('aot-encode', [str(executable), str(aot), '--require-aot'])
-        run('compiled-api-reference', ['dotnet', str(ROOT / 'tests/Data.Codecs/ApiCheck/bin/Release/net11.0/NativeWeave.Data.Codecs.ApiCheck.dll'), str(ROOT / 'src/Data.Codecs/bin/Release/net11.0/NativeWeave.Data.Codecs.dll'), str(ROOT / 'src/Data.Codecs/bin/Release/net11.0/NativeWeave.Data.Codecs.xml'), str(ROOT / 'src/Data.Codecs/api-reference.md')])
-        run('sample-execution', ['dotnet', str(ROOT / 'samples/api/data-codecs/bin/Release/net11.0/NativeWeave.Data.Codecs.Sample.dll')])
+        run('compiled-api-reference', ['dotnet', str(ROOT / 'tests/Data.Codecs/ApiCheck/bin/Release/net11.0/Korda.Data.Codecs.ApiCheck.dll'), str(ROOT / 'src/Data.Codecs/bin/Release/net11.0/Korda.Data.Codecs.dll'), str(ROOT / 'src/Data.Codecs/bin/Release/net11.0/Korda.Data.Codecs.xml'), str(ROOT / 'src/Data.Codecs/api-reference.md')])
+        run('sample-execution', ['dotnet', str(ROOT / 'samples/api/data-codecs/bin/Release/net11.0/Korda.Data.Codecs.Sample.dll')])
         native_env = dict(env)
         if args.postgres_bin:
             pg = args.postgres_bin.resolve()
             data = output / 'postgres-data'
-            run('postgres-init', [str(pg / 'initdb'), '-D', str(data), '-U', 'nativeweave', '--auth=trust', '--no-locale', '--encoding=UTF8'])
+            run('postgres-init', [str(pg / 'initdb'), '-D', str(data), '-U', 'korda', '--auth=trust', '--no-locale', '--encoding=UTF8'])
             with socket.socket() as listener:
                 listener.bind(('127.0.0.1', 0)); port = listener.getsockname()[1]
             server_log = (output / 'postgres.log').open('w')
@@ -99,13 +99,13 @@ def main() -> int:
                 if server.poll() is not None: raise RuntimeError('PostgreSQL exited during startup.')
                 time.sleep(.1)
             else: raise RuntimeError('PostgreSQL startup deadline exceeded.')
-            native_env['NATIVEWEAVE_TEST_POSTGRES_URL'] = f'postgresql://nativeweave@127.0.0.1:{port}/postgres'
-        elif not native_env.get('NATIVEWEAVE_TEST_POSTGRES_URL'):
-            raise RuntimeError('PostgreSQL binaries or explicit NATIVEWEAVE_TEST_POSTGRES_URL are required.')
+            native_env['KORDA_TEST_POSTGRES_URL'] = f'postgresql://korda@127.0.0.1:{port}/postgres'
+        elif not native_env.get('KORDA_TEST_POSTGRES_URL'):
+            raise RuntimeError('PostgreSQL binaries or explicit KORDA_TEST_POSTGRES_URL are required.')
         fixture = args.native_build.resolve() / 'tests/nw_codec_roundtrip'
         run('aot-providers', [str(fixture), str(aot)], native_env)
         run('aot-returned-values', [str(executable), str(aot), '--require-aot'])
-        artifact_paths = [assembly, executable, fixture, ROOT / 'src/Data.Codecs/bin/Release/net11.0/NativeWeave.Data.Codecs.dll']
+        artifact_paths = [assembly, executable, fixture, ROOT / 'src/Data.Codecs/bin/Release/net11.0/Korda.Data.Codecs.dll']
         (output / 'artifacts.json').write_text(json.dumps([{'path': str(p.relative_to(ROOT)) if p.is_relative_to(ROOT) else str(p), 'sha256': sha(p), 'size': p.stat().st_size} for p in artifact_paths], indent=2) + '\n')
         # Source binding must still match the bytes at verification start.
         for item in inputs:

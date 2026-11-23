@@ -1,8 +1,8 @@
 using System.Runtime.CompilerServices;
-using NativeWeave.Interop;
-using NativeWeave.Interop.Abi;
-using NativeWeave.Interop.Async;
-using NativeWeave.Interop.Execution;
+using Korda.Interop;
+using Korda.Interop.Abi;
+using Korda.Interop.Async;
+using Korda.Interop.Execution;
 
 internal static class Program
 {
@@ -249,7 +249,7 @@ internal static class Program
         if (args.Contains("--core-only"))
         {
             Check(!typeof(ExecutorLifetime).IsPublic, "Executor plumbing became public.");
-            Check(!File.ReadAllText("/proc/self/maps").Contains("libnativeweave_interop_execution", StringComparison.Ordinal), "Core inspection implicitly loaded the native executor.");
+            Check(!File.ReadAllText("/proc/self/maps").Contains("libkorda_interop_execution", StringComparison.Ordinal), "Core inspection implicitly loaded the native executor.");
             Console.WriteLine($"A08 Core-only metadata: assertions={s_assertions}; native executor not loaded.");
             return;
         }

@@ -1,4 +1,4 @@
-using NativeWeave.Compatibility.Conformance;
+using Korda.Compatibility.Conformance;
 
 #if MIGRATED
 int answer = Contract.Sum(35, 7);

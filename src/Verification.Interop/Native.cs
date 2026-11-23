@@ -1,17 +1,17 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using NativeWeave.Interop.Abi;
+using Korda.Interop.Abi;
 
-namespace NativeWeave.Verification.Interop;
+namespace Korda.Verification.Interop;
 
 /// <summary>Statically rooted maintainer-only ABI adapters; all buffers are borrowed for one call.</summary>
 internal static unsafe partial class Native
 {
-    private const string Library = "nativeweave_verification_interop";
+    private const string Library = "korda_verification_interop";
     [LibraryImport(Library, EntryPoint = "nw_a20_layout_v1")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
     internal static partial ulong Layout(uint index);
-    [LibraryImport("nativeweave_verification_interop_c", EntryPoint = "nw_a20_c_layout_v1")]
+    [LibraryImport("korda_verification_interop_c", EntryPoint = "nw_a20_c_layout_v1")]
     [UnmanagedCallConv(CallConvs = [typeof(CallConvCdecl)])]
     internal static partial ulong CLayout(uint index);
     [LibraryImport(Library, EntryPoint = "nw_a20_extent_v1")]

@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
-using NativeWeave.Interop.Abi;
+using Korda.Interop.Abi;
 
-namespace NativeWeave.Query.Internal;
+namespace Korda.Query.Internal;
 
 /// <summary>Distinct native owner kinds; these values are managed tags, except the documented take-owner kinds.</summary>
 internal enum DatabaseOwnerKind { Source, Model, Session, Query, Plan, Relation, Cte, Cursor }

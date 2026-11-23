@@ -3,12 +3,12 @@ using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using NativeWeave.Data;
-using NativeWeave.Database;
-using NativeWeave.Database.PostgreSql;
-using NativeWeave.Database.Sqlite;
-using NativeWeave.Samples.Materialization;
-using NativeWeave.Interop.Async;
+using Korda.Data;
+using Korda.Database;
+using Korda.Database.PostgreSql;
+using Korda.Database.Sqlite;
+using Korda.Samples.Materialization;
+using Korda.Interop.Async;
 
 await Suite.Run(args);
 

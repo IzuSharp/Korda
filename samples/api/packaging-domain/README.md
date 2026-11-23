@@ -8,8 +8,8 @@ release is claimed. Applications choose their own hosting and use normal
 
 | Graph | Compilation symbols | Direct packages |
 | --- | --- | --- |
-| SQLite | `SQLITE` | `NativeWeave.Database.Sqlite` |
-| PostgreSQL | `POSTGRES` | `NativeWeave.Database.PostgreSql` |
+| SQLite | `SQLITE` | `Korda.Database.Sqlite` |
+| PostgreSQL | `POSTGRES` | `Korda.Database.PostgreSql` |
 | Both providers | `SQLITE;POSTGRES` | Both database provider packages |
 
 Every process inserts and reads typed entities, executes a strongly typed Fluent

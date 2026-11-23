@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-// Migrated from the fixed NativeWeave B14 implementation. See query.cpp and
+// Migrated from the fixed Korda B14 implementation. See query.cpp and
 // THIRD_PARTY_NOTICES.md for the SeaQuery 1.0.2 rendering provenance.
 #include "nw/mutations.hpp"
 

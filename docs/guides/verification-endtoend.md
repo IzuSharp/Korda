@@ -8,7 +8,7 @@ python3 tests/Verification.EndToEnd/api_probe.py \
   --output /outside/the/source/database-lifecycle
 ```
 
-The package driver executes both database providers in JIT and Native AOT. It preserves source/package identities and reports actual rows; it creates no NativeWeave server.
+The package driver executes both database providers in JIT and Native AOT. It preserves source/package identities and reports actual rows; it creates no Korda server.
 
 Finite fault cases use the reference database fixture's published artifacts, a PostgreSQL wire proxy and SQLite filesystem faults. These validate database begin/write/commit uncertainty, cancellation, pool return, restart/recovery and outbox consistency. The fixture owns disposable databases/processes and releases them after each case.
 

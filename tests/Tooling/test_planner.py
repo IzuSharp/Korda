@@ -143,7 +143,7 @@ class RoutingTests(unittest.TestCase):
                     "integration": ["consumer"],
                     "pack": ["pack"],
                     "consume": ["aot"],
-                    "package": "NativeWeave.Qt",
+                    "package": "Korda.Qt",
                 },
                 "gpu": {"sources": ["gpu/"], "run": ["gpu"]},
             }

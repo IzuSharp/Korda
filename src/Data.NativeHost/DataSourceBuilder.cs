@@ -1,7 +1,7 @@
-using NativeWeave.Data;
-using NativeWeave.Interop;
+using Korda.Data;
+using Korda.Interop;
 
-namespace NativeWeave.Database;
+namespace Korda.Database;
 
 /// <summary>A single-writer builder for one explicitly selected native database engine.</summary>
 /// <remarks>Configuration snapshots values. Build negotiates the packaged module and creates a lazy native pool;

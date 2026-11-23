@@ -6,7 +6,7 @@
   ],
   "public_runtime_surface": [],
   "distribution": "Reusable buildTransitive target and its MSBuild host task embedded in each tested facade package; no new public package is published by this task.",
-  "compiler_host_surface": "NativeWeave.Packaging.PackageClosure has ten compiled XML symbols, checked by tests/Packaging.Release/ApiCheck and documented in api-reference.md. The task assembly is absent from application runtime and Native AOT output.",
+  "compiler_host_surface": "Korda.Packaging.PackageClosure has ten compiled XML symbols, checked by tests/Packaging.Release/ApiCheck and documented in api-reference.md. The task assembly is absent from application runtime and Native AOT output.",
   "existing_product_api": "The real database facades use the existing Core package descriptors, manifests, native assets and module negotiation. This packaging task introduces no runtime descriptor or loader.",
   "domain_applicability": "The exact PostgreSQL/SQLite candidate graph uses this MSBuild task and buildTransitive target. Historical A16 design-inputs remain an immutable provenance record; orphan proof products and generic generators are retired.",
   "consumer": "samples/api/packaging-domain and tests/Packaging.Domain execute ordinary external PackageReference typed Fluent/DTO consumers in JIT and Native AOT.",

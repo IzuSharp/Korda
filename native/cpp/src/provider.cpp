@@ -572,9 +572,9 @@ std::shared_ptr<ProviderConnection> ProviderConnection::open(const ProviderOptio
                               "client_encoding",
                               nullptr};
 #ifdef _WIN32
-        constexpr const char* no_passfile = "NUL/nativeweave-no-passfile";
+        constexpr const char* no_passfile = "NUL/korda-no-passfile";
 #else
-        constexpr const char* no_passfile = "/dev/null/nativeweave-no-passfile";
+        constexpr const char* no_passfile = "/dev/null/korda-no-passfile";
 #endif
         const char* arguments[] = {values["host"].c_str(),
                                    port.c_str(),

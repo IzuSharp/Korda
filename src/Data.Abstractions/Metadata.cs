@@ -4,7 +4,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 
-namespace NativeWeave.Data;
+namespace Korda.Data;
 
 /// <summary>Immutable declaration flags for one table column.</summary>
 /// <remarks>Null optional settings remain distinct from defaults. MaxLength is a positive byte capacity.

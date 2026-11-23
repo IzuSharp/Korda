@@ -49,7 +49,7 @@ def validate(folder, plan, version, module=""):
             raise ValueError("Candidate changed after consumption")
         provider = next(p for p, identity in identities.items() if identity == name)
         with zipfile.ZipFile(path) as archive:
-            if json.loads(archive.read("nativeweave/public.json"))["inputs"] != record["inputs"][provider]:
+            if json.loads(archive.read("korda/public.json"))["inputs"] != record["inputs"][provider]:
                 raise ValueError("Packaged provider fingerprint differs from the tested inputs")
             if ET.fromstring(archive.read(name + ".nuspec")).find(".//{*}dependency") is not None:
                 raise ValueError("Public provider requires another package")
