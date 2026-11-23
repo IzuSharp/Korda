@@ -1,6 +1,6 @@
 # Database previews
 
-Pull requests run the checks selected by `python3 eng/ci/impact.py BASE`. The file ownership map and tests live in `eng/ci/impact.py` and `tests/Tooling/test_impact.py`. The planner compares version-independent input hashes with nuget.org so that an unpublished change remains pending across subsequent merges. Check the CI summary for the reason a lane was selected.
+Pull requests run the checks selected by `python3 eng/ci/impact.py BASE`. The file ownership map and tests live in `eng/ci/impact.py` and `tests/Tooling/test_impact.py`. When a public package input changes, the planner compares both providers’ input hashes with nuget.org and includes any outstanding release. Merging only documentation or tests outside the packages skips the registry lookup, candidate promotion and database build. Check the CI summary for the reason a lane was selected.
 
 For a documentation-only PR the planner, dependency review and secret scan run without a database runner. A single-provider regression selects its own native build and tests. Editing both providers’ regression suites schedules the two single-provider jobs in parallel. Pure generator, MSBuild task API and ELF profile test changes select their own checks independently. Packaging metadata changes can reuse the signed native assets and still test the resulting archives in real applications. A change to the shared runtime or to unclassified product code exercises both providers. CodeQL selects the affected supported languages; weekly validation scans both.
 

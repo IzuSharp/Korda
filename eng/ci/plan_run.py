@@ -4,9 +4,8 @@ import os
 from pathlib import Path
 import subprocess
 
-from impact import PROVIDERS, inputs, plan, rule
+from impact import plan_tree, rule
 from promote import candidate_name
-from registry import public_heads
 
 
 def main():
@@ -30,10 +29,7 @@ def main():
     deep = full or any(p.startswith(("native/", "CMake", ".github/workflows/build.yml", "eng/task07_native",
                                      "eng/ci/", "src/Packaging.", "eng/verify", "tests/Verification.",
                                      "tests/Packaging.", "tests/Migration.Cpp/", "tests/Interop.", "src/Verification.")) for p in paths)
-    # Lightweight PRs need no registry traffic. Recovery on main consults both live heads.
-    consult_registry = full or kind == "push" or any(rule(p)[1] for p in paths)
-    published = public_heads() if consult_registry else {p: {} for p in PROVIDERS}
-    result = plan(paths, inputs("HEAD"), published, full, recover=kind == "push")
+    result = plan_tree(paths, "HEAD", full)
     if full or any(p.startswith((".github/workflows/", "eng/ci/")) for p in paths):
         languages = ["csharp", "python"]
     else:

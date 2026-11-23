@@ -1,9 +1,10 @@
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "eng/ci"))
-from impact import PROVIDERS, plan, rule
+from impact import PROVIDERS, plan, plan_tree, rule
 
 
 class ImpactTests(unittest.TestCase):
@@ -23,13 +24,28 @@ class ImpactTests(unittest.TestCase):
     def test_unpublished_change_is_not_lost(self):
         hashes = dict.fromkeys(PROVIDERS, "current")
         published = {p: {"inputs": value} for p, value in hashes.items()}
-        self.assertEqual("light", plan(["README.md"], hashes, published)["scope"])
-        self.assertEqual([], plan(["tests/Data.Sqlite/Program.cs"], hashes, published)["packages"])
         published["postgresql"]["inputs"] = "previous"
-        result = plan(["README.md"], hashes, published)
+        result = plan(["src/Data.Sqlite/Provider.cs"], hashes, published)
         self.assertEqual((result["scope"], result["packages"]), ("full", ["postgresql"]))
 
-    def test_test_only_pr_does_not_recover_a_pending_release(self):
+    def test_docs_merge_skips_registry_even_when_legacy_packages_have_no_fingerprint(self):
+        hashes = dict.fromkeys(PROVIDERS, "current")
+        legacy = {p: {"version": "0.1.0-preview.163.2", "inputs": None} for p in PROVIDERS}
+        with patch("registry.public_heads", return_value=legacy) as registry:
+            for result in (plan_tree(["AGENTS.md"], "HEAD"), plan(["AGENTS.md"], hashes, legacy)):
+                self.assertEqual(("light", [], [], False),
+                                 (result["scope"], result["checks"], result["packages"], result["consume"]))
+            registry.assert_not_called()
+
+    def test_explicit_full_validation_still_consumes_published_packages(self):
+        published = {p: {"inputs": "previous"} for p in PROVIDERS}
+        with patch("registry.public_heads", return_value=published) as registry:
+            result = plan_tree(["AGENTS.md"], "HEAD", full=True)
+            registry.assert_called_once_with()
+        self.assertEqual(("full", True, [], published),
+                         (result["scope"], result["consume"], result["packages"], result["published"]))
+
+    def test_test_only_changes_do_not_recover_a_pending_release(self):
         hashes = dict.fromkeys(PROVIDERS, "current")
         old = {p: {"inputs": "previous"} for p in PROVIDERS}
         cases = {
@@ -42,9 +58,9 @@ class ImpactTests(unittest.TestCase):
         }
         for path, (scope, checks) in cases.items():
             with self.subTest(path=path):
-                actual = plan([path], hashes, old, recover=False)
+                actual = plan([path], hashes, old)
                 self.assertEqual((scope, checks, []), (actual["scope"], actual["checks"], actual["packages"]))
-        actual = plan(list(cases)[3:], hashes, old, recover=False)
+        actual = plan(list(cases)[3:], hashes, old)
         self.assertEqual((actual["scope"], actual["checks"]), ("light", ["elf-profile", "generator", "pack-api"]))
 
     def test_public_candidates_and_internal_checks_have_independent_inputs(self):
@@ -64,7 +80,7 @@ class ImpactTests(unittest.TestCase):
         hashes = dict.fromkeys(PROVIDERS, "same")
         published = {p: {"inputs": "same"} for p in PROVIDERS}
         paths = ["tests/Data.Postgres/Program.cs", "tests/Data.Sqlite/Program.cs", "tests/Query.Generator/Program.cs"]
-        result = plan(paths, hashes, published, recover=False)
+        result = plan(paths, hashes, published)
         self.assertEqual((list(PROVIDERS), ["generator"], [], False),
                          (result["build_scopes"], result["checks"], result["packages"], result["consume"]))
         self.assertEqual(["full"], plan(paths + ["src/Data.NativeHost/Session.cs"], hashes, published)["build_scopes"])

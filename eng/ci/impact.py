@@ -60,7 +60,7 @@ def inputs(tree):
     return {p: digest.hexdigest() for p, digest in result.items()}
 
 
-def plan(paths, fingerprints, published, deep=False, *, recover=True):
+def plan(paths, fingerprints, published, deep=False):
     lanes, changed = set(), set()
     reasons = {}
     for path in paths:
@@ -68,10 +68,9 @@ def plan(paths, fingerprints, published, deep=False, *, recover=True):
         lanes.add(lane)
         changed.update(packages)
         reasons.setdefault(lane, []).append(path)
-    pending = {p for p in PROVIDERS if published[p].get("inputs") != fingerprints[p]}
-    # Test-only PRs never build somebody else's unpublished release. Main can recover it.
-    if not recover and not changed:
-        pending.clear()
+    pending = set()
+    if changed:
+        pending = {p for p in PROVIDERS if published[p].get("inputs") != fingerprints[p]}
     bootstrap = any(not published[p].get("inputs") for p in PROVIDERS)
     if deep or (pending and bootstrap) or pending - changed or "full" in lanes:
         scope = "full"
@@ -99,6 +98,14 @@ def plan(paths, fingerprints, published, deep=False, *, recover=True):
             "published": published, "reasons": reasons, "deep": deep}
 
 
+def plan_tree(paths, tree, full=False):
+    from registry import public_heads
+
+    # Full validation also consumes published packages as reference inputs.
+    published = public_heads() if full or any(rule(p)[1] for p in paths) else {p: {} for p in PROVIDERS}
+    return plan(paths, inputs(tree), published, full)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("base")
@@ -106,10 +113,9 @@ def main():
     parser.add_argument("--full", action="store_true")
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
-    from registry import public_heads
     diff = subprocess.check_output(["git", "diff", "--no-renames", "--name-only", "-z", args.base, args.tree])
     paths = [p.decode() for p in diff.split(b"\0") if p]
-    result = plan(paths, inputs(args.tree), public_heads(), args.full, recover=False)
+    result = plan_tree(paths, args.tree, args.full)
     data = json.dumps(result, indent=2, sort_keys=True)
     print(data)
     if args.output:

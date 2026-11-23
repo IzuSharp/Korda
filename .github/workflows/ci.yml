@@ -44,7 +44,7 @@ jobs:
       - id: plan
         run: python3 eng/ci/plan_run.py
       - id: promote
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && steps.plan.outputs.pending == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 eng/ci/promote.py
