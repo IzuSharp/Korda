@@ -187,9 +187,11 @@ def api_docs(design):
          ROOT, design, os.environ["DOTNET_ROOT"]], "query-generator-api")
 
 
-def consumer_probes(version):
+def consumer_probes(version, only=None):
     for name, driver in (("database-lifecycle", "tests/Verification.EndToEnd/api_probe.py"),
                          ("database-business", "tests/Reference.TaskService/package_probe.py")):
+        if only and only != name:
+            continue
         with tempfile.TemporaryDirectory(prefix="nativeweave-" + name + "-") as temp:
             external = Path(temp) / "consumer"
             try:
@@ -197,6 +199,8 @@ def consumer_probes(version):
                      "--version", version + ".2", "--output", external], name)
             finally:
                 export_fixture_results(external, OUTPUT / name)
+    if only:
+        return
     consume("local")
     run(["git", "diff", "--check"], "diff-check")
     if run(["git", "status", "--porcelain"], "final-status").strip():
@@ -215,6 +219,7 @@ def main():
     parser.add_argument("--design", type=Path, default=ARTIFACTS / "frozen-design")
     parser.add_argument("--plan", type=Path, default=ARTIFACTS / "frozen-plan")
     parser.add_argument("--consumer-environment", choices=["local", "pristine"], default="pristine")
+    parser.add_argument("--probe", choices=["database-lifecycle","database-business"])
     parser.add_argument("--compare-rust-reference", action="store_true",
                         help="Run the one-time DB-CPP-01 old/new comparison with the hash-locked reference artifact")
     args = parser.parse_args()
@@ -238,7 +243,7 @@ def main():
     elif args.command == "compare-existing":
         migration_comparison(args.version)
     elif args.command == "consumer-probes":
-        consumer_probes(args.version)
+        consumer_probes(args.version,args.probe)
     elif args.command == "verify":
         # The local aggregate uses the same build actions as the hosted worker.
         verify_inputs()

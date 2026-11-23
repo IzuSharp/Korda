@@ -1,7 +1,6 @@
 """Plan module checks and package candidates from two Git trees."""
 
 import argparse
-import hashlib
 import json
 import posixpath
 import xml.etree.ElementTree as ET
@@ -10,7 +9,7 @@ from pathlib import Path
 from catalog import DIRECTORY, git, load_catalog
 from registry import public_heads
 
-from facts import IDS, PROVIDERS, files, fingerprints, inputs
+from facts import IDS as IDS, PROVIDERS, files, fingerprints, inputs as inputs
 from language import language, purpose
 from database_plan import plan_actions
 
@@ -95,16 +94,9 @@ def make_plan(catalog, paths, entries, previous, full=False, old_entries=None):
     if old_entries is not None and previous is not catalog:
         # Recompute impact when registered dependency edges or packaging recipes changed.
         old_hashes = fingerprints(previous, old_entries)
-        for name in catalog.packages:
-            if name not in previous.packages or (
-                hashes[name] != old_hashes.get(name)
-                and (
-                    catalog.dependencies(name) != previous.dependencies(name)
-                    or catalog.modules[name].get("pack")
-                    != previous.modules[name].get("pack")
-                )
-            ):
-                touched.add(name)
+        touched.update(
+            name for name in catalog.packages if old_hashes.get(name) != hashes[name]
+        )
     db = set(PROVIDERS) & catalog.packages.keys()
     published = {p: {"version": None, "inputs": None} for p in catalog.packages}
     if touched:

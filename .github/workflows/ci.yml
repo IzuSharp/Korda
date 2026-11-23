@@ -120,7 +120,7 @@ jobs:
       id-token: write
     with:
       module: ${{ matrix.module }}
-      artifact: ${{ needs.plan.outputs.from-artifact || needs.plan.outputs.artifact }}${{ matrix.suffix }}
-      run: ${{ needs.plan.outputs.reuse || github.run_id }}
-      version: 0.1.0-preview.${{ needs.plan.outputs.number || github.run_number }}.2
+      artifact: ${{ needs.plan.outputs.from-artifact }}${{ matrix.suffix }}
+      run: ${{ needs.plan.outputs.reuse }}
+      version: 0.1.0-preview.${{ needs.plan.outputs.number }}.2
       plan: ${{ needs.plan.outputs.plan }}

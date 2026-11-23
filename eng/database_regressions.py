@@ -13,6 +13,38 @@ ROOT = build.ROOT
 FLAGS = ["-m:1", "-nr:false", "-p:UseSharedCompilation=false"]
 
 
+SUITES = [
+    ("Data.NativeHost", "NativeWeave.Data.NativeHost.Tests", []),
+    ("Data.Migrations", "NativeWeave.Data.Migrations.Tests", []),
+    ("Data.Materialization", "NativeWeave.Data.Materialization.Tests", ["results"]),
+    ("Query.Fluent", "NativeWeave.Query.Fluent.Tests", ["results"]),
+    ("Orm.Relations", "NativeWeave.Orm.Relations.Tests", []),
+]
+
+
+def managed_suites(only, output, pg, run, run_isolated):
+    for name, assembly, parameters in SUITES:
+        if only and name != only:
+            continue
+        project = ROOT / "tests" / name / (assembly + ".csproj")
+        publish = output / name / "aot"
+        run(name + "-aot-restore", ["dotnet", "restore", project, "--locked-mode", "-r", "linux-x64", "-p:PublishAot=true", *FLAGS])
+        run(name + "-aot-publish", ["dotnet", "publish", project, "-c", "Release", "-r", "linux-x64",
+                                   "-p:PublishAot=true", "--no-restore", "-p:IlcTreatWarningsAsErrors=true", *FLAGS, "-o", publish])
+        executable = publish / assembly
+        if executable.read_bytes()[:4] != b"\x7fELF" or executable.with_suffix(".dll").exists():
+            raise RuntimeError("Expected an actual standalone Native AOT executable")
+        aot_args = [output / name / "aot-results", "--require-aot"] if parameters else (
+            ["--require-aot"] if name == "Orm.Relations" else [])
+        run_isolated(name + "-aot", [executable, *aot_args])
+        if name == "Data.Migrations":
+            run_isolated(name + "-process-aot", [sys.executable, "tests/Data.Migrations/cross_process.py",
+                "--postgres-bin", pg, "--output", output / name / "process-aot", "--", executable])
+
+    if not only or only == "Orm.Relations":
+        run("relations-type-errors", [sys.executable, "tests/Orm.Relations/compile_negative.py"])
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--design", type=Path, required=True)
@@ -20,6 +52,7 @@ def main():
     parser.add_argument("--postgres-bin", type=Path)
     parser.add_argument("--native-build", type=Path, default=ROOT / "artifacts/cmake/linux-x64-release")
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--suite", choices=[row[0] for row in SUITES])
     args = parser.parse_args()
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
@@ -59,6 +92,14 @@ def main():
         # fresh-database precondition independently for each runtime/process cell.
         run(label, [sys.executable, "tests/Data.NativeHost/run.py", "--postgres-bin", pg,
                     "--output", output / "postgres" / label, "--", *command])
+
+    if args.suite:
+        managed_suites(args.suite, output, pg, run, run_isolated)
+        if build.source() != initial:
+            raise RuntimeError("Source identity changed during component execution")
+        (output / "result.json").write_text(json.dumps({"status": "passed", "suite": args.suite,
+            "source": initial, "modes": ["aot"], "commands": records}, indent=2) + "\n")
+        return
 
     # These tests are the ports of the old native component assertions. Requiring
     # the complete inventory prevents a missing target or empty regex from being
@@ -107,30 +148,7 @@ def main():
               "--native-build", native_build, "--native-module", native_build / "libnativeweave_database_host.so")
 
     # Execute the actual published test applications against isolated databases.
-    suites = [
-        ("Data.NativeHost", "NativeWeave.Data.NativeHost.Tests", []),
-        ("Data.Migrations", "NativeWeave.Data.Migrations.Tests", []),
-        ("Data.Materialization", "NativeWeave.Data.Materialization.Tests", ["results"]),
-        ("Query.Fluent", "NativeWeave.Query.Fluent.Tests", ["results"]),
-        ("Orm.Relations", "NativeWeave.Orm.Relations.Tests", []),
-    ]
-    for name, assembly, parameters in suites:
-        project = ROOT / "tests" / name / (assembly + ".csproj")
-        publish = output / name / "aot"
-        run(name + "-aot-restore", ["dotnet", "restore", project, "--locked-mode", "-r", "linux-x64", "-p:PublishAot=true", *FLAGS])
-        run(name + "-aot-publish", ["dotnet", "publish", project, "-c", "Release", "-r", "linux-x64",
-                                   "-p:PublishAot=true", "--no-restore", "-p:IlcTreatWarningsAsErrors=true", *FLAGS, "-o", publish])
-        executable = publish / assembly
-        if executable.read_bytes()[:4] != b"\x7fELF" or executable.with_suffix(".dll").exists():
-            raise RuntimeError("Expected an actual standalone Native AOT executable")
-        aot_args = [output / name / "aot-results", "--require-aot"] if parameters else (
-            ["--require-aot"] if name == "Orm.Relations" else [])
-        run_isolated(name + "-aot", [executable, *aot_args])
-        if name == "Data.Migrations":
-            run_isolated(name + "-process-aot", [sys.executable, "tests/Data.Migrations/cross_process.py",
-                "--postgres-bin", pg, "--output", output / name / "process-aot", "--", executable])
-
-    run("relations-type-errors", [sys.executable, "tests/Orm.Relations/compile_negative.py"])
+    managed_suites(None, output, pg, run, run_isolated)
     if build.source() != initial:
         raise RuntimeError("Source identity changed during regression execution")
     (output / "result.json").write_text(json.dumps({"task": "DB-CPP-01", "status": "passed",

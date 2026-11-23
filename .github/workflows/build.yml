@@ -1,4 +1,4 @@
-name: Linux database candidate
+name: Linux module checks
 on:
   workflow_call:
     inputs:
@@ -76,17 +76,20 @@ jobs:
         if: contains(fromJSON(inputs.plan).resources[inputs.scope], 'native')
         uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
-          key: linux-x64-tools-${{ hashFiles('native/dependencies.lock.json') }}
+          key: linux-x64-tools-${{ hashFiles('native/dependencies.lock.json','eng/ci/sccache.sh') }}
           path: |
             artifacts/toolchain/downloads
+            artifacts/toolchain/sccache/tool.tar.gz
             artifacts/dependencies/downloads
       - name: Install native build prerequisites and pinned Clang tools
         if: contains(fromJSON(inputs.plan).resources[inputs.scope], 'native')
         env:
+          NEED_PG: ${{ contains(fromJSON(inputs.plan).resources[inputs.scope], 'pg-tools') }}
           NEED_QEMU: ${{ contains(fromJSON(inputs.plan).resources[inputs.scope], 'qemu') }}
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends zstd zlib1g-dev libssl-dev bison flex python3-cryptography
+          sudo apt-get install -y --no-install-recommends zstd libssl-dev
+          if [ "$NEED_PG" = true ]; then sudo apt-get install -y zlib1g-dev bison flex python3-cryptography; fi
           if [ "$NEED_QEMU" = true ]; then sudo apt-get install -y qemu-user; fi
           python3 eng/cpp_toolchain.py
           bash eng/ci/sccache.sh install

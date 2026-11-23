@@ -1,38 +1,15 @@
-"""Module strategies. Commands run on the current runner; resources describe what YAML must prepare."""
+"""Linux conformance strategies for the native runtime, database and public provider packages."""
 
 from dataclasses import dataclass
 from pathlib import Path
 import json
-import os
-import shlex
-import subprocess
 import sys
-import time
 
-from language import purpose
+from runner import Action, Command
 
 PROVIDERS = ("postgresql", "sqlite")
 DESIGN = "artifacts/frozen-design"
 FULL_NATIVE = "artifacts/cmake/linux-x64-release"
-
-
-@dataclass(frozen=True)
-class Action:
-    name: str
-    resources: tuple = ()
-    needs: tuple = ()
-
-    def run(self, ctx):
-        raise NotImplementedError(self.name)
-
-
-@dataclass(frozen=True)
-class Command(Action):
-    commands: tuple = ()
-
-    def run(self, ctx):
-        for command in self.commands:
-            ctx.call([str(word).format_map(ctx.variables) for word in command])
 
 
 @dataclass(frozen=True)
@@ -219,7 +196,11 @@ def recipes():
                 *([flag, DESIGN] if flag else []),
             ),
             needs=("database.native",),
-            resources=("dotnet", "pg-server", *(["design"] if flag else [])),
+            resources=(
+                "dotnet",
+                *(["pg-server"] if ident in ("transaction", "streaming") else []),
+                *(["design"] if flag else []),
+            ),
         )
     for name in (
         "Abi",
@@ -351,10 +332,57 @@ def recipes():
         ),
         resources=("dotnet", "design"),
     )
-    for provider, directory, design in (
-        ("postgresql", "Data.Postgres", "--design-root"),
-        ("sqlite", "Data.Sqlite", "--design"),
+    for name in ("database-lifecycle", "database-business"):
+        add(
+            name + ".aot",
+            py(
+                "eng/build.py",
+                "consumer-probes",
+                "--version",
+                "{version}",
+                "--probe",
+                name,
+            ),
+            needs=("database.pack",),
+            resources=("pg-server",),
+        )
+    add(
+        "domain.consume-aot",
+        py("eng/build.py", "consume", "--consumer-environment", "local"),
+        needs=("database.pack",),
+        resources=("pg-server",),
+    )
+    for directory in (
+        "Data.NativeHost",
+        "Data.Migrations",
+        "Data.Materialization",
+        "Query.Fluent",
+        "Orm.Relations",
     ):
+        add(
+            directory.lower() + ".test",
+            py(
+                "eng/database_regressions.py",
+                "--suite",
+                directory,
+                "--design",
+                DESIGN,
+                "--plan",
+                "artifacts/frozen-plan",
+                "--output",
+                f"artifacts/component-tests/{directory}",
+            ),
+            needs=("database.native",),
+            resources=("dotnet", "pg-server"),
+        )
+    for provider in (Sqlite(), PostgreSql()):
+        provider.register(add)
+    return steps
+
+
+class Provider:
+    def register(self, add):
+        provider, directory, design = self.name, self.directory, self.design_option
         preset = "linux-x64-" + provider
         build = "artifacts/cmake/" + preset
         add(
@@ -405,47 +433,15 @@ def recipes():
                 needs=(provider + ".build",),
                 resources=("design", "dotnet", *(("pg-server",) if options else ())),
             )
-    return steps
 
 
-def ordered(actions, steps):
-    result, visiting = [], set()
-
-    def visit(name):
-        if name in result:
-            return
-        if name in visiting or name not in steps:
-            raise ValueError(f"Invalid CI action or dependency: {name}")
-        visiting.add(name)
-        for dep in steps[name].needs:
-            visit(dep)
-        visiting.remove(name)
-        result.append(name)
-
-    for name in sorted(actions):
-        visit(name)
-    return result
+class Sqlite(Provider):
+    name = "sqlite"
+    directory = "Data.Sqlite"
+    design_option = "--design"
 
 
-class Context:
-    def __init__(self, plan_path):
-        self.variables = dict(
-            root=str(Path.cwd()),
-            sdk=os.environ.get("DOTNET_ROOT", ""),
-            version=os.environ.get("PACKAGE_VERSION", "0.1.0-local.1"),
-            plan=str(plan_path),
-        )
-
-    def call(self, command, env=None):
-        command = list(map(str, command))
-        print("+", shlex.join(command), flush=True)
-        subprocess.run(command, check=True, env=os.environ | (env or {}))
-
-    def execute(self, steps, names):
-        for index, name in enumerate(names, 1):
-            start = time.monotonic()
-            print(f"[{index}/{len(names)}] {name}", flush=True)
-            try:
-                steps[name].run(self)
-            finally:
-                print(f"{name}: {time.monotonic() - start:.2f}s", flush=True)
+class PostgreSql(Provider):
+    name = "postgresql"
+    directory = "Data.Postgres"
+    design_option = "--design-root"

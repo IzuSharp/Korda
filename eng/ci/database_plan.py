@@ -1,6 +1,7 @@
 """Choose registered actions and their shared prerequisites before a runner installs tools."""
 
-from strategies import Command, PROVIDERS, ordered, py, recipes
+from runner import Command, ordered
+from modules.database import PROVIDERS, py, recipes
 from language import purpose
 
 
@@ -74,6 +75,12 @@ def plan_actions(
             if not any(p.endswith("/verify.py") for p in paths):
                 actions.discard(module + ".api")
         desired.update(actions)
+    if (
+        len(touched) == 2
+        and "database-native" in catalog.modules
+        and direct & catalog.dependencies("database-native")
+    ):
+        desired.update(("database.regressions", "database.dependencies"))
     if "consumer.check" in desired or "bundle.check" in desired:
         desired.difference_update({"consumer.check", "bundle.check"})
         # Publishing code has local archive contract tests; exercise a checked candidate on the host as well.
@@ -101,6 +108,16 @@ def plan_actions(
             desired -= {p + ".dependencies" for p in PROVIDERS}
             desired.add("database.dependencies")
     if "database.regressions" in desired:
+        desired -= {
+            n.lower() + ".test"
+            for n in (
+                "Data.NativeHost",
+                "Data.Migrations",
+                "Data.Materialization",
+                "Query.Fluent",
+                "Orm.Relations",
+            )
+        }
         # This driver invokes these same test programs on the same host and provider libraries.
         desired -= {
             "database.native-tests",
@@ -127,14 +144,15 @@ def plan_actions(
     actions = ordered(desired, steps)
     # A single build directory and package feed stay in one DAG. Independent fixture checks can run alongside it.
     groups = {}
+    separate_providers = not public and all(p + ".build" in actions for p in PROVIDERS)
     for name in actions:
-        lane = (
-            "fixtures"
-            if name.startswith("fixture.")
-            else "interop"
-            if name.startswith("interop.")
-            else "linux"
-        )
+        prefix = name.partition(".")[0]
+        if prefix == "fixture":
+            lane = "fixtures"
+        elif prefix == "interop" or (separate_providers and prefix in PROVIDERS):
+            lane = prefix
+        else:
+            lane = "linux"
         groups.setdefault(lane, []).append(name)
     resources = {
         group: sorted(

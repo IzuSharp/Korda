@@ -12,7 +12,8 @@ import tempfile
 from catalog import ROOT, git, load_catalog
 from database_plan import catalog_steps
 from facts import files
-from strategies import Context, ordered, recipes
+from runner import Context
+from modules.database import recipes
 
 
 def check_index():
@@ -129,7 +130,12 @@ def main():
     ):
         raise ValueError("Plan is missing a prerequisite")
     with postgres(ctx, "pg-server" in plan["resources"][args.group]):
-        ctx.execute(steps, names)
+        with tempfile.TemporaryDirectory(prefix="nw-native-check-") as session:
+            os.environ["NW_NATIVE_CHECK_SESSION"] = session
+            try:
+                ctx.execute(steps, names)
+            finally:
+                os.environ.pop("NW_NATIVE_CHECK_SESSION", None)
 
 
 if __name__ == "__main__":
