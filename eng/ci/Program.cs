@@ -19,7 +19,8 @@ namespace NativeWeave.CI
         internal static int Run(string[] args)
         {
             var root = Directory.GetCurrentDirectory();
-            var ctx = new BuildContext(root, Environment.GetEnvironmentVariable("PACKAGE_VERSION") ?? "0.1.0-local.1", "light");
+            var version = Environment.GetEnvironmentVariable("NW_VERSION") ?? Environment.GetEnvironmentVariable("PACKAGE_VERSION") ?? "0.1.0-local.1";
+            var ctx = new BuildContext(root, version, "light");
             if (args is ["check-index"])
             {
                 _ = new GitCatalog(ctx).Read(ctx.Read("git", "write-tree").Trim());
