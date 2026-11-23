@@ -8,7 +8,7 @@ using System.Xml.Linq;
 string root = Path.GetFullPath(args[0]), design = Path.GetFullPath(args[1]), sdk = Path.GetFullPath(args[2]);
 string output = Path.Combine(root, "src/Data.NativeHost/bin/Release/net11.0");
 var files = Directory.GetFiles(Path.Combine(sdk, "packs/Microsoft.NETCore.App.Ref/11.0.0/ref/net11.0"), "*.dll").ToDictionary(x => Path.GetFileName(x)!, StringComparer.OrdinalIgnoreCase);
-foreach (string path in Directory.GetFiles(Path.Combine(root, "tests/Query.Fluent/bin/Release/net11.0"), "*.dll")) if (Path.GetFileName(path) != "NativeWeave.Database.dll") files[Path.GetFileName(path)] = path;
+foreach (string path in Directory.GetFiles(output, "*.dll")) if (Path.GetFileName(path) != "NativeWeave.Database.dll") files[Path.GetFileName(path)] = path;
 
 var references = files.Values.Select(x => MetadataReference.CreateFromFile(x)).ToList();
 var options = new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, nullableContextOptions: NullableContextOptions.Enable, metadataImportOptions: MetadataImportOptions.All);

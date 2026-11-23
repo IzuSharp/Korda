@@ -10,7 +10,7 @@ python3 tests/Verification.EndToEnd/api_probe.py \
   --output /absolute/outside-source/database-api
 ```
 
-Set `NW_TEST_POSTGRES` to a live PostgreSQL URI and put `psql` on PATH. The default runs SQLite and PostgreSQL under both JIT and Native AOT. See [api-probe.md](api-probe.md) for its exact database lifecycle observations.
+Set `NW_TEST_POSTGRES` to a live PostgreSQL URI and put `psql` on PATH. The default runs SQLite and PostgreSQL under Native AOT. See [api-probe.md](api-probe.md) for its exact database lifecycle observations.
 
 ## Finite database failures
 

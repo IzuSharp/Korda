@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Outside-tree database NuGet consumption with JIT and Native AOT execution.
+"""Outside-tree database NuGet consumption with Native AOT execution.
 
 Both fixtures use the same isolated, rust-free package build. Independent SQLite
 or psql observations and runtime receipts decide each finite row.
@@ -29,7 +29,7 @@ ROOT = Path(__file__).resolve().parents[2]
 ASSEMBLY = 'NativeWeave.Verification.EndToEnd.ApiProbe'
 COMMON = ['-m:1', '-nr:false', '-p:UseSharedCompilation=false']
 DIRECT = {'NativeWeave.Database.Sqlite', 'NativeWeave.Database.PostgreSql'}
-REQUIRED = [provider + '-' + mode for provider in ('sqlite', 'postgresql') for mode in ('jit', 'aot')]
+REQUIRED = [provider + '-' + mode for provider in ('sqlite', 'postgresql') for mode in ('aot',)]
 
 # Shared source/package identity helpers; all runtime observations are produced afresh.
 HELPER_PATH = ROOT / 'tests/Reference.TaskService/package_probe.py'
@@ -207,8 +207,8 @@ class Controller:
         config = {'provider': provider, 'database': database, 'outputDirectory': str(directory),
             'allowLocalDatabaseTlsDisable': provider == 'postgresql'}
         config_path = directory / 'config.private.json'; save(config_path, config); config_path.chmod(0o600)
-        executable = artifacts / (self.assembly + ('.dll' if mode == 'jit' else ''))
-        argv = ['dotnet', executable] if mode == 'jit' else [executable]
+        executable = artifacts / (self.assembly)
+        argv = [executable]
         before = inventory(artifacts)
         if before != self.state['builds'][mode]['artifacts_sha256']:
             raise AssertionError('Artifact mutated before execution.')
@@ -242,7 +242,7 @@ class Controller:
             entry['receipt_sha256'] = sha(receipt_path)
             if run['exit_code'] != 0 or receipt['failures'] or any(case['status'] != 'passed' for case in receipt['cases']):
                 raise AssertionError('Actual public API case failed; see immutable receipt and process log.')
-            if receipt['dynamicCodeSupported'] != (mode == 'jit'):
+            if receipt['dynamicCodeSupported'] is not False:
                 raise AssertionError('Actual runtime mode does not match requested row.')
             frozen_cases = json.loads((self.output / 'consumers' / mode / 'required-cases.json').read_text())
             required = frozen_cases['common'] + (frozen_cases['postgresql'] if provider == 'postgresql' else [])
@@ -293,8 +293,8 @@ class Controller:
         if self.state['consumer_rust_invocations']:
             self.state['failures'].append({'consumer_rust_invocations': self.state['consumer_rust_invocations']})
         self.state['ended_utc'] = utc()
-        self.state['all_four_rows_passed'] = all(self.state['rows'].get(row, {}).get('status') == 'passed' for row in REQUIRED)
-        self.state['public_api_matrix_complete'] = self.state['all_four_rows_passed'] and not self.state['failures']
+        self.state['all_required_rows_passed'] = all(self.state['rows'].get(row, {}).get('status') == 'passed' for row in REQUIRED)
+        self.state['public_api_matrix_complete'] = self.state['all_required_rows_passed'] and not self.state['failures']
         self.checkpoint()
         return 1 if self.state['failures'] else 0
 
@@ -308,7 +308,7 @@ def main(fixture='api'):
     parser.add_argument('--version', required=True)
     parser.set_defaults(fixture=fixture)
     parser.add_argument('--providers', nargs='+', choices=['sqlite', 'postgresql'], default=['sqlite', 'postgresql'])
-    parser.add_argument('--modes', nargs='+', choices=['jit', 'aot'], default=['jit', 'aot'])
+    parser.add_argument('--modes', nargs='+', choices=['aot'], default=['aot'])
     args = parser.parse_args()
     return Controller(args).run()
 

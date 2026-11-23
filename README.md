@@ -41,13 +41,13 @@ export NW_POSTGRES_BIN=/path/to/postgresql18/bin
 python3 eng/build.py verify
 ```
 
-Run from a committed clean source tree. Each candidate output is immutable; use a fresh checkout/output for a new identity. The gate builds/tests retained workspaces, checks compiled APIs, runs real PostgreSQL/SQLite and migrated database failure scenarios, packs the database candidate, and executes out-of-tree strong typed Fluent/DTO consumers in JIT and Native AOT. Logs and source/package/native identities are in `artifacts/db-scope/`.
+Run from a committed clean source tree. Each candidate output is immutable; use a fresh checkout/output for a new identity. The gate builds/tests retained workspaces, checks compiled APIs, runs real PostgreSQL/SQLite and migrated database failure scenarios, packs the database candidate, and executes out-of-tree strongly typed Fluent/DTO consumers with Native AOT. Logs and source/package/native identities are in `artifacts/db-scope/`.
 
-Linux CI also runs the retained Core packaging/minimum-CPU checks, ASan/UBSan with leak scanning, a fresh Linux native build/package/consumer image without Rust, a pinned SDK container with no Rust installed, immutable database release/recovery tests, and a runtime-only transfer. Security checks remain required. Configuration is not evidence of a passing run; actual results are recorded in the [DB-CPP-01 Plan handoff](https://github.com/IzuSharp/Plan/blob/main/ledger/evidence/batches/DB-CPP-01/handoff-linux.md).
+Scheduled Linux CI runs the full host checks and ASan/UBSan with leak scanning. To verify the minimum CPU, clean toolchain images and runtime-only transfer, run CI manually with `verify_images` selected and `check_paths` empty. The [DB-CPP-01 Plan handoff](https://github.com/IzuSharp/Plan/blob/main/ledger/evidence/batches/DB-CPP-01/handoff-linux.md) records migration results.
 
 ## Status and history
 
-After a pull request merges into `main`, [CI](https://github.com/IzuSharp/NativeWeave/actions/workflows/ci.yml) tests the Linux x64 packages and publishes a database preview to nuget.org. The final job installs both providers from the public feed and runs each in JIT and Native AOT. See [release and retry details](docs/releasing.md).
+Pull requests test affected Linux x64 modules. After a merge into `main`, [CI](https://github.com/IzuSharp/NativeWeave/actions/workflows/ci.yml) publishes eligible preview packages and verifies consumption from nuget.org with Native AOT. See [release and retry details](docs/releasing.md).
 
 - [Background](docs/background.md) and [verification](docs/verification.md)
 - [Contributing](CONTRIBUTING.md) and [security policy](SECURITY.md)

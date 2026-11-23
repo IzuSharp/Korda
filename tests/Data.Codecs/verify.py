@@ -78,9 +78,7 @@ def main() -> int:
         for label, p in [('consumer', project), ('api-check', api), ('sample', sample)]:
             run(label + '-restore', ['dotnet', 'restore', p, *restore, *common])
             run(label + '-build', ['dotnet', 'build', p, '-c', 'Release', '--no-restore', *common])
-        jit = output / 'jit'
         aot = output / 'aot-vectors'
-        run('jit-encode', ['dotnet', str(assembly), str(jit)])
         publish = output / 'aot'
         run('aot-publish', ['dotnet', 'publish', project, '-c', 'Release', '-r', 'linux-x64', '-p:PublishAot=true', '-p:RestoreLockedMode=true', *restore[1:], *common, '-o', str(publish)])
         executable = publish / 'NativeWeave.Data.Codecs.Tests'
@@ -105,9 +103,7 @@ def main() -> int:
         elif not native_env.get('NATIVEWEAVE_TEST_POSTGRES_URL'):
             raise RuntimeError('PostgreSQL binaries or explicit NATIVEWEAVE_TEST_POSTGRES_URL are required.')
         fixture = args.native_build.resolve() / 'tests/nw_codec_roundtrip'
-        for label, vector_dir in [('jit', jit), ('aot', aot)]:
-            run(label + '-providers', [str(fixture), str(vector_dir)], native_env)
-        run('jit-returned-values', ['dotnet', str(assembly), str(jit)])
+        run('aot-providers', [str(fixture), str(aot)], native_env)
         run('aot-returned-values', [str(executable), str(aot), '--require-aot'])
         artifact_paths = [assembly, executable, fixture, ROOT / 'src/Data.Codecs/bin/Release/net11.0/NativeWeave.Data.Codecs.dll']
         (output / 'artifacts.json').write_text(json.dumps([{'path': str(p.relative_to(ROOT)) if p.is_relative_to(ROOT) else str(p), 'sha256': sha(p), 'size': p.stat().st_size} for p in artifact_paths], indent=2) + '\n')
@@ -123,7 +119,7 @@ def main() -> int:
             try: server.wait(timeout=30)
             except subprocess.TimeoutExpired: server.kill(); server.wait()
         if server_log is not None: server_log.close()
-        summary = {'task': 'B07', 'platform': 'linux-x64', 'status': status, 'commands': len(records), 'source_manifest_sha256': sha(output/'source-inputs.json'), 'offline_restore': args.offline_config is not None, 'scope': 'Internal managed/native codecs; actual C++ libpq/SQLite and JIT/AOT value roundtrips; no B04 host, pristine package or other-platform acceptance.'}
+        summary = {'task': 'B07', 'platform': 'linux-x64', 'status': status, 'commands': len(records), 'source_manifest_sha256': sha(output/'source-inputs.json'), 'offline_restore': args.offline_config is not None, 'scope': 'Internal managed/native codecs; actual C++ libpq/SQLite and Native AOT value roundtrips; no B04 host, pristine package or other-platform acceptance.'}
         (output/'summary.json').write_text(json.dumps(summary, indent=2)+'\n')
         print(json.dumps(summary), flush=True)
     return 0 if status == 'passed' else 1

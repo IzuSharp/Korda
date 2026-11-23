@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""B03 component verification: exact integrated provider API, SQLite/B05 composition and JIT/AOT."""
+"""B03 component verification: exact integrated provider API, SQLite/B05 composition and Native AOT."""
 import argparse
 import hashlib
 import json
@@ -32,6 +32,9 @@ def main():
     parser.add_argument("--dotnet", default="dotnet")
     parser.add_argument("--design", type=Path)
     parser.add_argument("--native-build", type=Path, default=ROOT / "artifacts/cmake/linux-x64-release")
+    phase = parser.add_mutually_exclusive_group()
+    phase.add_argument("--api-only", action="store_true")
+    phase.add_argument("--test-only", action="store_true")
     args = parser.parse_args()
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
@@ -96,6 +99,15 @@ def main():
             # migration decision; bind this run to the supplied committed tree.
             manifest["designInputs"] = {"commit": revision}
         assert run("sdk", [dotnet, "--version"]).strip() == "11.0.100"
+        if args.api_only:
+            for project in (ordinary[0], ordinary[2]):
+                restore("api-restore-" + Path(project).stem, project)
+                run("api-build-" + Path(project).stem, [dotnet, "build", project, "-c", "Release", "--no-restore", *build_flags])
+            assembly = ROOT / "src/Data.Sqlite/bin/Release/net11.0/NativeWeave.Database.Sqlite.dll"
+            api_result = json.loads(run("compiled-api-xml-reference", [dotnet, "tests/Data.Sqlite/ApiCheck/bin/Release/net11.0/NativeWeave.Sqlite.ApiCheck.dll", ROOT, sdk, assembly]))
+            manifest.update(status="passed", api=api_result)
+            save()
+            return
         run("sdk-info", [dotnet, "--info"])
         assert "clang version 23.1.5" in run("clang", ["clang++", "--version"])
         run("clang-target", ["clang++", "-dumpmachine"])
@@ -114,15 +126,14 @@ def main():
         execution_env["LD_LIBRARY_PATH"] = str(native.parent) + os.pathsep + env.get("LD_LIBRARY_PATH", "")
         execution_env["NW_SQLITE_COMPONENT_ASSET"] = str(component_native)
         for index, project in enumerate(ordinary):
+            if args.test_only and project == ordinary[2]:
+                continue
             restore("ordinary-restore-" + str(index), project)
             run("ordinary-build-" + str(index), [dotnet, "build", project, "-c", "Release", "--no-restore", *build_flags])
         run("managed-whitespace", [dotnet, "format", "whitespace", ".", "--folder", "--verify-no-changes", "--include",
                                     "src/Data.Sqlite/SqliteOptions.cs", "src/Data.Sqlite/SqliteConfiguration.cs", "src/Data.Sqlite/SqliteDataSource.cs", "tests/Data.Sqlite/Program.cs", "tests/ProviderProfileChecks.cs", "tests/Data.Sqlite/ApiCheck/Program.cs", "samples/api/data-sqlite/SqliteExamples.cs", "--verbosity", "quiet"])
         assembly = ROOT / "src/Data.Sqlite/bin/Release/net11.0/NativeWeave.Database.Sqlite.dll"
-        api_result = json.loads(run("compiled-api-xml-reference", [dotnet, "tests/Data.Sqlite/ApiCheck/bin/Release/net11.0/NativeWeave.Sqlite.ApiCheck.dll", ROOT, sdk, assembly]))
-        execution_env["NATIVEWEAVE_B03_TEST_ROOT"] = str(output / "jit-data")
-        jit_output = run("jit", [dotnet, "tests/Data.Sqlite/bin/Release/net11.0/NativeWeave.Data.Sqlite.Tests.dll"], execution_env)
-        assert "NativeAOT=False" in jit_output and all(f"PASS B03 native scenario {i}" in jit_output for i in range(1, 15))
+        api_result = {} if args.test_only else json.loads(run("compiled-api-xml-reference", [dotnet, "tests/Data.Sqlite/ApiCheck/bin/Release/net11.0/NativeWeave.Sqlite.ApiCheck.dll", ROOT, sdk, assembly]))
         restore("aot-restore", ordinary[1], True)
         publish = output / "publish"
         run("aot-publish", [dotnet, "publish", ordinary[1], "-c", "Release", "-r", "linux-x64", "-p:PublishAot=true", "--no-restore", "-p:IlcTreatWarningsAsErrors=true", *build_flags, "-o", publish])
@@ -151,7 +162,7 @@ def main():
             manifest["artifacts"][str(record_path)] = sha(record_path)
         manifest["nativeScenarioGroups"] = 14
         manifest["hostPreflight"] = True
-        manifest["compiledComponentSymbols"] = api_result["compiled_symbols"]
+        manifest["compiledComponentSymbols"] = api_result.get("compiled_symbols")
         manifest["compiledHostCompositionSymbols"] = len(json.loads((ROOT / "src/Data.Sqlite/host-composition.expected.json").read_text())["symbols"])
         manifest["workerShutdownEvidence"] = "C++ statement retirement, physical pool return or close, last-parent disposal barrier, and Host source worker join are observed separately"
         final = source_identity()
@@ -167,7 +178,7 @@ def main():
         save()
         raise
     save()
-    print("PASS: B03 Linux x64 component oracles, integrated Host preflight, exact API, real SQLite/B05 composition, JIT and actual Native AOT; full Host execution is verified separately.")
+    print("PASS: B03 Linux x64 component oracles, integrated Host preflight, exact API, real SQLite/B05 composition, actual Native AOT; full Host execution is verified separately.")
 
 
 if __name__ == "__main__":

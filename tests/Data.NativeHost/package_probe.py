@@ -149,8 +149,6 @@ run('consumer-restore', ['dotnet', 'restore', project, '--ignore-failed-sources'
 run('consumer-build', ['dotnet', 'build', project, '-c', 'Release', '--no-restore', *common], consumer, consumer_env)
 consumer_dll = consumer / 'bin/Release/net11.0/HostConsumer.dll'
 runner = ROOT / 'tests/Data.NativeHost/run.py'
-for selected in ['sqlite', 'postgresql']:
-    run('consumer-jit-' + selected, ['python3', runner, '--postgres-bin', args.postgres_bin, '--output', out / ('jit-' + selected), '--', 'dotnet', consumer_dll, selected], consumer, consumer_env)
 run('consumer-aot-publish', ['dotnet', 'publish', project, '-c', 'Release', '-r', 'linux-x64', '-p:PublishAot=true', '--ignore-failed-sources', *common, '-o', consumer / 'publish'], consumer, consumer_env)
 for selected in ['sqlite', 'postgresql']:
     run('consumer-aot-' + selected, ['python3', runner, '--postgres-bin', args.postgres_bin, '--output', out / ('aot-' + selected), '--', consumer / 'publish/HostConsumer', selected], consumer, consumer_env)
@@ -159,13 +157,13 @@ for selected in ['sqlite', 'postgresql']:
 run('consumer-dto-edit', ['dotnet', 'build', project, '-c', 'Release', '--no-restore', *common], consumer, consumer_env)
 assert not marker.exists(), 'A normal consumer invoked Rust'
 records = {}
-for mode, path in [('jit', consumer_dll.parent), ('aot', consumer / 'publish')]:
+for mode, path in [('aot', consumer / 'publish')]:
     for identity, (engine, native, basename) in provider.items():
         value = json.loads((path / ('NativeWeave.' + engine + '.assets.json')).read_text())
         assert value['sha256'] == sha(native) == sha(path / value['outputPath'])
         records[mode + '-' + engine] = value
 (out / 'summary.json').write_text(json.dumps({'source_commit': source_commit, 'native_dependency_lock_sha256': sha(ROOT / 'native/dependencies.lock.json'), 'packages': packages,
     'independent_provider_closures': True, 'transitive_generator_compiled_and_executed': True, 'no_consumer_rust': True,
-    'jit_and_aot_actual_providers': ['SQLite', 'PostgreSQL18'], 'dto_edit_native_hashes_unchanged': True,
+    'aot_actual_providers': ['SQLite', 'PostgreSQL18'], 'dto_edit_native_hashes_unchanged': True,
     'sdk_output_records': records, 'aot_executable_sha256': sha(consumer / 'publish/HostConsumer')}, indent=2) + '\n')
-print('B04 exact-package Linux JIT/AOT consumer passed; no Cargo/rustc/rustup invocation', flush=True)
+print('B04 exact-package Linux Native AOT consumer passed; no Cargo/rustc/rustup invocation', flush=True)

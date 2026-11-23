@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Actual Linux process contention and crash/resume for the product C# JIT/AOT wrapper."""
+"""Actual Linux process contention and crash/resume for the product C# Native AOT wrapper."""
 import argparse, hashlib, json, os
 from pathlib import Path
 import signal, sqlite3, subprocess, tempfile, time, urllib.parse, zlib

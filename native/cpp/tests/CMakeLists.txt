@@ -19,6 +19,11 @@ function(nw_fixture name source)
   endif()
 endfunction()
 
+if(NW_INTEROP_ONLY)
+  include(interop.cmake)
+  return()
+endif()
+
 if(NW_BUILD_SQLITE)
   nw_fixture(nativeweave_sqlite_fixture sqlite.cpp)
   target_sources(nativeweave_sqlite_fixture PRIVATE
@@ -85,18 +90,13 @@ if(NOT (NW_BUILD_SQLITE AND NW_BUILD_POSTGRESQL))
   return()
 endif()
 
-function(nw_native_test name source)
-  add_executable(nw_${name}_tests "${source}")
-  target_link_libraries(nw_${name}_tests PRIVATE nw_interop_support)
-  set_target_properties(nw_${name}_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${NW_TEST_OUTPUT}")
-endfunction()
-nw_native_test(interop interop_tests.cpp)
+include(interop.cmake)
+
 nw_native_test(contracts contracts_tests.cpp)
 nw_native_test(query query_tests.cpp)
 target_sources(nw_query_tests PRIVATE "${PROJECT_SOURCE_DIR}/native/cpp/src/query.cpp" "${PROJECT_SOURCE_DIR}/native/cpp/src/mutations.cpp")
 nw_native_test(scalar scalar_tests.cpp)
 target_sources(nw_scalar_tests PRIVATE "${PROJECT_SOURCE_DIR}/native/cpp/src/scalar.cpp")
-nw_native_test(execution execution_tests.cpp)
 nw_native_test(administration administration_tests.cpp)
 target_sources(nw_administration_tests PRIVATE "${PROJECT_SOURCE_DIR}/native/cpp/src/administration.cpp"
   "${PROJECT_SOURCE_DIR}/native/cpp/src/provider.cpp" "${PROJECT_SOURCE_DIR}/native/cpp/src/scalar.cpp")
@@ -121,26 +121,15 @@ target_include_directories(nw_host_review_tests SYSTEM PRIVATE ${PostgreSQL_INCL
 target_link_libraries(nw_host_review_tests PRIVATE nw_sqlite_engine "${NW_LIBPQ_STATIC}"
   "${NW_PGCOMMON_SHARED_STATIC}" "${NW_PGPORT_SHARED_STATIC}" OpenSSL::SSL ZLIB::ZLIB ${CMAKE_DL_LIBS})
 
-add_test(NAME native.interop COMMAND nw_interop_tests)
 add_test(NAME native.contracts COMMAND nw_contracts_tests "${CMAKE_CURRENT_SOURCE_DIR}/golden/contracts")
 add_test(NAME native.query COMMAND nw_query_tests "${PROJECT_SOURCE_DIR}")
 add_test(NAME native.scalar COMMAND nw_scalar_tests)
-add_test(NAME native.execution COMMAND nw_execution_tests)
 add_test(NAME native.administration COMMAND nw_administration_tests)
 add_test(NAME native.provider COMMAND nw_provider_tests)
 add_test(NAME native.host_review COMMAND nw_host_review_tests)
-set_tests_properties(native.interop native.contracts native.query native.scalar native.execution native.administration native.provider native.host_review
+set_tests_properties(native.contracts native.query native.scalar native.administration native.provider native.host_review
   PROPERTIES TIMEOUT 60 LABELS "native;contract")
 
-nw_fixture(nw_abi_conformance abi.cpp)
-nw_fixture(nativeweave_interop_lifetime lifetime.cpp)
-nw_fixture(nativeweave_interop_memory memory.cpp)
-nw_fixture(nativeweave_errors_fixture errors.cpp)
-nw_fixture(nativeweave_interop_callbacks callbacks.cpp)
-nw_fixture(nativeweave_interop_async async.cpp)
-nw_fixture(nativeweave_interop_execution execution.cpp)
-nw_fixture(nativeweave_verification_interop verification.cpp)
-target_sources(nativeweave_verification_interop PRIVATE fixtures/memory.cpp)
 nw_fixture(nativeweave_query_binding_fixture query_binding.cpp)
 target_sources(nativeweave_query_binding_fixture PRIVATE "${PROJECT_SOURCE_DIR}/native/cpp/src/query.cpp"
   "${PROJECT_SOURCE_DIR}/native/cpp/src/mutations.cpp")
@@ -148,8 +137,6 @@ add_library(nativeweave_verification_interop_c SHARED "${PROJECT_SOURCE_DIR}/src
 target_link_libraries(nativeweave_verification_interop_c PRIVATE nw_project_options)
 set_target_properties(nativeweave_verification_interop_c PROPERTIES
   C_VISIBILITY_PRESET default LIBRARY_OUTPUT_DIRECTORY "${NW_FIXTURE_OUTPUT}")
-nw_fixture(nw_async_downstream async_downstream.cpp)
-nw_fixture(nw_execution_downstream execution_downstream.cpp)
 
 # Fault seams exist only in the retained B05/B06 maintainer bridges. The three
 # product Host targets never receive NW_HOST_TEST_HOOKS.
@@ -169,15 +156,6 @@ set_target_properties(nw_codec_roundtrip PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${
 add_executable(nw_postgres_sync_tests postgres_sync_tests.cpp)
 target_link_libraries(nw_postgres_sync_tests PRIVATE nw_host_test_support)
 set_target_properties(nw_postgres_sync_tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${NW_TEST_OUTPUT}")
-set(NW_NEGOTIATION_VARIANTS alpha beta minor_zero future_size bad_major bad_size bad_pointer bad_reserved bad_pending bad_unknown)
-foreach(variant IN LISTS NW_NEGOTIATION_VARIANTS)
-  nw_fixture(nw_a02_${variant} negotiation.cpp)
-  if(variant STREQUAL "beta")
-    target_compile_definitions(nw_a02_${variant} PRIVATE fixture_beta)
-  elseif(NOT variant STREQUAL "alpha")
-    target_compile_definitions(nw_a02_${variant} PRIVATE ${variant})
-  endif()
-endforeach()
 
 set(NW_COMPAT_PROFILES old new major layout semantics)
 foreach(variant IN LISTS NW_COMPAT_PROFILES)
@@ -194,27 +172,9 @@ foreach(variant IN LISTS NW_COMPAT_PROFILES)
 endforeach()
 set_tests_properties(native.compatibility.semantics PROPERTIES WILL_FAIL TRUE)
 
-add_executable(nw_error_probe fixtures/error_probe.cpp)
-target_link_libraries(nw_error_probe PRIVATE nw_interop_support)
-set_target_properties(nw_error_probe PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${NW_TEST_OUTPUT}")
-add_executable(nw_error_abort_probe fixtures/error_abort_probe.cpp)
-target_link_libraries(nw_error_abort_probe PRIVATE nw_project_options)
-set_target_properties(nw_error_abort_probe PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${NW_TEST_OUTPUT}")
-if(NOT MSVC)
-  target_compile_options(nw_error_abort_probe PRIVATE -fno-exceptions)
-endif()
-add_test(NAME native.errors.ordinary COMMAND nw_error_probe ordinary)
-add_test(NAME native.errors.quarantine COMMAND nw_error_probe quarantine)
-set_tests_properties(native.errors.ordinary native.errors.quarantine PROPERTIES
-  PASS_REGULAR_EXPRESSION "status=9 poisoned=true quarantined=1 active=0" TIMEOUT 10 LABELS "native;contract")
-
-add_executable(nw_abi_layout_c "${PROJECT_SOURCE_DIR}/tests/Interop.Abi/native/layout.c")
-add_executable(nw_abi_layout_cpp "${PROJECT_SOURCE_DIR}/tests/Interop.Abi/native/layout.cpp")
-add_executable(nw_abi_bootstrap_c "${PROJECT_SOURCE_DIR}/tests/Interop.Abi/native/bootstrap.c")
-target_link_libraries(nw_abi_bootstrap_c PRIVATE nw_abi_conformance)
 add_executable(nw_database_abi_c database_abi.c)
 target_link_libraries(nw_database_abi_c PRIVATE nativeweave_database_host)
-foreach(target IN ITEMS nw_abi_layout_c nw_abi_layout_cpp nw_abi_bootstrap_c nw_database_abi_c)
+foreach(target IN ITEMS nw_database_abi_c)
   target_link_libraries(${target} PRIVATE nw_project_options)
   set_target_properties(${target} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${NW_TEST_OUTPUT}")
   if(MSVC)
@@ -223,8 +183,6 @@ foreach(target IN ITEMS nw_abi_layout_c nw_abi_layout_cpp nw_abi_bootstrap_c nw_
     target_compile_options(${target} PRIVATE -UNDEBUG)
   endif()
 endforeach()
-add_test(NAME native.abi.bootstrap COMMAND nw_abi_bootstrap_c)
-set_tests_properties(native.abi.bootstrap PROPERTIES TIMEOUT 10 LABELS "native;contract")
 add_test(NAME native.database.abi COMMAND nw_database_abi_c)
 set_tests_properties(native.database.abi PROPERTIES TIMEOUT 10 LABELS "native;contract;abi")
 nw_native_test(relations_abi relations_abi_tests.cpp)

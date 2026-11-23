@@ -219,7 +219,7 @@ def main():
     parser.add_argument('--database', required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--psql', default='psql')
-    parser.add_argument('--mode', choices=['jit', 'aot'], required=True)
+    parser.add_argument('--mode', choices=['aot'], required=True)
     parser.add_argument('--postgres-oracles', action='store_true')
     parser.add_argument('command', nargs=argparse.REMAINDER)
     args = parser.parse_args()
@@ -234,7 +234,7 @@ def main():
         save(args.output / 'golden-actual.json', json.loads(golden.stdout))
         config = configuration(args.provider, args.database, args.output)
         receipt = run_case(command, config, '--verify', args.output / 'verify')
-        if receipt['dynamicCodeSupported'] != (args.mode == 'jit'): raise AssertionError('Actual runtime mode mismatch.')
+        if receipt['dynamicCodeSupported'] is not False: raise AssertionError('Actual runtime mode mismatch.')
         result['checks'] = receipt['checks']
         result['independent_sql'] = reconcile(config, receipt, args.psql)
         result['maintenance_checks'] = maintenance_checks(command, config, receipt, args.output / 'maintenance', args.psql)

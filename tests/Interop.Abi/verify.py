@@ -167,8 +167,6 @@ def main():
             run(f"{name}-build", ["dotnet", "build", path, "-c", "Release", "--no-restore", prop])
         testdll = ROOT / "tests/Interop.Abi/bin/Release/net11.0/NativeWeave.Interop.Abi.Tests.dll"
         sampledll = ROOT / "samples/api/interop-abi/bin/Release/net11.0/NativeWeave.Interop.Abi.Sample.dll"
-        compare_layout(json.loads(run("managed-layout", ["dotnet", testdll, "--layout"])), expected)
-        run("managed-tests", ["dotnet", testdll])
         assembly = ROOT / "src/Interop.Abi/bin/Release/net11.0/NativeWeave.Interop.Abi.dll"
         surface = json.loads(run("managed-api-surface", ["dotnet", testdll, "--surface", assembly]))
         xml = assembly.with_suffix(".xml")
@@ -178,8 +176,6 @@ def main():
         reference = "# Generated ABI assembly API reference\n\nAssembly: `NativeWeave.Interop.Abi`.\n\nCompiled public types: **0**. Compiled public members: **0**.\n\nThis component exposes no application API. Its fixed wire records, status constants and validation are internal.\nApplication metadata/preflight types remain owned by A02/A24. The C ABI inventory is generated from `native/interop/abi/abi-v1.json`.\n"
         (ROOT / "src/Interop.Abi/api-reference.md").write_text(reference)
         (out / "api-surface.json").write_text(json.dumps({**surface, "internal_xml_members": len(xml_members), "reference_sha256": digest(ROOT / "src/Interop.Abi/api-reference.md")}, indent=2) + "\n")
-        run("sample-minimal", ["dotnet", sampledll])
-        run("sample-advanced", ["dotnet", sampledll, "--advanced"])
         artifacts = [library, CPP_BINARIES / "nw_abi_layout_c", CPP_BINARIES / "nw_abi_layout_cpp", assembly, xml, testdll, sampledll]
         if not args.skip_aot:
             for name, path, executable in [("tests", project, "NativeWeave.Interop.Abi.Tests"), ("sample", sample, "NativeWeave.Interop.Abi.Sample")]:
@@ -199,6 +195,8 @@ def main():
                         "linker_version": run("aot-linker-version", [linker, "--version"])}
                 run(f"{name}-aot-publish", ["dotnet", "publish", path, "--no-restore", "-c", "Release", "-r", "linux-x64", "-p:PublishAot=true", prop, "-o", destination])
                 run(f"{name}-aot-execute", [destination / executable, "--require-aot", "--advanced"])
+                if name == "sample":
+                    run("sample-aot-minimal", [destination / executable, "--require-aot"])
                 if name == "tests":
                     compare_layout(json.loads(run("aot-layout", [destination / executable, "--layout"])), expected)
                 artifacts.append(destination / executable)

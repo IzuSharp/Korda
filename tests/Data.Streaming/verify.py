@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run B06 against the actual B02/B03 components, JIT and Linux NativeAOT.
+"""Run B06 against the actual B02/B03 components, Linux NativeAOT.
 
 The test-only native ABI bridge is not a second Database host or a shipped asset.
 Missing PostgreSQL is a failed gate, never a successful or simulated result.
@@ -169,10 +169,13 @@ def main() -> int:
             native_env["NATIVEWEAVE_TEST_POSTGRES_URL"] = f"postgresql://nativeweave@127.0.0.1:{port}/postgres"
         elif not native_env.get("NATIVEWEAVE_TEST_POSTGRES_URL"):
             raise RuntimeError("PostgreSQL binaries or explicit NATIVEWEAVE_TEST_POSTGRES_URL are required.")
-        run("jit-providers", ["dotnet", str(assembly), str(output / "jit")], native_env)
         run("aot-providers", [str(executable), str(output / "aot-results"), "--require-aot"], native_env)
-        run("sample-sqlite", ["dotnet", str(sample_assembly), "sqlite"], native_env)
-        run("sample-postgresql", ["dotnet", str(sample_assembly), "postgresql"], native_env)
+        sample_dir = output / "sample-aot"
+        run("sample-aot-publish", ["dotnet", "publish", sample, "-c", "Release", "-r", "linux-x64",
+                                  "-p:PublishAot=true", "-p:RestoreLockedMode=true", "-o", str(sample_dir), *common])
+        sample_exe = sample_dir / "NativeWeave.Data.Streaming.Sample"
+        run("sample-sqlite", [str(sample_exe), "sqlite"], native_env)
+        run("sample-postgresql", [str(sample_exe), "postgresql"], native_env)
 
         artifact_paths = [assembly, streaming_assembly, streaming_xml, executable, fixture, api_assembly, sample_assembly]
         (output / "artifacts.json").write_text(json.dumps([
@@ -201,7 +204,7 @@ def main() -> int:
             "task": "B06", "platform": "linux-x64", "status": status, "commands": len(records),
             "source_manifest_sha256": sha(output / "source-inputs.json"),
             "offline_restore": args.offline_config is not None,
-            "scope": "Retained native/managed bounded stream composition with actual C++ Host/libpq/SQLite providers, Linux JIT/NativeAOT, compiled API/XML and sample. No pristine package, other-platform acceptance, or hard process RSS bound.",
+            "scope": "Retained native/managed bounded stream composition with actual C++ Host/libpq/SQLite providers, Linux Native AOT, compiled API/XML and sample. No pristine package, other-platform acceptance, or hard process RSS bound.",
         }
         (output / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
         print(json.dumps(summary), flush=True)

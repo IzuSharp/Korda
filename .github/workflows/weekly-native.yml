@@ -1,0 +1,49 @@
+name: Weekly native analysis
+on:
+  schedule:
+    - cron: '37 4 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: read
+  security-events: write
+jobs:
+  native-analysis:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25
+        with:
+          key: linux-x64-tools-${{ hashFiles('native/dependencies.lock.json') }}
+          path: |
+            artifacts/toolchain/downloads
+            artifacts/dependencies/downloads
+      - name: Prepare locked toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends pkg-config libssl-dev zlib1g-dev bison flex
+          python3 eng/cpp_toolchain.py
+      - id: pg
+        run: echo "key=$(python3 eng/postgres-cache-key.py full)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25
+        with:
+          key: postgres-full-ubuntu24-x64-${{ steps.pg.outputs.key }}
+          path: artifacts/postgres-tools/install
+      - run: bash eng/postgres-tools.sh
+      - uses: github/codeql-action/init@33d7b85da1a04171e211befe2c739303b9a4c066
+        with:
+          languages: c-cpp
+          build-mode: manual
+      - id: native
+        name: Compile the full native preset for analysis
+        run: |
+          cmake --preset linux-x64-release
+          cmake --build --preset linux-x64-release
+      - name: Run clang-tidy
+        run: python3 eng/check_native.py tidy
+      - uses: github/codeql-action/analyze@33d7b85da1a04171e211befe2c739303b9a4c066
+        if: ${{ !cancelled() && steps.native.outcome == 'success' }}
+        with:
+          category: nativeweave/weekly-cpp

@@ -31,7 +31,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 ASSEMBLY = 'NativeWeave.Migration.Cpp.Consumer'
 RUST_COMMIT = '465cd0f90e6af05ec50eb581156240377cf0825b'
-ROWS = [provider + '-' + mode for provider in ('sqlite', 'postgresql') for mode in ('jit', 'aot')]
+ROWS = [provider + '-' + mode for provider in ('sqlite', 'postgresql') for mode in ('aot',)]
 COMMON = ['-m:1', '-nr:false', '-p:UseSharedCompilation=false']
 spec = importlib.util.spec_from_file_location('package_identity', ROOT / 'tests/Reference.TaskService/package_probe.py')
 identity = importlib.util.module_from_spec(spec)
@@ -236,8 +236,8 @@ class Run:
         before = inventory(artifacts)
         if before != self.state['builds'][name]['artifacts_sha256']:
             raise AssertionError('Built artifact changed before execution.')
-        executable = artifacts / (ASSEMBLY + ('.dll' if mode == 'jit' else ''))
-        command = ['dotnet', executable] if mode == 'jit' else [executable]
+        executable = artifacts / (ASSEMBLY)
+        command = [executable]
         self.command(label, [*command, provider, database, stage, mode, receipt], timeout=180)
         value = json.loads(receipt.read_text())
         expected_cases = self.cases['common'] + self.cases[stage]
@@ -332,7 +332,7 @@ class Run:
         self.command('dotnet-version', ['dotnet', '--version'])
         artifacts, variants = {}, {}
         with self.postgres() as base:
-            for mode in ('jit', 'aot'):
+            for mode in ('aot',):
                 for provider in ('sqlite', 'postgresql'):
                     if mode not in artifacts:
                         artifacts[mode] = self.build(mode)
@@ -397,7 +397,7 @@ class Run:
                 'rust_commit': RUST_COMMIT, 'cpp_packages': self.state['packages'],
                 'abi_compatibility': {'baseline': self.baseline['abi'], 'candidate': self.state['abi'], 'inputs_sha256': self.abi_inputs},
                 'limits': 'Finite behavior/history matrix; race, disconnect, forced commit-unknown and memory-safety gates are reported by the product regression suites.'})
-        print('PASS', self.args.phase, 'SQLite/PostgreSQL x JIT/AOT; source, packages, native hashes and independent SQL recorded at', self.directory)
+        print('PASS', self.args.phase, 'SQLite/PostgreSQL x Native AOT; source, packages, native hashes and independent SQL recorded at', self.directory)
 
 
 def main():

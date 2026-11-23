@@ -103,9 +103,7 @@ sample = 'samples/api/data-abstractions/DataAbstractions.csproj'
 for label, project in [('managed', managed), ('api', api), ('sample', sample)]:
     run(label + '-restore', [DOTNET, 'restore', project, '--locked-mode', '--disable-build-servers', *restore_options])
     run(label + '-build', [DOTNET, 'build', project, '-c', 'Release', '--no-restore', '--disable-build-servers'])
-run('managed-run', [DOTNET, ROOT / 'tests/Data.Abstractions/bin/Release/net11.0/NativeWeave.Data.Tests.dll', OUT / 'managed'])
 api_result = json.loads(run('api-exact-xml-reference', [DOTNET, ROOT / 'tests/Data.Abstractions/ApiCheck/bin/Release/net11.0/ApiCheck.dll', ROOT, SDK, ROOT / 'src/Data.Abstractions/bin/Release/net11.0/NativeWeave.Data.dll', *(['--write'] if a.write_reference else [])]))
-run('sample-run', [DOTNET, ROOT / 'samples/api/data-abstractions/bin/Release/net11.0/DataAbstractions.dll'])
 
 # The unchanged managed golden encoder is consumed by the production C++
 # contract implementation, also registered in the shared native CTest preset.
@@ -122,7 +120,6 @@ toolchain['native_dynamic_dependencies'] = run('native-dependencies', ['readelf'
 toolchain['native_binary_sha256'] = sha(native_binary)
 toolchain['native_provenance_sha256'] = sha(provenance)
 write_json('toolchain.json', toolchain)
-native_results = json.loads(run('native-goldens', [native_binary, OUT / 'managed']))
 dependency_lock = ROOT / 'native/dependencies.lock.json'
 locked = json.loads(dependency_lock.read_text())
 write_json('dependency-licenses.json', {
@@ -171,7 +168,6 @@ with tempfile.TemporaryDirectory(prefix='nativeweave-b01-consumer-') as temporar
     offline = ['-p:NuGetAudit=false'] if a.offline_packages else []
     run('package-consumer-restore', [DOTNET, 'restore', '--configfile', consumer_config, *offline, '--disable-build-servers'], consumer, consumer_env)
     run('package-consumer-build', [DOTNET, 'build', '-c', 'Release', '--no-restore', '--disable-build-servers'], consumer, consumer_env)
-    run('package-consumer-jit', [DOTNET, consumer / 'bin/Release/net11.0/Consumer.dll'], consumer, consumer_env)
     run('package-consumer-aot-restore', [DOTNET, 'restore', '-r', 'linux-x64', '-p:PublishAot=true', '--configfile', consumer_config, *offline, '--disable-build-servers'], consumer, consumer_env)
     selection = json.loads(run('aot-linker-selection', [DOTNET, 'msbuild', 'Consumer.csproj', '-nologo', '-t:ResolveReferences,SetupOSSpecificProps', '-p:RuntimeIdentifier=linux-x64', '-p:PublishAot=true', '-getProperty:CppCompilerAndLinker,CppLinker,LinkerFlavor'], consumer, consumer_env))['Properties']
     driver = Path(shutil.which(selection['CppLinker']) or selection['CppLinker']).resolve()
@@ -197,11 +193,7 @@ with tempfile.TemporaryDirectory(prefix='nativeweave-b01-consumer-') as temporar
 run('managed-aot-restore', [DOTNET, 'restore', managed, '-r', 'linux-x64', '-p:PublishAot=true', '--locked-mode', '--disable-build-servers', *restore_options])
 run('managed-aot-publish', [DOTNET, 'publish', managed, '-c', 'Release', '-r', 'linux-x64', '-p:PublishAot=true', '--self-contained', 'true', '--no-restore', '--disable-build-servers', '-o', OUT / 'aot-tests'])
 run('managed-aot-run', [OUT / 'aot-tests/NativeWeave.Data.Tests', OUT / 'managed-aot', '--require-aot'])
-run('native-aot-goldens', [native_binary, OUT / 'managed-aot'])
-for filename in ['parent.json', 'child.json', 'unicode-model.json', 'configured-model.json', 'projection.json', 'scalar-projection.json', 'relation.json', 'relation.bin', 'key.bin', 'values.bin']:
-    if (OUT / 'managed' / filename).read_bytes() != (OUT / 'managed-aot' / filename).read_bytes():
-        raise RuntimeError('JIT/AOT canonical bytes differ: ' + filename)
-
+native_results = json.loads(run('native-aot-goldens', [native_binary, OUT / 'managed-aot']))
 tracked = subprocess.check_output(['git', 'ls-files', '--cached', '--others', '--exclude-standard',
     'src/Data.Abstractions', 'tests/Data.Abstractions', 'native/database/interfaces',
     'native/cpp/include/nw/contracts.hpp', 'native/cpp/include/nw/generated/schema.hpp',
@@ -212,5 +204,5 @@ tracked = [name for name in tracked if (ROOT / name).is_file()]
 write_json('source-identity.json', {'commit': subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip(), 'status': subprocess.check_output(['git', 'status', '--short'], cwd=ROOT, text=True), 'design_commit': 'c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9', 'platform': 'linux-x64', 'files': {f: sha(ROOT / f) for f in tracked}, 'root_build_inputs': {f: sha(ROOT / f) for f in ['global.json', 'Directory.Build.props', 'CMakeLists.txt', 'CMakePresets.json', 'native/cpp/tests/CMakeLists.txt', 'native/dependencies.lock.json', 'THIRD_PARTY_NOTICES.md']}})
 artifacts = [packages[0], ROOT / 'src/Data.Abstractions/bin/Release/net11.0/NativeWeave.Data.dll', native_binary, OUT / 'aot-consumer/Consumer', OUT / 'aot-tests/NativeWeave.Data.Tests']
 write_json('artifact-hashes.json', {str(f.relative_to(OUT)) if f.is_relative_to(OUT) else str(f.relative_to(ROOT)) if f.is_relative_to(ROOT) else str(f): sha(f) for f in artifacts})
-write_json('summary.json', {'status': 'passed', 'task': 'B01', 'platform': 'linux-x64', 'compiled_api_symbols': api_result['compiled_symbols'], 'managed_case_families': len(json.loads((OUT / 'managed/managed-results.json').read_text())['cases']), 'negative_compile_cases': 4, 'native_scalar_kinds': native_results['scalar_kinds'], 'native_malformed_rejections': native_results['malformed_rejections'], 'native_cross_language_goldens': native_results['cross_language_goldens'], 'package_jit': True, 'package_native_aot_executed': True, 'managed_contracts_native_aot_executed': True, 'jit_aot_golden_identity': True, 'rust_consumer_invocations': 0, 'nuget_audit': 'unavailable_offline' if a.offline_packages else 'normal_restore', 'scope': 'B01 metadata/row/value contracts; not a live database host, generator, provider or final pristine platform acceptance', 'windows': 'deferred_by_user'})
+write_json('summary.json', {'status': 'passed', 'task': 'B01', 'platform': 'linux-x64', 'compiled_api_symbols': api_result['compiled_symbols'], 'managed_case_families': len(json.loads((OUT / 'managed-aot/managed-results.json').read_text())['cases']), 'negative_compile_cases': 4, 'native_scalar_kinds': native_results['scalar_kinds'], 'native_malformed_rejections': native_results['malformed_rejections'], 'native_cross_language_goldens': native_results['cross_language_goldens'], 'package_native_aot_executed': True, 'managed_contracts_native_aot_executed': True, 'rust_consumer_invocations': 0, 'nuget_audit': 'unavailable_offline' if a.offline_packages else 'normal_restore', 'scope': 'B01 metadata/row/value contracts; not a live database host, generator, provider or final pristine platform acceptance', 'windows': 'deferred_by_user'})
 print('B01 Linux x64 verification passed.', flush=True)

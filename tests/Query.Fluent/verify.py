@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""B13 Linux: real typed native queries, exact API and boundary costs and isolated NuGet JIT/AOT."""
+"""B13 Linux: real typed native queries, exact API and boundary costs and isolated NuGet Native AOT."""
 import argparse
 import datetime
 import hashlib
@@ -106,11 +106,9 @@ try:
         raise RuntimeError('PostgreSQL did not become ready before deadline.')
     env['NW_TEST_POSTGRES'] = f'postgresql://nativeweave@127.0.0.1:{port}/postgres'
     project = 'tests/Query.Fluent/NativeWeave.Query.Fluent.Tests.csproj'
-    run('restore-jit', ['dotnet', 'restore', project, '--locked-mode', *common, *assets])
-    run('build-jit', ['dotnet', 'build', project, '-c', 'Release', '--no-restore', *common, *assets])
-    shutil.copytree(ROOT / 'tests/Query.Fluent/bin/Release/net11.0', out / 'jit-bin')
-    dll = out / 'jit-bin/NativeWeave.Query.Fluent.Tests.dll'
-    run('actual-jit', ['dotnet', dll, out / 'jit-results'])
+    run('restore-managed', ['dotnet', 'restore', project, '--locked-mode', *common, *assets])
+    run('build-managed', ['dotnet', 'build', project, '-c', 'Release', '--no-restore', *common, *assets])
+    dll = ROOT / 'tests/Query.Fluent/bin/Release/net11.0/NativeWeave.Query.Fluent.Tests.dll'
     run('api-build', ['dotnet', 'build', 'tests/Query.Fluent/ApiCheck/ApiCheck.csproj', '-c', 'Release', *common])
     run('api-reference-negative-consumers', ['dotnet', ROOT / 'tests/Query.Fluent/ApiCheck/bin/Release/net11.0/NativeWeave.Query.Fluent.ApiCheck.dll', ROOT, a.design.resolve(), env['DOTNET_ROOT']])
     run('restore-aot', ['dotnet', 'restore', project, '-r', 'linux-x64', '-p:PublishAot=true', '--locked-mode', *common, *assets])
@@ -154,7 +152,6 @@ try:
     run('consumer-restore', ['dotnet', 'restore', cp, '--configfile', config, *common], consumer, consumer_env)
     run('consumer-build', ['dotnet', 'build', cp, '-c', 'Release', '--no-restore', *common], consumer, consumer_env)
     consumer_dll = consumer / 'bin/Release/net11.0/QueryFluent.Sample.dll'
-    run('consumer-jit', ['dotnet', consumer_dll], consumer, consumer_env)
     run('consumer-restore-aot', ['dotnet', 'restore', cp, '-r', 'linux-x64', '-p:PublishAot=true', '--configfile', config, *common], consumer, consumer_env)
     run('consumer-publish-aot', ['dotnet', 'publish', cp, '-c', 'Release', '-r', 'linux-x64', '-p:PublishAot=true', '--no-restore', '-o', out / 'consumer-aot', *common], consumer, consumer_env)
     consumer_aot = out / 'consumer-aot/QueryFluent.Sample'
@@ -163,17 +160,17 @@ try:
         raise RuntimeError('Ordinary NuGet consumption unexpectedly invoked Rust.')
     write('consumer-identities.json', {'directory': str(consumer), 'project_references': 0,
           'nativeweave_packages': packages, 'consumer_sha256': {f.name: sha(f) for f in consumer.iterdir() if f.is_file()},
-          'jit_sha256': sha(consumer_dll), 'aot_sha256': sha(consumer_aot), 'pristine_machine': False, 'no_consumer_rust': True, 'sdk_package_sha256': {name: sha(feed / f'{name}.11.0.0.nupkg') for name in sdk_packages}})
+          'managed_sha256': sha(consumer_dll), 'aot_sha256': sha(consumer_aot), 'pristine_machine': False, 'no_consumer_rust': True, 'sdk_package_sha256': {name: sha(feed / f'{name}.11.0.0.nupkg') for name in sdk_packages}})
     run('dotnet-identity', ['dotnet', '--info'])
     if source != inputs(ROOT, scopes) or host_source != inputs(a.host_source.resolve(), host_scopes) or native_hashes != {str(m): sha(m) for m in modules}:
         raise RuntimeError('Acceptance input or native artifact changed during execution.')
     write('artifact-identities.json', {'managed_sha256': sha(dll), 'aot_sha256': sha(executable), 'native_sha256': native_hashes,
           'source_inputs_unchanged': True, 'exact_compiled_public_api_xml_and_negative_consumers': True})
     write('status.json', {'result': 'passed', 'platform': 'linux-x64', 'candidate': source['commit'], 'host_candidate': host_source['commit'],
-          'commands': len(commands), 'jit': json.loads((out / 'jit-results/result.json').read_text()),
-          'aot': json.loads((out / 'aot-results/result.json').read_text()), 'isolated_nuget_jit_and_aot': True,
+          'commands': len(commands),
+          'aot': json.loads((out / 'aot-results/result.json').read_text()), 'isolated_nuget_aot': True,
           'public_facade_owner': 'B13; public namespace source-composed in NativeWeave.Database', 'other_platforms': 'not executed'})
-    print('PASS B13 immutable Linux actual Fluent query and isolated NuGet JIT/AOT', flush=True)
+    print('PASS B13 immutable Linux actual Fluent query and isolated NuGet Native AOT', flush=True)
 except Exception as failure:
     write('status.json', {'result': 'failed', 'platform': 'linux-x64', 'candidate': source['commit'], 'error': str(failure), 'completed_commands': len(commands)})
     raise

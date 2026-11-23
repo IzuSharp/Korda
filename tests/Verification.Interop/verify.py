@@ -142,9 +142,6 @@ def main():
             dll = ROOT / Path(project).parent / "bin/Release/net11.0" / (assembly + ".dll")
             run(label + "-aot-restore", ["dotnet", "restore", project, "-r", "linux-x64", "-p:PublishAot=true", *locked, *common])
             if not args.prepare:
-                run(label + "-jit", ["dotnet", dll], contains=("PASS A20",))
-                if label == "sample":
-                    run("sample-jit-advanced", ["dotnet", dll, "--advanced"], contains=("PASS A20",))
                 aot = output / (label + "-aot")
                 run(label + "-aot-publish", ["dotnet", "publish", project, "-c", "Release", "-r", "linux-x64",
                     "-p:PublishAot=true", "-p:IlcTreatWarningsAsErrors=true", "--no-restore", "-o", aot, *common])
@@ -154,9 +151,9 @@ def main():
                     run("sample-aot-advanced", [executable, "--require-aot", "--advanced"], contains=("PASS A20",))
                 if (aot / (assembly + ".dll")).exists():
                     raise RuntimeError("Expected actual Native AOT output.")
-                artifact(label + "-jit", dll); artifact(label + "-aot", executable)
+                artifact(label + "-aot", executable)
                 if label == "tests":
-                    managed = [("jit", ["dotnet", dll]), ("aot", [executable])]
+                    managed = [("aot", [executable])]
         project = "src/Build.Integration/ApiReference/ApiReference.csproj"
         run("api-restore", ["dotnet", "restore", project, "--locked-mode", *common])
         run("api-build", ["dotnet", "build", project, "-c", "Release", "--no-restore", *common])

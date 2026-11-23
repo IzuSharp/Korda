@@ -118,7 +118,8 @@ int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
             uint32_t limit = data[1], capacity = data[2];
             bool valid = utf8(data + 3, n, limit, &prefix);
             uint8_t output[512];
-            memset(output, 0xa5, sizeof(output));
+            for (size_t i = 0; i < sizeof(output); i++)
+                output[i] = 0xa5;
             uint64_t written = UINT64_MAX;
             uint32_t status = nw_a20_utf8_v1(data + 3, n, limit, output, capacity, &written);
             uint32_t expected = !valid ? NW_INVALID_ARGUMENT : prefix > capacity ? NW_BUFFER_TOO_SMALL : NW_OK;
@@ -134,22 +135,27 @@ int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size)
         {
             if (size < 10)
                 return 0;
-            uint64_t aligned[8], original[8];
-            memset(aligned, 0xa5, sizeof(aligned));
-            uint32_t capacity = data[1] % 65, status = (uint32_t)le64(data + 2);
-            memcpy(aligned, &capacity, sizeof(capacity));
-            memcpy(original, aligned, sizeof(aligned));
-            assert(nw_a20_error_v1(status, (nw_error_info_v1*)aligned, 17, -71, 123) == status);
-            if (status > 1 && capacity >= 24)
+            struct error_buffer
             {
                 nw_error_info_v1 record;
-                memcpy(&record, aligned, sizeof(record));
-                assert(record.struct_size == 24 && record.domain == 17 && record.code == -71 && record.flags == 0 &&
-                       record.correlation_id == 123);
-                assert(memcmp((uint8_t*)aligned + 24, (uint8_t*)original + 24, sizeof(aligned) - 24) == 0);
+                uint8_t tail[40];
+            } original;
+            _Static_assert(sizeof(nw_error_info_v1) == 24 && sizeof(struct error_buffer) == 64, "v1 fixture layout");
+            uint8_t* bytes = (uint8_t*)&original;
+            for (size_t i = 0; i < sizeof(original); i++)
+                bytes[i] = 0xa5;
+            uint32_t capacity = data[1] % 65, status = (uint32_t)le64(data + 2);
+            original.record.struct_size = capacity;
+            struct error_buffer output = original;
+            assert(nw_a20_error_v1(status, &output.record, 17, -71, 123) == status);
+            if (status > 1 && capacity >= sizeof(output.record))
+            {
+                assert(output.record.struct_size == 24 && output.record.domain == 17 && output.record.code == -71 &&
+                       output.record.flags == 0 && output.record.correlation_id == 123);
+                assert(memcmp(output.tail, original.tail, sizeof(output.tail)) == 0);
             }
             else
-                assert(memcmp(aligned, original, sizeof(aligned)) == 0);
+                assert(memcmp(&output, &original, sizeof(output)) == 0);
             break;
         }
         case 3:

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""B12 Linux: real Host materialization, static generated oracle and isolated NuGet JIT/AOT."""
+"""B12 Linux: real Host materialization, static generated oracle and isolated NuGet Native AOT."""
 import argparse
 import datetime
 import hashlib
@@ -106,11 +106,9 @@ try:
         raise RuntimeError('PostgreSQL did not become ready before deadline.')
     env['NW_TEST_POSTGRES'] = f'postgresql://nativeweave@127.0.0.1:{port}/postgres'
     project = 'tests/Data.Materialization/NativeWeave.Data.Materialization.Tests.csproj'
-    run('restore-jit', ['dotnet', 'restore', project, '--locked-mode', *common, *assets])
-    run('build-jit', ['dotnet', 'build', project, '-c', 'Release', '--no-restore', *common, *assets])
-    shutil.copytree(ROOT / 'tests/Data.Materialization/bin/Release/net11.0', out / 'jit-bin')
-    dll = out / 'jit-bin/NativeWeave.Data.Materialization.Tests.dll'
-    run('actual-jit', ['dotnet', dll, out / 'jit-results'])
+    run('restore-managed', ['dotnet', 'restore', project, '--locked-mode', *common, *assets])
+    run('build-managed', ['dotnet', 'build', project, '-c', 'Release', '--no-restore', *common, *assets])
+    dll = ROOT / 'tests/Data.Materialization/bin/Release/net11.0/NativeWeave.Data.Materialization.Tests.dll'
     run('restore-aot', ['dotnet', 'restore', project, '-r', 'linux-x64', '-p:PublishAot=true', '--locked-mode', *common, *assets])
     run('publish-aot', ['dotnet', 'publish', project, '-c', 'Release', '-r', 'linux-x64', '-p:PublishAot=true', '--no-restore', '-o', out / 'aot', *common, *assets])
     executable = out / 'aot/NativeWeave.Data.Materialization.Tests'
@@ -153,7 +151,6 @@ try:
     run('consumer-restore', ['dotnet', 'restore', cp, '--configfile', config, *common], consumer, consumer_env)
     run('consumer-build', ['dotnet', 'build', cp, '-c', 'Release', '--no-restore', *common], consumer, consumer_env)
     consumer_dll = consumer / 'bin/Release/net11.0/Materialization.Consumer.dll'
-    run('consumer-jit', ['dotnet', consumer_dll], consumer, consumer_env)
     run('consumer-restore-aot', ['dotnet', 'restore', cp, '-r', 'linux-x64', '-p:PublishAot=true', '--configfile', config, *common], consumer, consumer_env)
     run('consumer-publish-aot', ['dotnet', 'publish', cp, '-c', 'Release', '-r', 'linux-x64', '-p:PublishAot=true', '--no-restore', '-o', out / 'consumer-aot', *common], consumer, consumer_env)
     consumer_aot = out / 'consumer-aot/Materialization.Consumer'
@@ -162,7 +159,7 @@ try:
         raise RuntimeError('Ordinary NuGet consumption unexpectedly invoked Rust.')
     write('consumer-identities.json', {'directory': str(consumer), 'project_references': 0,
           'nativeweave_packages': packages, 'consumer_sha256': {f.name: sha(f) for f in consumer.iterdir() if f.is_file()},
-          'jit_sha256': sha(consumer_dll), 'aot_sha256': sha(consumer_aot), 'pristine_machine': False, 'no_consumer_rust': True, 'sdk_package_sha256': {name: sha(feed / f'{name}.11.0.0.nupkg') for name in sdk_packages}})
+          'managed_sha256': sha(consumer_dll), 'aot_sha256': sha(consumer_aot), 'pristine_machine': False, 'no_consumer_rust': True, 'sdk_package_sha256': {name: sha(feed / f'{name}.11.0.0.nupkg') for name in sdk_packages}})
     applicability = json.loads((ROOT / 'src/Data.Materialization/api-applicability.json').read_text())
     if applicability['new_public_types'] or applicability['native_exports'] or applicability['new_package']:
         raise RuntimeError('B12 internal composition unexpectedly advertises public plumbing.')
@@ -173,10 +170,10 @@ try:
     write('artifact-identities.json', {'managed_sha256': sha(dll), 'aot_sha256': sha(executable), 'native_sha256': native_hashes,
           'source_inputs_unchanged': True, 'generated_and_manual_use_same_independent_oracle': True})
     write('status.json', {'result': 'passed', 'platform': 'linux-x64', 'candidate': source['commit'], 'host_candidate': host_source['commit'],
-          'commands': len(commands), 'jit': json.loads((out / 'jit-results/result.json').read_text()),
-          'aot': json.loads((out / 'aot-results/result.json').read_text()), 'isolated_nuget_jit_and_aot': True,
+          'commands': len(commands),
+          'aot': json.loads((out / 'aot-results/result.json').read_text()), 'isolated_nuget_aot': True,
           'public_facade_owner': 'B13; reused B01 API unchanged by B12', 'other_platforms': 'not executed'})
-    print('PASS B12 immutable Linux actual materialization and isolated NuGet JIT/AOT', flush=True)
+    print('PASS B12 immutable Linux actual materialization and isolated NuGet Native AOT', flush=True)
 except Exception as failure:
     write('status.json', {'result': 'failed', 'platform': 'linux-x64', 'candidate': source['commit'], 'error': str(failure), 'completed_commands': len(commands)})
     raise

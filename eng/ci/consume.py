@@ -1,4 +1,5 @@
-"""Restore only the requested public IDs and execute independent and combined JIT/AOT applications."""
+"""Restore only the requested public IDs and execute independent and combined Native AOT applications."""
+
 import argparse
 import json
 import os
@@ -20,16 +21,40 @@ def main():
     parser.add_argument("record", type=Path)
     parser.add_argument("plan", type=Path)
     parser.add_argument("--public", action="store_true")
-    parser.add_argument("--check-build-only", action="store_true", help="Cross-build linux-x64 without executing")
     args = parser.parse_args()
     record = json.loads(args.record.read_text())
     selected = {p["id"]: p["version"] for p in record["packages"]}
-    versions = {IDS[p]: v["version"] for p, v in json.loads(args.plan.read_text())["published"].items()} | selected
+    versions = {
+        IDS[p]: v["version"] for p, v in json.loads(args.plan.read_text())["published"].items() if p in IDS
+    } | selected
     with tempfile.TemporaryDirectory(prefix="nativeweave-public-") as tmp:
         work = Path(tmp)
         conf = ET.parse(ROOT / "NuGet.Config")
+        # Keep application packages isolated. NuGet may read SDK tooling from the runner's warm cache.
+        sdk_cache = Path(os.environ.get("NUGET_PACKAGES", Path.home() / ".nuget/packages")).resolve()
+        if sdk_cache.is_dir():
+            fallback = work / "sdk-cache"
+            fallback.mkdir()
+            for folder in sdk_cache.iterdir():
+                if folder.is_dir() and folder.name.lower().startswith(
+                    (
+                        "microsoft.netcore.app.",
+                        "microsoft.aspnetcore.app.",
+                        "microsoft.dotnet.",
+                        "runtime.linux-x64.microsoft.dotnet.",
+                    )
+                ):
+                    (fallback / folder.name).symlink_to(folder, target_is_directory=True)
+            folders = ET.SubElement(conf.getroot(), "fallbackPackageFolders")
+            ET.SubElement(folders, "clear")
+            ET.SubElement(folders, "add", key="sdk", value=str(fallback))
         if not args.public:
-            ET.SubElement(conf.find("packageSources"), "add", key="candidate", value=str(args.record.resolve().parent / "feed"))
+            ET.SubElement(
+                conf.find("packageSources"),
+                "add",
+                key="candidate",
+                value=str(args.record.resolve().parent / "feed"),
+            )
             local = ET.SubElement(conf.find("packageSourceMapping"), "packageSource", key="candidate")
             for identity in selected:
                 ET.SubElement(local, "package", pattern=identity)
@@ -37,30 +62,47 @@ def main():
         shutil.copy(ROOT / "global.json", work)
         env = os.environ | {"NUGET_PACKAGES": str(work / "cache")}
         for graph, (refs, symbols, providers) in GRAPHS.items():
-            if graph != "combined" and refs[0] not in selected:
+            if not set(refs).issubset(selected):
                 continue
             app = work / graph
             app.mkdir()
             shutil.copy(ROOT / "samples/api/packaging-domain/Program.cs", app)
-            project(app / "Consumer.csproj", refs, versions, [*symbols, "PUBLIC_PROVIDER_BUNDLE"])
+            project(
+                app / "Consumer.csproj",
+                refs,
+                versions,
+                [*symbols, "PUBLIC_PROVIDER_BUNDLE"],
+            )
+
             def run(*argv, extra=None):
                 subprocess.run(argv, cwd=app, env=env | (extra or {}), check=True)
-            run("dotnet", "build", "-c", "Release", "-r", "linux-x64", "--no-self-contained")
+
+            def execute(*command):
+                for provider in providers:
+                    database = (
+                        str(app / "smoke.db") if provider == "sqlite" else os.environ["NW_TEST_POSTGRES"]
+                    )
+                    run(
+                        *command,
+                        extra={"B24_PROVIDER": provider, "B24_DATABASE": database},
+                    )
+
+            run(
+                "dotnet",
+                "publish",
+                "-c",
+                "Release",
+                "-r",
+                "linux-x64",
+                "-p:PublishAot=true",
+                "-o",
+                "out",
+            )
             assets = json.loads((app / "obj/project.assets.json").read_text())
             actual = {key for key in assets["libraries"] if key.lower().startswith("nativeweave.")}
             if actual != {name + "/" + versions[name] for name in refs}:
                 raise ValueError("Unexpected NativeWeave dependencies: " + str(actual))
-            def execute(*command):
-                for provider in providers:
-                    database = str(app / "smoke.db") if provider == "sqlite" else os.environ["NW_TEST_POSTGRES"]
-                    run(*command, extra={"B24_PROVIDER": provider, "B24_DATABASE": database})
-
-            if not args.check_build_only:
-                execute("dotnet", "bin/Release/net11.0/linux-x64/B24Consumer.dll", "--require-jit")
-            options = ["--no-self-contained"] if args.check_build_only else ["-p:PublishAot=true"]
-            run("dotnet", "publish", "-c", "Release", "-r", "linux-x64", *options, "-o", "out")
-            if not args.check_build_only:
-                execute("./out/B24Consumer", "--require-aot")
+            execute("./out/B24Consumer", "--require-aot")
 
 
 if __name__ == "__main__":

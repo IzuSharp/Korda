@@ -2,17 +2,24 @@
 import argparse
 import json
 from pathlib import Path
-import subprocess
-from bundles import compat
-from impact import IDS, inputs
+import sys
+from catalog import ROOT, git, load_catalog
+from impact import inputs
 import xml.etree.ElementTree as ET
 import zipfile
 
 
-def validate(folder, plan, version):
-    tree = subprocess.check_output(["git", "rev-parse", "HEAD^{tree}"], text=True).strip()
+sys.path.insert(0, str(ROOT / "src/Verification.Compatibility"))
+import compatibility as compat
+
+
+def validate(folder, plan, version, module=""):
+    tree = git("rev-parse", "HEAD^{tree}").decode().strip()
     record = compat.read_json(folder / "release.json")
-    expected = {IDS[name] for name in plan["packages"]}
+    identities = load_catalog().packages
+    if module and module not in plan["candidates"]:
+        raise ValueError("Module is outside the release plan")
+    expected = {identities[name] for name in ([module] if module else plan["packages"])}
     if record["source_tree"] != tree or record["inputs"] != inputs("HEAD") or record["source_dirty"] is not False:
         raise ValueError("Provider artifact is for a different source tree")
     packages = {p["id"]: p for p in record["packages"]}
@@ -25,7 +32,7 @@ def validate(folder, plan, version):
         path = folder / "feed" / f"{name}.{version}.nupkg"
         if compat.file_hash(path) != item["upload_archive_sha256"]:
             raise ValueError("Candidate changed after consumption")
-        provider = next(p for p, identity in IDS.items() if identity == name)
+        provider = next(p for p, identity in identities.items() if identity == name)
         with zipfile.ZipFile(path) as archive:
             if json.loads(archive.read("nativeweave/public.json"))["inputs"] != record["inputs"][provider]:
                 raise ValueError("Packaged provider fingerprint differs from the tested inputs")
@@ -43,6 +50,7 @@ if __name__ == "__main__":
     parser.add_argument("directory", type=Path)
     parser.add_argument("plan", type=Path)
     parser.add_argument("version")
+    parser.add_argument("--module", default="")
     args = parser.parse_args()
-    for path in validate(args.directory, json.loads(args.plan.read_text()), args.version).values():
+    for path in validate(args.directory, json.loads(args.plan.read_text()), args.version, args.module).values():
         print(path)

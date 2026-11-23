@@ -44,7 +44,7 @@ def build_filesystem_shim(shim: Path, output: Path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--artifact-directory', type=Path, required=True)
-    parser.add_argument('--mode', choices=['jit', 'aot'], required=True)
+    parser.add_argument('--mode', choices=['aot'], required=True)
     parser.add_argument('--provider', choices=['sqlite', 'postgresql'], required=True)
     parser.add_argument('--dotnet', default='dotnet')
     parser.add_argument('--postgres-bin', type=Path, default=Path(shutil.which('postgres') or '/usr/lib/postgresql/18/bin/postgres').parent)
@@ -53,12 +53,12 @@ def main():
     parser.add_argument('--filesystem-shim', type=Path)
     args = parser.parse_args()
     artifact = args.artifact_directory.resolve()
-    executable = artifact / ('NativeWeave.Reference.TaskService.dll' if args.mode == 'jit' else 'NativeWeave.Reference.TaskService')
+    executable = artifact / 'NativeWeave.Reference.TaskService'
     require(executable.is_file(), 'The selected actual reference consumer does not exist')
     required = (*POSTGRES, *COMMON) if args.provider == 'postgresql' else (*SQLITE, *COMMON)
     selected = args.cases or list(required)
     require(len(set(selected)) == len(selected) and all(case in required for case in selected), 'Unknown or duplicate fault selection')
-    command = [args.dotnet, str(executable)] if args.mode == 'jit' else [str(executable)]
+    command = [str(executable)]
     identity = {'mode': args.mode, 'provider': args.provider, 'program': command,
         'executableSha256': sha(executable), 'artifactDirectory': str(artifact),
         'artifacts': {str(path.relative_to(artifact)): sha(path) for path in sorted(artifact.rglob('*')) if path.is_file()},

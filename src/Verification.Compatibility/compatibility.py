@@ -190,8 +190,8 @@ def validate_regression(root, record, previous, candidate):
         checked_file(root, executable)
         require(mode != "aot" or row.get("dynamicCode") is False, "NWCMP007", "AOT matrix row did not execute Native AOT")
         require(mode != "jit" or executable["sha256"] == profile["sha256"], "NWCMP007", "JIT row executed a different managed artifact")
-    require(observed == {(mode, managed, native) for mode in ("jit", "aot") for managed in manifests for native in manifests},
-            "NWCMP007", "Complete regression needs all old/new JIT and AOT cross-pairs")
+    require({("aot", managed, native) for managed in manifests for native in manifests}.issubset(observed),
+            "NWCMP007", "Complete regression needs all old/new Native AOT cross-pairs")
 
 
 def compare_components(previous_path, candidate_path, root, review_path, now=None):

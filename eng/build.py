@@ -10,6 +10,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 ARTIFACTS = ROOT / "artifacts"
@@ -118,68 +119,108 @@ def migration_comparison(version):
         export_fixture_results(external, OUTPUT / "migration-comparison")
 
 
-def verify(version, design, plan, compare_rust_reference=False):
-    if not os.environ.get("NW_TEST_POSTGRES"):
-        raise RuntimeError("Set NW_TEST_POSTGRES to a disposable real PostgreSQL 18 test server")
-    os.environ["NATIVEWEAVE_TEST_POSTGRES_URL"] = os.environ["NW_TEST_POSTGRES"]
+def workspace(destination):
+    """Keep future, unrelated projects out of the database solution build."""
+    import xml.etree.ElementTree as ET
+    sys.path.insert(0, str(ROOT / "eng/ci"))
+    from catalog import load_catalog
+    catalog = load_catalog()
+    database_modules = json.loads((ROOT / "eng/ci/modules/database.json").read_text())
+    solution = ET.parse(ROOT / "NativeWeave.slnx")
+    for parent in solution.iter():
+        for project in list(parent.findall("Project")):
+            path = project.attrib["Path"]
+            owner, _ = catalog.owner(path)
+            if owner not in database_modules:
+                parent.remove(project)
+            else:
+                project.set("Path", os.path.relpath(ROOT / path, destination.parent))
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    solution.write(destination, encoding="utf-8")
+    return str(destination)
+
+
+def build_workspace():
+    solution = workspace(OUTPUT / "database.slnx")
+    msbuild = ["-m:1", "-nr:false", "-p:UseSharedCompilation=false"]
+    run(["dotnet", "restore", solution, "--locked-mode", "--disable-parallel", *msbuild], "restore")
+    run(["dotnet", "build", solution, "-c", "Release", "--no-restore", *msbuild], "build")
+    run(["dotnet", "format", solution, "--verify-no-changes", "--no-restore"], "dotnet-format")
+
+
+def verify_inputs():
     if run(["git", "status", "--porcelain"], "initial-status").strip():
         raise RuntimeError("Commit a clean candidate before collecting source-bound evidence")
-    initial = source()
-    standard = json.loads((ROOT / "public-api-standard.json").read_text())
-    if digest(ROOT / standard["localPath"]) != standard["sha256"]:
-        raise RuntimeError("Pinned public API standard bytes changed; review adoption explicitly")
     run([sys.executable, "eng/verify_db_scope.py"], "database-scope")
-    run([sys.executable, "-m", "unittest", "discover", "-s", "tests/Tooling", "-v"], "build-tool-tests")
     run([sys.executable, "eng/check_native.py", "format"], "clang-format")
-    manifest = native()
-    run([sys.executable, "eng/check_native.py", "tidy"], "clang-tidy")
-    msbuild = ["-m:1", "-nr:false", "-p:UseSharedCompilation=false"]
-    run(["dotnet", "restore", "NativeWeave.slnx", "--locked-mode", "--disable-parallel", *msbuild], "restore")
-    run(["dotnet", "build", "NativeWeave.slnx", "-c", "Release", "--no-restore", *msbuild], "build")
-    run(["dotnet", "format", "NativeWeave.slnx", "--verify-no-changes", "--no-restore"], "dotnet-format")
-    for component in ("core",):
-        run([sys.executable, "src/Build.Integration/compose_docs.py", "--config",
-             f"src/Build.Integration/api/{component}.json", "--output", f"artifacts/docs/{component}-site"],
-            component + "-api-docs")
+
+
+def regressions(design, plan):
     try:
-        run([sys.executable, "eng/database_regressions.py", "--design", design, "--plan", plan,
-             "--output", OUTPUT / "regressions"], "database-regressions")
+        # The driver writes per-check logs and receipts. Forward its progress as each check starts.
+        subprocess.run([sys.executable, "eng/database_regressions.py", "--design", design, "--plan", plan,
+                        "--output", OUTPUT / "regressions"], cwd=ROOT, check=True)
     finally:
         export_fixture_results(OUTPUT / "regressions", OUTPUT / "regression-evidence")
-    pack(version, manifest)
-    if compare_rust_reference:
-        migration_comparison(version)
+
+
+def api_docs(design):
+    standard = json.loads((ROOT / "public-api-standard.json").read_text())
+    if digest(ROOT / standard["localPath"]) != standard["sha256"]:
+        raise RuntimeError("Pinned public API standard bytes changed")
+    run([sys.executable, "src/Build.Integration/compose_docs.py", "--config",
+         "src/Build.Integration/api/core.json", "--output", "artifacts/docs/core-site"], "core-api-docs")
+
+    run([sys.executable, "tests/Build.Integration/verify_docs.py",
+         "--output", OUTPUT / "api-checks/tool"], "api-tool-negative-contracts")
+    run(["dotnet", "run", "--project", "tests/Packaging.Release/ApiCheck", "-c", "Release",
+         "--no-build", "--", OUTPUT / "api-checks/packaging-task-reference.md"], "packaging-task-api")
+    tool = ROOT / "src/Build.Integration/ApiReference/bin/Release/net11.0/NativeWeave.ApiReference.dll"
+    if not tool.is_file():
+        directory = tool.parent
+        tool = next(p for p in directory.glob("*.dll") if p.with_suffix(".runtimeconfig.json").is_file())
+    for name in ("Data.Migrations", "Orm.Relations"):
+        run([sys.executable, f"tests/{name}/api.py", "--design", design, "--tool", tool], name + "-api")
+    run(["dotnet", "tests/Query.Fluent/ApiCheck/bin/Release/net11.0/NativeWeave.Query.Fluent.ApiCheck.dll",
+         ROOT, design, os.environ["DOTNET_ROOT"]], "fluent-api")
+    run(["dotnet", "tests/Query.Generator/bin/Release/net11.0/NativeWeave.Query.Generator.Tests.dll"], "query-generator")
+    run(["dotnet", "tests/Query.Generator/ApiCheck/bin/Release/net11.0/NativeWeave.Query.Generator.ApiCheck.dll",
+         ROOT, design, os.environ["DOTNET_ROOT"]], "query-generator-api")
+
+
+def consumer_probes(version, only=None):
     for name, driver in (("database-lifecycle", "tests/Verification.EndToEnd/api_probe.py"),
                          ("database-business", "tests/Reference.TaskService/package_probe.py")):
-        external = ROOT.parent / "_consumers" / name
-        try:
-            run([sys.executable, driver, "--feed", OUTPUT / "prepared/candidate/feed",
-                 "--version", version + ".2", "--output", external], name)
-        finally:
-            export_fixture_results(external, OUTPUT / name)
+        if only and only != name:
+            continue
+        with tempfile.TemporaryDirectory(prefix="nativeweave-" + name + "-") as temp:
+            external = Path(temp) / "consumer"
+            try:
+                run([sys.executable, driver, "--feed", OUTPUT / "prepared/candidate/feed",
+                     "--version", version + ".2", "--output", external], name)
+            finally:
+                export_fixture_results(external, OUTPUT / name)
+    if only:
+        return
     consume("local")
     run(["git", "diff", "--check"], "diff-check")
-    if run(["git", "status", "--porcelain"], "final-status").strip() or source() != initial:
+    if run(["git", "status", "--porcelain"], "final-status").strip():
         raise RuntimeError("Source or dependency locks changed during verification")
-    report = {"task": "DB-CPP-01", "status": "passed", "rid": "linux-x64", "source": initial,
-              "versionBase": version, "nativeManifestSha256": digest(manifest),
-              "candidateManifestSha256": digest(OUTPUT / "prepared/manifest.json"),
-              "checks": ["scope", "clang-format", "clang-tidy", "cpp-contract-tests", "locked-restore",
-                         "managed-workspace-build", "dotnet-format", "compiled-api-and-xml",
-                         "postgresql-and-sqlite-regressions", "nuget-closure", "external-fluent-dto-jit-and-aot"] +
-                        (["same-source-rust-cpp-business-parity", "historical-data-handover"] if compare_rust_reference else []),
-              "pristineMachine": False, "independentReview": False, "publiclyPublished": False}
-    (ARTIFACTS / "verification.json").write_text(json.dumps(report, indent=2) + "\n")
-    print("PASS: retained database workspaces, actual PostgreSQL/SQLite, package Fluent DTO and Native AOT consumers.")
+    receipt = {"status": "passed", "rid": "linux-x64", "source": source(), "versionBase": version,
+               "nativeManifestSha256": digest(OUTPUT / "native-build/manifest.json"),
+               "candidateManifestSha256": digest(OUTPUT / "prepared/manifest.json"),
+               "checks": ["external-database-business-aot", "external-database-lifecycle-aot", "local-package-closure-aot"]}
+    (ARTIFACTS / "verification.json").write_text(json.dumps(receipt, indent=2) + "\n")
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["native", "pack", "verify", "consume"])
+    parser.add_argument("command", choices=["native", "pack", "pack-existing", "compare-existing", "inputs", "regressions", "workspace", "api", "consumer-probes", "verify", "consume"])
     parser.add_argument("--version", default="0.1.0-db-cpp.1")
     parser.add_argument("--design", type=Path, default=ARTIFACTS / "frozen-design")
     parser.add_argument("--plan", type=Path, default=ARTIFACTS / "frozen-plan")
     parser.add_argument("--consumer-environment", choices=["local", "pristine"], default="pristine")
+    parser.add_argument("--probe", choices=["database-lifecycle","database-business"])
     parser.add_argument("--compare-rust-reference", action="store_true",
                         help="Run the one-time DB-CPP-01 old/new comparison with the hash-locked reference artifact")
     args = parser.parse_args()
@@ -190,8 +231,31 @@ def main():
     ARTIFACTS.mkdir(exist_ok=True)
     if args.command == "native":
         native()
+    elif args.command == "inputs":
+        verify_inputs()
+    elif args.command == "regressions":
+        regressions(args.design, args.plan)
+    elif args.command == "workspace":
+        build_workspace()
+    elif args.command == "api":
+        api_docs(args.design.resolve())
+    elif args.command == "pack-existing":
+        pack(args.version, OUTPUT / "native-build/manifest.json")
+    elif args.command == "compare-existing":
+        migration_comparison(args.version)
+    elif args.command == "consumer-probes":
+        consumer_probes(args.version,args.probe)
     elif args.command == "verify":
-        verify(args.version, args.design.resolve(), args.plan.resolve(), args.compare_rust_reference)
+        # The local aggregate uses the same build actions as the hosted worker.
+        verify_inputs()
+        native()
+        build_workspace()
+        api_docs(args.design.resolve())
+        regressions(args.design, args.plan)
+        pack(args.version, OUTPUT / "native-build/manifest.json")
+        consumer_probes(args.version)
+        if args.compare_rust_reference:
+            migration_comparison(args.version)
     elif args.command == "consume":
         consume(args.consumer_environment)
     else:

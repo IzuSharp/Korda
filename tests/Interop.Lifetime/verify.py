@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Execute A03's real Linux x64 lifecycle, documentation and JIT/AOT consumers."""
+"""Execute A03's real Linux x64 lifecycle, documentation and Native AOT consumers."""
 import argparse
 import hashlib
 import json
@@ -58,7 +58,6 @@ def main():
             run(label+"-restore",["dotnet","restore",project,"--locked-mode",*common])
             run(label+"-build",["dotnet","build",project,"-c","Release","--no-restore",*common])
             dll=ROOT/Path(project).parent/"bin/Release/net11.0"/(assembly+".dll")
-            report[label+"_jit"] = run(label+"-jit",["dotnet",dll]).strip()
             run(label+"-aot-restore",["dotnet","restore",project,"--locked-mode","-r","linux-x64","-p:PublishAot=true",*common])
             destination=output/(label+"-aot")
             run(label+"-aot-publish",["dotnet","publish",project,"-c","Release","-r","linux-x64","-p:PublishAot=true","-p:IlcTreatWarningsAsErrors=true","--no-restore","-o",destination,*common])

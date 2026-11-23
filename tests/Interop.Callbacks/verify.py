@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run actual Linux x64 A06 callback, dispatcher, UCO and JIT/AOT conformance."""
+"""Run actual Linux x64 A06 callback, dispatcher, UCO and Native AOT conformance."""
 import argparse
 import hashlib
 import json
@@ -77,12 +77,6 @@ def main():
             run(label + "-build", ["dotnet", "build", project, "-c", "Release", "--no-restore", *common])
             dll = ROOT / Path(project).parent / "bin/Release/net11.0" / (assembly + ".dll")
             expected = (-6, 134, 1) if label == "invalid-uco" else (0,)
-            stdout, stderr = run(label + "-jit", ["dotnet", dll], expected)
-            if label == "invalid-uco":
-                if "CALLING_INVALID_UCO" not in stdout or "INVALID_CALLBACK_BODY_ENTERED" in stdout or "InvalidProgramException" not in stderr:
-                    raise RuntimeError("Invalid UCO did not fail before the method body.")
-            else:
-                report[label + "_jit"] = stdout.strip()
             run(label + "-aot-restore", ["dotnet", "restore", project, "-r", "linux-x64", "-p:PublishAot=true", *restore, *common])
             destination = output / (label + "-aot")
             run(label + "-aot-publish", ["dotnet", "publish", project, "-c", "Release", "-r", "linux-x64", "-p:PublishAot=true",

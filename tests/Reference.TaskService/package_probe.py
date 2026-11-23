@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Package identity helpers and the finite database reference JIT/Native AOT matrix."""
+"""Package identity helpers and the finite database reference Native AOT matrix."""
 import hashlib
 import json
 from pathlib import Path

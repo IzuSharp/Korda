@@ -120,19 +120,18 @@ def main():
             for generation in ("old", "new"):
                 for native_generation in ("old", "new"):
                     native = natives[native_generation]
-                    command = (["dotnet", consumers[generation]] if mode == "jit" else [consumers[generation]])
-                    output = run(f"{mode}-{generation}-managed-{native_generation}-native", [*command, native, compat.file_hash(native), "pass", *([] if mode == "jit" else ["--require-aot"])])
+                    command = [consumers[generation]]
+                    output = run(f"{mode}-{generation}-managed-{native_generation}-native", [*command, native, compat.file_hash(native), "pass", "--require-aot"])
                     row = json.loads(output.strip().splitlines()[-1]); row.update(mode=mode, native=native_generation,
                         managed_profile=record(managed[generation], ROOT), managed_artifact=record(consumers[generation], ROOT), native_artifact=record(native, ROOT))
                     matrix.append(row)
             for case, native_name in [("major", "major"), ("layout", "layout"), ("capability", "old"), ("hash", "new"), ("semantics", "semantics"), ("conflict", "new")]:
                 native = natives[native_name]
-                command = ["dotnet", consumers["new"]] if mode == "jit" else [consumers["new"]]
+                command = [consumers["new"]]
                 output = run(f"{mode}-negative-{case}", [*command, native, "0" * 64 if case == "hash" else compat.file_hash(native), case,
-                    *([] if mode == "jit" else ["--require-aot"])])
+                    "--require-aot"])
                 row = json.loads(output.strip().splitlines()[-1]); row.update(mode=mode, native=native_name)
                 matrix.append(row)
-        matrix_rows("jit", managed)
         run("sample-aot-restore", ["dotnet", "restore", sample, "-r", "linux-x64", "-p:PublishAot=true", *locked, *common])
         aot = {}
         for generation in ("old", "new"):
@@ -185,28 +184,22 @@ def main():
             except compat.Rejected as error:
                 assert generation in ("DEFAULT", "NULLABILITY", "GENERIC", "REMOVED", "OBSOLETE") and "NWCMP006:" in str(error)
                 api_results.append({"generation": generation, "snapshot": "rejected", "diagnostic": str(error)})
-        binaries = {}
-        for generation in ("OLD", "NEW", "DEFAULT", "NULLABILITY", "REMOVED", "OBSOLETE", "AMBIGUOUS"):
+        aot = ["-r", "linux-x64", "-p:PublishAot=true"]
+        run("api-consumer-aot-restore", ["dotnet", "restore", consumer_project, *aot, *locked, *common])
+        for generation in ("OLD", "NEW", "DEFAULT", "NULLABILITY", "REMOVED", "OBSOLETE", "AMBIGUOUS", "BEHAVIOR", "MIGRATED"):
             output = evidence / "api-consumers" / generation.lower()
+            fixture = "OBSOLETE" if generation == "MIGRATED" else generation
+            properties = [f"-p:FixtureAssembly={fixture_dlls[fixture]}", f"-p:ConsumerGeneration={generation}"]
             negative = {"NULLABILITY": "CS8625", "REMOVED": "CS0117", "OBSOLETE": "NWCOMP001", "AMBIGUOUS": "CS0121"}.get(generation)
-            run(f"source-{generation.lower()}", ["dotnet", "build", consumer_project, "--no-restore", "-c", "Release", "-o", output,
-                f"-p:FixtureAssembly={fixture_dlls[generation]}", *common], expected=None if negative else 0, contains=(negative,) if negative else ())
-            if negative is None:
-                binaries[generation] = output / "NativeWeave.Compatibility.ApiConsumer.dll"
-                run(f"source-run-{generation.lower()}", ["dotnet", binaries[generation]], expected=None if generation == "DEFAULT" else 0,
-                    contains=("compatibility changed",) if generation == "DEFAULT" else ("consumer passed",))
-        migrated = evidence / "api-consumers" / "migrated"
-        run("obsolete-migration-build", ["dotnet", "build", consumer_project, "--no-restore", "-c", "Release", "-o", migrated,
-            f"-p:FixtureAssembly={fixture_dlls['OBSOLETE']}", "-p:ConsumerGeneration=MIGRATED", *common])
-        run("obsolete-migration-run", ["dotnet", migrated / "NativeWeave.Compatibility.ApiConsumer.dll"], contains=("consumer passed",))
-        original_consumer = binaries["OLD"].parent
-        for generation in ("NEW", "DEFAULT", "REMOVED", "BEHAVIOR"):
-            output = evidence / "binary-consumers" / generation.lower()
-            shutil.copytree(original_consumer, output)
-            shutil.copy2(fixture_dlls[generation], output / fixture_dlls[generation].name)
-            negative = {"REMOVED": "MissingMethodException", "BEHAVIOR": "compatibility changed"}.get(generation)
-            run(f"binary-{generation.lower()}", ["dotnet", output / binaries["OLD"].name], expected=None if negative else 0,
-                contains=(negative,) if negative else ("consumer passed",))
+            if negative:
+                run(f"source-{generation.lower()}", ["dotnet", "build", consumer_project, "--no-restore", "-c", "Release",
+                    *aot, *properties, *common], expected=None, contains=(negative,))
+                continue
+            run(f"source-{generation.lower()}", ["dotnet", "publish", consumer_project, "--no-restore", "-c", "Release",
+                *aot, "-o", output, *properties, *common])
+            changed = generation in ("DEFAULT", "BEHAVIOR")
+            run(f"source-run-{generation.lower()}", [output / "NativeWeave.Compatibility.ApiConsumer"],
+                expected=None if changed else 0, contains=("compatibility changed",) if changed else ("consumer passed",))
         write(evidence / "api-cases.json", api_results)
 
         # Compile the actual product Core and its existing exact EngineLoadOptions policy.

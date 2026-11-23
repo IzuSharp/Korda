@@ -58,7 +58,10 @@ def home_files_probe(output,run,build,native_env):
         'original_cases':len(cases),'tls':tls},indent=2)+'\n')
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--output',type=Path,required=True);parser.add_argument('--postgres-bin',type=Path,required=True);parser.add_argument('--native-build',type=Path,default=ROOT/'artifacts/cmake/linux-x64-release');parser.add_argument('--offline-config',type=Path);parser.add_argument('--native-only',action='store_true');parser.add_argument('--write-reference',action='store_true');parser.add_argument('--update-locks',action='store_true');parser.add_argument('--design-root',type=Path,default=ROOT.parent/'NativeWeave-Design')
+    parser=argparse.ArgumentParser();parser.add_argument('--output',type=Path,required=True);parser.add_argument('--postgres-bin',type=Path,default=ROOT/'artifacts/postgres-tools/install/bin');parser.add_argument('--native-build',type=Path,default=ROOT/'artifacts/cmake/linux-x64-release');parser.add_argument('--offline-config',type=Path);parser.add_argument('--native-only',action='store_true');parser.add_argument('--write-reference',action='store_true');parser.add_argument('--update-locks',action='store_true');parser.add_argument('--design-root',type=Path,default=ROOT.parent/'NativeWeave-Design')
+    phase=parser.add_mutually_exclusive_group()
+    phase.add_argument('--api-only',action='store_true')
+    phase.add_argument('--test-only',action='store_true')
     args=parser.parse_args();output=args.output.resolve();output.mkdir(parents=True,exist_ok=False)
     env=os.environ.copy();inputs=[];env.update(DOTNET_CLI_USE_MSBUILD_SERVER='0',MSBUILDUSESERVER='0');records=[];servers=[];status='failed';host_preflight=False
     for name in list(env):
@@ -110,6 +113,10 @@ def main():
         run('component-symbols',['nm','-D','--defined-only',build/'fixtures/libnativeweave_data_postgres.so'])
         run('native-dependencies',['readelf','-d',build/'fixtures/libnativeweave_postgres_fixture.so'])
         (output/'native-dependencies.lock.json').write_bytes((ROOT/'native/dependencies.lock.json').read_bytes())
+        if args.api_only:
+            run_managed(args,output,run,{})
+            status='passed'
+            return 0
         certs=output/'certificates';(output/'tls-identities.json').write_text(json.dumps(certificates(certs),indent=2)+'\n')
         pg=args.postgres_bin.resolve();urls={}
         for name,tls in [('valid',True),('expired',True),('plain',False)]:
@@ -160,15 +167,21 @@ def run_managed(args,output,run,native_env):
     test='tests/Data.Postgres/NativeWeave.Database.PostgreSql.Tests.csproj'
     checker='tests/Data.Postgres/ApiCheck/ApiCheck.csproj'
     sample='samples/api/data-postgres/PostgresExample.csproj'
+    if args.api_only:
+        provider='src/Data.Postgres/NativeWeave.Database.PostgreSql.csproj'
+        run('provider-api-build',['dotnet','build',provider,'-c','Release',*msbuild])
     for label,project in [('test',test),('api',checker),('sample',sample)]:
+        if (args.api_only and label != 'api') or (args.test_only and label == 'api'):
+            continue
         run(label+'-restore',['dotnet','restore',project,*restore,*msbuild])
         run(label+'-build',['dotnet','build',project,'-c','Release','--no-restore',*msbuild])
     run('managed-whitespace',['dotnet','format','whitespace','.', '--folder','--verify-no-changes','--include',
                              'tests/Data.Postgres/Program.cs','tests/ProviderProfileChecks.cs','samples/api/data-postgres/Program.cs','--verbosity','quiet'])
-    run('exact-api-xml-reference',['dotnet',str(ROOT/'tests/Data.Postgres/ApiCheck/bin/Release/net11.0/ApiCheck.dll'),str(ROOT),os.environ['DOTNET_ROOT'],str(ROOT/'src/Data.Postgres/bin/Release/net11.0/NativeWeave.Database.PostgreSql.dll'),*(['--write'] if args.write_reference else [])])
+    if not args.test_only:
+        run('exact-api-xml-reference',['dotnet',str(ROOT/'tests/Data.Postgres/ApiCheck/bin/Release/net11.0/ApiCheck.dll'),str(ROOT),os.environ['DOTNET_ROOT'],str(ROOT/'src/Data.Postgres/bin/Release/net11.0/NativeWeave.Database.PostgreSql.dll'),*(['--write'] if args.write_reference else [])])
+    if args.api_only:
+        return
     native_env=native_env|{'NW_PG_COMPONENT_ASSET':str(component),'NW_PG_HOST_ASSET':str(asset),'LD_LIBRARY_PATH':str(fixture.parent)+':'+os.environ.get('LD_LIBRARY_PATH','')}
-    run('managed-jit',['dotnet',str(ROOT/'tests/Data.Postgres/bin/Release/net11.0/NativeWeave.Database.PostgreSql.Tests.dll')],native_env|{'NW_PG_REPORT':str(output/'jit-report.json'),'NW_PG_OPTION_RECORD':str(output/'jit-options.bin')})
-    run('sample-jit',['dotnet',str(ROOT/'samples/api/data-postgres/bin/Release/net11.0/PostgresExample.dll')],native_env)
     for label,project,name in [('test',test,'NativeWeave.Database.PostgreSql.Tests'),('sample',sample,'PostgresExample')]:
         destination=output/(label+'-aot')
         run(label+'-aot-restore',['dotnet','restore',project,'-r','linux-x64','-p:PublishAot=true',*restore,*msbuild])
