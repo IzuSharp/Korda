@@ -21,9 +21,7 @@ class OwnershipTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Unregistered"):
             Catalog({}).owner("new/source.cpp")
         with self.assertRaisesRegex(ValueError, "Ambiguous"):
-            Catalog({"a": {"sources": ["src/"]}, "b": {"tests": ["src/"]}}).owner(
-                "src/file"
-            )
+            Catalog({"a": {"sources": ["src/"]}, "b": {"tests": ["src/"]}}).owner("src/file")
         with self.assertRaisesRegex(ValueError, "dependency"):
             Catalog({"a": {"depends": ["b"]}, "b": {"depends": ["a"]}})
 
@@ -56,6 +54,4 @@ class OwnershipTests(unittest.TestCase):
             digest("compiler/source.cpp", b"first"),
             digest("compiler/source.cpp", b"second"),
         )
-        self.assertEqual(
-            digest("gpu/source.cpp", b"first"), digest("gpu/source.cpp", b"second")
-        )
+        self.assertEqual(digest("gpu/source.cpp", b"first"), digest("gpu/source.cpp", b"second"))

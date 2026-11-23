@@ -39,11 +39,9 @@ Run `python3 eng/ci/impact.py origin/main --output artifacts/plan.json` to see t
 
 PR jobs carry read-only permissions. Only the trusted merge workflow can publish a verified candidate. Weekly and explicit full checks exercise all registered modules.
 
-
 ## Implement and run a workflow
 
-
-A module can use a command array directly. For shared multi-step workflows implement an `Action` subclass or register existing commands with explicit prerequisites. See the two provider classes in `database.py`. A module's `checks` list selects those actions. `api_checks` can restrict an API-only edit. Each action declares the resources it uses. An independent module may request the .NET SDK with `"resources": ["dotnet"]`.
+A module can use a command array directly. For shared multi-step workflows implement an `Action` subclass or register existing commands with explicit prerequisites. See the two provider classes in `database.py`. A module's `checks` list selects those actions. `api_checks` can restrict an API-only edit. Each action declares the resources it uses. An independent module can request runner resources such as `"resources": ["dotnet"]`.
 
 The Python runner executes each prerequisite once per worker, logs the command and elapsed time, and stops on the first failure. The workflow installs tools, restores caches and transfers the resulting artifacts. Keep new actions runnable in a temporary checkout with the same JSON plan.
 
@@ -54,3 +52,5 @@ python3 eng/ci/impact.py origin/main --output artifacts/plan.json
 # Pass a group listed under actions in the plan.
 python3 eng/ci/worker.py run artifacts/plan.json linux
 ```
+
+The historical Rust migration comparison uses its frozen archive. Run `python3 eng/build.py verify --compare-rust-reference` explicitly when that archive is available.

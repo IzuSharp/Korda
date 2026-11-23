@@ -55,19 +55,14 @@ def catalog_steps(scope, public=(), validate=False, grouped=False):
     return steps
 
 
-def plan_actions(
-    catalog, reasons, direct, touched, pending, *, previous, entries, full
-):
+def plan_actions(catalog, reasons, direct, touched, pending, *, previous, entries, full):
     desired = set()
     deferred = set()
     tested_public = set(pending)
     for module in catalog.modules if full else direct:
         actions = set(catalog.modules[module].get("checks", ()))
         paths = reasons.get(module, ())
-        roles = {
-            purpose(path, (catalog if path in entries else previous).owner(path)[1])
-            for path in paths
-        }
+        roles = {purpose(path, (catalog if path in entries else previous).owner(path)[1]) for path in paths}
         roles.discard("documentation")
         if not full and roles == {"api"}:
             actions = set(catalog.modules[module].get("api_checks", actions))
@@ -86,9 +81,7 @@ def plan_actions(
         # Publishing code has local archive contract tests; exercise a checked candidate on the host as well.
         tested_public.update(pending or PROVIDERS)
     for provider in touched:
-        desired.update(
-            {provider + ".dependencies", provider + ".api", provider + ".test"}
-        )
+        desired.update({provider + ".dependencies", provider + ".api", provider + ".test"})
     if full:
         tested_public.update(PROVIDERS)
         desired.update(
@@ -97,7 +90,7 @@ def plan_actions(
                 "weekly.runtime",
                 "weekly.clean-build",
                 "weekly.transfer",
-                "weekly.migration",
+                "manual.migration",
             }
         )
     else:
@@ -131,13 +124,14 @@ def plan_actions(
             *(p + ".test" for p in PROVIDERS),
             *(p + ".api" for p in PROVIDERS),
         }
+    manual = {name for name in desired if name.startswith("manual.")}
+    desired -= manual
+    deferred |= manual
     public = sorted(tested_public)
     # Validation must describe exactly the candidates present in the outgoing feed.
     if pending:
         public = sorted(pending)
-    grouped = len(public) > 1 or (
-        "database.pack" in desired or "database.business-aot" in desired
-    )
+    grouped = len(public) > 1 or ("database.pack" in desired or "database.business-aot" in desired)
     if public:
         desired.add("public.validate" if pending else "public.consume-aot")
     steps = catalog_steps("linux", public, bool(pending), grouped)
@@ -155,9 +149,7 @@ def plan_actions(
             lane = "linux"
         groups.setdefault(lane, []).append(name)
     resources = {
-        group: sorted(
-            {resource for name in names for resource in steps[name].resources}
-        )
+        group: sorted({resource for name in names for resource in steps[name].resources})
         for group, names in groups.items()
     }
     return dict(

@@ -1,4 +1,5 @@
 """Module ownership and reverse dependencies. Registrations use repository-relative paths."""
+
 import fnmatch
 import json
 import posixpath
@@ -26,23 +27,70 @@ class Catalog:
         for name, spec in modules.items():
             if not re.fullmatch(r"[a-z][a-z0-9-]*", name):
                 raise ValueError(f"Invalid module name: {name}")
-            unknown = spec.keys() - {"sources", "tests", "depends", "api_checks", "checks", "run", "package", "pack", "consume", "artifacts", "resources", "targets", "integration", "includes"}
+            unknown = spec.keys() - {
+                "sources",
+                "tests",
+                "depends",
+                "api_checks",
+                "checks",
+                "run",
+                "package",
+                "pack",
+                "consume",
+                "artifacts",
+                "resources",
+                "targets",
+                "integration",
+                "includes",
+            }
             if unknown:
                 raise ValueError(f"{name}: unknown registration fields {sorted(unknown)}")
-            for field in ("sources", "tests", "depends", "api_checks", "checks", "run", "pack", "consume", "resources", "targets", "integration", "includes"):
+            for field in (
+                "sources",
+                "tests",
+                "depends",
+                "api_checks",
+                "checks",
+                "run",
+                "pack",
+                "consume",
+                "resources",
+                "targets",
+                "integration",
+                "includes",
+            ):
                 values = spec.get(field, [])
                 if not isinstance(values, list) or not all(isinstance(v, str) and v for v in values):
                     raise ValueError(f"{name}.{field} must be an array of strings")
+            resources = set(spec.get("resources", []))
+            unsupported = resources - {
+                "dotnet",
+                "native",
+                "pg-tools",
+                "pg-server",
+                "design",
+                "scope-design",
+                "plan",
+                "qemu",
+            }
+            if unsupported:
+                raise ValueError(f"{name}: unknown runner resources {sorted(unsupported)}")
             for target in spec.get("targets", []):
                 if target in self.targets:
                     raise ValueError(f"Duplicate target {target} in {name}")
                 self.targets[target] = name
-            if "artifacts" in spec and (not isinstance(spec["artifacts"], str) or
-                    not re.fullmatch(r"artifacts/[a-zA-Z0-9_./-]+", spec["artifacts"]) or
-                    ".." in Path(spec["artifacts"]).parts or not spec.get("run")):
+            if "artifacts" in spec and (
+                not isinstance(spec["artifacts"], str)
+                or not re.fullmatch(r"artifacts/[a-zA-Z0-9_./-]+", spec["artifacts"])
+                or ".." in Path(spec["artifacts"]).parts
+                or not spec.get("run")
+            ):
                 raise ValueError(f"{name}: give the module's run command an output under artifacts/")
-            if "package" in spec and not (spec.get("pack") and spec.get("consume")) and not (
-                    name in {"sqlite", "postgresql"} and spec.get("checks")):
+            if (
+                "package" in spec
+                and not (spec.get("pack") and spec.get("consume"))
+                and not (name in {"sqlite", "postgresql"} and spec.get("checks"))
+            ):
                 raise ValueError(f"{name}: a top-level package requires pack and consume commands")
             for kind in ("sources", "tests"):
                 for pattern in spec.get(kind, []):
@@ -52,7 +100,8 @@ class Catalog:
             if "package" in spec:
                 identity = spec["package"]
                 if not re.fullmatch(r"NativeWeave\.[A-Za-z0-9.-]+", identity) or identity.lower() in (
-                        p.lower() for p in self.packages.values()):
+                    p.lower() for p in self.packages.values()
+                ):
                     raise ValueError(f"Invalid or duplicate public package: {identity}")
                 self.packages[name] = identity
         self.rules.sort(reverse=True)
@@ -124,6 +173,9 @@ def load_catalog(tree=None):
     catalog = Catalog(modules)
     if tree and modules:
         projects = git("ls-tree", "-r", "--name-only", tree).decode().splitlines()
-        catalog.add_project_references((p, git("show", tree + ":" + p)) for p in projects
-                                       if p.endswith(".csproj") and catalog.owner(p)[1] == "sources")
+        catalog.add_project_references(
+            (p, git("show", tree + ":" + p))
+            for p in projects
+            if p.endswith(".csproj") and catalog.owner(p)[1] == "sources"
+        )
     return catalog

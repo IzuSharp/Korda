@@ -57,9 +57,7 @@ class RoutingTests(unittest.TestCase):
         self.assertEqual(result["resources"], {"fixtures": ["native"]})
 
     def test_memory_suite_and_native_interop_are_database_free(self):
-        result = self.plan(
-            "tests/Interop.Memory/verify.py", "native/cpp/tests/interop_tests.cpp"
-        )
+        result = self.plan("tests/Interop.Memory/verify.py", "native/cpp/tests/interop_tests.cpp")
         self.assertEqual(self.actions(result), {"interop.native", "interop.memory"})
         self.assertEqual(result["resources"]["interop"], ["dotnet", "native"])
         self.assertFalse(result["candidates"])
@@ -96,29 +94,21 @@ class RoutingTests(unittest.TestCase):
 
     def test_scoped_migration_tests_only_execute_their_consumer(self):
         result = self.plan("tests/Data.Migrations/cross_process.py")
-        self.assertEqual(
-            self.actions(result), {"database.native", "data.migrations.test"}
-        )
+        self.assertEqual(self.actions(result), {"database.native", "data.migrations.test"})
         self.assertEqual(result["packages"], [])
 
     def test_runner_strategy_requires_only_backward_edges(self):
-        result = self.plan(
-            "src/Data.Sqlite/SqliteOptions.cs", "src/Data.Codecs/ParameterSnapshot.cs"
-        )
+        result = self.plan("src/Data.Sqlite/SqliteOptions.cs", "src/Data.Codecs/ParameterSnapshot.cs")
         from database_plan import catalog_steps
 
-        steps = catalog_steps(
-            "linux", result["public_checks"], True, result["grouped_pack"]
-        )
+        steps = catalog_steps("linux", result["public_checks"], True, result["grouped_pack"])
         for selected in result["actions"].values():
             for index, name in enumerate(selected):
                 self.assertLessEqual(set(steps[name].needs), set(selected[:index]))
 
     def test_historical_images_only_run_in_extended_validation(self):
-        plan = self.plan(
-            "tests/Packaging.Linux/verify.py", "tests/Migration.Cpp/run.py"
-        )
-        self.assertEqual(set(plan["deferred"]), {"weekly.runtime", "weekly.migration"})
+        plan = self.plan("tests/Packaging.Linux/verify.py", "tests/Migration.Cpp/run.py")
+        self.assertEqual(set(plan["deferred"]), {"weekly.runtime", "manual.migration"})
         self.assertNotIn("qemu", set().union(*plan["resources"].values()))
 
     def test_new_language_and_module_do_not_select_database(self):

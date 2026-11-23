@@ -1,4 +1,5 @@
 """Compose public provider packages from verified component bytes; never publish here."""
+
 import argparse
 import hashlib
 import json
@@ -26,8 +27,13 @@ POLICY = ROOT / "tests/Verification.Compatibility/signature-policy.json"
 
 def payload(path):
     with zipfile.ZipFile(path) as archive:
-        return {name: archive.read(name) for name in archive.namelist()
-                if not (name.endswith(".nuspec") or name in ("[Content_Types].xml", "_rels/.rels", ".signature.p7s"))}
+        return {
+            name: archive.read(name)
+            for name in archive.namelist()
+            if not (
+                name.endswith(".nuspec") or name in ("[Content_Types].xml", "_rels/.rels", ".signature.p7s")
+            )
+        }
 
 
 def published(provider, version):
@@ -64,8 +70,19 @@ def component_files(candidate, provider):
 
 def compile_project(project, version, extra=()):
     subprocess.run(["dotnet", "restore", project, "--locked-mode", *extra], check=True)
-    subprocess.run(["dotnet", "build", project, "-c", "Release", "--no-restore", f"-p:Version={version}", *extra],
-                   check=True)
+    subprocess.run(
+        [
+            "dotnet",
+            "build",
+            project,
+            "-c",
+            "Release",
+            "--no-restore",
+            f"-p:Version={version}",
+            *extra,
+        ],
+        check=True,
+    )
 
 
 def selected_files(provider, plan, version, manifest):
@@ -80,11 +97,18 @@ def selected_files(provider, plan, version, manifest):
         compile_project(TASK_PROJECT, version)
         for suffix in (".dll", ".xml"):
             filename = BUILD_TASK + suffix
-            entries["tools/net11.0/" + filename] = (TASK_PROJECT.parent / "bin/Release/net11.0" / filename).read_bytes()
+            entries["tools/net11.0/" + filename] = (
+                TASK_PROJECT.parent / "bin/Release/net11.0" / filename
+            ).read_bytes()
         for identity_shared in sorted(set(MANAGED) - set(IDS.values())):
             compile_project(managed_project(identity_shared), version)
-            entries.update({name: file.read_bytes() for name, file in managed_entries(identity_shared).items()
-                            if name.startswith(("lib/", "tools/"))})
+            entries.update(
+                {
+                    name: file.read_bytes()
+                    for name, file in managed_entries(identity_shared).items()
+                    if name.startswith(("lib/", "tools/"))
+                }
+            )
 
     build, assets = inventory.collect(manifest, provider)
     asset = assets["database." + provider]
@@ -96,9 +120,19 @@ def selected_files(provider, plan, version, manifest):
     for entry, file in managed_entries(identity).items():
         entries[entry] = file.read_bytes()
     native = dict(path=name, sha256=asset["sha256"], rid=RID, abi_major=1)
-    entries["nativeweave/manifest.json"] = json_bytes(dict(schemaVersion=1, packageId=identity,
-        packageVersion=version, rid=RID, nativePath=name, nativeSha256=asset["sha256"], abiMajor=1,
-        sourceCommit=build["sourceCommit"], sourceDirty=False))
+    entries["nativeweave/manifest.json"] = json_bytes(
+        dict(
+            schemaVersion=1,
+            packageId=identity,
+            packageVersion=version,
+            rid=RID,
+            nativePath=name,
+            nativeSha256=asset["sha256"],
+            abiMajor=1,
+            sourceCommit=build["sourceCommit"],
+            sourceDirty=False,
+        )
+    )
     return entries, native
 
 
@@ -106,14 +140,38 @@ def compose(provider, version, entries, native, commit, fingerprint):
     identity = IDS[provider]
     for notice in ("LICENSE", "THIRD_PARTY_NOTICES.md"):
         entries[notice] = (ROOT / notice).read_bytes()
-    entries["tools/NativeWeave.Packaging.targets"] = (ROOT / "src/Packaging.Release/buildTransitive/NativeWeave.Packaging.targets").read_bytes()
-    entries["tools/" + GENERATOR + ".targets"] = (ROOT / f"src/Query.Generator/buildTransitive/{GENERATOR}.targets").read_bytes()
+    entries["tools/NativeWeave.Packaging.targets"] = (
+        ROOT / "src/Packaging.Release/buildTransitive/NativeWeave.Packaging.targets"
+    ).read_bytes()
+    entries["tools/" + GENERATOR + ".targets"] = (
+        ROOT / f"src/Query.Generator/buildTransitive/{GENERATOR}.targets"
+    ).read_bytes()
     entries["nativeweave/public.json"] = json_bytes({"inputs": fingerprint})
-    descriptor = dict(engineId="database." + provider, facadePackageId=identity, facadePackageVersion=version,
-        rid=RID, sourcePath=native["path"], sha256=native["sha256"], abiMajor=1, abiMinor=0, cpuBaseline="x86-64",
-        capabilities={cap: bit for bit, cap in enumerate(DATABASE_CAPABILITIES)})
-    entries["nativeweave/closure.json"] = json_bytes({"schemaVersion": 1, "packages": [
-        dict(id=identity, version=version, dependencies={}, nativeAssets=[descriptor])]})
+    descriptor = dict(
+        engineId="database." + provider,
+        facadePackageId=identity,
+        facadePackageVersion=version,
+        rid=RID,
+        sourcePath=native["path"],
+        sha256=native["sha256"],
+        abiMajor=1,
+        abiMinor=0,
+        cpuBaseline="x86-64",
+        capabilities={cap: bit for bit, cap in enumerate(DATABASE_CAPABILITIES)},
+    )
+    entries["nativeweave/closure.json"] = json_bytes(
+        {
+            "schemaVersion": 1,
+            "packages": [
+                dict(
+                    id=identity,
+                    version=version,
+                    dependencies={},
+                    nativeAssets=[descriptor],
+                )
+            ],
+        }
+    )
     original = json.loads(entries["nativeweave/manifest.json"])
     native = {**native, "source_commit": original["sourceCommit"]}
     original.update(packageId=identity, packageVersion=version, packagingProducerCommit=commit)
@@ -121,10 +179,20 @@ def compose(provider, version, entries, native, commit, fingerprint):
     shared = {n: hashlib.sha256(v).hexdigest() for n, v in shared_files(entries).items()}
     digest = hashlib.sha256(json_bytes(shared)).hexdigest()
     wrapper = (ROOT / "eng/ci/provider.targets").read_text()
-    entries[f"buildTransitive/{identity}.targets"] = wrapper.replace("@PROVIDER@", identity).replace("@SHARED@", digest).encode()
+    entries[f"buildTransitive/{identity}.targets"] = (
+        wrapper.replace("@PROVIDER@", identity).replace("@SHARED@", digest).encode()
+    )
     path = packer.pack(OUT / "feed", identity, version, entries, repository=(REPOSITORY, commit))
-    return dict(id=identity, version=version, source_commit=commit, repository=REPOSITORY, dependencies={},
-                native=native, upload_archive_sha256=sha(path), unsigned_entries=compat.package_entries(path))
+    return dict(
+        id=identity,
+        version=version,
+        source_commit=commit,
+        repository=REPOSITORY,
+        dependencies={},
+        native=native,
+        upload_archive_sha256=sha(path),
+        unsigned_entries=compat.package_entries(path),
+    )
 
 
 def main():
@@ -154,17 +222,44 @@ def main():
         else:
             entries = published(provider, plan["published"][provider]["version"])
             info = json.loads(entries["nativeweave/manifest.json"])
-            native = dict(path=info["nativePath"], sha256=info["nativeSha256"], rid=RID, abi_major=1)
+            native = dict(
+                path=info["nativePath"],
+                sha256=info["nativeSha256"],
+                rid=RID,
+                abi_major=1,
+            )
             # Packaging-only changes can update the host task without rebuilding the native library.
             if plan["rebuild_task"]:
                 for suffix in (".dll", ".xml"):
                     name = BUILD_TASK + suffix
-                    entries["tools/net11.0/" + name] = (TASK_PROJECT.parent / "bin/Release/net11.0" / name).read_bytes()
-        records.append(compose(provider, args.version, entries, native, commit, plan["inputs"][provider]))
-    record = dict(schema_version=1, source_commit=commit, source_tree=tree, rid=RID, source_dirty=False,
-                  packages=records, publish=plan["packages"], inputs=plan["inputs"])
+                    entries["tools/net11.0/" + name] = (
+                        TASK_PROJECT.parent / "bin/Release/net11.0" / name
+                    ).read_bytes()
+        records.append(
+            compose(
+                provider,
+                args.version,
+                entries,
+                native,
+                commit,
+                plan["inputs"][provider],
+            )
+        )
+    record = dict(
+        schema_version=1,
+        source_commit=commit,
+        source_tree=tree,
+        rid=RID,
+        source_dirty=False,
+        packages=records,
+        publish=plan["packages"],
+        inputs=plan["inputs"],
+    )
     save(OUT / "release.json", record)
-    compat.validate_closure(record, {p["id"]: OUT / "feed" / f"{p['id']}.{p['version']}.nupkg" for p in records})
+    compat.validate_closure(
+        record,
+        {p["id"]: OUT / "feed" / f"{p['id']}.{p['version']}.nupkg" for p in records},
+    )
 
 
 if __name__ == "__main__":

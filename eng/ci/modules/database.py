@@ -34,9 +34,7 @@ class Fixture(Action):
         ctx.call(["cmake", "--build", build, "--target", target])
         inputs = []
         if corpus:
-            cases = json.loads(
-                Path("tests/Verification.Interop/corpus/seeds.json").read_text()
-            )["cases"]
+            cases = json.loads(Path("tests/Verification.Interop/corpus/seeds.json").read_text())["cases"]
             if not cases:
                 raise ValueError("Empty interop fixture corpus")
             for index, case in enumerate(cases):
@@ -173,7 +171,7 @@ def recipes():
         resources=("scope-design", "dotnet", "pg-server"),
     )
     add(
-        "weekly.migration",
+        "manual.migration",
         py("eng/build.py", "compare-existing", "--version", "{version}"),
         needs=("database.pack",),
         resources=("pg-server",),

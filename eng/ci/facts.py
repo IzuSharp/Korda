@@ -1,4 +1,5 @@
 """Read immutable Git and NuGet data for the CI planner and package verifier."""
+
 import hashlib
 import json
 import sys
@@ -11,7 +12,11 @@ IDS = {p: name for p, name in load_catalog().packages.items() if p in PROVIDERS}
 
 
 def files(tree):
-    return {entry.split(b"\t", 1)[1].decode(): entry for entry in git("ls-tree", "-rz", tree).split(b"\0") if entry}
+    return {
+        entry.split(b"\t", 1)[1].decode(): entry
+        for entry in git("ls-tree", "-rz", tree).split(b"\0")
+        if entry
+    }
 
 
 def fingerprints(catalog, entries):

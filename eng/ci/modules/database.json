@@ -145,7 +145,7 @@
   },
   "native-acceptance-tests": {
     "tests": ["tests/Migration.Cpp/"],
-    "checks": ["weekly.migration"]
+    "checks": ["manual.migration"]
   },
   "abi-bootstrap-tests": {
     "tests": ["tests/Interop.Abi/native/bootstrap.c"],

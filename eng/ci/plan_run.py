@@ -32,9 +32,7 @@ def main():
         else event.get("before") or "HEAD^"
     )
     replay = (
-        event.get("inputs", {}).get("check_paths", "").splitlines()
-        if kind == "workflow_dispatch"
-        else []
+        event.get("inputs", {}).get("check_paths", "").splitlines() if kind == "workflow_dispatch" else []
     )
     replay = [p.strip() for p in replay if p.strip()]
     full = kind == "schedule" or (kind == "workflow_dispatch" and not replay)
@@ -44,9 +42,7 @@ def main():
     data = json.dumps(result, sort_keys=True, indent=2)
     output.write_text(data + "\n")
     print(data)
-    tree = subprocess.check_output(
-        ["git", "rev-parse", "HEAD^{tree}"], text=True
-    ).strip()
+    tree = subprocess.check_output(["git", "rev-parse", "HEAD^{tree}"], text=True).strip()
     name = candidate_name(
         tree,
         result["candidates"],

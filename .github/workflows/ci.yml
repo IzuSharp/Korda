@@ -68,6 +68,7 @@ jobs:
     with:
       version: 0.1.0-preview.${{ github.run_number }}
       scope: ${{ matrix.scope }}
+      resources: ${{ toJSON(fromJSON(needs.plan.outputs.plan).resources[matrix.scope]) }}
       plan: ${{ needs.plan.outputs.plan }}
       artifact: ${{ needs.plan.outputs.artifact }}
   modules:

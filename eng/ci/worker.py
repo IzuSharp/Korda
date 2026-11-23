@@ -21,9 +21,7 @@ def check_index():
     graph = load_catalog(tree)
     allowed = set(recipes()) | {"bundle.check", "consumer.check"}
     for name, spec in graph.modules.items():
-        unknown = (
-            set(spec.get("checks", ())) | set(spec.get("api_checks", ()))
-        ) - allowed
+        unknown = (set(spec.get("checks", ())) | set(spec.get("api_checks", ()))) - allowed
         if unknown:
             raise ValueError(f"{name}: unknown checks {sorted(unknown)}")
     for path in files(tree):
@@ -35,9 +33,7 @@ def postgres(ctx, required):
     if not required or os.environ.get("NW_TEST_POSTGRES"):
         yield
         return
-    binary = Path(
-        os.environ.get("NW_POSTGRES_BIN", "artifacts/postgres-tools/install/bin")
-    ).resolve()
+    binary = Path(os.environ.get("NW_POSTGRES_BIN", "artifacts/postgres-tools/install/bin")).resolve()
     with tempfile.TemporaryDirectory(prefix="nw-pg-") as temp:
         data = Path(temp) / "data"
         ctx.call(
@@ -115,18 +111,12 @@ def main():
         field = plan["run_steps"][args.group]
         if field not in ("run", "integration"):
             raise ValueError(f"Unexpected check {field}")
-        ctx.call(
-            load_catalog().modules[args.group][field], env={"NW_MODULE": args.group}
-        )
+        ctx.call(load_catalog().modules[args.group][field], env={"NW_MODULE": args.group})
         return
     names = plan["actions"][args.group]
-    steps = catalog_steps(
-        args.group, plan["public_checks"], bool(plan["packages"]), plan["grouped_pack"]
-    )
+    steps = catalog_steps(args.group, plan["public_checks"], bool(plan["packages"]), plan["grouped_pack"])
     if len(set(names)) != len(names) or any(
-        dep not in names[:i]
-        for i, name in enumerate(names)
-        for dep in steps[name].needs
+        dep not in names[:i] for i, name in enumerate(names) for dep in steps[name].needs
     ):
         raise ValueError("Plan is missing a prerequisite")
     with postgres(ctx, "pg-server" in plan["resources"][args.group]):
