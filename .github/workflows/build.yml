@@ -137,11 +137,7 @@ jobs:
           TMPDIR: ${{ runner.temp }}
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          case "$MODE" in
-            run|module-check) python3 eng/ci/worker.py "$MODE" artifacts/plan.json "$SCOPE" ;;
-            module-pack) python3 eng/ci/module_job.py pack "$SCOPE" artifacts/plan.json "$NW_VERSION" ;;
-            *) exit 2 ;;
-          esac
+          python3 eng/ci/worker.py "$MODE" artifacts/plan.json "$SCOPE"
           git diff --exit-code
       - name: Retain action logs after a failure
         if: failure()

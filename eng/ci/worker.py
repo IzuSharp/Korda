@@ -84,7 +84,7 @@ def main():
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("check-index")
     commands.add_parser("interop-native")
-    for cmd in ("run", "module-check"):
+    for cmd in ("run", "module-check", "module-pack"):
         sub = commands.add_parser(cmd)
         sub.add_argument("plan", type=Path)
         sub.add_argument("group")
@@ -107,11 +107,16 @@ def main():
         return
     plan = json.loads(args.plan.read_text())
     ctx = Context(args.plan.resolve())
-    if args.command == "module-check":
-        field = plan["run_steps"][args.group]
-        if field not in ("run", "integration"):
-            raise ValueError(f"Unexpected check {field}")
-        ctx.call(load_catalog().modules[args.group][field], env={"NW_MODULE": args.group})
+    if args.command in ("module-check", "module-pack"):
+        with postgres(ctx, "pg-server" in plan["module_resources"][args.group]):
+            if args.command == "module-pack":
+                version = os.environ.get("NW_VERSION", ctx.variables["version"] + ".2")
+                ctx.call([sys.executable, "eng/ci/module_job.py", "pack", args.group, args.plan, version])
+            else:
+                field = plan["run_steps"][args.group]
+                if field not in ("run", "integration"):
+                    raise ValueError(f"Unexpected check {field}")
+                ctx.call(load_catalog().modules[args.group][field], env={"NW_MODULE": args.group})
         return
     names = plan["actions"][args.group]
     steps = catalog_steps(args.group, plan["public_checks"], bool(plan["packages"]), plan["grouped_pack"])

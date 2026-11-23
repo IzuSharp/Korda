@@ -134,19 +134,7 @@ def make_plan(catalog, paths, entries, previous, full=False, old_entries=None):
         artifacts={n: catalog.modules[n]["artifacts"] for n in modules if "artifacts" in catalog.modules[n]},
         module_packages=module_packages,
         reasons=reasons,
-        module_resources={
-            n: sorted(
-                set(catalog.modules[n].get("resources", []))
-                | (
-                    {"native", "pg-tools"}
-                    if "pg-server" in catalog.modules[n].get("resources", [])
-                    else {"native"}
-                    if "pg-tools" in catalog.modules[n].get("resources", [])
-                    else set()
-                )
-            )
-            for n in set(modules) | set(module_packages)
-        },
+        module_resources={n: catalog.resources(n) for n in set(modules) | set(module_packages)},
         compose_from={
             p: sorted(
                 n for n in catalog.dependencies(p) & set(modules) if catalog.modules[n].get("artifacts")

@@ -154,6 +154,14 @@ class Catalog:
         for name in self.modules:
             self.dependencies(name)
 
+    def resources(self, name):
+        resources = set(self.modules[name].get("resources", []))
+        if "pg-server" in resources:
+            resources.add("pg-tools")
+        if "pg-tools" in resources:
+            resources.add("native")
+        return sorted(resources)
+
     def consumers(self, sources):
         return {name for name, closure in self.closures.items() if sources & closure}
 
