@@ -51,10 +51,10 @@ def catalog_steps(scope):
     return steps
 
 
-def plan_actions(catalog, reasons, direct, touched, pending, *, previous, entries, full, images=False):
+def plan_actions(catalog, reasons, direct, touched, package_checks, *, previous, entries, full, images=False):
     desired = set()
     deferred = set()
-    tested_public = set(pending)
+    tested_public = set(package_checks)
     for module in catalog.modules if full else direct:
         actions = set(catalog.modules[module].get("checks", ()))
         paths = reasons.get(module, ())
@@ -118,12 +118,11 @@ def plan_actions(catalog, reasons, direct, touched, pending, *, previous, entrie
             "interop.execution",
             "interop.negotiation",
         }
+        for provider in PROVIDERS:
+            desired.update((provider + ".test", provider + ".api"))
     manual = {name for name in desired if name.startswith("manual.")}
     desired -= manual
     deferred |= manual
-    if "database.regressions" in desired:
-        for provider in PROVIDERS:
-            desired.update((provider + ".test", provider + ".api"))
     lanes = {}
     for name in sorted(desired):
         prefix = name.partition(".")[0]

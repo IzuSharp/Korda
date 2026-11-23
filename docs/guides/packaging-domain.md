@@ -8,7 +8,7 @@ The internal compatibility candidate contains twelve Korda package IDs: Interop.
 
 ## Ordinary applications
 
-The [sample](../../samples/api/packaging-domain/README.md) uses normal PackageReference consumers with static entity mapping, typed Fluent projection and DTO result assertions. Public SQLite-only and PostgreSQL-only applications restore one bundled provider. A combined application restores both providers; neither choice adds a host runtime.
+The [sample](../../samples/api/packaging-domain/README.md) uses normal PackageReference consumers with static entity mapping, typed Fluent projection and DTO result assertions. Each public provider can be installed and verified independently. The combined graph in the internal compatibility suite exercises co-installation for the specific candidate pair under test.
 
 The existing strict package task checks the actual restored closure and SDK-selected native outputs. The consumer gate checks all nuspec dependencies, project.assets.json, published assemblies and `/proc/self/maps` after real database work. Actual loaded native hashes must match the package. An added entity/DTO query is compiled after restore without changing native bytes or invoking Rust.
 

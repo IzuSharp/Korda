@@ -137,7 +137,6 @@ def make_plan(
         result,
         changed_languages=changed_languages,
         inputs=hashes,
-        published=published,
         packages=sorted(package_checks & db),
         candidates=sorted(pending),
         versions={

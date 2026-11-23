@@ -64,7 +64,7 @@
     "checks": ["pack.api"]
   },
   "public-consumers": {
-    "tests": ["eng/ci/consume.py", ".github/workflows/release.yml"],
+    "tests": ["eng/ci/consume.py", "eng/ci/registry.py", ".github/workflows/release.yml"],
     "checks": ["consumer.check"]
   },
   "abstraction-tests": {
@@ -253,7 +253,7 @@
   },
   "public-validation-tests": {
     "tests": ["eng/ci/validate_public.py"],
-    "checks": []
+    "checks": ["consumer.check"]
   },
   "database-lifecycle-probe": {
     "tests": ["tests/Verification.EndToEnd/api_probe.py"],

@@ -10,7 +10,7 @@ PRs and main pushes verify the affected modules using the proposed merge diff or
 
 On each main push the planner also compares every registered public ID's package-input fingerprint with its last indexed preview. A missing or changed package gets its own next version, starting at `0.1.0-preview.1`. An unchanged ID keeps its current version. Even a documentation merge can deliver a previously missing preview. Main validates the final version and retains one artifact per package. The required Verify job checks for each expected artifact before publication.
 
-The protected release job checks the source tree, package ID, version and archive hashes before login. It rechecks the latest main inputs and NuGet state, polls indexing every two minutes, verifies the signed package and runs the registry consumer. A failed job can be rerun; a later main push also reconciles any outstanding package independently. Keep `NUGET_PUBLISH_ENABLED` enabled for automatic publication.
+The trusted release job checks the source tree, package ID, version and archive hashes before login. It rechecks the latest main inputs and NuGet state, polls indexing every two minutes, verifies the signed package and runs the registry consumer. A failed job can be rerun; a later main push also reconciles any outstanding package independently. Keep `NUGET_PUBLISH_ENABLED` enabled for automatic publication.
 
 GitHub Actions can restore caches from the base branch. PR caches remain scoped to their merge ref. The weekly or manual full run on main also warms the default-branch caches for subsequent PRs.
 

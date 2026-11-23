@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 import sys
 import unittest
+import tempfile
+import xml.etree.ElementTree as ET
 from unittest.mock import patch
 from urllib.error import HTTPError
 import zipfile
@@ -82,6 +84,28 @@ class PreviewTests(unittest.TestCase):
         with patch("registry.read", side_effect=HTTPError("test", 503, "unavailable", {}, None)):
             with self.assertRaises(HTTPError):
                 public_heads({"sqlite": "Korda.Database.Sqlite"})
+
+    def test_public_nuspec_uses_the_allocated_version_and_readme(self):
+        import bundles
+
+        version = next_preview(None)
+        commit = "1" * 40
+        with tempfile.TemporaryDirectory() as tmp, patch.object(bundles, "OUT", Path(tmp)):
+            for provider, identity in self.catalog.packages.items():
+                native = {"path": f"runtimes/linux-x64/native/{provider}.so", "sha256": "0" * 64}
+                entries = {"korda/manifest.json": json.dumps({"sourceCommit": commit}).encode()}
+                record = bundles.compose(provider, version, entries, native, commit, self.inputs[provider])
+                self.assertEqual(record["version"], version)
+                with zipfile.ZipFile(Path(tmp, "feed", f"{identity}.{version}.nupkg")) as archive:
+                    metadata = ET.fromstring(archive.read(identity + ".nuspec")).find("{*}metadata")
+                    self.assertEqual(metadata.findtext("{*}id"), identity)
+                    self.assertEqual(metadata.findtext("{*}version"), "0.1.0-preview.1")
+                    readme = archive.read(metadata.findtext("{*}readme")).decode()
+                    self.assertIn(f"dotnet add package {identity} --version {version}", readme)
+                    self.assertIn("Native AOT", metadata.findtext("{*}description"))
+                    self.assertEqual(
+                        json.loads(archive.read("korda/public.json"))["inputs"], self.inputs[provider]
+                    )
 
     def test_recheck_before_publication_and_idempotent_retry(self):
         plan = {

@@ -14,13 +14,13 @@ sys.path.insert(0, str(ROOT / "src/Verification.Compatibility"))
 import compatibility as compat
 
 
-def validate(folder, plan, version, module=""):
+def validate(folder, plan, version, module):
     tree = git("rev-parse", "HEAD^{tree}").decode().strip()
     record = compat.read_json(folder / "release.json")
     identities = load_catalog().packages
-    if module and module not in set(plan["public_checks"] + plan["module_packages"]):
+    if module not in set(plan["public_checks"] + plan["module_packages"]):
         raise ValueError("Module is outside the release plan")
-    expected = {identities[name] for name in ([module] if module else plan["packages"])}
+    expected = {identities[module]}
     if (
         record["source_tree"] != tree
         or record["source_commit"] != git("rev-parse", "HEAD").decode().strip()
@@ -63,7 +63,7 @@ if __name__ == "__main__":
     parser.add_argument("directory", type=Path)
     parser.add_argument("plan", type=Path)
     parser.add_argument("version")
-    parser.add_argument("--module", default="")
+    parser.add_argument("--module", required=True)
     args = parser.parse_args()
     for path in validate(
         args.directory, json.loads(args.plan.read_text()), args.version, args.module

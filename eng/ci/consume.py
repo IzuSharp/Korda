@@ -96,7 +96,7 @@ def main():
             )
             assets = json.loads((app / "obj/project.assets.json").read_text())
             actual = {key for key in assets["libraries"] if key.lower().startswith("korda.")}
-            if actual != {name + "/" + versions[name] for name in refs}:
+            if actual != {name + "/" + selected[name] for name in refs}:
                 raise ValueError("Unexpected Korda dependencies: " + str(actual))
             execute("./out/B24Consumer", "--require-aot")
 

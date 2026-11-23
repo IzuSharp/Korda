@@ -32,13 +32,17 @@ def require_checks(plan, results, artifacts):
 def main():
     event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text())
     kind = os.environ["GITHUB_EVENT_NAME"]
-    base = (
-        event["pull_request"]["base"]["sha"]
-        if kind == "pull_request"
-        else event["merge_group"]["base_sha"]
-        if kind == "merge_group"
-        else event.get("before") or "HEAD^"
-    )
+    if kind == "push":
+        base = event["before"]
+        if event["after"] != git("rev-parse", "HEAD").decode().strip():
+            raise ValueError("The checkout does not match the pushed commit")
+    elif kind == "pull_request":
+        # The pull_request checkout is GitHub's proposed merge commit.
+        base = git("rev-parse", "HEAD^1").decode().strip()
+    elif kind == "merge_group":
+        base = event["merge_group"]["base_sha"]
+    else:
+        base = "HEAD^"
     replay = (
         event.get("inputs", {}).get("check_paths", "").splitlines() if kind == "workflow_dispatch" else []
     )
@@ -48,9 +52,6 @@ def main():
         kind == "workflow_dispatch"
         and str(event.get("inputs", {}).get("verify_images", "")).lower() == "true"
     )
-    # PR jobs check out GitHub's proposed merge tree. Compare to its actual base parent.
-    if kind == "pull_request":
-        base = git("rev-parse", "HEAD^1").decode().strip()
     result = plan_tree(
         base,
         replay=replay or None,
