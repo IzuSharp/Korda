@@ -26,16 +26,9 @@ struct Fixture
     std::shared_ptr<Source> source;
     std::shared_ptr<Session> session;
     std::shared_ptr<Cursor> cursor;
-    std::mutex stop_mutex;
-    std::shared_ptr<Cursor> stop_cursor;
-    std::shared_ptr<Cursor> get_stop(bool clear = false)
-    {
-        std::lock_guard lock(stop_mutex);
-        auto result = stop_cursor;
-        if (clear)
-            stop_cursor.reset();
-        return result;
-    }
+    // Stop may arrive before the managed worker enters fetch. The provider observes
+    // the same cancellation token on either side of that admission boundary.
+    const std::shared_ptr<Cancel> fetch_cancel = std::make_shared<Cancel>();
     std::shared_ptr<Buffer> ready;
     std::array<std::uint64_t, 20> stats{};
     bool counted = false;
@@ -46,7 +39,7 @@ struct Fixture
         if (counted)
             --owners;
         ready.reset();
-        auto cursor_owner = get_stop(true);
+        auto cursor_owner = std::move(cursor);
         if (cursor_owner)
             cursor_owner->request_close();
         if (!joined && source)
@@ -227,7 +220,6 @@ std::unique_ptr<Fixture> open(std::uint32_t provider, std::uint32_t scenario, By
     // This bridge takes over the exact Cursor owner. Do not let the temporary
     // generic Owner request its closure while publishing the component ABI.
     owner->data = ModelBinding{};
-    fixture->stop_cursor = fixture->cursor;
     fixture->counted = true;
     ++owners;
     return fixture;
@@ -260,9 +252,8 @@ extern "C"
                 std::unique_lock lock(fixture.mutex, std::try_to_lock);
                 if (!lock.owns_lock() || !fixture.cursor || fixture.ready)
                     throw Error::state("concurrent or duplicate fetch");
-                fixture.ready =
-                    fixture.cursor->fetch(std::make_shared<Cancel>(), fixture.source->config.limits.batch_rows,
-                                          fixture.source->config.limits.batch_bytes);
+                fixture.ready = fixture.cursor->fetch(fixture.fetch_cancel, fixture.source->config.limits.batch_rows,
+                                                      fixture.source->config.limits.batch_bytes);
             });
     }
     std::uint32_t nw_stream_fixture_take(void* owner, void** output)
@@ -287,8 +278,7 @@ extern "C"
     }
     void nw_stream_fixture_stop(void* owner)
     {
-        if (auto cursor = static_cast<Fixture*>(owner)->get_stop())
-            cursor->request_close();
+        static_cast<Fixture*>(owner)->fetch_cancel->request();
     }
     std::uint32_t nw_stream_fixture_join(void* owner)
     {
@@ -310,7 +300,6 @@ extern "C"
                     fixture.stats[8] = fixture.cursor->retired.load();
                     fixture.stats[9] = fixture.session->connection->healthy();
                     fixture.stats[10] = fixture.cursor->stop_observed;
-                    (void)fixture.get_stop(true);
                     fixture.cursor.reset();
                 }
                 if (fixture.stats[9])
