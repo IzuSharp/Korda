@@ -22,18 +22,6 @@ jobs:
     name: Run ${{ inputs.scope }} actions
     runs-on: ubuntu-24.04
     timeout-minutes: 120
-    services:
-      postgres:
-        image: ${{ (inputs.scope != 'sqlite' || fromJSON(inputs.plan).packages[0] != null) && 'postgres:18.0@sha256:41fc5342eefba6cc2ccda736aaf034bbbb7c3df0fdb81516eba1ba33f360162c' || '' }}
-        env:
-          POSTGRES_USER: nativeweave
-          POSTGRES_DB: postgres
-          POSTGRES_HOST_AUTH_METHOD: trust
-        ports:
-          - "127.0.0.1:5432:5432"
-        options: >-
-          --health-cmd "pg_isready -U nativeweave -d postgres"
-          --health-interval 5s --health-timeout 5s --health-retries 12
     env:
       CI: "true"
       NUGET_PACKAGES: ${{ github.workspace }}/artifacts/nuget-packages
@@ -41,8 +29,6 @@ jobs:
       DOTNET_NOLOGO: "true"
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
       PACKAGE_VERSION: ${{ inputs.version }}
-      NATIVEWEAVE_TEST_POSTGRES_URL: postgresql://nativeweave@127.0.0.1:5432/postgres
-      NW_TEST_POSTGRES: postgresql://nativeweave@127.0.0.1:5432/postgres
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
@@ -54,7 +40,7 @@ jobs:
           PLAN: ${{ inputs.plan }}
         run: mkdir -p artifacts && echo "$PLAN" > artifacts/plan.json
       - name: Read immutable historical database API signatures
-        if: inputs.scope != 'pack'
+        if: contains(fromJSON(inputs.plan).resources[inputs.scope], 'design')
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: IzuSharp/NativeWeave-Design
@@ -62,7 +48,7 @@ jobs:
           path: artifacts/frozen-design
           persist-credentials: false
       - name: Read immutable historical Core API acceptance inputs
-        if: contains(fromJSON(inputs.plan).actions[inputs.scope], 'database.regressions') || contains(fromJSON(inputs.plan).actions[inputs.scope], 'interop-negotiation-tests.test')
+        if: contains(fromJSON(inputs.plan).resources[inputs.scope], 'plan')
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: IzuSharp/Plan
@@ -70,7 +56,7 @@ jobs:
           path: artifacts/frozen-plan
           persist-credentials: false
       - name: Read fixed database-scope compatibility inputs
-        if: contains(fromJSON(inputs.plan).actions[inputs.scope], 'database.compatibility') || contains(fromJSON(inputs.plan).actions[inputs.scope], 'database.api') || contains(fromJSON(inputs.plan).actions[inputs.scope], 'database.clean-build')
+        if: contains(fromJSON(inputs.plan).resources[inputs.scope], 'scope-design')
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           repository: IzuSharp/NativeWeave-Design
@@ -78,7 +64,8 @@ jobs:
           fetch-depth: 0
           path: artifacts/scope-design
           persist-credentials: false
-      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
+      - if: contains(fromJSON(inputs.plan).resources[inputs.scope], 'dotnet')
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           global-json-file: global.json
           cache: true
@@ -86,7 +73,7 @@ jobs:
             global.json
             **/packages*.lock.json
       - name: Restore pinned tool downloads
-        if: inputs.scope != 'pack'
+        if: contains(fromJSON(inputs.plan).resources[inputs.scope], 'native')
         uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           key: linux-x64-tools-${{ hashFiles('native/dependencies.lock.json') }}
@@ -94,14 +81,17 @@ jobs:
             artifacts/toolchain/downloads
             artifacts/dependencies/downloads
       - name: Install native build prerequisites and pinned Clang tools
-        if: inputs.scope != 'pack'
+        if: contains(fromJSON(inputs.plan).resources[inputs.scope], 'native')
+        env:
+          NEED_QEMU: ${{ contains(fromJSON(inputs.plan).resources[inputs.scope], 'qemu') }}
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends zstd zlib1g-dev libssl-dev qemu-user bison flex python3-cryptography
+          sudo apt-get install -y --no-install-recommends zstd zlib1g-dev libssl-dev bison flex python3-cryptography
+          if [ "$NEED_QEMU" = true ]; then sudo apt-get install -y qemu-user; fi
           python3 eng/cpp_toolchain.py
           bash eng/ci/sccache.sh install
       - name: Restore compiler objects
-        if: inputs.scope != 'pack'
+        if: contains(fromJSON(inputs.plan).resources[inputs.scope], 'native')
         uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25
         with:
           path: ~/.cache/sccache
@@ -110,7 +100,7 @@ jobs:
             sccache-linux-x64-v017-${{ hashFiles('native/dependencies.lock.json', 'CMakePresets.json') }}-${{ inputs.scope }}-
             sccache-linux-x64-v017-${{ hashFiles('native/dependencies.lock.json', 'CMakePresets.json') }}-
       - id: pg
-        if: contains(fromJSON('["full","selected","postgresql","components"]'), inputs.scope)
+        if: contains(fromJSON(inputs.plan).resources[inputs.scope], 'pg-tools')
         run: echo "key=$(python3 eng/postgres-cache-key.py full)" >> "$GITHUB_OUTPUT"
       - name: Restore exact PostgreSQL installation
         if: steps.pg.outputs.key
@@ -127,81 +117,21 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           jq -r --arg group "$SCOPE" '.actions[$group][]' artifacts/plan.json
-          dotnet build eng/ci -c Release -p:RestoreLockedMode=true
-          dotnet eng/ci/bin/Release/net11.0/NativeWeave.CI.dll run artifacts/plan.json "$SCOPE"
+          python3 eng/ci/worker.py run artifacts/plan.json "$SCOPE"
           git diff --exit-code
-      - name: Restore runner ownership of exported database evidence
-        if: always()
-        run: |
-          db_scope_owner="$(id -u):$(id -g)"
-          for db_scope_evidence in \
-            artifacts/db-scope/prepared/evidence \
-            artifacts/db-scope/release/evidence \
-            artifacts/db-scope/runtime/evidence \
-            artifacts/db-scope/evidence \
-            artifacts/cpp-clean; do
-            if sudo test -d "$db_scope_evidence"; then
-              sudo chown -R --no-dereference "$db_scope_owner" "$db_scope_evidence"
-            fi
-          done
-      - name: Retain verification logs and evidence
-        if: always() && (inputs.scope == 'full' || inputs.scope == 'selected')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: nativeweave-evidence-${{ github.run_id }}-${{ github.run_attempt }}
-          path: |
-            artifacts/logs/
-            artifacts/verification.json
-            artifacts/cmake/linux-x64-release/Testing/
-            artifacts/cmake/linux-x64-asan-ubsan/Testing/
-            artifacts/cpp-sanitizers/
-            !artifacts/cpp-sanitizers/**/certificates/*.key
-            artifacts/cpp-compatibility/result.json
-            artifacts/cpp-compatibility/commands.json
-            artifacts/cpp-compatibility/*.stdout
-            artifacts/cpp-compatibility/*.stderr
-            artifacts/cpp-interop-properties/result.json
-            artifacts/cpp-interop-properties/*.stdout
-            artifacts/cpp-interop-properties/*.stderr
-            artifacts/cpp-clean/receipt.json
-            artifacts/cpp-clean/image.json
-            artifacts/cpp-clean/native-build/
-            artifacts/cpp-clean/prepared/evidence/
-            artifacts/cpp-clean/local-consumer/evidence/
-            artifacts/db-scope/regressions/result.json
-            artifacts/db-scope/regressions/commands.json
-            artifacts/db-scope/regressions/logs/
-            artifacts/db-scope/api-checks/tool/logs/
-            artifacts/db-scope/api-checks/tool/html/logs/
-            artifacts/db-scope/regression-evidence/
-            artifacts/task04/
-            artifacts/db-scope/native-build/manifest.json
-            artifacts/db-scope/native-build/logs/
-            artifacts/db-scope/native-build/compiler-provenance.txt
-            artifacts/db-scope/native-build/compile_commands.json
-            artifacts/db-scope/prepared/manifest.json
-            artifacts/db-scope/prepared/evidence/
-            artifacts/db-scope/local-consumer/evidence/
-            artifacts/db-scope/database-lifecycle/
-            artifacts/db-scope/database-business/
-            artifacts/db-scope/migration-comparison/
-            artifacts/db-scope/release/evidence/
-            artifacts/db-scope/runtime/evidence/
-            artifacts/db-scope/evidence/
-          if-no-files-found: ${{ inputs.scope == 'full' && 'error' || 'warn' }}
-          retention-days: 14
-      - name: Collect selected component results
-        if: always() && inputs.scope == 'components'
+      - name: Retain action logs after a failure
+        if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: component-results-${{ github.run_id }}-${{ github.run_attempt }}
-          path: artifacts/component-tests/**/result.json
+          name: diagnostics-${{ inputs.scope }}-${{ github.run_id }}
+          path: artifacts/logs/
           if-no-files-found: ignore
+          retention-days: 7
       - name: Compiler cache statistics
-        if: always() && inputs.scope != 'pack'
+        if: always() && contains(fromJSON(inputs.plan).resources[inputs.scope], 'native')
         run: bash eng/ci/sccache.sh stats
       - name: Retain the exact PR-tested public candidates
-        if: fromJSON(inputs.plan).packages[0] != null
+        if: fromJSON(inputs.plan).packages[0] != null && contains(fromJSON(inputs.plan).actions[inputs.scope], 'public.validate')
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: ${{ inputs.artifact }}

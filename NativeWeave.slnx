@@ -1,8 +1,4 @@
 <Solution>
-  <Folder Name="/ci/">
-    <Project Path="eng/ci/NativeWeave.CI.csproj" />
-    <Project Path="tests/CI/NativeWeave.CI.Tests.csproj" />
-  </Folder>
   <Folder Name="/src/">
     <Project Path="src/Data.NativeHost/NativeWeave.Database.csproj" />
     <Project Path="src/Data.NativeHost/DependencyInjection/NativeWeave.Database.DependencyInjection.csproj" />

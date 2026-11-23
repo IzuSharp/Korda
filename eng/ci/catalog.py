@@ -26,10 +26,10 @@ class Catalog:
         for name, spec in modules.items():
             if not re.fullmatch(r"[a-z][a-z0-9-]*", name):
                 raise ValueError(f"Invalid module name: {name}")
-            unknown = spec.keys() - {"sources", "tests", "depends", "checks", "run", "package", "pack", "consume", "artifacts", "targets", "integration", "includes"}
+            unknown = spec.keys() - {"sources", "tests", "depends", "checks", "run", "package", "pack", "consume", "artifacts", "resources", "targets", "integration", "includes"}
             if unknown:
                 raise ValueError(f"{name}: unknown registration fields {sorted(unknown)}")
-            for field in ("sources", "tests", "depends", "checks", "run", "pack", "consume", "targets", "integration", "includes"):
+            for field in ("sources", "tests", "depends", "checks", "run", "pack", "consume", "resources", "targets", "integration", "includes"):
                 values = spec.get(field, [])
                 if not isinstance(values, list) or not all(isinstance(v, str) and v for v in values):
                     raise ValueError(f"{name}.{field} must be an array of strings")
@@ -37,14 +37,12 @@ class Catalog:
                 if target in self.targets:
                     raise ValueError(f"Duplicate target {target} in {name}")
                 self.targets[target] = name
-            if not all(c.startswith("db:") for c in spec.get("checks", [])):
-                raise ValueError(f"{name}: use run for an independent module check")
             if "artifacts" in spec and (not isinstance(spec["artifacts"], str) or
                     not re.fullmatch(r"artifacts/[a-zA-Z0-9_./-]+", spec["artifacts"]) or
                     ".." in Path(spec["artifacts"]).parts or not spec.get("run")):
                 raise ValueError(f"{name}: give the module's run command an output under artifacts/")
             if "package" in spec and not (spec.get("pack") and spec.get("consume")) and not (
-                    spec.get("checks") == [f"db:{name}"]):
+                    name in {"sqlite", "postgresql"} and spec.get("checks")):
                 raise ValueError(f"{name}: a top-level package requires pack and consume commands")
             for kind in ("sources", "tests"):
                 for pattern in spec.get(kind, []):

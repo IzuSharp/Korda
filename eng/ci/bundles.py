@@ -13,6 +13,7 @@ from registry import package
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src/Packaging.Domain"))
 from model import DATABASE_CAPABILITIES, REPOSITORY, RID, json_bytes, module, save, sha
+from model import MANAGED
 from prepare import TASK_PROJECT, inventory, managed_entries, managed_project
 
 compat = module("compatibility", "src/Verification.Compatibility/compatibility.py")
@@ -70,7 +71,21 @@ def compile_project(project, version, extra=()):
 def selected_files(provider, plan, version, manifest):
     identity = IDS[provider]
     peer = next(p for p in PROVIDERS if p != provider)
-    entries = shared_files(published(peer, plan["published"][peer]["version"]))
+    head = plan["published"][peer]
+    if head.get("inputs"):
+        entries = shared_files(published(peer, head["version"]))
+    else:
+        # First bundled release: bootstrap shared assets locally, even when the other provider has never shipped.
+        entries = {}
+        compile_project(TASK_PROJECT, version)
+        for suffix in (".dll", ".xml"):
+            filename = BUILD_TASK + suffix
+            entries["tools/net11.0/" + filename] = (TASK_PROJECT.parent / "bin/Release/net11.0" / filename).read_bytes()
+        for identity_shared in sorted(set(MANAGED) - set(IDS.values())):
+            compile_project(managed_project(identity_shared), version)
+            entries.update({name: file.read_bytes() for name, file in managed_entries(identity_shared).items()
+                            if name.startswith(("lib/", "tools/"))})
+
     build, assets = inventory.collect(manifest, provider)
     asset = assets["database." + provider]
     name = "runtimes/linux-x64/native/" + asset["path"].name
@@ -132,7 +147,8 @@ def main():
             # An independent release must keep its peer's shared assembly identities.
             if len(names) == 1:
                 peer = next(p for p in PROVIDERS if p != provider)
-                entries.update(shared_files(published(peer, plan["published"][peer]["version"])))
+                if plan["published"][peer].get("inputs"):
+                    entries.update(shared_files(published(peer, plan["published"][peer]["version"])))
         elif args.native:
             entries, native = selected_files(provider, plan, args.version, args.native)
         else:

@@ -32,7 +32,10 @@
       ".github/workflows/build.yml",
       ".github/workflows/database-checks.yml",
       ".clang-tidy",
-      "eng/check_native.py"
+      "eng/check_native.py",
+      ".editorconfig",
+      ".clang-format",
+      "eng/postgres-cache-key.py"
     ]
   }
 }

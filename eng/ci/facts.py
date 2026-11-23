@@ -1,9 +1,10 @@
-"""Read immutable Git and NuGet data for the managed planner and package verifier."""
+"""Read immutable Git and NuGet data for the CI planner and package verifier."""
 import hashlib
 import json
 import sys
 from catalog import git, load_catalog
 from registry import public_heads
+from language import purpose
 
 PROVIDERS = ("sqlite", "postgresql")
 IDS = {p: name for p, name in load_catalog().packages.items() if p in PROVIDERS}
@@ -17,7 +18,7 @@ def fingerprints(catalog, entries):
     digests = {p: hashlib.sha256() for p in catalog.packages}
     for path, entry in entries.items():
         module, kind = catalog.owner(path)
-        if kind == "sources":
+        if purpose(path, kind) == "sources":
             for name, digest in digests.items():
                 if module in catalog.dependencies(name):
                     digest.update(entry + b"\0")

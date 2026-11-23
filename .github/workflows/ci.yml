@@ -28,7 +28,6 @@ jobs:
     outputs:
       build: ${{ steps.jobs.outputs.build }}
       modules: ${{ steps.jobs.outputs.modules }}
-      focused: ${{ steps.jobs.outputs.focused }}
       plan: ${{ steps.plan.outputs.plan }}
       pending: ${{ steps.plan.outputs.pending }}
       artifact: ${{ steps.plan.outputs.artifact }}
@@ -41,22 +40,13 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
-        with:
-          global-json-file: global.json
-      - name: Build CI tool and check tracked ownership
+      - name: Validate tracked ownership and CI contracts
         run: |
-          dotnet build eng/ci -c Release -p:RestoreLockedMode=true
-          dotnet run --project eng/ci -c Release --no-build -- check-index
-      - name: Test and format CI tooling
-        run: |
-          dotnet test tests/CI -c Release -p:RestoreLockedMode=true
-          dotnet format eng/ci --no-restore --verify-no-changes
-          dotnet format tests/CI --no-restore --verify-no-changes
+          python3 eng/ci/worker.py check-index
           python3 -m unittest discover -s tests/Tooling -v
           git diff --check
       - id: plan
-        run: dotnet run --project eng/ci -c Release --no-build -- github
+        run: python3 eng/ci/plan_run.py
       - id: promote
         if: github.event_name == 'push' && steps.plan.outputs.pending == 'true'
         env:
@@ -66,7 +56,7 @@ jobs:
         env:
           MERGED: ${{ steps.promote.outputs.merged }}
           REUSE: ${{ steps.promote.outputs.run }}
-        run: dotnet run --project eng/ci -c Release --no-build -- jobs
+        run: python3 eng/ci/plan_run.py --jobs
   build:
     needs: plan
     if: needs.plan.outputs.build == 'true'
@@ -87,12 +77,6 @@ jobs:
     with:
       plan: ${{ needs.plan.outputs.plan }}
       artifact: ${{ needs.plan.outputs.artifact }}
-  focused:
-    needs: plan
-    if: needs.plan.outputs.focused == 'true'
-    uses: ./.github/workflows/database-checks.yml
-    with:
-      plan: ${{ needs.plan.outputs.plan }}
   security:
     needs: plan
     if: github.event_name != 'push'
@@ -105,7 +89,7 @@ jobs:
       security-events: write
   verify:
     name: Verify
-    needs: [plan, build, focused, modules, security]
+    needs: [plan, build, modules, security]
     if: always()
     runs-on: ubuntu-24.04
     steps:
@@ -114,16 +98,13 @@ jobs:
           PLAN: ${{ needs.plan.result }}
           BUILD: ${{ needs.build.result }}
           MODULES: ${{ needs.modules.result }}
-          FOCUSED: ${{ needs.focused.result }}
           NEED_MODULES: ${{ needs.plan.outputs.modules }}
-          NEED_FOCUSED: ${{ needs.plan.outputs.focused }}
           SECURITY: ${{ needs.security.result }}
           REQUIRED: ${{ needs.plan.outputs.build }}
         run: |
           test "$PLAN" = success
           if [ "$REQUIRED" = true ]; then test "$BUILD" = success; else test "$BUILD" = skipped; fi
           if [ "$NEED_MODULES" = true ]; then test "$MODULES" = success; else test "$MODULES" = skipped; fi
-          if [ "$NEED_FOCUSED" = true ]; then test "$FOCUSED" = success; else test "$FOCUSED" = skipped; fi
           if [ "$GITHUB_EVENT_NAME" = push ]; then test "$SECURITY" = skipped; else test "$SECURITY" = success; fi
   publish:
     needs: [plan, verify]

@@ -210,7 +210,7 @@ def consumer_probes(version):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["native", "pack", "pack-existing", "inputs", "regressions", "workspace", "api", "consumer-probes", "verify", "consume"])
+    parser.add_argument("command", choices=["native", "pack", "pack-existing", "compare-existing", "inputs", "regressions", "workspace", "api", "consumer-probes", "verify", "consume"])
     parser.add_argument("--version", default="0.1.0-db-cpp.1")
     parser.add_argument("--design", type=Path, default=ARTIFACTS / "frozen-design")
     parser.add_argument("--plan", type=Path, default=ARTIFACTS / "frozen-plan")
@@ -235,6 +235,8 @@ def main():
         api_docs(args.design.resolve())
     elif args.command == "pack-existing":
         pack(args.version, OUTPUT / "native-build/manifest.json")
+    elif args.command == "compare-existing":
+        migration_comparison(args.version)
     elif args.command == "consumer-probes":
         consumer_probes(args.version)
     elif args.command == "verify":

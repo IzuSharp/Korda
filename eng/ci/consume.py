@@ -37,7 +37,7 @@ def main():
         shutil.copy(ROOT / "global.json", work)
         env = os.environ | {"NUGET_PACKAGES": str(work / "cache")}
         for graph, (refs, symbols, providers) in GRAPHS.items():
-            if graph != "combined" and refs[0] not in selected:
+            if not set(refs).issubset(selected):
                 continue
             app = work / graph
             app.mkdir()

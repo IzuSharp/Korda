@@ -28,14 +28,15 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+      - if: contains(fromJSON(inputs.plan).module_resources[matrix.module], 'dotnet')
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
           global-json-file: global.json
       - name: Run the selected module
         run: |
           mkdir -p artifacts
           echo "$PLAN" > artifacts/plan.json
-          NW_VERSION="$VERSION" dotnet run --project eng/ci -c Release -p:RestoreLockedMode=true -- module-check "$MODULE" artifacts/plan.json
+          NW_VERSION="$VERSION" python3 eng/ci/worker.py module-check artifacts/plan.json "$MODULE"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: fromJSON(inputs.plan).artifacts[matrix.module] != ''
         with:
@@ -62,7 +63,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+      - if: contains(fromJSON(inputs.plan).module_resources[matrix.module], 'dotnet')
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
           global-json-file: global.json
       - name: Restore this package's selected module outputs
