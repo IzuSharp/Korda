@@ -6,10 +6,9 @@ import json
 from pathlib import Path
 import subprocess
 import sys
-import zipfile
 
 from impact import IDS, PROVIDERS
-from registry import package
+from provider_metadata import render
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "src/Packaging.Domain"))
@@ -22,50 +21,11 @@ packer = module("linux_packages", "src/Packaging.Linux/packages.py")
 GENERATOR = "Korda.Query.Generator"
 BUILD_TASK = "Korda.Packaging.Tasks"
 OUT = Path("artifacts/public")
-POLICY = ROOT / "tests/Verification.Compatibility/signature-policy.json"
-
-
-def payload(path):
-    with zipfile.ZipFile(path) as archive:
-        return {
-            name: archive.read(name)
-            for name in archive.namelist()
-            if not (
-                name.endswith(".nuspec") or name in ("[Content_Types].xml", "_rels/.rels", ".signature.p7s")
-            )
-        }
-
-
-def published(provider, version):
-    cache = Path("artifacts/published") / provider
-    cache.mkdir(parents=True, exist_ok=True)
-    path = cache / f"{IDS[provider]}.{version}.nupkg"
-    if not path.exists():
-        path.write_bytes(package(IDS[provider], version))
-    compat.verify_signature(path, compat.read_json(POLICY), cache)
-    return payload(path)
 
 
 def shared_files(entries):
     private = {f"lib/net11.0/{identity}{ext}" for identity in IDS.values() for ext in (".dll", ".xml")}
     return {n: v for n, v in entries.items() if n.startswith(("lib/", "tools/")) and n not in private}
-
-
-def component_files(candidate, provider):
-    record = compat.read_json(candidate / "release.json")
-    index = {p["id"]: p for p in record["packages"]}
-    paths = {n: candidate / "feed" / f"{n}.{p['version']}.nupkg" for n, p in index.items()}
-    compat.validate_closure(record, paths)
-    identity = IDS[provider]
-    leaf = index[identity + ".Native"]
-    contents = payload(paths[identity + ".Native"])
-    for name in index:
-        if name in (p for p in IDS.values() if p != identity) or name.endswith(".Native"):
-            continue
-        for entry, data in payload(paths[name]).items():
-            if entry.startswith(("lib/", "tools/")):
-                contents[entry] = data
-    return contents, leaf["native"]
 
 
 def compile_project(project, version, extra=()):
@@ -85,31 +45,15 @@ def compile_project(project, version, extra=()):
     )
 
 
-def selected_files(provider, plan, version, manifest):
+def selected_files(provider, version, manifest):
     identity = IDS[provider]
-    peer = next(p for p in PROVIDERS if p != provider)
-    head = plan["published"][peer]
-    if head.get("inputs"):
-        entries = shared_files(published(peer, head["version"]))
-    else:
-        # First bundled release: bootstrap shared assets locally, even when the other provider has never shipped.
-        entries = {}
-        compile_project(TASK_PROJECT, version)
-        for suffix in (".dll", ".xml"):
-            filename = BUILD_TASK + suffix
-            entries["tools/net11.0/" + filename] = (
-                TASK_PROJECT.parent / "bin/Release/net11.0" / filename
-            ).read_bytes()
-        for identity_shared in sorted(set(MANAGED) - set(IDS.values())):
-            compile_project(managed_project(identity_shared), version)
-            entries.update(
-                {
-                    name: file.read_bytes()
-                    for name, file in managed_entries(identity_shared).items()
-                    if name.startswith(("lib/", "tools/"))
-                }
-            )
-
+    entries = {}
+    compile_project(TASK_PROJECT, version)
+    for suffix in (".dll", ".xml"):
+        filename = BUILD_TASK + suffix
+        entries["tools/net11.0/" + filename] = (
+            TASK_PROJECT.parent / "bin/Release/net11.0" / filename
+        ).read_bytes()
     build, assets = inventory.collect(manifest, provider)
     asset = assets["database." + provider]
     name = "runtimes/linux-x64/native/" + asset["path"].name
@@ -117,8 +61,11 @@ def selected_files(provider, plan, version, manifest):
     entries[name] = asset["path"].read_bytes()
     prop = "KordaSqliteAssetPath" if provider == "sqlite" else "KordaPostgresAssetPath"
     compile_project(managed_project(identity), version, [f"-p:{prop}={asset['path']}"])
-    for entry, file in managed_entries(identity).items():
-        entries[entry] = file.read_bytes()
+    # The facade builds its project references; the source generator is packaged as a tool.
+    for component in sorted((set(MANAGED) - set(IDS.values())) | {identity}):
+        for entry, file in managed_entries(component).items():
+            if entry.startswith(("lib/", "tools/")):
+                entries[entry] = file.read_bytes()
     native = dict(path=name, sha256=asset["sha256"], rid=RID, abi_major=1)
     entries["korda/manifest.json"] = json_bytes(
         dict(
@@ -136,7 +83,7 @@ def selected_files(provider, plan, version, manifest):
     return entries, native
 
 
-def compose(provider, version, entries, native, commit, fingerprint):
+def compose(provider, version, entries, native, commit, fingerprint, payload_fingerprint):
     identity = IDS[provider]
     for notice in ("LICENSE", "THIRD_PARTY_NOTICES.md"):
         entries[notice] = (ROOT / notice).read_bytes()
@@ -146,7 +93,7 @@ def compose(provider, version, entries, native, commit, fingerprint):
     entries["tools/" + GENERATOR + ".targets"] = (
         ROOT / f"src/Query.Generator/buildTransitive/{GENERATOR}.targets"
     ).read_bytes()
-    entries["korda/public.json"] = json_bytes({"inputs": fingerprint})
+    entries["korda/public.json"] = json_bytes({"inputs": fingerprint, "payload_inputs": payload_fingerprint})
     descriptor = dict(
         engineId="database." + provider,
         facadePackageId=identity,
@@ -182,7 +129,16 @@ def compose(provider, version, entries, native, commit, fingerprint):
     entries[f"buildTransitive/{identity}.targets"] = (
         wrapper.replace("@PROVIDER@", identity).replace("@SHARED@", digest).encode()
     )
-    path = packer.pack(OUT / "feed", identity, version, entries, repository=(REPOSITORY, commit))
+    description, entries["README.md"] = render(provider, identity, version)
+    path = packer.pack(
+        OUT / "feed",
+        identity,
+        version,
+        entries,
+        repository=(REPOSITORY, commit),
+        description=description,
+        readme="README.md",
+    )
     return dict(
         id=identity,
         version=version,
@@ -199,52 +155,27 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--plan", type=Path, required=True)
     parser.add_argument("--version", required=True)
-    parser.add_argument("--components", type=Path)
-    parser.add_argument("--native", type=Path)
+    parser.add_argument("--provider", choices=PROVIDERS, required=True)
+    parser.add_argument("--native", type=Path, required=True)
     args = parser.parse_args()
     plan = json.loads(args.plan.read_text())
-    names = plan["packages"] or ([plan["scope"]] if plan["scope"] in PROVIDERS else PROVIDERS)
+    provider = args.provider
+    if provider not in plan["public_checks"] or args.version != plan["versions"][provider]:
+        raise ValueError("Package or version differs from the verification plan")
     commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
     tree = subprocess.check_output(["git", "rev-parse", "HEAD^{tree}"], text=True).strip()
-    records = []
-    if plan["rebuild_task"] and not args.components and not args.native:
-        compile_project(TASK_PROJECT, args.version)
-    for provider in names:
-        if args.components:
-            entries, native = component_files(args.components, provider)
-            # An independent release must keep its peer's shared assembly identities.
-            if len(names) == 1:
-                peer = next(p for p in PROVIDERS if p != provider)
-                if plan["published"][peer].get("inputs"):
-                    entries.update(shared_files(published(peer, plan["published"][peer]["version"])))
-        elif args.native:
-            entries, native = selected_files(provider, plan, args.version, args.native)
-        else:
-            entries = published(provider, plan["published"][provider]["version"])
-            info = json.loads(entries["korda/manifest.json"])
-            native = dict(
-                path=info["nativePath"],
-                sha256=info["nativeSha256"],
-                rid=RID,
-                abi_major=1,
-            )
-            # Packaging-only changes can update the host task without rebuilding the native library.
-            if plan["rebuild_task"]:
-                for suffix in (".dll", ".xml"):
-                    name = BUILD_TASK + suffix
-                    entries["tools/net11.0/" + name] = (
-                        TASK_PROJECT.parent / "bin/Release/net11.0" / name
-                    ).read_bytes()
-        records.append(
-            compose(
-                provider,
-                args.version,
-                entries,
-                native,
-                commit,
-                plan["inputs"][provider],
-            )
+    entries, native = selected_files(provider, args.version, args.native)
+    records = [
+        compose(
+            provider,
+            args.version,
+            entries,
+            native,
+            commit,
+            plan["inputs"][provider],
+            plan["payload_inputs"][provider],
         )
+    ]
     record = dict(
         schema_version=1,
         source_commit=commit,

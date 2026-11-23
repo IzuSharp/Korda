@@ -52,6 +52,7 @@ def main():
     parser.add_argument("--postgres-bin", type=Path)
     parser.add_argument("--native-build", type=Path, default=ROOT / "artifacts/cmake/linux-x64-release")
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--separate-provider-tests", action="store_true")
     parser.add_argument("--suite", choices=[row[0] for row in SUITES])
     args = parser.parse_args()
     output = args.output.resolve()
@@ -134,9 +135,9 @@ def main():
     component("Interop.Negotiation", "--plan-root", args.plan.resolve(), "--design-root", design)
     component("Interop.Execution")
     component("Data.Abstractions", "--native-build", native_build)
-    component("Data.Sqlite", "--design", design, "--native-build", native_build)
-    # Existing provider tests include real TLS policy and actual connection failures.
-    component("Data.Postgres", "--postgres-bin", pg, "--design-root", design, "--native-build", native_build)
+    if not args.separate_provider_tests:
+        component("Data.Sqlite", "--design", design, "--native-build", native_build)
+        component("Data.Postgres", "--postgres-bin", pg, "--design-root", design, "--native-build", native_build)
     component("Data.Transactions", "--design", design, "--native-build", native_build)
     component("Data.Streaming", "--design-root", design, "--native-build", native_build)
     component("Data.Codecs", "--native-build", native_build)

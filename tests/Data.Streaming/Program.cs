@@ -155,6 +155,13 @@ foreach (var provider in new uint[] { 1, 2 })
     await Expect<DatabaseException>(async () => { await Make(provider, 7, required, value => transport = value).SingleAsync(); }, e => e.Kind == DatabaseErrorKind.Conversion);
     Clean("null-nonnullable", provider, transport);
 
+    // The worker can be preempted after scheduling a fetch but before entering the provider.
+    transport = await NativeFixtureTransport.OpenAsync(provider, 8, ordinary.CanonicalBytes, limits.MaxBatchRows, limits.MaxBatchBytes, CancellationToken.None);
+    transport.RequestStop();
+    await Expect<OperationCanceledException>(async () => { using var batch = await transport.FetchAsync(); });
+    await transport.JoinAsync();
+    Clean("stop-before-native-fetch", provider, transport);
+
     foreach (var enumerationToken in new[] { false, true })
     {
         transport = null;

@@ -2,11 +2,12 @@
 
 import argparse
 import json
-import re
 from pathlib import Path
 import sys
 from catalog import ROOT, git, load_catalog
 from impact import inputs
+from facts import PROVIDERS
+import provider_metadata
 import xml.etree.ElementTree as ET
 import zipfile
 
@@ -15,20 +16,16 @@ sys.path.insert(0, str(ROOT / "src/Verification.Compatibility"))
 import compatibility as compat
 
 
-def validate(folder, plan, version, module=""):
-    source = plan.get("retry_merge", "HEAD")
-    if source != "HEAD":
-        if not re.fullmatch(r"[0-9a-f]{40}", source):
-            raise ValueError("Invalid recovery merge commit")
-        git("merge-base", "--is-ancestor", source, "HEAD")
-    tree = git("rev-parse", source + "^{tree}").decode().strip()
+def validate(folder, plan, version, module):
+    tree = git("rev-parse", "HEAD^{tree}").decode().strip()
     record = compat.read_json(folder / "release.json")
     identities = load_catalog().packages
-    if module and module not in plan["candidates"]:
+    if module not in set(plan["public_checks"] + plan["module_packages"]):
         raise ValueError("Module is outside the release plan")
-    expected = {identities[name] for name in ([module] if module else plan["packages"])}
+    expected = {identities[module]}
     if (
         record["source_tree"] != tree
+        or record["source_commit"] != git("rev-parse", "HEAD").decode().strip()
         or record["inputs"] != inputs("HEAD")
         or record["source_dirty"] is not False
     ):
@@ -49,9 +46,17 @@ def validate(folder, plan, version, module=""):
             raise ValueError("Candidate changed after consumption")
         provider = next(p for p, identity in identities.items() if identity == name)
         with zipfile.ZipFile(path) as archive:
-            if json.loads(archive.read("korda/public.json"))["inputs"] != record["inputs"][provider]:
+            package_inputs = json.loads(archive.read("korda/public.json"))
+            if package_inputs["inputs"] != record["inputs"][provider]:
                 raise ValueError("Packaged provider fingerprint differs from the tested inputs")
-            if ET.fromstring(archive.read(name + ".nuspec")).find(".//{*}dependency") is not None:
+            metadata = ET.fromstring(archive.read(name + ".nuspec")).find("{*}metadata")
+            if metadata.findtext("{*}id") != name or metadata.findtext("{*}version") != version:
+                raise ValueError("Packed NuGet identity differs from the release plan")
+            if module in PROVIDERS:
+                provider_metadata.verify(archive, metadata, module, name, version)
+                if package_inputs.get("payload_inputs") != plan["payload_inputs"][module]:
+                    raise ValueError("Packaged provider has different non-metadata inputs")
+            if metadata.find(".//{*}dependency") is not None:
                 raise ValueError("Public provider requires another package")
         paths[name] = path
     if set(paths.values()) != set((folder / "feed").iterdir()):
@@ -65,7 +70,7 @@ if __name__ == "__main__":
     parser.add_argument("directory", type=Path)
     parser.add_argument("plan", type=Path)
     parser.add_argument("version")
-    parser.add_argument("--module", default="")
+    parser.add_argument("--module", required=True)
     args = parser.parse_args()
     for path in validate(
         args.directory, json.loads(args.plan.read_text()), args.version, args.module

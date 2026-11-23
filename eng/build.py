@@ -155,11 +155,11 @@ def verify_inputs():
     run([sys.executable, "eng/check_native.py", "format"], "clang-format")
 
 
-def regressions(design, plan):
+def regressions(design, plan, separate_providers=False):
     try:
         # The driver writes per-check logs and receipts. Forward its progress as each check starts.
         subprocess.run([sys.executable, "eng/database_regressions.py", "--design", design, "--plan", plan,
-                        "--output", OUTPUT / "regressions"], cwd=ROOT, check=True)
+                        "--output", OUTPUT / "regressions", *(["--separate-provider-tests"] if separate_providers else [])], cwd=ROOT, check=True)
     finally:
         export_fixture_results(OUTPUT / "regressions", OUTPUT / "regression-evidence")
 
@@ -216,6 +216,7 @@ def consumer_probes(version, only=None):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=["native", "pack", "pack-existing", "compare-existing", "inputs", "regressions", "workspace", "api", "consumer-probes", "verify", "consume"])
+    parser.add_argument("--separate-provider-tests", action="store_true")
     parser.add_argument("--version", default="0.1.0-db-cpp.1")
     parser.add_argument("--design", type=Path, default=ARTIFACTS / "frozen-design")
     parser.add_argument("--plan", type=Path, default=ARTIFACTS / "frozen-plan")
@@ -234,7 +235,7 @@ def main():
     elif args.command == "inputs":
         verify_inputs()
     elif args.command == "regressions":
-        regressions(args.design, args.plan)
+        regressions(args.design, args.plan, args.separate_provider_tests)
     elif args.command == "workspace":
         build_workspace()
     elif args.command == "api":

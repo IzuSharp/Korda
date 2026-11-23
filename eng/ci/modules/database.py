@@ -109,7 +109,7 @@ def recipes():
     )
     add(
         "database.regressions",
-        py("eng/build.py", "regressions"),
+        py("eng/build.py", "regressions", "--separate-provider-tests"),
         needs=("database.native",),
         resources=("dotnet", "design", "plan", "pg-server"),
     )
@@ -411,6 +411,15 @@ class Provider:
                 build,
                 *options,
             )
+            if operation == "api":
+                identity_dir = f"artifacts/packed-api/{provider}"
+                add(
+                    provider + ".packed-api",
+                    py("eng/ci/packed_api.py", provider, "{version}", identity_dir),
+                    (*cmd, "--assembly-dir", identity_dir),
+                    needs=("public.pack",),
+                    resources=("dotnet", "design"),
+                )
             ctest = (
                 "ctest",
                 "--preset",

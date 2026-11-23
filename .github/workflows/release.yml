@@ -4,13 +4,10 @@ on:
     inputs:
       module:
         type: string
-        default: ""
-      artifact:
         required: true
-        type: string
-      run:
+      database:
+        type: boolean
         required: true
-        type: string
       version:
         required: true
         type: string
@@ -19,7 +16,7 @@ on:
         type: string
 jobs:
   publish:
-    if: github.repository == 'IzuSharp/Korda' && github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && fromJSON(inputs.plan).retry_merge != ''))
+    if: github.repository == 'IzuSharp/Korda' && github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-24.04
     timeout-minutes: 55
     environment: nuget
@@ -29,7 +26,7 @@ jobs:
       id-token: write
     services:
       postgres:
-        image: ${{ !inputs.module && contains(fromJSON(inputs.plan).packages, 'postgresql') && 'postgres:18.0@sha256:41fc5342eefba6cc2ccda736aaf034bbbb7c3df0fdb81516eba1ba33f360162c' || '' }}
+        image: ${{ inputs.database && inputs.module == 'postgresql' && 'postgres:18.0@sha256:41fc5342eefba6cc2ccda736aaf034bbbb7c3df0fdb81516eba1ba33f360162c' || '' }}
         env:
           POSTGRES_USER: korda
           POSTGRES_DB: postgres
@@ -45,17 +42,15 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          fetch-depth: ${{ fromJSON(inputs.plan).retry_merge && '0' || '1' }}
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6
         with:
           global-json-file: global.json
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          name: ${{ inputs.artifact }}
+          name: candidate-${{ inputs.module }}
           path: artifacts/publication
-          run-id: ${{ inputs.run }}
-          github-token: ${{ github.token }}
       - name: Verify the tested tree, package allowlist and bytes
         env:
           VERSION: ${{ inputs.version }}
@@ -63,18 +58,31 @@ jobs:
         run: |
           echo "$PLAN" > artifacts/plan.json
           python3 eng/ci/validate_public.py "$CANDIDATE" artifacts/plan.json "$VERSION" --module "$MODULE" > artifacts/packages.txt
+      - name: Check for superseding package changes
+        id: current
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          latest=$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)
+          if ! git cat-file -e "$latest^{tree}"; then
+            git fetch --no-tags origin "$latest"
+          fi
+          python3 eng/ci/registry.py --publish-current "$MODULE" "$latest" artifacts/plan.json
       - id: login
+        if: steps.current.outputs.publish == 'true'
         uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1
         with:
           user: ${{ vars.NUGET_USER }}
-      - name: Push database previews to nuget.org
+      - name: Push verified preview to nuget.org
+        if: steps.current.outputs.publish == 'true'
         env:
           NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
         run: |
           while IFS= read -r package; do
             dotnet nuget push "$package" --source "$NUGET_SOURCE" --api-key "$NUGET_API_KEY" --skip-duplicate
           done < artifacts/packages.txt
-      - name: Wait for indexing and verify signed registry packages
+      - name: Wait for indexing and verify signed registry package
+        if: steps.current.outputs.verify == 'true'
         run: |
           PYTHONPATH=src/Packaging.Release python3 - <<'PY'
           import os, time
@@ -110,10 +118,10 @@ jobs:
                   time.sleep(120)
           PY
       - name: Consume the public database packages in Native AOT
-        if: "!inputs.module"
+        if: steps.current.outputs.verify == 'true' && inputs.database
         run: python3 eng/ci/consume.py "$CANDIDATE/release.json" artifacts/plan.json --public
       - name: Run the registered public package consumer
-        if: inputs.module != ''
+        if: steps.current.outputs.verify == 'true' && !inputs.database
         env:
           VERSION: ${{ inputs.version }}
         run: python3 eng/ci/module_job.py public "$MODULE" artifacts/plan.json "$VERSION"

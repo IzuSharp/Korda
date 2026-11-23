@@ -19,15 +19,17 @@ def files(tree):
     }
 
 
-def fingerprints(catalog, entries):
+def fingerprints(catalog, entries, *, include_metadata=True):
     digests = {p: hashlib.sha256() for p in catalog.packages}
     for path, entry in entries.items():
         module, kind = catalog.owner(path)
-        if purpose(path, kind) == "sources":
+        role = purpose(path, kind)
+        if role == "sources" or (include_metadata and role == "metadata"):
             for name, digest in digests.items():
                 if module in catalog.dependencies(name):
                     digest.update(entry + b"\0")
     for name, digest in digests.items():
+        digest.update(catalog.packages[name].encode() + b"\0")
         for module in sorted(catalog.dependencies(name)):
             spec = catalog.modules[module]
             if spec.get("artifacts"):

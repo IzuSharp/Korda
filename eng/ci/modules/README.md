@@ -25,19 +25,20 @@ Add an entry to a JSON file in this directory. Entries can be grouped by product
 
 | Register | Meaning |
 | --- | --- |
+| `metadata` | Package content such as a NuGet description or README. A change contributes to the public package fingerprint without changing the managed payload fingerprint. |
 | `sources`, `tests` | Repository-relative files or directory prefixes ending in `/`. A more specific rule wins. Changes to tests select their own module check. Changes to sources also select consumers. |
 | `targets`, `depends` | Native CMake target names and additional module dependencies, including generators, linked sources and native libraries loaded at runtime. Literal managed project references between source modules are read from Git. Register conditional or computed dependencies that are invisible there. |
 | `includes` | Modules bundled into an aggregate. Editing the aggregate's own source also exercises its included components. A leaf edit affects consumers and package acceptance without pulling in independent siblings. |
 | `run`, `artifacts` | Linux check command as an argument array, with optional internal build output under `artifacts/`. A module can be test-only. Register a multi-step check as one script. |
 | `package`, `pack`, `consume` | Optional top-level NuGet ID and its producer and AOT consumer commands. Set `integration` to an additional command if a changed dependency needs an integration check before packaging. |
 
-Run `python3 eng/ci/impact.py origin/main --output artifacts/plan.json` to see the changed languages, owning paths, actions, runner resources and public candidates. Renames count as a deletion and an addition. Unknown paths, ambiguous ownership and dependency cycles fail before a runner installs a compiler.
+Run `python3 eng/ci/impact.py origin/main --output artifacts/plan.json` to see the changed languages, owning paths, actions, runner resources and selected package checks. Renames count as a deletion and an addition. Unknown paths, ambiguous ownership and dependency cycles fail before a runner installs a compiler.
 
 **Native targets.** The fast planner uses the registered source roots and module edges. The native build requests a CMake File API reply before configure and verifies target sources, target dependencies and Ninja's observed header dependencies after compiling. New native build scripts can call `eng/ci/native_graph.py query BUILD_DIR` before configure and `verify BUILD_DIR TARGET ...` afterward. Register all supported conditional edges even when a single preset does not exercise them.
 
 **Packaging commands.** CI runs commands from the repository root. The pack command receives `NW_PACKAGE`, `NW_VERSION`, `NW_FEED` (an empty local output directory) and `NW_INPUTS`. Produce exactly one standalone nupkg with that ID and version and include `korda/public.json` containing the `inputs` fingerprint. Pack scripts can reuse selected internal outputs under `artifacts/modules/<module>/` and must obtain unchanged components from their normal build or verified cache. The consumer restores the exact ID/version from `NW_FEED` into an isolated cache and executes a Native AOT application. The same command runs against nuget.org after publication.
 
-PR jobs carry read-only permissions. Only the trusted merge workflow can publish a verified candidate. Weekly and explicit full checks exercise all registered modules.
+PR jobs carry read-only permissions. Main checks each public package fingerprint and builds the final version for missing or changed previews. Only the trusted release job publishes those verified artifacts. Weekly and explicit full checks exercise all registered modules.
 
 ## Implement and run a workflow
 

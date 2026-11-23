@@ -21,7 +21,8 @@ permissions:
   actions: read
 concurrency:
   group: ci-${{ github.event_name }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  queue: max
+  cancel-in-progress: false
 jobs:
   plan:
     runs-on: ubuntu-24.04
@@ -30,15 +31,7 @@ jobs:
       actions: read
       pull-requests: read
     outputs:
-      build: ${{ steps.jobs.outputs.build }}
-      modules: ${{ steps.jobs.outputs.modules }}
       plan: ${{ steps.plan.outputs.plan }}
-      pending: ${{ steps.plan.outputs.pending }}
-      artifact: ${{ steps.plan.outputs.artifact }}
-      merged: ${{ steps.promote.outputs.merged }}
-      reuse: ${{ steps.promote.outputs.run }}
-      from-artifact: ${{ steps.promote.outputs.artifact }}
-      number: ${{ steps.promote.outputs.number }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
@@ -51,40 +44,27 @@ jobs:
           git diff --check
       - id: plan
         run: python3 eng/ci/plan_run.py
-      - id: promote
-        if: github.event_name == 'push' && steps.plan.outputs.pending == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: python3 eng/ci/promote.py
-      - id: jobs
-        env:
-          MERGED: ${{ steps.promote.outputs.merged }}
-          REUSE: ${{ steps.promote.outputs.run }}
-        run: python3 eng/ci/plan_run.py --jobs
   build:
     needs: plan
-    if: needs.plan.outputs.build == 'true'
+    if: fromJSON(needs.plan.outputs.plan).build_scopes[0] != null
     strategy:
       fail-fast: false
       matrix:
         scope: ${{ fromJSON(needs.plan.outputs.plan).build_scopes }}
     uses: ./.github/workflows/build.yml
     with:
-      version: 0.1.0-preview.${{ github.run_number }}
+      version: ${{ fromJSON(needs.plan.outputs.plan).versions[matrix.scope] || '0.1.0-ci.1' }}
       scope: ${{ matrix.scope }}
       resources: ${{ toJSON(fromJSON(needs.plan.outputs.plan).resources[matrix.scope]) }}
       plan: ${{ needs.plan.outputs.plan }}
-      artifact: ${{ needs.plan.outputs.artifact }}
   modules:
     needs: plan
-    if: needs.plan.outputs.modules == 'true'
+    if: fromJSON(needs.plan.outputs.plan).modules[0] != null || fromJSON(needs.plan.outputs.plan).module_packages[0] != null
     uses: ./.github/workflows/modules.yml
     with:
       plan: ${{ needs.plan.outputs.plan }}
-      artifact: ${{ needs.plan.outputs.artifact }}
   security:
     needs: plan
-    if: github.event_name != 'push'
     uses: ./.github/workflows/security.yml
     with:
       languages: ${{ toJSON(fromJSON(needs.plan.outputs.plan).languages) }}
@@ -98,22 +78,21 @@ jobs:
     if: always()
     runs-on: ubuntu-24.04
     steps:
-      - name: Require the selected checks
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Require selected jobs and verified package artifacts
         env:
-          PLAN: ${{ needs.plan.result }}
-          BUILD: ${{ needs.build.result }}
-          MODULES: ${{ needs.modules.result }}
-          NEED_MODULES: ${{ needs.plan.outputs.modules }}
-          SECURITY: ${{ needs.security.result }}
-          REQUIRED: ${{ needs.plan.outputs.build }}
-        run: |
-          test "$PLAN" = success
-          if [ "$REQUIRED" = true ]; then test "$BUILD" = success; else test "$BUILD" = skipped; fi
-          if [ "$NEED_MODULES" = true ]; then test "$MODULES" = success; else test "$MODULES" = skipped; fi
-          if [ "$GITHUB_EVENT_NAME" = push ]; then test "$SECURITY" = skipped; else test "$SECURITY" = success; fi
+          GH_TOKEN: ${{ github.token }}
+          RESULTS: ${{ toJSON(needs) }}
+          PLAN: ${{ needs.plan.outputs.plan }}
+        run: python3 eng/ci/plan_run.py --verify
   publish:
     needs: [plan, verify]
-    if: github.repository == 'IzuSharp/Korda' && needs.plan.outputs.merged == 'true' && needs.plan.outputs.pending == 'true' && vars.NUGET_PUBLISH_ENABLED == 'true'
+    if: >-
+      !cancelled() && needs.verify.result == 'success' && github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' && github.repository == 'IzuSharp/Korda' &&
+      fromJSON(needs.plan.outputs.plan).releases[0] != null && vars.NUGET_PUBLISH_ENABLED == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -125,7 +104,6 @@ jobs:
       id-token: write
     with:
       module: ${{ matrix.module }}
-      artifact: ${{ needs.plan.outputs.from-artifact }}${{ matrix.suffix }}
-      run: ${{ needs.plan.outputs.reuse }}
-      version: 0.1.0-preview.${{ needs.plan.outputs.number }}.2
+      database: ${{ matrix.database }}
+      version: ${{ fromJSON(needs.plan.outputs.plan).versions[matrix.module] }}
       plan: ${{ needs.plan.outputs.plan }}

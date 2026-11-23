@@ -110,16 +110,28 @@ def main():
     if args.command in ("module-check", "module-pack"):
         with postgres(ctx, "pg-server" in plan["module_resources"][args.group]):
             if args.command == "module-pack":
-                version = os.environ.get("NW_VERSION", ctx.variables["version"] + ".2")
-                ctx.call([sys.executable, "eng/ci/module_job.py", "pack", args.group, args.plan, version])
+                version = plan["versions"][args.group]
+                ctx.call(
+                    [
+                        sys.executable,
+                        "eng/ci/module_job.py",
+                        "pack",
+                        args.group,
+                        args.plan,
+                        version,
+                    ]
+                )
             else:
                 field = plan["run_steps"][args.group]
                 if field not in ("run", "integration"):
                     raise ValueError(f"Unexpected check {field}")
-                ctx.call(load_catalog().modules[args.group][field], env={"NW_MODULE": args.group})
+                ctx.call(
+                    load_catalog().modules[args.group][field],
+                    env={"NW_MODULE": args.group},
+                )
         return
     names = plan["actions"][args.group]
-    steps = catalog_steps(args.group, plan["public_checks"], bool(plan["packages"]), plan["grouped_pack"])
+    steps = catalog_steps(args.group)
     if len(set(names)) != len(names) or any(
         dep not in names[:i] for i, name in enumerate(names) for dep in steps[name].needs
     ):

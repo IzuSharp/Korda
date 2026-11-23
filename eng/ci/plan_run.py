@@ -7,30 +7,42 @@ import subprocess
 import sys
 
 from impact import plan_tree
-from promote import candidate_name
+from catalog import git
 
 
-def jobs(plan, event, merged, reuse):
-    if event == "push" and merged and plan["candidates"] and not reuse:
-        raise RuntimeError(
-            "No verified PR candidate matches the merged tree. Revalidate the candidate before publishing."
-        )
-    return {
-        "build": event != "push" and bool(plan["actions"]),
-        "modules": event != "push" and bool(plan["modules"] or plan["module_packages"]),
+def require_checks(plan, results, artifacts):
+    expected = {
+        "plan": True,
+        "security": True,
+        "build": bool(plan["build_scopes"]),
+        "modules": bool(plan["modules"] or plan["module_packages"]),
     }
+    for name, required in expected.items():
+        want = "success" if required else "skipped"
+        if results[name]["result"] != want:
+            raise ValueError(f"{name}: expected {want}, got {results[name]['result']}")
+    packages = set(plan["public_checks"]) | set(plan["module_packages"])
+    missing = {f"candidate-{p}" for p in packages} - artifacts
+    if missing or not set(plan["candidates"]).issubset(packages):
+        raise ValueError(
+            f"Missing verified package artifacts: {sorted(missing or set(plan['candidates']) - packages)}"
+        )
 
 
 def main():
     event = json.loads(Path(os.environ["GITHUB_EVENT_PATH"]).read_text())
     kind = os.environ["GITHUB_EVENT_NAME"]
-    base = (
-        event["pull_request"]["base"]["sha"]
-        if kind == "pull_request"
-        else event["merge_group"]["base_sha"]
-        if kind == "merge_group"
-        else event.get("before") or "HEAD^"
-    )
+    if kind == "push":
+        base = event["before"]
+        if event["after"] != git("rev-parse", "HEAD").decode().strip():
+            raise ValueError("The checkout does not match the pushed commit")
+    elif kind == "pull_request":
+        # The pull_request checkout is GitHub's proposed merge commit.
+        base = git("rev-parse", "HEAD^1").decode().strip()
+    elif kind == "merge_group":
+        base = event["merge_group"]["base_sha"]
+    else:
+        base = "HEAD^"
     replay = (
         event.get("inputs", {}).get("check_paths", "").splitlines() if kind == "workflow_dispatch" else []
     )
@@ -40,29 +52,21 @@ def main():
         kind == "workflow_dispatch"
         and str(event.get("inputs", {}).get("verify_images", "")).lower() == "true"
     )
-    result = plan_tree(base, replay=replay or None, full=full, images=images)
+    result = plan_tree(
+        base,
+        replay=replay or None,
+        full=full,
+        images=images,
+        reconcile=kind == "push" and os.environ["GITHUB_REF"] == "refs/heads/main",
+    )
     output = Path("artifacts/plan.json")
     output.parent.mkdir(exist_ok=True)
     data = json.dumps(result, sort_keys=True, indent=2)
     output.write_text(data + "\n")
     print(data)
-    tree = subprocess.check_output(["git", "rev-parse", "HEAD^{tree}"], text=True).strip()
-    name = candidate_name(
-        tree,
-        result["candidates"],
-        os.environ["GITHUB_RUN_ID"],
-        os.environ["GITHUB_RUN_ATTEMPT"],
-    )
     workflow_plan = {k: v for k, v in result.items() if k != "reasons"}
     with open(os.environ["GITHUB_OUTPUT"], "a") as out:
-        for key, value in {
-            "scope": result["scope"],
-            "deep": str(result["deep"]).lower(),
-            "artifact": name,
-            "pending": str(bool(result["candidates"])).lower(),
-            "plan": json.dumps(workflow_plan, separators=(",", ":")),
-        }.items():
-            print(f"{key}={value}", file=out)
+        print("plan=" + json.dumps(workflow_plan, separators=(",", ":")), file=out)
     with open(os.environ["GITHUB_STEP_SUMMARY"], "a") as out:
         print(
             "Linux checks:",
@@ -86,16 +90,24 @@ def main():
 
 
 if __name__ == "__main__":
-    if sys.argv[1:] == ["--jobs"]:
-        plan = json.loads(Path("artifacts/plan.json").read_text())
-        selected = jobs(
-            plan,
-            os.environ["GITHUB_EVENT_NAME"],
-            os.environ["MERGED"] == "true",
-            os.environ["REUSE"],
-        )
-        with open(os.environ["GITHUB_OUTPUT"], "a") as out:
-            for job, required in selected.items():
-                print(f"{job}={str(required).lower()}", file=out)
+    if sys.argv[1:] == ["--verify"]:
+        plan = json.loads(os.environ["PLAN"])
+        packages = plan["public_checks"] or plan["module_packages"]
+        artifacts = set()
+        if packages:
+            endpoint = f"repos/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}/artifacts"
+            names = subprocess.check_output(
+                [
+                    "gh",
+                    "api",
+                    "--paginate",
+                    endpoint,
+                    "--jq",
+                    ".artifacts[] | select(.expired == false) | .name",
+                ],
+                text=True,
+            )
+            artifacts.update(names.splitlines())
+        require_checks(plan, json.loads(os.environ["RESULTS"]), artifacts)
     else:
         main()

@@ -11,7 +11,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "eng/ci"))
 from catalog import Catalog, git, load_catalog
 from facts import files
 from impact import make_plan, plan_tree
-from plan_run import jobs
+from plan_run import require_checks
 from runner import Action, Context, ordered
 
 
@@ -67,18 +67,56 @@ class RoutingTests(unittest.TestCase):
         self.assertEqual(plan["packages"], ["sqlite"])
         self.assertEqual(plan["public_checks"], ["sqlite"])
         self.assertIn("public.validate", self.actions(plan))
-        self.assertEqual(plan["resources"]["linux"], ["design", "dotnet", "native"])
-        self.assertFalse(plan["grouped_pack"])
+        self.assertEqual(plan["resources"]["sqlite"], ["design", "dotnet", "native"])
 
-    def test_single_public_bundle_reuses_components_required_by_another_check(self):
-        plan = self.plan("src/Data.Sqlite/SqliteOptions.cs", "tests/Verification.EndToEnd/api_probe.py")
+    def test_package_and_shared_checks_have_independent_workdirs(self):
+        plan = self.plan(
+            "src/Data.Sqlite/SqliteOptions.cs",
+            "tests/Verification.EndToEnd/api_probe.py",
+        )
         self.assertEqual(plan["packages"], ["sqlite"])
-        self.assertTrue(plan["grouped_pack"])
-        self.assertIn("database.pack", self.actions(plan))
-        from database_plan import catalog_steps
+        self.assertIn("database.pack", plan["actions"]["linux"])
+        self.assertIn("sqlite.build", plan["actions"]["sqlite"])
+        self.assertNotIn("database.pack", plan["actions"]["sqlite"])
+        self.assertNotIn("pg-server", plan["resources"]["sqlite"])
 
-        steps = catalog_steps("linux", plan["public_checks"], True, plan["grouped_pack"])
-        self.assertEqual(steps["public.pack"].needs, ("database.pack",))
+    def test_provider_metadata_validates_only_its_own_archive(self):
+        for path, providers in (
+            ("packaging/providers/sqlite.txt", {"sqlite"}),
+            ("packaging/providers/postgresql.txt", {"postgresql"}),
+            ("packaging/providers/README.md", {"postgresql", "sqlite"}),
+            ("eng/ci/registry.py", {"postgresql", "sqlite"}),
+        ):
+            with self.subTest(path=path):
+                plan = self.plan(path)
+                self.assertEqual(set(plan["build_scopes"]), providers)
+                for provider in providers:
+                    self.assertEqual(
+                        set(plan["actions"][provider]),
+                        {
+                            provider + ".build",
+                            "public.pack",
+                            "public.consume-aot",
+                            "public.validate",
+                        },
+                    )
+
+    def test_packed_signatures_follow_managed_and_layout_inputs(self):
+        for path, providers in (
+            ("src/Data.Sqlite/SqliteOptions.cs", {"sqlite"}),
+            ("src/Data.Postgres/Korda.Database.PostgreSql.csproj", {"postgresql"}),
+            ("src/Query.Generator/Korda.Query.Generator.csproj", {"sqlite", "postgresql"}),
+            ("eng/ci/bundles.py", {"sqlite", "postgresql"}),
+            ("src/Packaging.Linux/packages.py", {"sqlite", "postgresql"}),
+        ):
+            with self.subTest(path=path):
+                plan = self.plan("packaging/providers/README.md", path)
+                for provider in ("sqlite", "postgresql"):
+                    actions = plan["actions"][provider]
+                    self.assertEqual(provider + ".packed-api" in actions, provider in providers)
+                    self.assertNotIn(provider + ".api", actions)
+                    if provider in providers:
+                        self.assertLess(actions.index("public.pack"), actions.index(provider + ".packed-api"))
 
     def test_independent_api_surfaces(self):
         for path, expected in (
@@ -111,8 +149,8 @@ class RoutingTests(unittest.TestCase):
         result = self.plan("src/Data.Sqlite/SqliteOptions.cs", "src/Data.Codecs/ParameterSnapshot.cs")
         from database_plan import catalog_steps
 
-        steps = catalog_steps("linux", result["public_checks"], True, result["grouped_pack"])
-        for selected in result["actions"].values():
+        for scope, selected in result["actions"].items():
+            steps = catalog_steps(scope)
             for index, name in enumerate(selected):
                 self.assertLessEqual(set(steps[name].needs), set(selected[:index]))
 
@@ -199,17 +237,17 @@ class RoutingTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "Unregistered"):
                     plan_tree(self.tree, bad)
 
-    def test_merge_reuses_only_verified_artifacts(self):
-        plan = {
-            "actions": {"linux": ["test"]},
-            "modules": [],
-            "module_packages": [],
-            "candidates": ["sqlite"],
-        }
-        self.assertTrue(jobs(plan, "pull_request", False, "")["build"])
-        self.assertFalse(jobs(plan, "push", True, "123")["build"])
-        with self.assertRaisesRegex(RuntimeError, "verified PR candidate"):
-            jobs(plan, "push", True, "")
+    def test_verify_requires_every_selected_package(self):
+        plan = self.plan("src/Data.Codecs/ParameterSnapshot.cs")
+        results = {n: {"result": "success"} for n in ("plan", "build", "security")}
+        results["modules"] = {"result": "skipped"}
+        verified = {"candidate-postgresql", "candidate-sqlite"}
+        require_checks(plan, results, verified)
+        for missing in verified:
+            with self.assertRaisesRegex(ValueError, "Missing verified package"):
+                require_checks(plan, results, verified - {missing})
+        with self.assertRaisesRegex(ValueError, "build: expected success"):
+            require_checks(plan, results | {"build": {"result": "skipped"}}, verified)
 
     def test_unknown_and_cyclic_actions_and_failed_dependency(self):
         nodes = {
