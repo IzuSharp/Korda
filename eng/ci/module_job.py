@@ -3,6 +3,7 @@ import argparse
 import json
 import os
 import subprocess
+import tempfile
 import zipfile
 from pathlib import Path
 
@@ -15,13 +16,18 @@ def command(argv, env):
     subprocess.run(argv, cwd=ROOT, env=os.environ | env, check=True)
 
 
+def consume(spec, env):
+    with tempfile.TemporaryDirectory(prefix="nativeweave-consumer-") as cache:
+        command(spec["consume"], env | {"NUGET_PACKAGES": cache})
+
+
 def execute(action, name, plan, version):
     spec = load_catalog().modules[name]
     env = {"NW_MODULE": name, "NW_VERSION": version}
     if action == "public":
         if name not in plan["candidates"]:
             raise ValueError("Unexpected public consumer: " + name)
-        command(spec["consume"], env | {"NW_PACKAGE": spec["package"], "NW_FEED": "https://api.nuget.org/v3/index.json"})
+        consume(spec, env | {"NW_PACKAGE": spec["package"], "NW_FEED": "https://api.nuget.org/v3/index.json"})
         return
     if action == "check":
         command(spec[plan["run_steps"][name]], env)
@@ -48,7 +54,7 @@ def execute(action, name, plan, version):
                   packages=[dict(id=identity, version=version, source_commit=commit, dependencies={},
                                  upload_archive_sha256=compat.file_hash(path), unsigned_entries=compat.package_entries(path))])
     compat.validate_closure(record, {identity: path})
-    command(spec["consume"], env)
+    consume(spec, env)
     if git("status", "--porcelain").strip() or compat.file_hash(path) != record["packages"][0]["upload_archive_sha256"]:
         raise ValueError("Module check changed the candidate or source tree")
     (OUT / "release.json").write_text(json.dumps(record, indent=2) + "\n")

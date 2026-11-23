@@ -100,6 +100,15 @@ class ImpactTests(unittest.TestCase):
         self.catalog.add_project_references([("gpu/gpu.csproj", '<Project><ItemGroup><ProjectReference Include="../compiler/tool.csproj"/></ItemGroup></Project>')])
         self.assertEqual(["compiler", "gpu"], self.plan(["compiler/source.cpp"], stale={"qt"})["modules"])
 
+    def test_new_dependency_of_both_database_packages_runs_real_consumers(self):
+        modules = self.catalog.modules.copy()
+        modules["utilities"] = {"sources": ["util/"], "run": ["check-util"]}
+        modules["database"] = dict(modules["database"], depends=modules["database"]["depends"] + ["utilities"])
+        self.catalog = Catalog(modules)
+        result = self.plan(["util/source.cpp"], stale={"sqlite", "postgresql"})
+        self.assertEqual(("full", ["utilities"], ["postgresql", "sqlite"], True),
+                         (result["scope"], result["modules"], result["packages"], result["consume"]))
+
     def test_removal_with_new_registry_and_invalid_registrations(self):
         before = Catalog({"lib": {"sources": ["old/"]}, "api": {"depends": ["lib"], "run": ["verify"]}})
         after = Catalog({"api": {"tests": ["eng/ci/modules/"], "run": ["verify"]}})

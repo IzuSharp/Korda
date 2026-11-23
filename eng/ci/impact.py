@@ -27,8 +27,12 @@ def fingerprints(catalog, entries):
                 if module in catalog.dependencies(name):
                     digest.update(entry + b"\0")
     for name, digest in digests.items():
+        for module in sorted(catalog.dependencies(name)):
+            spec = catalog.modules[module]
+            if spec.get("artifacts"):
+                digest.update(json.dumps([module, spec["artifacts"], spec["run"]]).encode())
         if catalog.modules[name].get("pack"):
-            digest.update(json.dumps(catalog.modules[name]["pack"]).encode())
+            digest.update(json.dumps([catalog.packages[name], catalog.modules[name]["pack"]]).encode())
     return {name: digest.hexdigest() for name, digest in digests.items()}
 
 
@@ -61,6 +65,7 @@ def solution_projects(path, entry):
 
 def classify(paths, catalog, entries, previous):
     direct, affected_packages, affected_modules, reasons = set(), set(), set(), {}
+    owners = set()
     for path in paths:
         graph = catalog if path in entries else previous
         module, kind = graph.owner(path)
@@ -68,6 +73,8 @@ def classify(paths, catalog, entries, previous):
         if module in catalog.modules:
             direct.add(module)
         if kind == "sources":
+            if module in catalog.modules:
+                owners.add(module)
             consumers = graph.consumers({module})
             affected_modules.update(consumers & catalog.modules.keys())
             affected_packages.update(consumers & catalog.packages.keys())
@@ -84,7 +91,6 @@ def classify(paths, catalog, entries, previous):
                     affected_packages.update(consumers & catalog.packages.keys())
     # An aggregate source edit exercises its own included components. A test-only
     # edit, or an edit in one of its children, does not pull in its siblings.
-    owners = {catalog.owner(p)[0] for p in paths if p in entries and catalog.owner(p)[1] == "sources"}
     for owner in owners:
         for child in catalog.modules[owner].get("includes", []):
             affected_modules.update(catalog.dependencies(child))
@@ -122,6 +128,10 @@ def make_plan(catalog, paths, entries, previous, full=False, old_entries=None):
         eligible.update(db)  # Recover an outstanding release only inside this package family.
     pending = {p for p in eligible if published[p].get("inputs") != hashes[p]}
     selected = set(catalog.modules) if full else direct | consumers
+    if touched & db and not db_checks.intersection({"full", "deep", "pack", "task", *db}):
+        # A shared module can acquire database consumers through a project reference
+        # without having a database-specific check of its own.
+        db_checks.update(touched & db)
     result = build_plan(db_checks, touched & db, pending & db, published, full)
     run_steps = {}
     for name in selected:
@@ -140,7 +150,8 @@ def make_plan(catalog, paths, entries, previous, full=False, old_entries=None):
         languages.update(("csharp", "python"))
     releases = ([{"module": "", "suffix": ""}] if pending & db else [])
     releases.extend({"module": p, "suffix": "-" + p} for p in sorted(pending - db))
-    module_packages = sorted((set(catalog.packages) if full else pending) - db)
+    validate_packages = set(catalog.packages) if full else pending | (direct & catalog.packages.keys())
+    module_packages = sorted(validate_packages - db)
     return dict(result, inputs=hashes, published=published, packages=sorted(pending & db),
                 candidates=sorted(pending), releases=releases, modules=modules, run_steps=run_steps, languages=sorted(languages),
                 artifacts={n: catalog.modules[n]["artifacts"] for n in modules if "artifacts" in catalog.modules[n]},
