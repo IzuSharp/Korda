@@ -10,6 +10,8 @@ references **one** standalone provider package. It executes real database checks
 bootstraps customer and composite-key order scaffolds, compiles them into a
 baseline, then modifies only the DTO source and verifies that both compared AOT
 builds load the same packaged native image.
+The edited run also sets `DtoEdit=true` to select the matching managed projection
+and SQL branches in `Program.cs`. The native package and library remain identical.
 
 ## Run one provider
 

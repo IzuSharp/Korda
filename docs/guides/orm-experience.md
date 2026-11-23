@@ -109,6 +109,8 @@ checks the actual restored graph and runs a scaffold bootstrap. It then publishe
 and executes a baseline containing both generated entities, edits only the DTO
 source to add its version field, and publishes/executes again. All loaded
 provider hashes must equal the exact `.nupkg` payload. Only `Models.cs` changes between the baseline and edited source snapshots.
+The `DtoEdit` build property also selects the corresponding managed projection
+and SQL branches already present in `Program.cs`; it does not change native inputs.
 The native library is never rebuilt by the consumer.
 
 The process reports two SQL dispatches for one page plus its batched details.
