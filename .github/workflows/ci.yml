@@ -6,6 +6,10 @@ on:
   merge_group:
   workflow_dispatch:
     inputs:
+      verify_images:
+        description: "Include clean-image, runtime-transfer and minimum-CPU checks in a full run"
+        type: boolean
+        default: false
       check_paths:
         description: "Optional: replay test or documentation paths, one per line. Empty runs the full suite."
         type: string

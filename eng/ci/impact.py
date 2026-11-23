@@ -70,7 +70,7 @@ def classify(paths, catalog, entries, previous):
     return direct, affected_modules, affected_packages, reasons
 
 
-def make_plan(catalog, paths, entries, previous, full=False, old_entries=None):
+def make_plan(catalog, paths, entries, previous, full=False, old_entries=None, *, images=False):
     direct, consumers, touched, reasons = classify(paths, catalog, entries, previous)
     if old_entries is not None:
         # The solution is an index shared by otherwise independent products.
@@ -104,6 +104,7 @@ def make_plan(catalog, paths, entries, previous, full=False, old_entries=None):
         previous=previous,
         entries=entries,
         full=full,
+        images=images,
     )
     run_steps = {}
     for name in selected:
@@ -144,7 +145,7 @@ def make_plan(catalog, paths, entries, previous, full=False, old_entries=None):
     )
 
 
-def plan_tree(base, tree="HEAD", *, replay=None, full=False):
+def plan_tree(base, tree="HEAD", *, replay=None, full=False, images=False):
     paths = changed_paths(base, tree) if replay is None else replay
     catalog = load_catalog(tree)
     previous = catalog
@@ -157,7 +158,7 @@ def plan_tree(base, tree="HEAD", *, replay=None, full=False):
         for p in replay:
             if p not in entries or catalog.owner(p)[1] != "tests":
                 raise ValueError("Replay accepts tracked test or documentation paths only: " + p)
-    return make_plan(catalog, paths, entries, previous, full, old_files)
+    return make_plan(catalog, paths, entries, previous, full, old_files, images=images)
 
 
 def main():
@@ -165,9 +166,14 @@ def main():
     parser.add_argument("base")
     parser.add_argument("--tree", default="HEAD")
     parser.add_argument("--full", action="store_true")
+    parser.add_argument(
+        "--images", action="store_true", help="Include clean images and CPU emulation in a full run"
+    )
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
-    data = json.dumps(plan_tree(args.base, args.tree, full=args.full), indent=2, sort_keys=True)
+    data = json.dumps(
+        plan_tree(args.base, args.tree, full=args.full, images=args.images), indent=2, sort_keys=True
+    )
     print(data)
     if args.output:
         args.output.parent.mkdir(exist_ok=True, parents=True)

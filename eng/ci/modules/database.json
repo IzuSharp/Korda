@@ -137,11 +137,11 @@
   },
   "linux-package-tests": {
     "tests": ["tests/Packaging.Linux/", "eng/verify-task04-linux.sh"],
-    "checks": ["elf.test", "weekly.runtime"]
+    "checks": ["elf.test", "image.runtime"]
   },
   "domain-package-tests": {
     "tests": ["tests/Packaging.Domain/", "tests/Packaging.Release/", "eng/verify-task07-linux.sh"],
-    "checks": ["domain.consume-aot", "weekly.transfer"]
+    "checks": ["domain.consume-aot", "image.transfer"]
   },
   "native-acceptance-tests": {
     "tests": ["tests/Migration.Cpp/"],
@@ -181,7 +181,7 @@
   },
   "native-clean-check": {
     "tests": ["eng/verify-cpp-clean.sh"],
-    "checks": ["weekly.clean-build"]
+    "checks": ["image.clean-build"]
   },
   "api-checks": {
     "tests": ["public-api-standard.json"],

@@ -55,7 +55,7 @@ def catalog_steps(scope, public=(), validate=False, grouped=False):
     return steps
 
 
-def plan_actions(catalog, reasons, direct, touched, pending, *, previous, entries, full):
+def plan_actions(catalog, reasons, direct, touched, pending, *, previous, entries, full, images=False):
     desired = set()
     deferred = set()
     tested_public = set(pending)
@@ -87,15 +87,19 @@ def plan_actions(catalog, reasons, direct, touched, pending, *, previous, entrie
         desired.update(
             {
                 "weekly.sanitizers",
-                "weekly.runtime",
-                "weekly.clean-build",
-                "weekly.transfer",
+                "image.runtime",
+                "image.clean-build",
+                "image.transfer",
                 "manual.migration",
             }
         )
-    else:
+    if not full:
         deferred = {a for a in desired if a.startswith("weekly.")}
         desired -= deferred
+    if not (full and images):
+        image_actions = {a for a in desired if a.startswith("image.")}
+        deferred.update(image_actions)
+        desired -= image_actions
     if len(tested_public) > 1 or "database.regressions" in desired:
         if any(p + ".dependencies" in desired for p in PROVIDERS):
             desired -= {p + ".dependencies" for p in PROVIDERS}

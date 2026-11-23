@@ -36,7 +36,11 @@ def main():
     )
     replay = [p.strip() for p in replay if p.strip()]
     full = kind == "schedule" or (kind == "workflow_dispatch" and not replay)
-    result = plan_tree(base, replay=replay or None, full=full)
+    images = (
+        kind == "workflow_dispatch"
+        and str(event.get("inputs", {}).get("verify_images", "")).lower() == "true"
+    )
+    result = plan_tree(base, replay=replay or None, full=full, images=images)
     output = Path("artifacts/plan.json")
     output.parent.mkdir(exist_ok=True)
     data = json.dumps(result, sort_keys=True, indent=2)
@@ -68,7 +72,7 @@ def main():
             file=out,
         )
         print(
-            "\nScheduled checks:",
+            "\nDeferred checks:",
             ", ".join(result["deferred"]) or "none",
             "\n\nCodeQL:",
             ", ".join(result["languages"]) or "none",

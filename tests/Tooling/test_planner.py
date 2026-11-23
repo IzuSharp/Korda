@@ -118,8 +118,18 @@ class RoutingTests(unittest.TestCase):
 
     def test_historical_images_only_run_in_extended_validation(self):
         plan = self.plan("tests/Packaging.Linux/verify.py", "tests/Migration.Cpp/run.py")
-        self.assertEqual(set(plan["deferred"]), {"weekly.runtime", "manual.migration"})
+        self.assertEqual(set(plan["deferred"]), {"image.runtime", "manual.migration"})
         self.assertNotIn("qemu", set().union(*plan["resources"].values()))
+
+    def test_weekly_stays_on_host_and_images_require_explicit_full_run(self):
+        images = {"image.runtime", "image.clean-build", "image.transfer"}
+        weekly = make_plan(self.graph, [], self.entries, self.graph, full=True)
+        self.assertTrue(images.isdisjoint(self.actions(weekly)))
+        self.assertLessEqual(images, set(weekly["deferred"]))
+        self.assertIn("weekly.sanitizers", self.actions(weekly))
+        explicit = make_plan(self.graph, [], self.entries, self.graph, full=True, images=True)
+        self.assertLessEqual(images, self.actions(explicit))
+        self.assertNotIn("manual.migration", self.actions(explicit))
 
     def test_new_language_and_module_do_not_select_database(self):
         graph = Catalog(

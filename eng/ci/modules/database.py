@@ -142,13 +142,13 @@ def recipes():
         resources=("dotnet",),
     )
     add(
-        "weekly.runtime",
+        "image.runtime",
         ("bash", "eng/verify-task04-linux.sh"),
         needs=("database.native",),
         resources=("dotnet", "qemu", "pg-server", "design"),
     )
     add(
-        "weekly.transfer",
+        "image.transfer",
         ("bash", "eng/verify-task07-linux.sh"),
         needs=("database.pack",),
         resources=("pg-server", "design"),
@@ -159,7 +159,7 @@ def recipes():
         resources=(*native, "pg-server"),
     )
     add(
-        "weekly.clean-build",
+        "image.clean-build",
         ("bash", "eng/verify-cpp-clean.sh"),
         needs=("database.native",),
         resources=("scope-design", "dotnet", "pg-server"),
