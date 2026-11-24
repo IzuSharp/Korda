@@ -101,5 +101,5 @@
   "allowExistingSudoForTaskPidOnly": true,
   "wholeBatchAcceptance": false,
   "acceptedLongSegments": 0,
-  "activationNote": "Separate CPU/plan diagnosis on the immutable observed runtime; all original application bytes unchanged; no formal timing or long-run credit."
+  "activationNote": "Continue the same immutable CPU/plan diagnosis after preserving run 45470764239 attempt 2: accept the observed perf ACK terminal NUL and fragmented valid frames. Runtime, original ELF, workload, sampling scope and plan contracts are unchanged; no formal timing or long-run credit."
 }

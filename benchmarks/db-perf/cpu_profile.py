@@ -372,6 +372,18 @@ def verify_perf_data(path, expected):
                 "ordinaryObserverReadVerified": True, "permissionOrOwnershipChanges": False}
 
 
+def perf_ack_state(reply):
+    # perf v6.8.12 writes sizeof("ack\n"), including its terminal NUL.
+    # The legacy four-byte form is also accepted, but only at the deadline so
+    # a fragmented optional NUL cannot be mistaken for a later control frame.
+    require(len(reply) <= 5 and b"ack\n\0".startswith(reply), "Invalid or multiple perf ACK frames")
+    if reply == b"ack\n\0":
+        return "nul-complete"
+    if reply == b"ack\n":
+        return "legacy-complete"
+    return "prefix"
+
+
 def start_perf(perf, tool, child, identity, directory, request, runner):
     attempts = []
     for privileged in (False, True):
@@ -411,19 +423,43 @@ def start_perf(perf, tool, child, identity, directory, request, runner):
         attempts.append(record)
         write(directory / "perf-start-attempts.json", attempts)
         deadline = time.monotonic() + 8
+        reply = b""
+        ack_state = "prefix"
+        record["ackFragmentsHex"] = []
         os.write(control_fd, b"enable\n")
         while time.monotonic() < deadline and process.poll() is None:
             if select.select([ack_fd], [], [], 0.1)[0]:
-                reply = os.read(ack_fd, 1024)
+                fragment = os.read(ack_fd, 1024)
+                record["ackFragmentsHex"].append(fragment.hex())
+                reply += fragment
                 record["ackBytes"] = reply.decode(errors="replace")
-                if reply == b"ack\n":
-                    record["enabledAck"] = True
-                    record["enabledAckMonotonicNs"] = time.monotonic_ns()
-                    write(directory / "perf-start-attempts.json", attempts)
-                    return {"process": process, "control": control_fd, "ack": ack_fd,
-                            "stdout": stdout, "stderr": stderr, "data": data,
-                            "record": record, "attempts": attempts, "controlPath": control, "ackPath": ack}
-                break
+                record["ackHex"] = reply.hex()
+                try:
+                    ack_state = perf_ack_state(reply)
+                except ValueError as error:
+                    record["ackError"] = error_record(error)
+                    break
+                if ack_state == "nul-complete":
+                    break
+        # Reject any additional already queued bytes as another/overlong frame.
+        if "ackError" not in record and select.select([ack_fd], [], [], 0)[0]:
+            fragment = os.read(ack_fd, 1024)
+            record["ackFragmentsHex"].append(fragment.hex())
+            reply += fragment
+            record.update(ackBytes=reply.decode(errors="replace"), ackHex=reply.hex())
+            try:
+                ack_state = perf_ack_state(reply)
+            except ValueError as error:
+                record["ackError"] = error_record(error)
+        if "ackError" not in record and process.poll() is None and (
+                ack_state == "nul-complete" or ack_state == "legacy-complete" and time.monotonic() >= deadline):
+            record["enabledAck"] = True
+            record["ackFormat"] = ack_state
+            record["enabledAckMonotonicNs"] = time.monotonic_ns()
+            write(directory / "perf-start-attempts.json", attempts)
+            return {"process": process, "control": control_fd, "ack": ack_fd,
+                    "stdout": stdout, "stderr": stderr, "data": data,
+                    "record": record, "attempts": attempts, "controlPath": control, "ackPath": ack}
         os.write(control_fd, b"stop\n")
         try:
             process.wait(timeout=12)
@@ -668,6 +704,25 @@ def self_test():
     count = 0
     with tempfile.TemporaryDirectory(prefix="db-perf-cpu-controls-") as temporary:
         root = Path(temporary)
+        for fragments in ([b"ack\n\0"], [b"a", b"c", b"k", b"\n", b"\0"], [b"ack\n", b"\0"]):
+            reply = b""
+            for fragment in fragments:
+                reply += fragment
+                state = perf_ack_state(reply)
+            require(state == "nul-complete", "Actual perf ACK or its valid fragments were rejected")
+            count += 1
+        require(perf_ack_state(b"ack\n") == "legacy-complete", "Legacy ACK was not distinguished from the NUL form")
+        count += 1
+        for prefix in (b"", b"a", b"ac", b"ack"):
+            require(perf_ack_state(prefix) == "prefix", "An incomplete ACK was accepted")
+            count += 1
+        for invalid in (b"ACK\n", b"ack\0", b"ack\r\n", b"\0ack\n", b"ack\n\0x", b"ack\nack\n", b"ack\n\0ack\n\0"):
+            try:
+                perf_ack_state(invalid)
+            except ValueError:
+                count += 1
+            else:
+                raise AssertionError("Invalid, overlong or multiple ACK frames were accepted")
         output = root / "perf.data"
         before = create_perf_data(output)
         output.write_bytes(b"controlled output; no perf invocation")
@@ -738,7 +793,7 @@ def self_test():
                 raise AssertionError("Altered executable/symbol bytes were accepted")
             target.write_bytes(saved)
     print(json.dumps({"controlsPassed": count, "databaseExecutions": 0, "perfExecutions": 0,
-                      "scope": "pure sample/ELF identity controls; not actual profiling"}))
+                      "scope": "pure ACK/sample/file/ELF identity controls; not actual profiling"}))
 
 
 def main():
