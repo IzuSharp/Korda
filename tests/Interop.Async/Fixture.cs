@@ -113,13 +113,19 @@ internal static unsafe partial class Fixture
     }
     internal static NativeResourceOwner New(uint mode = 0, byte[]? bytes = null)
     {
+        var handle = NewHandle(mode, bytes);
+        try { return new(handle); }
+        catch { handle.Dispose(); throw; }
+    }
+    internal static OperationHandle NewHandle(uint mode = 0, byte[]? bytes = null)
+    {
         var handle = new OperationHandle();
         try
         {
             if (Create(mode, bytes ?? [1, 2, 3], 0, out nint pointer) != NativeStatus.Ok)
                 throw new InvalidOperationException("Fixture create failed.");
             handle.Adopt(pointer);
-            return new(handle);
+            return handle;
         }
         catch { handle.Dispose(); throw; }
     }

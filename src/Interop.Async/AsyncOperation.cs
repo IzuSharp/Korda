@@ -35,7 +35,7 @@ internal enum AsyncBoundary { BeforeRoot, RootAllocated, BeforeRegister, Registe
 internal abstract class AsyncOperation : CoordinatedCallback, IDisposable, IAsyncDisposable
 {
     private readonly object _gate = new();
-    private readonly NativeResourceOwner _owner;
+    private readonly IDisposable _owner;
     private readonly AsyncNativeCalls _native;
     private readonly CallbackCoordinator _coordinator;
     private readonly CancellationToken _token;
@@ -85,6 +85,19 @@ internal abstract class AsyncOperation : CoordinatedCallback, IDisposable, IAsyn
 
     protected AsyncOperation(NativeResourceOwner owner, AsyncNativeCalls native, CallbackCoordinator coordinator,
         CancellationToken cancellationToken, IDisposable? inputLifetime, long inputBytes,
+        ICallbackScheduler? scheduler, Action<AsyncBoundary>? testBoundary)
+        : this((IDisposable)owner, native, coordinator, cancellationToken, inputLifetime, inputBytes, scheduler, testBoundary) { }
+
+    private AsyncOperation(SafeHandle owner, AsyncNativeCalls native, CallbackCoordinator coordinator,
+        CancellationToken cancellationToken, IDisposable? inputLifetime, long inputBytes,
+        ICallbackScheduler? scheduler, Action<AsyncBoundary>? testBoundary)
+        : this(ValidateOwner(owner), native, coordinator, cancellationToken, inputLifetime, inputBytes, scheduler, testBoundary) { }
+
+    // The only owner forms are the general owner contract and an exclusively
+    // transferred SafeHandle on the private retired-result path. One reference
+    // keeps the ordinary Task context's storage unchanged.
+    private AsyncOperation(IDisposable owner, AsyncNativeCalls native, CallbackCoordinator coordinator,
+        CancellationToken cancellationToken, IDisposable? inputLifetime, long inputBytes,
         ICallbackScheduler? scheduler, Action<AsyncBoundary>? testBoundary) : base(scheduler)
     {
         ArgumentNullException.ThrowIfNull(owner);
@@ -107,6 +120,13 @@ internal abstract class AsyncOperation : CoordinatedCallback, IDisposable, IAsyn
             _slot = coordinator.Reserve(this);
         }
         catch { _root.Free(); _rootLive = false; throw; }
+    }
+
+    private static IDisposable ValidateOwner(SafeHandle owner)
+    {
+        ArgumentNullException.ThrowIfNull(owner);
+        if (owner.IsClosed || owner.IsInvalid) throw new ArgumentException("An open, valid native owner is required.", nameof(owner));
+        return owner;
     }
 
     internal Task Retirement
@@ -255,15 +275,41 @@ internal abstract class AsyncOperation : CoordinatedCallback, IDisposable, IAsyn
             if (_released || _releasing || (!cleanup && _closing)) return false;
             checked { _controls++; }
         }
-        try { pointer = _owner.Acquire(ref acquired); return true; }
-        catch { lock (_gate) _controls--; Signal(); throw; }
+        try
+        {
+            if (_owner is NativeResourceOwner resource) pointer = resource.Acquire(ref acquired);
+            else
+            {
+                var handle = (SafeHandle)_owner;
+                bool physical = false;
+                try
+                {
+                    handle.DangerousAddRef(ref physical);
+                    pointer = handle.DangerousGetHandle();
+                    acquired = true;
+                }
+                catch { if (physical) handle.DangerousRelease(); throw; }
+                finally { GC.KeepAlive(_native); }
+            }
+            return true;
+        }
+        catch { acquired = false; lock (_gate) _controls--; Signal(); throw; }
     }
 
     internal void ReleaseControl(ref bool acquired) => ReleaseControl(ref acquired, notify: true);
     private void ReleaseControl(ref bool acquired, bool notify)
     {
         if (!acquired) return;
-        try { _owner.Release(ref acquired); }
+        try
+        {
+            if (_owner is NativeResourceOwner resource) resource.Release(ref acquired);
+            else
+            {
+                acquired = false;
+                try { ((SafeHandle)_owner).DangerousRelease(); }
+                finally { GC.KeepAlive(_native); }
+            }
+        }
         finally { lock (_gate) _controls--; if (notify) Signal(); }
     }
 
@@ -550,7 +596,8 @@ internal abstract class AsyncOperation : CoordinatedCallback, IDisposable, IAsyn
                 _callbackEntries != 0 || _releasing) return;
             _releasing = true;
         }
-        _owner.Dispose();
+        try { _owner.Dispose(); }
+        finally { GC.KeepAlive(_native); }
         _inputLifetime?.Dispose();
         _root.Free();
         lock (_gate) { _rootLive = false; _released = true; }
@@ -601,6 +648,20 @@ internal abstract class AsyncOperation : CoordinatedCallback, IDisposable, IAsyn
         private byte _outcome;
 
         internal RetiredValueTask(NativeResourceOwner owner, AsyncNativeCalls native, CallbackCoordinator coordinator,
+            Func<nint, TResult> takeAndMaterialize, CancellationToken cancellationToken = default,
+            IDisposable? inputLifetime = null, long inputBytes = 0, ICallbackScheduler? scheduler = null,
+            Action<AsyncBoundary>? testBoundary = null)
+            : base(owner, Validate(native, takeAndMaterialize), coordinator, cancellationToken, inputLifetime,
+                inputBytes, scheduler, testBoundary)
+        {
+            _takeAndMaterialize = takeAndMaterialize;
+            _completion.RunContinuationsAsynchronously = true;
+        }
+
+        // Only this private bridge transfers a fresh handle directly. Its
+        // control count prevents disposal during physical AddRef/Release;
+        // successful construction, not Start, transfers ownership.
+        internal RetiredValueTask(SafeHandle owner, AsyncNativeCalls native, CallbackCoordinator coordinator,
             Func<nint, TResult> takeAndMaterialize, CancellationToken cancellationToken = default,
             IDisposable? inputLifetime = null, long inputBytes = 0, ICallbackScheduler? scheduler = null,
             Action<AsyncBoundary>? testBoundary = null)

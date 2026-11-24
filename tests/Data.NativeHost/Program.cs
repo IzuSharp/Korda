@@ -74,6 +74,7 @@ internal static class Suite
             await Throws<ArgumentException>(() => session.ScalarAsync(quotedHole, Codecs.Int64));
             var projection = Projection<Row>.Create([ResultField.Create("id", Codecs.Int64), ResultField.Create("name", Codecs.String)], row => new(row.Read(0, Codecs.Int64), row.Read(1, Codecs.String)));
             await NativeBatches(source, session, table, projection);
+            await PrivateFetchOwnerFailures(source, session, table, projection);
             var rows = await session.QueryAsync(SqlCommand.Create("SELECT id,name FROM " + table + " ORDER BY id"), projection);
             Check(rows.Count == 7 && rows[6].Id == 7 && rows[0].Name == "row 1", "multi-batch owned materialization");
             var empty = await session.QueryAsync(SqlCommand.Create("SELECT id,name FROM " + table + " WHERE id<0"), projection); Check(empty.Count == 0, "empty canonical EOS");
@@ -184,6 +185,37 @@ internal static class Suite
             Check(BinaryPrimitives.ReadUInt32LittleEndian(second.Copy().AsSpan(56)) == 2, "native per-fetch two-row demand after prior buffer release");
         }
         finally { close.Request(); await close.JoinAsync(); }
+    }
+    private static async Task PrivateFetchOwnerFailures(DataSource source, DataSession session, string table, Projection<Row> projection)
+    {
+        var id = source.RegisterProjection(projection);
+        foreach (var fault in new[] { AsyncBoundary.BeforeRoot, AsyncBoundary.RootAllocated, AsyncBoundary.BeforeRegister,
+            AsyncBoundary.Registered, AsyncBoundary.BeforeStart, AsyncBoundary.StartReturned, AsyncBoundary.BeforeTake })
+        {
+            using var plan = SqlSubmission.Create(session, SqlCommand.Create("SELECT id,name FROM " + table + " ORDER BY id"), 3, id);
+            using var cursor = await session.ExecutePlanAsync(plan, ReadOnlyMemory<byte>.Empty, default);
+            var close = new CloseController(source, cursor, cursor.Dispose);
+            var original = new MappingFailure();
+            try
+            {
+                source.TestBoundary = boundary => { if (boundary == fault) throw original; };
+                var failure = await Throws<MappingFailure>(async () =>
+                {
+                    using var batch = await source.StartRetiredValueTask(
+                        () => NativeHost.Fetch(cursor, 3, source.Limits.MaxBatchBytes),
+                        operation => NativeHost.TakeBuffer(source.Binding, operation), default);
+                });
+                Check(ReferenceEquals(failure, original), "private fetch preserves constructor/setup/take failure identity");
+            }
+            finally
+            {
+                source.TestBoundary = null;
+                await close.JoinAsync();
+                Check(close.Snapshot.LocalResourcesReleased, "private failed fetch releases cursor ownership before reuse");
+            }
+        }
+        Check(await session.ScalarAsync(SqlCommand.Create("SELECT COUNT(*) FROM " + table), Codecs.Int64) == 7,
+            "private fetch fault compensation leaves the real session usable");
     }
     private static void InspectNativeBatch(HostStreamBatch batch, Korda.Database.NativeBuffer owner,
         EngineDescriptor engine, ulong expectedBuffers, bool dispose)

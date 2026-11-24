@@ -25,7 +25,7 @@ def main():
     parser.add_argument('--version', required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--manifest', type=Path, default=HERE.parent/'workload/queries-v3.json')
-    parser.add_argument('--kind', choices=('workload', 'prepared-probe'), default='workload')
+    parser.add_argument('--kind', choices=('workload', 'prepared-probe', 'resource-probe'), default='workload')
     args = parser.parse_args()
     app = args.output.resolve()
     if app == ROOT or ROOT in app.parents:
@@ -42,11 +42,14 @@ def main():
     if not manifest.is_file():
         raise FileNotFoundError(manifest)
     app.mkdir(parents=True)
-    source_folder = 'Korda' if args.kind == 'workload' else 'PreparedProbe'
-    assembly = 'DbPerf.Korda' if args.kind == 'workload' else 'DbPerf.PreparedProbe'
-    for file in (HERE / source_folder).iterdir():
+    source_folder = {'workload': HERE / 'Korda', 'prepared-probe': HERE / 'PreparedProbe',
+                     'resource-probe': HERE.parent / 'resources'}[args.kind]
+    assembly = {'workload': 'DbPerf.Korda', 'prepared-probe': 'DbPerf.PreparedProbe', 'resource-probe': 'ResourceProbe'}[args.kind]
+    for file in source_folder.iterdir():
         if file.suffix in ('.cs', '.csproj'):
             shutil.copy2(file, app / file.name)
+    if (source_folder / 'Directory.Build.props').is_file():
+        shutil.copy2(source_folder / 'Directory.Build.props', app / 'Directory.Build.props')
     if args.kind == 'workload':
         for file in (HERE / 'Shared').glob('*.cs'):
             shutil.copy2(file, app / file.name)
@@ -88,24 +91,34 @@ def main():
                'package_sha256': sha(package), 'command': command, 'exit_code': result.returncode,
                'publish_log_sha256': sha(app / 'publish.log'),
                'sources': {p.name: sha(p) for p in sorted(app.glob('*.cs'))}, 'project_sha256': sha(project),
-               'config_sha256': sha(app / 'NuGet.Config'), 'project_references': 0}
+               'config_sha256': sha(app / 'NuGet.Config'), 'project_references': 0,
+               'global_json_sha256': sha(app / 'global.json'), 'builder_sha256': sha(__file__)}
+    if (app / 'Directory.Build.props').is_file():
+        receipt['directory_build_props_sha256'] = sha(app / 'Directory.Build.props')
     receipt['workloadManifestSha256'] = sha(manifest)
-    if result.returncode == 0:
-        assets = json.loads((app / 'obj/project.assets.json').read_text())
-        korda = {k for k in assets['libraries'] if k.lower().startswith('korda.')}
-        if korda != {identity + '/' + args.version}:
-            raise ValueError('Unexpected Korda package graph: ' + repr(korda))
-        executable = app / 'out' / assembly
-        if executable.read_bytes()[:4] != b'\x7fELF' or executable.with_suffix('.dll').exists():
-            raise ValueError('Expected a standalone Native AOT ELF')
-        receipt['executable_sha256'] = sha(executable)
-        receipt['assets_sha256'] = sha(app / 'obj/project.assets.json')
-        shutil.copy2(app / 'obj/project.assets.json', app / 'project.assets.json')
-        generated = app / 'obj/Release/net11.0/linux-x64/generated'
-        if generated.is_dir():
-            shutil.copytree(generated, app / 'generated')
-        receipt['native_images'] = {str(p.relative_to(app / 'out')): sha(p) for p in sorted((app / 'out').rglob('libnw_database_*.so'))}
-    (app / 'build-receipt.json').write_text(json.dumps(receipt, indent=2) + '\n')
+    if args.kind == 'resource-probe':
+        receipt['workloadManifestUse'] = 'Identity retained only; this diagnostic uses its own source-bound cold/concurrent/exhaustion cases, not the 35-case timing workload.'
+    try:
+        if result.returncode == 0:
+            assets = json.loads((app / 'obj/project.assets.json').read_text())
+            korda = {k for k in assets['libraries'] if k.lower().startswith('korda.')}
+            if korda != {identity + '/' + args.version}:
+                raise ValueError('Unexpected Korda package graph: ' + repr(korda))
+            executable = app / 'out' / assembly
+            if executable.read_bytes()[:4] != b'\x7fELF' or executable.with_suffix('.dll').exists():
+                raise ValueError('Expected a standalone Native AOT ELF')
+            receipt['executable_sha256'] = sha(executable)
+            receipt['assets_sha256'] = sha(app / 'obj/project.assets.json')
+            shutil.copy2(app / 'obj/project.assets.json', app / 'project.assets.json')
+            generated = app / 'obj/Release/net11.0/linux-x64/generated'
+            if generated.is_dir():
+                shutil.copytree(generated, app / 'generated')
+            receipt['native_images'] = {str(p.relative_to(app / 'out')): sha(p) for p in sorted((app / 'out').rglob('libnw_database_*.so'))}
+    except Exception as error:
+        receipt['post_validation_error'] = {'type': type(error).__name__, 'message': str(error)}
+        raise
+    finally:
+        (app / 'build-receipt.json').write_text(json.dumps(receipt, indent=2) + '\n')
     print(json.dumps(receipt, indent=2))
     raise SystemExit(result.returncode)
 

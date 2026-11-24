@@ -455,6 +455,7 @@ internal static partial class Program
         if (args.Contains("--require-aot")) Check(!RuntimeFeature.IsDynamicCodeSupported && !RuntimeFeature.IsDynamicCodeCompiled, "Expected actual Native AOT execution.");
         if (args.Contains("--retire-fault")) { await RetireFaultQuarantine(); return; }
         if (args.Contains("--retired-value-task-quarantine")) { RetiredValueTaskQuarantine(); return; }
+        if (args.Contains("--direct-retired-value-task-quarantine")) { RetiredValueTaskQuarantine(direct: true); return; }
         if (args.Contains("--binding-diagnostics")) { await BindingDiagnostics(); Console.WriteLine("A07 copied binding diagnostics regression passed."); return; }
         string? isolation = args.FirstOrDefault(a => a is "--indeterminate-start" or "--callback-then-reject");
         if (isolation is not null) { await Quarantine(isolation); return; }
@@ -469,6 +470,7 @@ internal static partial class Program
         await BindingDiagnostics();
         await ResultBeforeNativeQuiet();
         await RetiredValueTaskChecks();
+        await DirectHandleChecks();
         await NativeWorkersAndGc();
         await ContextAndSelfWait();
         await DiscardedTaskCleanup();

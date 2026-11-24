@@ -6,17 +6,40 @@ using Korda.Interop.Callbacks;
 
 internal static partial class Program
 {
+    private static bool s_directRetiredOwner;
+
+    private static AsyncOperation.RetiredValueTask<T> CreateRetired<T>(uint mode, AsyncNativeCalls calls,
+        CallbackCoordinator coordinator, Func<nint, T> mapper, CancellationToken cancellationToken = default,
+        IDisposable? inputLifetime = null, long inputBytes = 0, ICallbackScheduler? scheduler = null,
+        Action<AsyncBoundary>? testBoundary = null)
+    {
+        if (s_directRetiredOwner)
+        {
+            var handle = Fixture.NewHandle(mode);
+            try { return new(handle, calls, coordinator, mapper, cancellationToken, inputLifetime, inputBytes, scheduler, testBoundary); }
+            catch { handle.Dispose(); throw; }
+        }
+        var owner = Fixture.New(mode);
+        try { return new(owner, calls, coordinator, mapper, cancellationToken, inputLifetime, inputBytes, scheduler, testBoundary); }
+        catch { owner.Dispose(); throw; }
+    }
+
     private static async Task RetiredValueTaskChecks()
     {
-        int before = s_assertions;
-        await RetiredResultWaitsForNativeSource();
-        await RetiredOutcomesAndObserverFailures();
-        await RetiredRegistrationDrain();
-        await RetiredExecutionContext();
-        await RetiredSetupAndTakeFailures();
-        await RetiredIndependentResults();
-        await RetiredAbandonedResult();
-        Console.WriteLine($"PASS retired private ValueTask: {s_assertions - before} assertions; no context reuse, exact retirement, canceled diagnostics and independent results");
+        foreach (bool direct in new[] { false, true })
+        {
+            s_directRetiredOwner = direct;
+            int before = s_assertions;
+            await RetiredResultWaitsForNativeSource();
+            await RetiredOutcomesAndObserverFailures();
+            await RetiredRegistrationDrain();
+            await RetiredExecutionContext();
+            await RetiredSetupAndTakeFailures();
+            await RetiredIndependentResults();
+            await RetiredAbandonedResult();
+            Console.WriteLine($"PASS retired private ValueTask (direct handle={direct}): {s_assertions - before} assertions; no context reuse, exact retirement, canceled diagnostics and independent results");
+        }
+        s_directRetiredOwner = false;
     }
 
     private static async Task RetiredResultWaitsForNativeSource()
@@ -36,7 +59,7 @@ internal static partial class Program
             Check(!Fixture.InNativeCall, "Private retirement observer ran on a native callback/control stack.");
             observations++;
         };
-        operation = new(Fixture.New(), calls, coordinator, Fixture.TakeBuffer, inputLifetime: input, inputBytes: 3, scheduler: scheduler);
+        operation = CreateRetired<NativeBuffer>(0, calls, coordinator, Fixture.TakeBuffer, inputLifetime: input, inputBytes: 3, scheduler: scheduler);
         var pending = operation.Start();
         using var nativeSource = Fixture.HoldSource(operation);
         Check(Fixture.Complete(operation) == NativeStatus.Ok, "Private result native completion failed.");
@@ -62,7 +85,7 @@ internal static partial class Program
             using var coordinator = new CallbackCoordinator(1);
             using var cancellation = new CancellationTokenSource();
             var calls = new RetiredCalls();
-            var operation = new AsyncOperation.RetiredValueTask<NativeBuffer>(Fixture.New(), calls, coordinator,
+            var operation = CreateRetired<NativeBuffer>(0, calls, coordinator,
                 Fixture.TakeBuffer, cancellation.Token);
             var pending = operation.Start();
             cancellation.Cancel();
@@ -90,7 +113,7 @@ internal static partial class Program
             var cleanup = new ApplicationException("retained-cleanup-diagnostic");
             var enriched = new OperationCanceledException("native-canceled-with-cleanup", cleanup, cancellation.Token);
             var calls = new RetiredCalls { MappedFailure = enriched };
-            var operation = new AsyncOperation.RetiredValueTask<NativeBuffer>(Fixture.New(), calls, coordinator,
+            var operation = CreateRetired<NativeBuffer>(0, calls, coordinator,
                 Fixture.TakeBuffer, cancellation.Token);
             var pending = operation.Start();
             Check(Fixture.Complete(operation, NativeStatus.Canceled) == NativeStatus.Ok, "Enriched cancel did not commit.");
@@ -106,7 +129,7 @@ internal static partial class Program
             using var coordinator = new CallbackCoordinator(1);
             var observerFailure = new ApplicationException("retirement-observer-failure");
             var calls = new RetiredCalls { Observed = _ => throw observerFailure };
-            var operation = new AsyncOperation.RetiredValueTask<int>(Fixture.New(), calls, coordinator,
+            var operation = CreateRetired<int>(0, calls, coordinator,
                 pointer => { using var buffer = Fixture.TakeBuffer(pointer); return 42; });
             var pending = operation.Start();
             Check(Fixture.Complete(operation, earlierFailure ? NativeStatus.Timeout : NativeStatus.Ok) == NativeStatus.Ok,
@@ -125,7 +148,7 @@ internal static partial class Program
         using var entered = new ManualResetEventSlim();
         using var resume = new ManualResetEventSlim();
         var calls = new RetiredCalls();
-        var operation = new AsyncOperation.RetiredValueTask<NativeBuffer>(Fixture.New(), calls, coordinator, Fixture.TakeBuffer,
+        var operation = CreateRetired<NativeBuffer>(0, calls, coordinator, Fixture.TakeBuffer,
             cancellation.Token, testBoundary: boundary =>
             {
                 if (boundary != AsyncBoundary.CancelEntered) return;
@@ -157,7 +180,7 @@ internal static partial class Program
             using var coordinator = new CallbackCoordinator(1);
             var calls = new RetiredCalls(); var input = new InputLease();
             var original = new ApplicationException("private-boundary-" + boundary);
-            var operation = new AsyncOperation.RetiredValueTask<NativeBuffer>(Fixture.New(2), calls, coordinator,
+            var operation = CreateRetired<NativeBuffer>(2, calls, coordinator,
                 Fixture.TakeBuffer, inputLifetime: input, inputBytes: 3,
                 testBoundary: point => { if (point == boundary) throw original; });
             var failure = await Failure<ApplicationException>(operation.Start().AsTask());
@@ -168,7 +191,7 @@ internal static partial class Program
         using (var coordinator = new CallbackCoordinator(1))
         {
             var calls = new RetiredCalls();
-            var operation = new AsyncOperation.RetiredValueTask<NativeBuffer>(Fixture.New(2), calls, coordinator,
+            var operation = CreateRetired<NativeBuffer>(2, calls, coordinator,
                 pointer => Fixture.TakeBuffer(pointer, throwAfterTake: true));
             await Failure<ApplicationException>(operation.Start().AsTask()); await Finish(operation);
             Check(Fixture.Count(5) == 0 && Fixture.Count(6) == 0, "Private mapper failure leaked its taken native result.");
@@ -177,7 +200,7 @@ internal static partial class Program
         {
             bool prevented = false;
             AsyncOperation.RetiredValueTask<NativeBuffer>? operation = null;
-            operation = new(Fixture.New(2), new RetiredCalls(), coordinator, Fixture.TakeBuffer, testBoundary: boundary =>
+            operation = CreateRetired<NativeBuffer>(2, new RetiredCalls(), coordinator, Fixture.TakeBuffer, testBoundary: boundary =>
             {
                 if (boundary != AsyncBoundary.BeforeTake) return;
                 try { _ = operation!.DisposeAsync(); } catch (InvalidOperationException) { prevented = true; }
@@ -199,7 +222,7 @@ internal static partial class Program
                 Observed = _ => Check(Ambient.Value is null,
                     "The internal retirement diagnostic unexpectedly captured application ExecutionContext.")
             };
-            var operation = new AsyncOperation.RetiredValueTask<NativeBuffer>(Fixture.New(), calls, coordinator, pointer =>
+            var operation = CreateRetired<NativeBuffer>(0, calls, coordinator, pointer =>
             {
                 Check(Ambient.Value is null && !Fixture.InNativeCall,
                     "Private typed take captured caller context or ran on the native callback stack.");
@@ -227,12 +250,12 @@ internal static partial class Program
     private static async Task RetiredIndependentResults()
     {
         using var coordinator = new CallbackCoordinator(1);
-        var first = new AsyncOperation.RetiredValueTask<NativeBuffer>(Fixture.New(2), new RetiredCalls(), coordinator, Fixture.TakeBuffer);
+        var first = CreateRetired<NativeBuffer>(2, new RetiredCalls(), coordinator, Fixture.TakeBuffer);
         var unconsumed = first.Start();
         await first.Retirement.WaitAsync(Deadline);
         await Until(() => unconsumed.IsCompleted, "First private result did not publish after retirement observation.");
         Check(unconsumed.IsCompletedSuccessfully, "Retired private result did not become readable.");
-        var second = new AsyncOperation.RetiredValueTask<NativeBuffer>(Fixture.New(2), new RetiredCalls(), coordinator, Fixture.TakeBuffer);
+        var second = CreateRetired<NativeBuffer>(2, new RetiredCalls(), coordinator, Fixture.TakeBuffer);
         using var secondResult = await second.Start().AsTask().WaitAsync(Deadline);
         await Finish(second);
         Task<NativeBuffer> firstTask = unconsumed.AsTask();
@@ -245,7 +268,7 @@ internal static partial class Program
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static WeakReference AbandonRetiredResult(CallbackCoordinator coordinator)
     {
-        var operation = new AsyncOperation.RetiredValueTask<NativeBuffer>(Fixture.New(2), new RetiredCalls(), coordinator, Fixture.TakeBuffer);
+        var operation = CreateRetired<NativeBuffer>(2, new RetiredCalls(), coordinator, Fixture.TakeBuffer);
         _ = operation.Start();
         return new WeakReference(operation);
     }
@@ -263,14 +286,15 @@ internal static partial class Program
         Check(Fixture.Count(0) == 0 && Fixture.Count(6) == 0, "Abandoned private completion leaked native backing storage.");
     }
 
-    private static void RetiredValueTaskQuarantine()
+    private static void RetiredValueTaskQuarantine(bool direct = false)
     {
+        s_directRetiredOwner = direct;
         using var coordinator = new CallbackCoordinator(2, TimeSpan.FromMinutes(1));
         foreach (bool failedRetire in new[] { false, true })
         {
             var scheduler = new ManualScheduler(); var input = new InputLease();
             var calls = new RetiredCalls(); calls.Inner.ThrowAfterStart = !failedRetire;
-            var operation = new AsyncOperation.RetiredValueTask<NativeBuffer>(Fixture.New(failedRetire ? 34u : 0u),
+            var operation = CreateRetired<NativeBuffer>(failedRetire ? 34u : 0u,
                 calls, coordinator, Fixture.TakeBuffer, inputLifetime: input, inputBytes: 3, scheduler: scheduler);
             var pending = operation.Start(); scheduler.Run();
             Check(operation.Snapshot.Quarantined && operation.Snapshot.RootLive && calls.Inner.Poisoned == 1,
@@ -281,7 +305,8 @@ internal static partial class Program
         GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect();
         Check(coordinator.Count == 2 && Fixture.Count(0) == 2,
             "Private quarantined contexts were released despite unresolved native obligations.");
-        Console.WriteLine($"{{\"mode\":\"--retired-value-task-quarantine\",\"passed\":true,\"retained_native_owners\":2,\"retirement_reported_success\":false,\"assertions\":{s_assertions}}}");
+        string mode = direct ? "--direct-retired-value-task-quarantine" : "--retired-value-task-quarantine";
+        Console.WriteLine($"{{\"mode\":\"{mode}\",\"passed\":true,\"retained_native_owners\":2,\"retirement_reported_success\":false,\"assertions\":{s_assertions}}}");
     }
 
     private sealed class RetiredCalls : AsyncNativeCalls

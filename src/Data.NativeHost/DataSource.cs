@@ -79,15 +79,16 @@ public sealed partial class DataSource : IDisposable, IAsyncDisposable
     internal ValueTask<T> StartRetiredValueTask<T>(Func<nint> create, Func<nint, T> take, CancellationToken token)
     {
         CheckOpen(); if (token.IsCancellationRequested) return new(Task.FromCanceled<T>(token));
-        OperationHandle? handle = null; NativeResourceOwner? resource = null;
+        OperationHandle? handle = null;
         try
         {
-            handle = new(Binding, create()); resource = new(handle, this);
-            var operation = new AsyncOperation.RetiredValueTask<T>(resource, _async, _resources.Coordinator, take, token,
+            handle = new(Binding, create());
+            var operation = new AsyncOperation.RetiredValueTask<T>(handle, _async, _resources.Coordinator, take, token,
                 testBoundary: TestBoundary);
+            handle = null;
             return operation.Start();
         }
-        catch { if (resource is not null) resource.Dispose(); else handle?.Dispose(); throw; }
+        catch { handle?.Dispose(); throw; }
     }
     private async Task<T> Complete<T>(AsyncOperation<T> operation, Task<T> result)
     {
