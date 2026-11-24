@@ -1,0 +1,105 @@
+{
+  "schemaVersion": 1,
+  "task": "DB-Perf-01",
+  "kind": "cpu-hotspot-diagnostic",
+  "enabled": true,
+  "runtime": {
+    "repository": "IzuSharp/Korda",
+    "runId": 45461269267,
+    "artifactId": 14953201071,
+    "zipSha256": "aecbd4e949e333399704ba141f7d52e9225323e658f6180262355831b5aec7e8",
+    "tarSha256": "735b47e883859edb9efaa615d00d93aca843c06522c757aa94c870ecd3c7f85c",
+    "manifestSha256": "5a2eba0796a009bfa316dfc07c66919c8b3e14f600faa808e96cd32da617885c",
+    "requestSha256": "189fc14ab799b152256c2d92c497c507a6ded2431cad8bdbd362bdc7538adfab",
+    "harnessCommit": "da153c22ef1093fccc3233ec76bfda96e6cc59df"
+  },
+  "applications": {
+    "postgresql/korda_before": {
+      "path": "apps/postgresql/korda_before/out/DbPerf.Korda",
+      "sha256": "d4fc9c4f4f0d861a78f56a9417c09c37c0827e6fe7a0ee37a67c455aa7d0dec3"
+    },
+    "postgresql/korda_after": {
+      "path": "apps/postgresql/korda_after/out/DbPerf.Korda",
+      "sha256": "6d011e3feaad72bfe12b44be3a0f309623adafdd586b4b625ea013d4c8576319"
+    },
+    "postgresql/independent_csharp_orm": {
+      "path": "apps/postgresql/independent_csharp_orm/out/DbPerf.Dapper",
+      "sha256": "e0f6ab1774d5e5da10d069c274daa8d22d0dfe348a4eefb595dbde81ce2e749b"
+    },
+    "sqlite/korda_before": {
+      "path": "apps/sqlite/korda_before/out/DbPerf.Korda",
+      "sha256": "3e6e4209717e756f916313d6e0b7f10f02c917fe9dab0a390ad0020d0974f9b1"
+    },
+    "sqlite/korda_after": {
+      "path": "apps/sqlite/korda_after/out/DbPerf.Korda",
+      "sha256": "9b38c6a1bb210027694baa04bf27ab749ff2923f8d8ce6f1c5a1d8993e0e8032"
+    },
+    "sqlite/independent_csharp_orm": {
+      "path": "apps/sqlite/independent_csharp_orm/out/DbPerf.Dapper",
+      "sha256": "40cff37667149ee85f35d0ee72e7a503be313d8e09c82c58cd1ef7b544d36170"
+    },
+    "postgresql/direct_cpp": {
+      "path": "native/db-perf-native",
+      "sha256": "ed8f8f3fc069e51ab185d7e626b4fbc9945b5048fa8f29472dd516335d18d45c"
+    },
+    "sqlite/direct_cpp": {
+      "path": "native/db-perf-native",
+      "sha256": "ed8f8f3fc069e51ab185d7e626b4fbc9945b5048fa8f29472dd516335d18d45c"
+    }
+  },
+  "symbolsSourceCommit": "da153c22ef1093fccc3233ec76bfda96e6cc59df",
+  "profile": {
+    "provider": "postgresql",
+    "seconds": 30,
+    "concurrency": 1,
+    "constructionMode": "prepared",
+    "frequencyHz": 99,
+    "stackBytes": 16384,
+    "maximumCommandSeconds": 180,
+    "sampleSeconds": 0.5
+  },
+  "cells": [
+    {
+      "name": "after",
+      "route": "korda_after"
+    },
+    {
+      "name": "before",
+      "route": "korda_before"
+    },
+    {
+      "name": "native-product",
+      "route": "direct_cpp",
+      "physicalPrepare": "per-operation",
+      "protocolConfirmation": "product"
+    },
+    {
+      "name": "native-reuse",
+      "route": "direct_cpp",
+      "physicalPrepare": "reuse",
+      "protocolConfirmation": "drain-only"
+    },
+    {
+      "name": "dapper",
+      "route": "independent_csharp_orm"
+    }
+  ],
+  "planDiagnostic": {
+    "warmupOperations": 350,
+    "operations": 35,
+    "casesOfInterest": [
+      "range",
+      "offset",
+      "early-stop"
+    ],
+    "protocolConfirmation": "drain-only",
+    "physicalPrepare": [
+      "per-operation",
+      "reuse"
+    ]
+  },
+  "allowExistingSudoForTaskPidOnly": true,
+  "wholeBatchAcceptance": false,
+  "acceptedLongSegments": 0,
+  "activationNote": "Separate CPU/plan diagnosis on the immutable observed runtime; all original application bytes unchanged; no formal timing or long-run credit."
+}
