@@ -7,6 +7,19 @@ using Korda.Database.Internal;
 if (args.Length == 0) throw new ArgumentException("Usage: Data.Streaming.Tests <report-directory> [--require-aot]");
 if (args.Contains("--require-aot", StringComparer.Ordinal) && RuntimeFeature.IsDynamicCodeSupported) throw new InvalidOperationException("Actual NativeAOT execution required.");
 Directory.CreateDirectory(args[0]);
+if (args.Contains("--allocation-probe", StringComparer.Ordinal))
+{
+    await AllocationProbe.RunAsync(args[0], args);
+    return;
+}
+if (args.Contains("--allocation-probe-races", StringComparer.Ordinal))
+{
+    await AllocationProbeRaces.RunAsync();
+    return;
+}
+await AllocationProbeGate.RunAsync(args[0]);
+if (args.Contains("--allocation-gate-only", StringComparer.Ordinal)) return;
+await AllocationProbeRaces.RunAsync();
 var cases = new List<Observation>();
 var allocatedBefore = GC.GetTotalAllocatedBytes(true);
 var workingSetBefore = Process.GetCurrentProcess().WorkingSet64;

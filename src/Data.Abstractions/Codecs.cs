@@ -254,9 +254,15 @@ internal static class DecimalBytes
     internal static decimal Decode(ReadOnlySpan<byte> bytes)
     {
         if (bytes.Length != 16 || bytes[12] > 28 || bytes[13] > 1 || bytes[14] != 0 || bytes[15] != 0) throw new ArgumentException("Invalid decimal encoding.");
-        var value = new decimal(BinaryPrimitives.ReadInt32LittleEndian(bytes), BinaryPrimitives.ReadInt32LittleEndian(bytes[4..]), BinaryPrimitives.ReadInt32LittleEndian(bytes[8..]), bytes[13] == 1, bytes[12]);
-        if (!Encode(value).AsSpan().SequenceEqual(bytes)) throw new ArgumentException("Noncanonical decimal encoding.");
-        return value;
+        var low = BinaryPrimitives.ReadUInt32LittleEndian(bytes);
+        var middle = BinaryPrimitives.ReadUInt32LittleEndian(bytes[4..]);
+        var high = BinaryPrimitives.ReadUInt32LittleEndian(bytes[8..]);
+        // The wire coefficient is only 96 bits. Checking its canonical form does
+        // not require materializing and re-encoding a decimal through BigInteger.
+        var coefficient = (UInt128)low | (UInt128)middle << 32 | (UInt128)high << 64;
+        if (coefficient == 0 ? bytes[12] != 0 || bytes[13] != 0 : bytes[12] != 0 && coefficient % 10 == 0)
+            throw new ArgumentException("Noncanonical decimal encoding.");
+        return new decimal(unchecked((int)low), unchecked((int)middle), unchecked((int)high), bytes[13] == 1, bytes[12]);
     }
     internal static BigInteger Scaled(decimal value, byte targetScale)
     {

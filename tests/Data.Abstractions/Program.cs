@@ -8,6 +8,11 @@ var output = Path.GetFullPath(args.Length == 0 ? "artifacts/B01/managed" : args[
 Directory.CreateDirectory(output);
 if (args.Contains("--require-aot", StringComparer.Ordinal) && RuntimeFeature.IsDynamicCodeSupported)
     throw new InvalidOperationException("Actual Native AOT execution requires dynamic code to be unavailable.");
+if (args.Contains("--allocation-probe", StringComparer.Ordinal))
+{
+    AllocationProbe.Run(output, args.Contains("--allocation-regression", StringComparer.Ordinal));
+    return;
+}
 Console.WriteLine("Dynamic code supported: " + RuntimeFeature.IsDynamicCodeSupported);
 var cases = new List<string>();
 void Check(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
@@ -157,6 +162,46 @@ Test("rfc8259_numeric_range_and_container_depth", () =>
     foreach (var text in new[] { new string('[', 65) + new string(']', 65), "{\"x\":01}", "[1,]", "NaN" })
         Reject<JsonException>(() => DbWire.ValidateScalar(json, Validation.Utf8.GetBytes(text)));
     Reject<ArgumentException>(() => DbWire.ValidateScalar(json, new byte[] { 0xef, 0xbb, 0xbf, (byte)'0' }));
+});
+Test("strict_utf8_validation_preserves_rejections", () =>
+{
+    foreach (var text in new[] { "", "ASCII\0", "订单 / café / 😀", "\ufeffvalue", "\ud7ff\ue000\uffff" })
+        DbWire.ValidateScalar(Codecs.String.Descriptor, Validation.Utf8.GetBytes(text));
+    byte[][] malformed = [[0x80], [0xc0, 0x80], [0xc2], [0xe2, 0x82], [0xed, 0xa0, 0x80], [0xf4, 0x90, 0x80, 0x80], [0xff]];
+    foreach (var bytes in malformed)
+    {
+        Reject<System.Text.DecoderFallbackException>(() => DbWire.ValidateScalar(Codecs.String.Descriptor, bytes));
+        var json = new byte[bytes.Length + 2]; json[0] = (byte)'"'; json[^1] = (byte)'"'; bytes.CopyTo(json, 1);
+        Reject<System.Text.DecoderFallbackException>(() => DbWire.ValidateScalar(Codecs.Json(TestJson.Default.Payload).Descriptor, json));
+    }
+});
+Test("decimal_decode_preserves_canonical_96_bit_contract", () =>
+{
+    var random = new Random(0xDB01);
+    for (var scale = 0; scale <= 28; scale++)
+        foreach (var negative in new[] { false, true })
+            for (var sample = 0; sample < 24; sample++)
+            {
+                var raw = new byte[16]; random.NextBytes(raw.AsSpan(0, 12));
+                if (sample == 0) raw.AsSpan(0, 12).Clear();
+                if (sample == 1) raw.AsSpan(0, 12).Fill(255);
+                if (sample == 2) { raw.AsSpan(0, 12).Clear(); raw[0] = 10; }
+                if (sample == 3) { raw.AsSpan(0, 12).Clear(); raw[0] = 1; }
+                raw[12] = (byte)scale; raw[13] = negative ? (byte)1 : (byte)0;
+                var value = new decimal(BinaryPrimitives.ReadInt32LittleEndian(raw), BinaryPrimitives.ReadInt32LittleEndian(raw.AsSpan(4)),
+                    BinaryPrimitives.ReadInt32LittleEndian(raw.AsSpan(8)), negative, (byte)scale);
+                // The existing encoder remains an independent BigInteger-based oracle.
+                var canonical = DecimalBytes.Encode(value);
+                Check(DecimalBytes.Decode(canonical) == value, "Canonical coefficient, sign or scale changed.");
+                if (raw.AsSpan().SequenceEqual(canonical)) Check(DecimalBytes.Decode(raw) == value, "Canonical input was rejected.");
+                else Reject<ArgumentException>(() => DecimalBytes.Decode(raw));
+            }
+    foreach (var length in new[] { 0, 15, 17 }) Reject<ArgumentException>(() => DecimalBytes.Decode(new byte[length]));
+    foreach (var pair in new[] { (12, 29), (12, 255), (13, 2), (14, 1), (15, 1) })
+    {
+        var raw = DecimalBytes.Encode(1m); raw[pair.Item1] = (byte)pair.Item2;
+        Reject<ArgumentException>(() => DecimalBytes.Decode(raw));
+    }
 });
 Test("scalar_projection_context_preserves_shape_checks", () =>
 {

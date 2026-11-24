@@ -134,7 +134,7 @@ internal sealed class DbWire
             case 2: case 17: if (bytes.Length != 4) Bad("Int32 width."); break;
             case 3: case 15: if (bytes.Length != 8) Bad("Int64 width."); break;
             case 4: if (bytes.Length != 1 || bytes[0] > 1) Bad("Boolean value."); break;
-            case 5: _ = Validation.Utf8.GetString(bytes); break;
+            case 5: _ = Validation.Utf8.GetCharCount(bytes); break;
             case 6: break;
             case 7: if (bytes.Length != 16) Bad("UUID width."); break;
             case 8: if (bytes.Length != 4 || RInt32(bytes) is < -719162 or > 2932896) Bad("Date range."); break;
@@ -146,7 +146,7 @@ internal sealed class DbWire
                 var v = DecimalBytes.Decode(bytes); using (var config = JsonDocument.Parse(codec.Configuration!)) DecimalBytes.CheckFit(v, config.RootElement.GetProperty("precision").GetByte(), config.RootElement.GetProperty("scale").GetByte()); break;
             case 14: _ = DecimalBytes.Decode(bytes); break;
             case 16:
-                _ = Validation.Utf8.GetString(bytes);
+                _ = Validation.Utf8.GetCharCount(bytes);
                 if (bytes.StartsWith(new byte[] { 0xef, 0xbb, 0xbf })) Bad("JSON BOM.");
                 using (JsonDocument.Parse(bytes.ToArray(), new JsonDocumentOptions { MaxDepth = 64 })) { }
                 break;
