@@ -10,6 +10,9 @@ using Korda.Interop.Abi;
 using Korda.Query.Internal;
 using System.Buffers.Binary;
 
+if (await SnapshotProbe.RunIfRequested(args)) return;
+Console.WriteLine("snapshot parser oracle inputs=" + SnapshotProbe.Verify());
+SnapshotProbe.VerifyAllocationBudget();
 try { await Suite.Run(); } catch (DatabaseException failure) { Console.Error.WriteLine($"kind={failure.Kind} provider={failure.ProviderCode} correlation={failure.CorrelationId}"); throw; }
 
 internal static class Suite

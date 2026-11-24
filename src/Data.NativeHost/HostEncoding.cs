@@ -54,11 +54,34 @@ internal static class HostEncoding
     }
     internal static TransactionSnapshot Snapshot(ReadOnlySpan<byte> bytes)
     {
-        var fields = ReadControl(bytes, 7);
-        uint Get(ushort id) => fields.TryGetValue(id, out var field) && field.Length == 4 ? BinaryPrimitives.ReadUInt32LittleEndian(field) : throw new DatabaseException("Native snapshot field is missing.", DatabaseErrorKind.ShapeMismatch);
-        var state = Get(1); var outcome = Get(2); var attempted = Get(3); var cleanup = Get(4); var disposition = Get(5); var released = Get(6); var deadline = Get(7);
-        if (state > 4 || outcome > 3 || attempted > 1 || cleanup > 4 || disposition > 3 || released > 1 || deadline > 1 || !fields.TryGetValue(8, out var correlation) || correlation.Length != 8)
+        if (bytes.Length < 16 || bytes.Length > DbWire.MaxEncodedBytes || BinaryPrimitives.ReadUInt16LittleEndian(bytes) != 1 || BinaryPrimitives.ReadUInt16LittleEndian(bytes[2..]) != 7 || BinaryPrimitives.ReadUInt32LittleEndian(bytes[4..]) != bytes.Length || BinaryPrimitives.ReadUInt32LittleEndian(bytes[12..]) != 0)
+            throw new DatabaseException("Invalid native control record.", DatabaseErrorKind.ShapeMismatch);
+        var count = BinaryPrimitives.ReadUInt32LittleEndian(bytes[8..]);
+        if (count > 64 || checked(16L + count * 16L) > bytes.Length) throw new DatabaseException("Invalid native control fields.", DatabaseErrorKind.ShapeMismatch);
+        // Keep only offsets into this synchronous input. Validate unknown fields
+        // and the complete record before reading any required snapshot value.
+        Span<(int Offset, int Length)> fields = stackalloc (int, int)[9]; fields.Clear();
+        var next = checked(16 + (int)count * 16); ushort previous = 0;
+        for (var i = 0; i < count; i++)
+        {
+            var at = 16 + i * 16; var id = BinaryPrimitives.ReadUInt16LittleEndian(bytes[at..]); var type = BinaryPrimitives.ReadUInt16LittleEndian(bytes[(at + 2)..]);
+            var length = BinaryPrimitives.ReadUInt32LittleEndian(bytes[(at + 4)..]); var offset = BinaryPrimitives.ReadUInt64LittleEndian(bytes[(at + 8)..]);
+            if (id <= previous || type is < 1 or > 7 || offset != (ulong)next || length > bytes.Length - next || type == 1 && length != 4 || type is 2 or 3 && length != 8)
+                throw new DatabaseException("Invalid native control field range.", DatabaseErrorKind.ShapeMismatch);
+            if (id <= fields.Length) fields[id - 1] = (next, (int)length);
+            previous = id; next += (int)length;
+        }
+        if (next != bytes.Length) throw new DatabaseException("Native control record has trailing bytes.", DatabaseErrorKind.ShapeMismatch);
+        var state = SnapshotUInt32(bytes, fields[0]); var outcome = SnapshotUInt32(bytes, fields[1]); var attempted = SnapshotUInt32(bytes, fields[2]);
+        var cleanup = SnapshotUInt32(bytes, fields[3]); var disposition = SnapshotUInt32(bytes, fields[4]); var released = SnapshotUInt32(bytes, fields[5]); var deadline = SnapshotUInt32(bytes, fields[6]);
+        if (state > 4 || outcome > 3 || attempted > 1 || cleanup > 4 || disposition > 3 || released > 1 || deadline > 1 || fields[7].Length != 8)
             throw new DatabaseException("Native snapshot values are invalid.", DatabaseErrorKind.ShapeMismatch);
-        return new((TransactionState)state, (TransactionOutcome)outcome, attempted == 1, new((CleanupStatus)cleanup, BinaryPrimitives.ReadUInt64LittleEndian(correlation), fields.TryGetValue(9, out var provider) ? Utf8.GetString(provider) : null, released == 1, (ConnectionDisposition)disposition, deadline == 1));
+        var correlation = BinaryPrimitives.ReadUInt64LittleEndian(bytes.Slice(fields[7].Offset, fields[7].Length));
+        // Every present field starts after the header; offset zero distinguishes
+        // an absent provider code from a present, empty provider code.
+        var provider = fields[8].Offset == 0 ? null : Utf8.GetString(bytes.Slice(fields[8].Offset, fields[8].Length));
+        return new((TransactionState)state, (TransactionOutcome)outcome, attempted == 1, new((CleanupStatus)cleanup, correlation, provider, released == 1, (ConnectionDisposition)disposition, deadline == 1));
     }
+    private static uint SnapshotUInt32(ReadOnlySpan<byte> bytes, (int Offset, int Length) field)
+        => field.Length == 4 ? BinaryPrimitives.ReadUInt32LittleEndian(bytes.Slice(field.Offset, field.Length)) : throw new DatabaseException("Native snapshot field is missing.", DatabaseErrorKind.ShapeMismatch);
 }
