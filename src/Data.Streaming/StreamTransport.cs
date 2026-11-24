@@ -78,7 +78,8 @@ internal readonly record struct StreamLimits(int MaxBatchRows, int MaxBatchBytes
 
 /// <summary>A synchronous B01 row lease over one validated, retained batch.</summary>
 /// <remarks>Complete wire identity and all cell ranges/types are checked before materialization. Disposing
-/// invalidates every reader and releases the creating transport's native owner exactly once.</remarks>
+/// invalidates every reader and releases the creating transport's native owner exactly once. A serialized
+/// enumerator may attach its next owner only after disposal; no public reader survives its synchronous mapper.</remarks>
 internal sealed class RowBatchLease : IRowLease, IDisposable
 {
     private IStreamBatch? _owner;
@@ -88,6 +89,14 @@ internal sealed class RowBatchLease : IRowLease, IDisposable
     internal RowBatchLease(IStreamBatch owner, WireExpectation expected, ResultField[] fields, StreamLimits limits)
     {
         _fields = fields;
+        Attach(owner, expected, limits);
+    }
+    internal bool IsActive => _wire.HasValue;
+    // Reject an active lease before accepting ownership. After this precondition,
+    // all validation failures compensate the incoming owner exactly once.
+    internal void Attach(IStreamBatch owner, WireExpectation expected, StreamLimits limits)
+    {
+        if (IsActive) throw new InvalidOperationException("The previous row batch must be disposed before attachment.");
         try
         {
             using var read = new BatchReadScope((owner as IBorrowedStreamBatch)?.ReadOwner);
@@ -102,11 +111,13 @@ internal sealed class RowBatchLease : IRowLease, IDisposable
             if (bytes.Length > limits.MaxBatchBytes) throw new DatabaseException("Native batch exceeds its admitted byte limit.", DatabaseErrorKind.ResourceLimit);
             var wire = ownedBytes is not null ? DbWire.ParseOwned(ownedBytes, expected)
                 : owner is IBorrowedStreamBatch ? DbWire.ParseBorrowed(bytes, expected) : DbWire.Parse(bytes.Span, expected);
-            _wire = wire;
             if (wire.Rows > limits.MaxBatchRows || wire.Rows == 0 && !owner.End)
                 throw new DatabaseException("Native batch row count or end marker is invalid.", DatabaseErrorKind.ShapeMismatch);
+            var end = owner.End;
             _owner = owner;
-            End = owner.End;
+            _wire = wire;
+            _row = 0;
+            End = end;
         }
         catch (ArgumentException exception)
         {
@@ -116,7 +127,7 @@ internal sealed class RowBatchLease : IRowLease, IDisposable
         catch { owner.Dispose(); throw; }
     }
     internal uint Rows => Wire.Rows;
-    internal bool End { get; }
+    internal bool End { get; private set; }
     internal long RowBytes(uint row)
     {
         using var read = new BatchReadScope((_owner as IBorrowedStreamBatch)?.ReadOwner);

@@ -195,13 +195,15 @@ internal sealed class TypedStream<T> : IAsyncEnumerable<T>
                     bool closed; lock (_gate) closed = _closed;
                     if (closed) { RequestStop(); throw new ObjectDisposedException(nameof(Enumerator)); }
                 }
-                if (_batch is null || _row == _batch.Rows)
+                if (_batch is null || !_batch.IsActive || _row == _batch.Rows)
                 {
-                    _batch?.Dispose(); _batch = null;
+                    _batch?.Dispose();
                     if (_lastBatch) { _finished = true; await CleanupAsync().ConfigureAwait(false); return false; }
                     var owner = await _transport.FetchAsync().ConfigureAwait(false);
-                    // Constructor owns compensation if validation fails.
-                    _batch = new(owner, _parent._expected, _parent._projection.Fields, _parent._limits with { MaxBatchRows = _fetchRows });
+                    // The serialized move reuses only its own inactive lease.
+                    // Construction/attachment owns compensation if validation fails.
+                    if (_batch is null) _batch = new(owner, _parent._expected, _parent._projection.Fields, _parent._limits with { MaxBatchRows = _fetchRows });
+                    else _batch.Attach(owner, _parent._expected, _parent._limits with { MaxBatchRows = _fetchRows });
                     _row = 0; _lastBatch = _batch.End;
                     if (_buffered)
                     {

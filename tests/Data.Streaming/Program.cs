@@ -27,6 +27,16 @@ if (args.Contains("--stable-batch-only", StringComparer.Ordinal))
     StableBatchTests.Run();
     return;
 }
+if (args.Contains("--row-lease-reuse-probe-only", StringComparer.Ordinal))
+{
+    RowLeaseReuseProbe.Run(args[0]);
+    return;
+}
+if (args.Contains("--row-lease-reuse-checks-only", StringComparer.Ordinal))
+{
+    await RowLeaseReuseChecks.RunAsync();
+    return;
+}
 if (args.Contains("--allocation-gate-only", StringComparer.Ordinal))
 {
     await AllocationProbeGate.RunAsync(args[0]);
@@ -39,6 +49,7 @@ if (!args.Contains("--correctness-only", StringComparer.Ordinal))
 }
 await AllocationProbeRaces.RunAsync();
 StableBatchTests.Run();
+await RowLeaseReuseChecks.RunAsync();
 var cases = new List<Observation>();
 var allocatedBefore = GC.GetTotalAllocatedBytes(true);
 var workingSetBefore = Process.GetCurrentProcess().WorkingSet64;

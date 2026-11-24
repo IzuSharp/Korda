@@ -150,6 +150,7 @@ def main() -> int:
         # process history; both keep their original strict raw counters.
         run("aot-allocation-gate", [str(executable), str(output / "allocation-results"), "--require-aot", "--allocation-gate-only"], native_env)
         run("aot-owned-batch-gate", [str(executable), str(output / "owned-batch-results"), "--require-aot", "--owned-batch-probe-only"], native_env)
+        run("aot-row-lease-reuse-gate", [str(executable), str(output / "row-lease-reuse-results"), "--require-aot", "--row-lease-reuse-probe-only"], native_env)
         if args.postgres_bin:
             pg = args.postgres_bin.resolve()
             data = output / "postgres-data"
