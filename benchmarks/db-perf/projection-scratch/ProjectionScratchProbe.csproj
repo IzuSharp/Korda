@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>Korda.Query.Binding.Tests</AssemblyName>
+    <PublishAot>true</PublishAot>
+    <IsAotCompatible>true</IsAotCompatible>
+    <IlcTreatWarningsAsErrors>true</IlcTreatWarningsAsErrors>
+    <UseSharedCompilation>false</UseSharedCompilation>
+    <DefineConstants Condition="'$(ProjectionScratch)' == 'true'">$(DefineConstants);PROJECTION_SCRATCH</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../src/Query.Binding/Korda.Query.Binding.csproj" />
+  </ItemGroup>
+</Project>
