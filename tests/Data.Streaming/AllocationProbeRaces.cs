@@ -9,17 +9,23 @@ internal static class AllocationProbeRaces
 {
     private static readonly TimeSpan Bound = TimeSpan.FromSeconds(10);
     private static int s_checks;
+    private static bool s_borrowNative;
 
     internal static async Task RunAsync()
     {
         s_checks = 0;
-        await DisposeDuringStart();
-        await DisposeDuringFetch();
-        await DisposeDuringMapping(failMapping: false, failCleanup: false);
-        await DisposeDuringMapping(failMapping: true, failCleanup: false);
-        await DisposeDuringMapping(failMapping: true, failCleanup: true);
-        await CancellationDuringFetch();
-        Console.WriteLine($"PASS lazy stream join races: {s_checks} assertions; pending start/fetch, shared disposers, active mapper, primary/cleanup failures and cancellation");
+        foreach (var borrowed in new[] { false, true })
+        {
+            s_borrowNative = borrowed;
+            await DisposeDuringStart();
+            await DisposeDuringFetch();
+            await DisposeDuringMapping(failMapping: false, failCleanup: false);
+            await DisposeDuringMapping(failMapping: true, failCleanup: false);
+            await DisposeDuringMapping(failMapping: true, failCleanup: true);
+            await CancellationDuringFetch();
+        }
+        BorrowedBatchChecks.Run();
+        Console.WriteLine($"PASS lazy stream join races: {s_checks} assertions; managed-owned and native-borrowed pending start/fetch, shared disposers, active mapper, primary/cleanup failures and cancellation");
     }
 
     private static async Task DisposeDuringStart()
@@ -98,6 +104,11 @@ internal static class AllocationProbeRaces
             Task first = reader.DisposeAsync().AsTask(), second = reader.DisposeAsync().AsTask();
             Check(!first.IsCompleted && !second.IsCompleted, "disposal joins a synchronously executing mapper");
             Check(transport.Batch.Disposals == 0 && transport.Joins == 0, "the mapper retains its batch until it exits");
+            if (s_borrowNative)
+            {
+                GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect();
+                Check(transport.Batch.NativeReleases == 0, "active mapper retains native memory across forced GC");
+            }
             releaseMapper.Set();
             await transport.JoinEntered.Task.WaitAsync(Bound);
             Check(transport.Batch.Disposals == 1 && !first.IsCompleted && !second.IsCompleted, "mapper exit releases the batch and still awaits retirement");
@@ -120,6 +131,7 @@ internal static class AllocationProbeRaces
                 await Task.WhenAll(first, second).WaitAsync(Bound);
             }
             Check(transport.Joins == 1 && transport.Batch.Disposals == 1, "mapper race retirement is once-only");
+            if (s_borrowNative) Check(transport.Batch.NativeReleases == 1, "native mapper buffer releases exactly once after the full synchronous read");
         }
         finally { releaseMapper.Set(); transport.ReleaseJoin(); }
     }
@@ -171,14 +183,15 @@ internal static class AllocationProbeRaces
         private readonly TaskCompletionSource<StreamRetirement> _retirement = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal readonly TaskCompletionSource FetchEntered = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal readonly TaskCompletionSource JoinEntered = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        internal readonly OwnedBatch Batch;
+        internal readonly ITrackedBatch Batch;
         internal int Fetches, Stops, Joins;
         internal ControlledTransport(Projection<long> projection, bool pendingFetch)
         {
             byte[] scalar = new byte[8]; BinaryPrimitives.WriteInt64LittleEndian(scalar, 42);
             var expectation = new WireExpectation(PayloadKind.Rows, 2, Convert.FromHexString(projection.ShapeHash), 0, 71,
                 [new(0, Codecs.Int64.Descriptor, 3)]);
-            Batch = new(DbWire.Encode(expectation, 1, [new ReadOnlyMemory<byte>(scalar)]));
+            var bytes = DbWire.Encode(expectation, 1, [new ReadOnlyMemory<byte>(scalar)]);
+            Batch = s_borrowNative ? new BorrowedBatchFixture(bytes) : new OwnedBatch(bytes);
             _start = Task.FromResult<IStreamTransport>(this); _ready = Task.FromResult<IStreamBatch>(Batch);
             if (pendingFetch) _fetch = new(TaskCreationOptions.RunContinuationsAsynchronously);
         }
@@ -205,13 +218,15 @@ internal static class AllocationProbeRaces
             else _retirement.TrySetException(failure);
         }
     }
-    private sealed class OwnedBatch(byte[] bytes) : IOwnedStreamBatch
+    private sealed class OwnedBatch(byte[] bytes) : IOwnedStreamBatch, ITrackedBatch
     {
         private byte[]? _bytes = bytes;
         private int _active;
-        internal int Disposals;
-        internal bool Active => Volatile.Read(ref _active) != 0;
-        internal void Acquire() => Volatile.Write(ref _active, 1);
+        private int _disposals;
+        public int Disposals => _disposals;
+        public int NativeReleases => 0;
+        public bool Active => Volatile.Read(ref _active) != 0;
+        public void Acquire() => Volatile.Write(ref _active, 1);
         public ReadOnlyMemory<byte> Bytes => Active && _bytes is { } value ? value : throw new ObjectDisposedException(nameof(OwnedBatch));
         public byte[] TakeBytes()
         {
@@ -223,7 +238,7 @@ internal static class AllocationProbeRaces
         {
             if (Interlocked.Exchange(ref _active, 0) == 0) throw new InvalidOperationException("Race fixture batch was released twice.");
             Interlocked.Exchange(ref _bytes, null);
-            Interlocked.Increment(ref Disposals);
+            Interlocked.Increment(ref _disposals);
         }
     }
 }

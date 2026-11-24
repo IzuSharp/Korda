@@ -492,6 +492,7 @@ Test("db_wire_all_scalar_golden_and_malformed_inputs", () =>
         var copy = (byte[])wire.Clone(); mutate(copy);
         Reject<ArgumentException>(() => DbWire.Parse(copy, expectation));
         Reject<ArgumentException>(() => DbWire.ParseOwned(copy, expectation));
+        Reject<ArgumentException>(() => DbWire.ParseBorrowed(copy, expectation));
     }
     Mutation(b => b[4] = 2); Mutation(b => b[12] = 1); Mutation(b => b[76] = 9); Mutation(b => b[68] = 1);
     Mutation(b => BinaryPrimitives.WriteUInt32LittleEndian(b.AsSpan(56), uint.MaxValue));
@@ -523,7 +524,7 @@ Test("db_wire_disordered_ranges_preserve_full_validation", () =>
         permutations++;
         var input = (byte[])original.Clone();
         for (var i = 0; i < 4; i++) DbWire.U64(input, cellsOffset + i * WireSchema.CellBytes + 8, offsets[order[i]]);
-        foreach (var parsed in new[] { DbWire.Parse(input, shape), DbWire.ParseOwned((byte[])input.Clone(), shape) })
+        foreach (var parsed in new[] { DbWire.Parse(input, shape), DbWire.ParseOwned((byte[])input.Clone(), shape), DbWire.ParseBorrowed(input, shape) })
             for (uint row = 0; row < 4; row++)
                 Check(BinaryPrimitives.ReadInt64LittleEndian(parsed.Cell(row, 0)!.Value.Span) == 11L * (order[row] + 1), "Disordered non-overlapping row changed.");
         for (var first = 0; first < 4; first++) for (var second = 0; second < 4; second++)
@@ -533,6 +534,7 @@ Test("db_wire_disordered_ranges_preserve_full_validation", () =>
             DbWire.U64(overlap, cellsOffset + second * WireSchema.CellBytes + 8, offsets[order[first]]);
             Reject<ArgumentException>(() => DbWire.Parse(overlap, shape));
             Reject<ArgumentException>(() => DbWire.ParseOwned(overlap, shape));
+            Reject<ArgumentException>(() => DbWire.ParseBorrowed(overlap, shape));
         }
     }
     Check(permutations == 24, "The complete range-order permutation matrix was not exercised.");
@@ -540,28 +542,33 @@ Test("db_wire_disordered_ranges_preserve_full_validation", () =>
     DbWire.U64(partial, cellsOffset + 3 * WireSchema.CellBytes + 8, offsets[0] + 1);
     Reject<ArgumentException>(() => DbWire.Parse(partial, shape));
     Reject<ArgumentException>(() => DbWire.ParseOwned(partial, shape));
+    Reject<ArgumentException>(() => DbWire.ParseBorrowed(partial, shape));
 });
 Test("db_wire_defensive_copy_and_exclusive_owned_handoff", () =>
 {
     var borrowed = (byte[])wire.Clone();
     var defensive = DbWire.Parse(borrowed, expectation);
     Array.Clear(borrowed);
-    Check(defensive.Bytes.AsSpan().SequenceEqual(wire), "Borrowed input mutation changed a parsed wire snapshot.");
-    Check(!ReferenceEquals(defensive.Bytes, borrowed), "The borrowed parse entry point lost its defensive copy.");
+    Check(defensive.Bytes.Span.SequenceEqual(wire), "Borrowed input mutation changed a parsed wire snapshot.");
+    Check(!System.Runtime.InteropServices.MemoryMarshal.TryGetArray(defensive.Bytes, out var defensiveArray) || !ReferenceEquals(defensiveArray.Array, borrowed), "The borrowed parse entry point lost its defensive copy.");
     var exclusive = (byte[])wire.Clone();
     var owned = DbWire.ParseOwned(exclusive, expectation);
-    Check(ReferenceEquals(owned.Bytes, exclusive), "The exclusive owned parse allocated a second payload copy.");
+    Check(System.Runtime.InteropServices.MemoryMarshal.TryGetArray(owned.Bytes, out var ownedArray) && ReferenceEquals(ownedArray.Array, exclusive), "The exclusive owned parse allocated a second payload copy.");
+    var nativeContract = DbWire.ParseBorrowed(exclusive, expectation);
+    Check(System.Runtime.InteropServices.MemoryMarshal.TryGetArray(nativeContract.Bytes, out var borrowedArray) && ReferenceEquals(borrowedArray.Array, exclusive), "Trusted borrowed parse cloned its storage.");
     Check(owned.Cell(0, 17) is null && owned.Cell(0, 18) is { Length: 0 }, "Owned parsing changed NULL/empty semantics.");
     Reject<ArgumentNullException>(() => DbWire.ParseOwned(null!, expectation));
     Reject<ArgumentException>(() => DbWire.ParseOwned((byte[])wire.Clone(), expectation with { MetadataHash = Enumerable.Repeat((byte)1, 32).ToArray() }));
+    Reject<ArgumentException>(() => DbWire.ParseBorrowed((byte[])wire.Clone(), expectation with { MetadataHash = Enumerable.Repeat((byte)1, 32).ToArray() }));
     Reject<ArgumentException>(() => DbWire.ParseOwned(wire.AsSpan(0, 95).ToArray(), expectation));
+    Reject<ArgumentException>(() => DbWire.ParseBorrowed(wire.AsSpan(0, 95).ToArray(), expectation));
 });
 Test("wire_owned_storage_is_explicit_and_default_parse_still_snapshots", () =>
 {
     var input = (byte[])wire.Clone();
     var copied = DbWire.Parse(input, expectation);
     var retained = DbWire.ParseOwned(input, expectation);
-    Check(!ReferenceEquals(copied.Bytes, input) && ReferenceEquals(retained.Bytes, input), "Wire storage ownership changed.");
+    Check(System.Runtime.InteropServices.MemoryMarshal.TryGetArray(copied.Bytes, out var copiedArray) && !ReferenceEquals(copiedArray.Array, input) && System.Runtime.InteropServices.MemoryMarshal.TryGetArray(retained.Bytes, out var retainedArray) && ReferenceEquals(retainedArray.Array, input), "Wire storage ownership changed.");
     var first = retained.Cell(0, 0)!.Value;
     Check(first.Span.SequenceEqual(copied.Cell(0, 0)!.Value.Span), "Owned parse changed decoded bytes.");
     Array.Clear(input);

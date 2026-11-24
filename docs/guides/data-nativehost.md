@@ -97,10 +97,12 @@ as a count command. `ScalarAsync` requires exactly one column and one row; zero 
 multiple rows reject. `QueryAsync` enforces both the buffered row and encoded-byte
 budgets. Setting either buffered budget to zero prohibits buffered demand.
 `StreamAsync` is one-shot and starts the native query at the first `MoveNextAsync`.
-A bounded native batch is copied into managed owned bytes; the complete ordered
-aliases/codecs are validated before user construction. The materializer runs
-synchronously and returns owned CLR data. Early exit or an exception joins cursor
-cleanup before the failed public operation completes.
+A bounded native batch retains its immutable native storage while the complete
+ordered aliases/codecs are validated before user construction. Validation and
+the complete synchronous materializer call hold a temporary SafeHandle reference.
+The materializer returns owned CLR data; no native span escapes the call. Early
+exit or an exception joins cursor cleanup before the failed public operation
+completes.
 
 ## Transactions and truthful cleanup
 
@@ -169,9 +171,13 @@ managed callback root. Registration and cancellation controls participate in
 retirement separately from native worker completion. A transferred cursor retains
 its own session/source parent after the producing operation is released. Only one
 unreleased batch is admitted per cursor. SQL/configuration use explicit bounded
-UTF-8 copies; db-wire results have a native batch and a managed byte copy. These
-facts are not throughput or memory-performance claims; comparative benchmarks
-remain with their assigned tasks.
+UTF-8 copies. The streaming host reads validated db-wire results directly from
+the retained native batch; codecs still create the owned strings, byte arrays or
+objects required by the result type. Ordinary internal batches without native
+ownership or an exclusive managed-array handoff retain defensive copying. This
+does not remove driver-to-wire serialization, operation/lease objects or business
+result allocations, and is not a claim of an allocation-free query. Comparative
+benchmarks remain with their assigned tasks.
 
 ## Examples and verification
 

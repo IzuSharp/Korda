@@ -1,10 +1,11 @@
+using System.Runtime.InteropServices;
 using Korda.Data;
 
 namespace Korda.Database.Internal;
 
-/// <summary>Internal host seam for one independently owned native batch and its bounded managed copy.</summary>
-/// <remarks>Bytes are managed-owned, immutable, and valid until disposal or an explicit owned handoff. The creating transport retains
-/// the native owner and its byte permit until Dispose; a raw pointer or native borrow never crosses await.</remarks>
+/// <summary>Internal host seam for one independently owned, bounded batch.</summary>
+/// <remarks>Bytes are immutable and valid until disposal or an explicit owned handoff. The creating transport retains
+/// the native owner and its byte permit until Dispose. Native spans are consumed only within a synchronous read scope.</remarks>
 internal interface IStreamBatch : IDisposable
 {
     ReadOnlyMemory<byte> Bytes { get; }
@@ -19,6 +20,34 @@ internal interface IStreamBatch : IDisposable
 internal interface IOwnedStreamBatch : IStreamBatch
 {
     byte[] TakeBytes();
+}
+
+/// <summary>Trusted immutable native storage whose reads require a temporary SafeHandle reference.</summary>
+/// <remarks>The batch holds the ordinary SafeHandle owner; it never holds an extra reference across await.
+/// Parsing, row sizing and the complete synchronous projection call retain ReadOwner until consumption ends.
+/// Returned application values must own their data; borrowed memory never escapes a public row reader.</remarks>
+internal interface IBorrowedStreamBatch : IStreamBatch
+{
+    SafeHandle ReadOwner { get; }
+}
+
+/// <summary>A nonallocating native read lifetime; no scope may cross await.</summary>
+internal ref struct BatchReadScope
+{
+    private SafeHandle? _owner;
+    internal BatchReadScope(SafeHandle? owner)
+    {
+        _owner = null;
+        if (owner is null) return;
+        var retained = false;
+        try { owner.DangerousAddRef(ref retained); _owner = owner; }
+        catch { if (retained) owner.DangerousRelease(); throw; }
+    }
+    public void Dispose()
+    {
+        var owner = _owner; _owner = null;
+        owner?.DangerousRelease();
+    }
 }
 
 /// <summary>Provider-confirmed native retirement, distinct from physical protocol reuse and managed disposal.</summary>
@@ -47,7 +76,7 @@ internal readonly record struct StreamLimits(int MaxBatchRows, int MaxBatchBytes
     }
 }
 
-/// <summary>A synchronous B01 row lease over one validated, copied batch.</summary>
+/// <summary>A synchronous B01 row lease over one validated, retained batch.</summary>
 /// <remarks>Complete wire identity and all cell ranges/types are checked before materialization. Disposing
 /// invalidates every reader and releases the creating transport's native owner exactly once.</remarks>
 internal sealed class RowBatchLease : IRowLease, IDisposable
@@ -61,6 +90,7 @@ internal sealed class RowBatchLease : IRowLease, IDisposable
         _fields = fields;
         try
         {
+            using var read = new BatchReadScope((owner as IBorrowedStreamBatch)?.ReadOwner);
             byte[]? ownedBytes = null;
             ReadOnlyMemory<byte> bytes;
             if (owner is IOwnedStreamBatch owned)
@@ -70,7 +100,8 @@ internal sealed class RowBatchLease : IRowLease, IDisposable
             }
             else bytes = owner.Bytes;
             if (bytes.Length > limits.MaxBatchBytes) throw new DatabaseException("Native batch exceeds its admitted byte limit.", DatabaseErrorKind.ResourceLimit);
-            var wire = ownedBytes is null ? DbWire.Parse(bytes.Span, expected) : DbWire.ParseOwned(ownedBytes, expected);
+            var wire = ownedBytes is not null ? DbWire.ParseOwned(ownedBytes, expected)
+                : owner is IBorrowedStreamBatch ? DbWire.ParseBorrowed(bytes, expected) : DbWire.Parse(bytes.Span, expected);
             _wire = wire;
             if (wire.Rows > limits.MaxBatchRows || wire.Rows == 0 && !owner.End)
                 throw new DatabaseException("Native batch row count or end marker is invalid.", DatabaseErrorKind.ShapeMismatch);
@@ -88,6 +119,7 @@ internal sealed class RowBatchLease : IRowLease, IDisposable
     internal bool End { get; }
     internal long RowBytes(uint row)
     {
+        using var read = new BatchReadScope((_owner as IBorrowedStreamBatch)?.ReadOwner);
         var wire = Wire;
         long bytes = checked(_fields.Length * (long)WireSchema.CellBytes);
         for (var i = 0; i < _fields.Length; i++) bytes = checked(bytes + (wire.Cell(row, i)?.Length ?? 0));
@@ -95,6 +127,7 @@ internal sealed class RowBatchLease : IRowLease, IDisposable
     }
     internal T Materialize<T>(uint row, Projection<T> projection)
     {
+        using var read = new BatchReadScope((_owner as IBorrowedStreamBatch)?.ReadOwner);
         if (row >= Rows) throw new ArgumentOutOfRangeException(nameof(row));
         _row = row;
         return projection.Read(this);

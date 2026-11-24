@@ -10,13 +10,14 @@ internal sealed record WireExpectation(PayloadKind Kind, uint Profile, byte[] Me
     internal uint? ExactRows { get; init; }
 }
 
-// One field serialization contract, not a CLR/native struct ABI. Only owned bytes escape parsing.
+// One field serialization contract, not a CLR/native struct ABI. Borrowed storage
+// is restricted to an internal batch whose owner protects every synchronous read.
 internal readonly struct DbWire
 {
     internal const int MaxEncodedBytes = 4 * 1024 * 1024;
     internal const int MaxDescriptors = 4096;
-    private DbWire(byte[] bytes, WireExpectation expected, uint rows) { Bytes = bytes; Expected = expected; Rows = rows; }
-    internal byte[] Bytes { get; }
+    private DbWire(ReadOnlyMemory<byte> bytes, WireExpectation expected, uint rows) { Bytes = bytes; Expected = expected; Rows = rows; }
+    internal ReadOnlyMemory<byte> Bytes { get; }
     internal WireExpectation Expected { get; }
     internal uint Rows { get; }
     internal static byte[] Encode(WireExpectation expected, uint rows, IReadOnlyList<ReadOnlyMemory<byte>?> cells)
@@ -63,7 +64,11 @@ internal readonly struct DbWire
         ArgumentNullException.ThrowIfNull(bytes);
         return ParseCore(bytes, expected, bytes);
     }
-    private static DbWire ParseCore(ReadOnlySpan<byte> bytes, WireExpectation expected, byte[]? owned)
+    // The caller retains the immutable native storage through validation and all
+    // later cell consumption. Ordinary callers still use the defensive Parse.
+    internal static DbWire ParseBorrowed(ReadOnlyMemory<byte> bytes, WireExpectation expected)
+        => ParseCore(bytes.Span, expected, bytes);
+    private static DbWire ParseCore(ReadOnlySpan<byte> bytes, WireExpectation expected, ReadOnlyMemory<byte>? retained)
     {
         try
         {
@@ -121,7 +126,7 @@ internal readonly struct DbWire
                 ranges.Sort((x, y) => x.Start.CompareTo(y.Start));
                 for (var i = 1; i < ranges.Count; i++) if (ranges[i].Start < ranges[i - 1].End) Bad("Nonempty cell ranges overlap.");
             }
-            return new(owned ?? bytes.ToArray(), expected, rows);
+            return new(retained ?? bytes.ToArray(), expected, rows);
         }
         catch (Exception e) when (e is OverflowException or ArgumentOutOfRangeException or JsonException)
         { throw new ArgumentException("Malformed bounded db-wire payload.", nameof(bytes), e); }
@@ -138,8 +143,9 @@ internal readonly struct DbWire
     {
         if (row >= Rows || (uint)column >= Expected.Descriptors.Length) throw new ArgumentOutOfRangeException(nameof(row));
         var o = checked(WireSchema.HeaderBytes + Expected.Descriptors.Length * WireSchema.DescriptorBytes + ((int)row * Expected.Descriptors.Length + column) * WireSchema.CellBytes);
-        if (R16(Bytes, o + 2) == 1) return null;
-        return new ReadOnlyMemory<byte>(Bytes, checked((int)R64(Bytes, o + 8)), checked((int)R64(Bytes, o + 16)));
+        var bytes = Bytes.Span;
+        if (R16(bytes, o + 2) == 1) return null;
+        return Bytes.Slice(checked((int)R64(bytes, o + 8)), checked((int)R64(bytes, o + 16)));
     }
     private static void CheckExpectation(WireExpectation expected, uint rows)
     {

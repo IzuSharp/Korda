@@ -129,6 +129,8 @@ internal static class Suite
             await source.DisposeAsync();
             await WaitZero(source.Provider == DatabaseProvider.Sqlite ? SqliteDataSource.Engine : PostgreSqlDataSource.Engine);
         }
+        await BorrowedBatchHostTests.Run(DatabaseProvider.Sqlite, Path.Combine(directory, "borrowed.db"));
+        await BorrowedBatchHostTests.Run(DatabaseProvider.PostgreSql, pg);
         await DependencyInjection(Path.Combine(directory, "di.db"));
         await WaitZero(SqliteDataSource.Engine);
         Directory.Delete(directory, true);
@@ -156,6 +158,8 @@ internal static class Suite
         using var plan = SqlSubmission.Create(session, SqlCommand.Create("SELECT id,name FROM " + table + " ORDER BY id"), 3, id);
         using var cursor = await session.ExecutePlanAsync(plan, ReadOnlyMemory<byte>.Empty, default);
         var close = new CloseController(source, cursor, cursor.Dispose);
+        var engine = source.Provider == DatabaseProvider.Sqlite ? SqliteDataSource.Engine : PostgreSqlDataSource.Engine;
+        var buffersBefore = Counts(engine)[4];
         Task<Korda.Database.NativeBuffer> Fetch(int rows) => source.Start(() => NativeHost.Fetch(cursor, rows, source.Limits.MaxBatchBytes), operation => NativeHost.TakeBuffer(source.Binding, operation));
         try
         {
@@ -163,22 +167,41 @@ internal static class Suite
             {
                 using var batch = new HostStreamBatch(first, checked((int)source.Limits.MaxBatchBytes));
                 var borrowed = batch.Bytes;
-                var transferred = batch.TakeBytes();
-                Check(System.Runtime.InteropServices.MemoryMarshal.TryGetArray(borrowed, out var segment)
-                    && ReferenceEquals(segment.Array, transferred), "host transfers its existing managed copy without cloning");
-                Check(BinaryPrimitives.ReadUInt32LittleEndian(transferred.AsSpan(56)) == 1, "native per-fetch one-row demand");
-                await Throws<ObjectDisposedException>(() => { _ = batch.Bytes; return Task.CompletedTask; });
-                await Throws<ObjectDisposedException>(() => { _ = batch.TakeBytes(); return Task.CompletedTask; });
+                Check(!System.Runtime.InteropServices.MemoryMarshal.TryGetArray(borrowed, out _),
+                    "host batch exposes native storage without an intermediate managed array");
+                Check(ReferenceEquals(batch.ReadOwner, first), "the native batch exposes its creating SafeHandle read owner");
+                InspectNativeBatch(batch, first, engine, buffersBefore + 1, dispose: false);
+                await Throws<NotSupportedException>(() => { using var pin = borrowed.Pin(); return Task.CompletedTask; });
                 await Throws<InvalidOperationException>(async () => { using var blocked = await Fetch(1); });
-                Check(!first.IsClosed, "managed transfer retains the native byte permit until batch disposal");
-                batch.Dispose(); batch.Dispose();
-                Check(first.IsClosed && BinaryPrimitives.ReadUInt32LittleEndian(transferred.AsSpan(56)) == 1,
-                    "host batch disposal releases native owner once while transferred managed bytes survive");
+                Check(!first.IsClosed, "the batch retains the native byte permit before disposal");
+                InspectNativeBatch(batch, first, engine, buffersBefore + 1, dispose: true);
+                Check(first.IsClosed && Counts(engine)[4] == buffersBefore,
+                    "the last synchronous read reference releases the disposed native batch once");
+                await Throws<ObjectDisposedException>(() => { _ = batch.Bytes; return Task.CompletedTask; });
+                await Throws<ObjectDisposedException>(() => { _ = borrowed.Span.Length; return Task.CompletedTask; });
             }
             using var second = await Fetch(2);
             Check(BinaryPrimitives.ReadUInt32LittleEndian(second.Copy().AsSpan(56)) == 2, "native per-fetch two-row demand after prior buffer release");
         }
         finally { close.Request(); await close.JoinAsync(); }
+    }
+    private static void InspectNativeBatch(HostStreamBatch batch, Korda.Database.NativeBuffer owner,
+        EngineDescriptor engine, ulong expectedBuffers, bool dispose)
+    {
+        var retained = false;
+        try
+        {
+            owner.DangerousAddRef(ref retained);
+            var span = batch.Bytes.Span;
+            Check(BinaryPrimitives.ReadUInt32LittleEndian(span[56..]) == 1, "native per-fetch one-row demand within a complete read scope");
+            if (dispose)
+            {
+                batch.Dispose(); batch.Dispose();
+                Check(Counts(engine)[4] == expectedBuffers, "disposing a batch cannot free storage retained by an active read scope");
+                Check(BinaryPrimitives.ReadUInt32LittleEndian(span[56..]) == 1, "an already acquired span remains valid until its read scope ends");
+            }
+        }
+        finally { if (retained) owner.DangerousRelease(); }
     }
     private static async Task DependencyInjection(string path)
     {

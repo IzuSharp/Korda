@@ -1,4 +1,6 @@
+using System.Buffers;
 using System.Buffers.Binary;
+using System.Runtime.InteropServices;
 using Korda.Database.Internal;
 using Korda.Query.Internal;
 
@@ -30,18 +32,31 @@ internal sealed class HostStreamTransport : IStreamTransport
     public async Task<StreamRetirement> JoinAsync()
     { _close.Request(); await _close.JoinAsync().ConfigureAwait(false); var snapshot = _close.Snapshot; return new(snapshot.LocalResourcesReleased, snapshot.ConnectionDisposition == ConnectionDisposition.Usable, 0); }
 }
-internal sealed class HostStreamBatch : IOwnedStreamBatch
+internal sealed class HostStreamBatch : MemoryManager<byte>, IBorrowedStreamBatch
 {
     private NativeBuffer? _owner;
-    private byte[]? _bytes;
-    internal HostStreamBatch(NativeBuffer owner, int maximum)
+    private readonly nint _address;
+    private readonly int _length;
+    internal unsafe HostStreamBatch(NativeBuffer owner, int maximum)
     {
-        _bytes = owner.Copy(maximum); _owner = owner;
-        if (_bytes.Length < 96) throw new Korda.Data.DatabaseException("Native batch header is incomplete.", Korda.Data.DatabaseErrorKind.ShapeMismatch);
-        End = BinaryPrimitives.ReadUInt32LittleEndian(_bytes.AsSpan(56)) == 0;
+        using var read = new BatchReadScope(owner);
+        owner.ViewWhileRetained(maximum, out _address, out _length);
+        if (_length < 96) throw new Korda.Data.DatabaseException("Native batch header is incomplete.", Korda.Data.DatabaseErrorKind.ShapeMismatch);
+        End = BinaryPrimitives.ReadUInt32LittleEndian(new ReadOnlySpan<byte>((void*)_address, _length)[56..]) == 0;
+        _owner = owner;
     }
-    public ReadOnlyMemory<byte> Bytes => _bytes ?? throw new ObjectDisposedException(nameof(HostStreamBatch));
-    public byte[] TakeBytes() => Interlocked.Exchange(ref _bytes, null) ?? throw new ObjectDisposedException(nameof(HostStreamBatch));
+    public SafeHandle ReadOwner => Volatile.Read(ref _owner) ?? throw new ObjectDisposedException(nameof(HostStreamBatch));
+    public ReadOnlyMemory<byte> Bytes { get { _ = ReadOwner; return CreateMemory(_length); } }
+    // Every caller of this internal memory manager holds a BatchReadScope over
+    // the complete synchronous consumption, not just over this GetSpan call.
+    public override unsafe Span<byte> GetSpan()
+    {
+        ObjectDisposedException.ThrowIf(ReadOwner.IsClosed, this);
+        return new Span<byte>((void*)_address, _length);
+    }
+    public override MemoryHandle Pin(int elementIndex = 0) => throw new NotSupportedException("Native batch memory cannot escape its synchronous read scope.");
+    public override void Unpin() { }
     public bool End { get; }
-    public void Dispose() { Interlocked.Exchange(ref _bytes, null); Interlocked.Exchange(ref _owner, null)?.Dispose(); }
+    public void Dispose() => Dispose(true);
+    protected override void Dispose(bool disposing) => Interlocked.Exchange(ref _owner, null)?.Dispose();
 }

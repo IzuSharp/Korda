@@ -17,10 +17,10 @@ internal static class WireValidationTests
         { assertions++; if (!condition) throw new InvalidOperationException(message); }
         void Reject(byte[] input, WireExpectation expected)
         {
-            foreach (var owned in new[] { false, true })
+            foreach (var storage in new[] { 0, 1, 2 })
             {
                 var rejected = false;
-                try { _ = owned ? DbWire.ParseOwned(input, expected) : DbWire.Parse(input, expected); }
+                try { _ = storage == 0 ? DbWire.Parse(input, expected) : storage == 1 ? DbWire.ParseOwned(input, expected) : DbWire.ParseBorrowed(input, expected); }
                 catch (ArgumentException) { rejected = true; }
                 Check(rejected, "Overlapping or out-of-bounds cell ranges were accepted.");
             }
@@ -44,9 +44,9 @@ internal static class WireValidationTests
                 var input = (byte[])original.Clone();
                 for (var i = 0; i < cellCount; i++)
                     BinaryPrimitives.WriteUInt64LittleEndian(input.AsSpan(cellsOffset + i * WireSchema.CellBytes + 8), (ulong)(payloadOffset + order[i] * 8));
-                foreach (var owned in new[] { false, true })
+                foreach (var storage in new[] { 0, 1, 2 })
                 {
-                    var parsed = owned ? DbWire.ParseOwned(input, expected) : DbWire.Parse(input, expected);
+                    var parsed = storage == 0 ? DbWire.Parse(input, expected) : storage == 1 ? DbWire.ParseOwned(input, expected) : DbWire.ParseBorrowed(input, expected);
                     Check(parsed.Rows == 4, "Unordered valid payload changed its row count.");
                     for (var i = 0; i < cellCount; i++)
                         Check(BinaryPrimitives.ReadInt64LittleEndian(parsed.Cell((uint)(i / ids.Length), i % ids.Length)!.Value.Span) == order[i],

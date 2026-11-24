@@ -34,6 +34,16 @@ internal sealed class NativeBuffer : SafeHandle
     { if (pointer == 0) throw new InvalidOperationException("Native buffer owner is zero."); _binding = binding; SetHandle(pointer); }
     public override bool IsInvalid => handle == 0;
     protected override unsafe bool ReleaseHandle() { _binding.Calls.nw_db_buffer_release_v1(handle); return true; }
+    // Only callers holding a synchronous BatchReadScope may consume this view.
+    // The buffer's immutable native storage remains owned by this SafeHandle.
+    internal unsafe void ViewWhileRetained(int maximum, out nint address, out int length)
+    {
+        var view = new NwBytesViewV1(); var error = BindingChecks.Error();
+        var status = _binding.Calls.nw_db_buffer_view_v1(DangerousGetHandle(), &view, &error); HostFailure.Check(_binding, status, error);
+        if (view.Length > (ulong)maximum || view.Length != 0 && view.Data is null)
+            throw new DatabaseException("Native buffer exceeds the admitted range.", DatabaseErrorKind.ResourceLimit);
+        address = (nint)view.Data; length = checked((int)view.Length);
+    }
     internal unsafe byte[] Copy(int maximum = DbWire.MaxEncodedBytes)
     {
         var retained = false;

@@ -115,9 +115,11 @@ allocations are outside this charged-data bound.
 3. A completed native batch is transferred once. Repeated take returns an invalid
    state and no second owner. Managed disposal is idempotent; a native destructor
    is never deliberately called twice with the same pointer.
-4. The transport supplies a bounded managed copy while retaining the native
-   batch. B01 validates and copies the wire into the current row lease. Mapping is
-   synchronous; `RowReader`, spans and native borrows never cross an await. CLR
+4. The production host retains a bounded immutable native batch. B01 validates
+   its borrowed wire without a managed payload copy; validation, row sizing and
+   the complete synchronous materializer hold a temporary SafeHandle reference.
+   A managed transport can instead transfer an exclusive array, or use the
+   defensive-copy fallback. `RowReader` and spans never cross an await. CLR
    strings/arrays/DTOs can outlive the lease because they own their data.
 5. Break, cancellation, failed decoding, or a constructor exception releases
    the current batch, closes further admission, requests stop, and awaits the
@@ -162,8 +164,9 @@ claiming a thread join.
 | --- | --- |
 | B06 native copy path | Finite conservative reservations plus exact current/peak serialized batch bytes and live owner counts |
 | Provider rows | B02/B03 separately report channel plus delivery/producer handoff retention; both tested adapters bound that observed category to two rows with a one-item channel |
-| Managed transport | One complete native-to-managed wire copy, retained until the batch is released |
-| B01 validation | One additional managed wire copy for a successfully validated lease; no escaping unmanaged `Memory` |
+| Production managed host | Retains the immutable native batch and protects complete synchronous reads; no managed payload copy |
+| B01 validation | Trusted native borrowing and exclusive managed-array handoff avoid copying; ordinary input keeps a defensive copy |
+| Maintainer-fixture transport | Its explicit native-to-managed copy and ordinary-input defensive copy remain fixture costs; they do not describe the production host |
 | Materialized values | Direct static constructors; strings and byte arrays are owned copies; buffered results retain their DTO/list/array allocations |
 | Control calls | The test bridge records fetch/take/copy/stop/join/release; its blocking worker adaptation is harness overhead, not a claimed production callback-host cost |
 | Whole process | SQLx receive buffers/caches, SQLite allocations, Tokio stacks, allocator bookkeeping/retention and GC are measured separately; no hard RSS or performance superiority claim |
