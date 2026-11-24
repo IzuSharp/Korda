@@ -21,6 +21,11 @@ from campaign_build import request_record, validate_heavy_workload
 
 class ControllerTests(unittest.TestCase):
     @staticmethod
+    def clean_oracle():
+        return {"oracleFailuresBefore": 0, "oracleFailuresAfter": 0,
+                "oracleFailures": 0, "firstOracleFailure": None}
+
+    @staticmethod
     def group_snapshot():
         return {"path": "/sys/fs/cgroup/runner/db-perf-01-pg-" + "a" * 24,
                 "deviceInode": [10, 20], "controls": {"cpu.max": {"unavailableErrno": 2}},
@@ -268,8 +273,8 @@ class ControllerTests(unittest.TestCase):
         success, all_completed = [0] * 8192, [0] * 8192
         success[1280] = 3
         all_completed[1280] = 4
-        return {"actualCaseIds": ["one"], "cases": [{"name": "one", "started": 4, "succeeded": 3, "failed": 1, "rows": 96}], "ownersReturnedToZero": True,
-                "offeredLoad": {"planned": 5, "attempted": 5, "sent": 4, "started": 4, "completed": 4,
+        return {**ControllerTests.clean_oracle(), "actualCaseIds": ["one"], "cases": [{"name": "one", "started": 4, "succeeded": 3, "failed": 1, "rows": 96}], "ownersReturnedToZero": True,
+                "offeredLoad": {**ControllerTests.clean_oracle(), "planned": 5, "attempted": 5, "sent": 4, "started": 4, "completed": 4,
                     "succeeded": 3, "failed": 1, "rejected": 1, "retries": 0, "rows": 96,
                     "timerFrequency": 1000000000, "startedTicks": 1000000000, "deadlineTicks": 6000000000,
                     "offeredEndTicks": 6000000000, "drainedTicks": 6100000000, "successScheduledHistogram": success,
@@ -284,6 +289,41 @@ class ControllerTests(unittest.TestCase):
         self.assertEqual(value["counts"]["rejected"], 1)
         self.assertEqual(value["errorAndRejectionRate"], 0.4)
         self.assertFalse(campaign.meets_slo(value, {"maximumErrorAndRejectionRate": 0.1, "maximumP99Microseconds": 100000}))
+
+    def test_oracle_failures_cannot_be_diluted_by_the_error_budget(self):
+        raw = self.offered()
+        normalized = campaign.normalized_result(raw, ["one"], 5, 1)
+        permissive_slo = {"maximumErrorAndRejectionRate": 0.5, "maximumP99Microseconds": 100000}
+        self.assertTrue(campaign.meets_slo(normalized, permissive_slo))
+        for where in ("result", "offered", "cleanup", "prior-phase"):
+            value = copy.deepcopy(raw)
+            target = value["offeredLoad"] if where == "offered" else value
+            target.update(oracleFailures=1, firstOracleFailure={"phase": where})
+            target["oracleFailuresAfter"] = 0 if where == "cleanup" else 1
+            target["oracleFailuresBefore"] = 1 if where == "prior-phase" else 0
+            with self.subTest(where=where), self.assertRaisesRegex(ValueError, "oracle violation"):
+                campaign.normalized_result(value, ["one"], 5, 1)
+        normalized["oracleFailures"] = 1
+        self.assertFalse(campaign.meets_slo(normalized, permissive_slo))
+        normalized["oracleFailures"] = 0
+        del normalized["correctnessPassed"]
+        self.assertFalse(campaign.meets_slo(normalized, permissive_slo))
+
+    def test_missing_or_malformed_oracle_evidence_is_not_zero(self):
+        for where in ("result", "offered"):
+            for field in self.clean_oracle():
+                value = self.offered()
+                target = value["offeredLoad"] if where == "offered" else value
+                del target[field]
+                with self.subTest(where=where, missing=field), self.assertRaises(ValueError):
+                    campaign.normalized_result(value, ["one"], 5, 1)
+        for field in ("oracleFailuresBefore", "oracleFailuresAfter", "oracleFailures"):
+            for invalid in (None, True, -1, 0.0):
+                value = self.offered(); value[field] = invalid
+                with self.subTest(field=field, value=invalid), self.assertRaises(ValueError):
+                    campaign.normalized_result(value, ["one"], 5, 1)
+        value = self.offered(); value["firstOracleFailure"] = {"phase": "warmup"}
+        with self.assertRaises(ValueError): campaign.normalized_result(value, ["one"], 5, 1)
 
     def test_closed_loop_cannot_credit_an_early_exit_as_the_requested_duration(self):
         value = self.offered()
@@ -551,13 +591,16 @@ class ControllerTests(unittest.TestCase):
             phase.update(beforeOwners=dict(warm), afterOwners=dict(warm))
             for name in ("startedTicks", "deadlineTicks", "offeredEndTicks", "drainedTicks"):
                 phase["offeredLoad"][name] += index * 6 * phase["offeredLoad"]["timerFrequency"]
-        raw = {"phases": phases, "actualCaseIds": ["one"], "sameSourceInstance": True,
+        raw = {**self.clean_oracle(), "phases": phases, "actualCaseIds": ["one"], "sameSourceInstance": True,
                "sameWorkerAndSessionInstances": True, "poolRebuiltBetweenPhases": False,
                "concurrency": 1, "warmOwners": warm, "drained": dict.fromkeys(warm, 0),
                "trackedResourcesReturnedToZero": True, "passed": True}
         settings = {"seconds": 5, "overloadSeconds": 5, "overloadRate": 1}
         measurement = campaign.normalized_recovery(raw, ["one"], settings, 1)
         self.assertTrue(measurement["consumerPassed"])
+        prior = dict(raw, oracleFailures=1, firstOracleFailure={"phase": "prior-command-phase"})
+        with self.assertRaisesRegex(ValueError, "oracle violation"):
+            campaign.normalized_recovery(prior, ["one"], settings, 1)
         self.assertEqual(measurement["counts"]["failed"], 1)
         self.assertFalse(campaign.recovery_meets_slo(measurement, {"maximumErrorAndRejectionRate": 0.001, "maximumP99Microseconds": 100000}))
         for snapshot in (raw["drained"], phases[1]["afterOwners"]):

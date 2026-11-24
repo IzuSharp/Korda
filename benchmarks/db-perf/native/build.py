@@ -82,6 +82,7 @@ def main():
                       '-Wl,-soname,libsqlite3.so', *['-D' + value for value in SQLITE_DEFINES],
                       str(args.sqlite_source.resolve() / 'sqlite3.c'), '-pthread', '-ldl', '-lm', '-o', str(sqlite_library)]
     executable = output / 'db-perf-native'
+    oracle_test = output / 'native-oracle-failure-test'
     profiler = output / 'libdb-perf-alloc.so'
     profile_test = output / 'allocation-profile-test'
     command = [str(cxx), '-std=c++20', '-O3', '-DNDEBUG', '-fno-omit-frame-pointer', '-Wall', '-Wextra',
@@ -108,7 +109,10 @@ def main():
         shutil.copyfile(prior / 'libsqlite3.so', sqlite_library)
         reused_sqlite = {'sourceBuild': str(prior), 'receiptSha256': sha(prior_receipt),
                          'librarySha256': reused_hash, 'reason': 'identical locked compiler, defines and SQLite source inputs'}
+    oracle_command = [str(HERE / 'oracle_failure_test.cpp') if value == str(HERE / 'main.cpp')
+                      else str(oracle_test) if value == str(executable) else value for value in command]
     commands = [command] if reused_sqlite else [sqlite_command, command]
+    commands += [oracle_command, [str(oracle_test)]]
     commands += [
         [str(cc), '-std=c17', '-O2', '-g', '-Wall', '-Wextra', '-shared', '-fPIC',
          str(HERE / 'allocation_profile.c'), '-pthread', '-o', str(profiler)],
@@ -132,11 +136,11 @@ def main():
         'sqliteVersion': deps['sqlite']['version'], 'sqliteLinkage': 'shared, exact locked amalgamation and product defines',
         'sqliteDefines': SQLITE_DEFINES, 'inputs': sources,
         'sqliteReusedFromVerifiedBuild': reused_sqlite,
-        'sources': {path.name: sha(path) for path in [HERE / 'main.cpp', Path(__file__), HERE / 'allocation_profile.c',
+        'sources': {path.name: sha(path) for path in [HERE / 'main.cpp', HERE / 'oracle_failure_test.cpp', Path(__file__), HERE / 'allocation_profile.c',
                     HERE / 'allocation_profile.h', HERE / 'allocation_profile_test.c']},
         'commands': commands, 'exitCodes': results,
         'logs': {path.name: sha(path) for path in output.glob('build-*.log')},
-        'outputs': {path.name: sha(path) for path in [sqlite_library, executable, profiler, profile_test] if path.exists()},
+        'outputs': {path.name: sha(path) for path in [sqlite_library, executable, oracle_test, profiler, profile_test] if path.exists()},
     }
     (output / 'build-receipt.json').write_text(json.dumps(receipt, indent=2) + '\n')
     print(json.dumps({'output': str(output), 'exitCodes': results, 'outputs': receipt['outputs']}))

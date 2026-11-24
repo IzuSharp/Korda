@@ -59,8 +59,8 @@ internal sealed partial class Workload
             try
             {
             var find=session.FindAsync(Orders.Table,key);if(!find.IsCompleted)suspensions++;
-            original=await find.ConfigureAwait(false)??throw new InvalidOperationException("Write target disappeared.");
-            if(original!=SeedOrder(id))throw new InvalidOperationException("Write target differs from fixed initial state.");
+            original=await find.ConfigureAwait(false)??throw CorrectnessOracle.Failure("Write target disappeared.", name);
+            if(original!=SeedOrder(id))throw CorrectnessOracle.Failure("Write target differs from fixed initial state.", name);
             HashOrder(ref digest,original);
             var changes=new Changes<Order>().Set(Orders.Note,name=="partial-update"?(string?)null:"perf-mutated");
             if(name!="partial-update")changes.Set(Orders.Version,2L);
@@ -68,7 +68,7 @@ internal sealed partial class Workload
                 ?session.UpdateCheckedAsync(Orders.Table,key,changes,new ConcurrencyCheck<Order>().Expect(Orders.Version,1L))
                 :session.UpdateAsync(Orders.Table,key,changes);
             if(!update.IsCompleted)suspensions++;
-            if(await update.ConfigureAwait(false)!=1)throw new InvalidOperationException("Mutation did not affect exactly one order.");
+            if(await update.ConfigureAwait(false)!=1)throw CorrectnessOracle.Failure("Mutation did not affect exactly one order.", name);
             if(name=="stale-conflict")
             {
                 var caught=false;
@@ -78,45 +78,54 @@ internal sealed partial class Workload
                     if(!stale.IsCompleted)suspensions++;await stale.ConfigureAwait(false);
                 }
                 catch(ConcurrencyConflictException){caught=true;}
-                if(!caught)throw new InvalidOperationException("A stale optimistic write was accepted.");
+                if(!caught)throw CorrectnessOracle.Failure("A stale optimistic write was accepted.", name);
                 digest.Boolean(true);
                 var rollback=transaction.RollbackAsync();if(!rollback.IsCompleted)suspensions++;await rollback.ConfigureAwait(false);
-                if(transaction.Outcome!=TransactionOutcome.RolledBack)throw new InvalidOperationException("Rollback was not confirmed.");
+                if(transaction.Outcome!=TransactionOutcome.RolledBack)throw CorrectnessOracle.Failure("Rollback was not confirmed.", name);
             }
             else
             {
                 var check=session.FindAsync(Orders.Table,key);if(!check.IsCompleted)suspensions++;
-                var changed=await check.ConfigureAwait(false)??throw new InvalidOperationException("Mutation removed its row.");
+                var changed=await check.ConfigureAwait(false)??throw CorrectnessOracle.Failure("Mutation removed its row.", name);
                 var expected=name=="partial-update"?original with{Note=null}:original with{Note="perf-mutated",Version=2};
-                if(changed!=expected)throw new InvalidOperationException("Partial mutation changed omitted fields or lost NULL.");
+                if(changed!=expected)throw CorrectnessOracle.Failure("Partial mutation changed omitted fields or lost NULL.", name);
                 HashOrder(ref digest,changed);
                 if(name=="tx-rollback")
                 {
                     var rollback=transaction.RollbackAsync();if(!rollback.IsCompleted)suspensions++;await rollback.ConfigureAwait(false);
-                    if(transaction.Outcome!=TransactionOutcome.RolledBack)throw new InvalidOperationException("Rollback was not confirmed.");
+                    if(transaction.Outcome!=TransactionOutcome.RolledBack)throw CorrectnessOracle.Failure("Rollback was not confirmed.", name);
                 }
                 else
                 {
                     var restore=new Changes<Order>().Set(Orders.Note,original.Note);
                     if(name!="partial-update")restore.Set(Orders.Version,original.Version);
                     var restoring=session.UpdateAsync(Orders.Table,key,restore);if(!restoring.IsCompleted)suspensions++;
-                    if(await restoring.ConfigureAwait(false)!=1)throw new InvalidOperationException("Restore did not affect exactly one row.");
+                    if(await restoring.ConfigureAwait(false)!=1)throw CorrectnessOracle.Failure("Restore did not affect exactly one row.", name);
                     var commit=transaction.CommitAsync();if(!commit.IsCompleted)suspensions++;await commit.ConfigureAwait(false);
-                    if(transaction.Outcome!=TransactionOutcome.Committed)throw new InvalidOperationException("Commit was not confirmed.");
+                    if(transaction.Outcome!=TransactionOutcome.Committed)throw CorrectnessOracle.Failure("Commit was not confirmed.", name);
                 }
             }
             }
+            catch (DatabaseException error) when (error.Kind is DatabaseErrorKind.Conversion or DatabaseErrorKind.ShapeMismatch
+                or DatabaseErrorKind.UnsupportedCapability or DatabaseErrorKind.ConcurrentUse
+                or DatabaseErrorKind.InvalidState or DatabaseErrorKind.UnknownOutcome)
+            { throw CorrectnessOracle.Failure("Transaction materialization or owner contract failed.",name,error); }
+            catch (Exception error) { CorrectnessOracle.ObserveContractFailure(error,name); throw; }
             finally
             {
                 // Outcome confirmation is distinct from local retirement. Join the
                 // transaction before reusing this physical session for the persisted read.
-                var retirement=transaction.DisposeAsync();if(!retirement.IsCompleted)suspensions++;
-                await retirement.ConfigureAwait(false);
+                try
+                {
+                    var retirement=transaction.DisposeAsync();if(!retirement.IsCompleted)suspensions++;
+                    await retirement.ConfigureAwait(false);
+                }
+                catch(Exception cleanup){CorrectnessOracle.ObserveCleanupFailure(cleanup,name);throw;}
             }
-            if(!transaction.Cleanup.LocalResourcesReleased)throw new InvalidOperationException("Transaction retirement did not release local resources.");
+            if(!transaction.Cleanup.LocalResourcesReleased)throw CorrectnessOracle.Failure("Transaction retirement did not release local resources.", name);
             var final=session.FindAsync(Orders.Table,key);if(!final.IsCompleted)suspensions++;
-            var persisted=await final.ConfigureAwait(false)??throw new InvalidOperationException("Persisted order disappeared.");
-            if(persisted!=original)throw new InvalidOperationException("Durable state was not restored after transaction.");
+            var persisted=await final.ConfigureAwait(false)??throw CorrectnessOracle.Failure("Persisted order disappeared.", name);
+            if(persisted!=original)throw CorrectnessOracle.Failure("Durable state was not restored after transaction.", name);
             HashOrder(ref digest,persisted);
             return new(name=="stale-conflict"?2:3,digest.Value,suspensions);
         }

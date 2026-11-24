@@ -12,6 +12,7 @@ internal sealed class Worker : IAsyncDisposable
     private readonly Workload _workload;
     private readonly Options _options;
     private bool _initialSessionReleased;
+    private Exception? _executionFailure;
     internal readonly long[] Histogram = new long[8192];
     internal long Started, Completed, Failed, Rows, Suspensions;
     internal readonly long[] CaseStarted = new long[Workload.Names.Length], CaseSucceeded = new long[Workload.Names.Length],
@@ -39,18 +40,39 @@ internal sealed class Worker : IAsyncDisposable
     internal async Task Warmup()
     {
         if (_options.Verify)
-            foreach (var name in Workload.Names) Validate(name, await Execute(name));
+            foreach (var name in Workload.Names) await Execute(name);
         for (var i = 0; i < _options.Warmup; i++)
         {
-            var name = _workload.Name(i); Validate(name, await Execute(name));
+            var name = _workload.Name(i); await Execute(name);
         }
     }
     private async ValueTask<OperationResult> Execute(string name)
     {
-        if (_options.SessionMode == "persistent") return await _workload.Execute(name).ConfigureAwait(false);
+        if (_options.SessionMode == "persistent")
+        {
+            try { var result = await _workload.Execute(name).ConfigureAwait(false); Validate(name, result); return result; }
+            catch(Exception error){CorrectnessOracle.ObserveContractFailure(error,name);throw;}
+        }
         var session = await _source.OpenSessionAsync().ConfigureAwait(false);
-        try { return await _workload.Execute(name, session).ConfigureAwait(false); }
-        finally { await _source.CloseSessionAsync(session).ConfigureAwait(false); }
+        _executionFailure=null;
+        try { var result = await _workload.Execute(name, session).ConfigureAwait(false); Validate(name, result); return result; }
+        catch(Exception error)
+        {
+            CorrectnessOracle.ObserveContractFailure(error,name);
+            _executionFailure=error;throw;
+        }
+        finally
+        {
+            try { await _source.CloseSessionAsync(session).ConfigureAwait(false); }
+            catch(Exception cleanup)
+            {
+                CorrectnessOracle.ObserveCleanupFailure(cleanup,name);
+                if(_executionFailure is {} primary)
+                    throw new AggregateException("Workload failure and session retirement failure.",primary,cleanup);
+                throw;
+            }
+            finally { _executionFailure=null; }
+        }
     }
     internal async ValueTask<OperationResult> ExecuteScheduled(long operationIndex)
     {
@@ -59,7 +81,7 @@ internal sealed class Worker : IAsyncDisposable
         try
         {
             var result = await Execute(name).ConfigureAwait(false);
-            Validate(name, result); CaseSucceeded[index]++; CaseRows[index] += result.Rows; CaseSuspensions[index] += result.Suspensions;
+            CaseSucceeded[index]++; CaseRows[index] += result.Rows; CaseSuspensions[index] += result.Suspensions;
             return result;
         }
         catch { CaseFailed[index]++; throw; }
@@ -68,7 +90,7 @@ internal sealed class Worker : IAsyncDisposable
     {
         var expected = _workload.Expected(name);
         if (result.Rows != expected.Rows || result.Digest != expected.Digest)
-            throw new InvalidOperationException($"{name}: expected {expected.Rows}/{expected.Digest:x16}, observed {result.Rows}/{result.Digest:x16}");
+            throw CorrectnessOracle.Failure($"{name}: expected {expected.Rows}/{expected.Digest:x16}, observed {result.Rows}/{result.Digest:x16}", name);
     }
     internal async Task Run(Task start, RunState state, long operations)
     {
@@ -159,7 +181,13 @@ internal sealed record RunReceipt(int SchemaVersion, string Route, string Provid
     double CpuSecondsPerSuccessfulOperation, OwnershipCounts Before, OwnershipCounts After, OwnershipCounts Drained,
     bool ApplicationConnectionsReturnedToZero, Latencies Latencies, SecondCount[] Seconds, bool TimeSeriesTruncated,
     Dictionary<string, string> ActualDiagnosticSql, Dictionary<string, OperationResult> ExpectedResults, string[] Errors, OfferedReceipt? OfferedLoad, CaseCount[] Cases, IdleReading? Idle,
-    bool TimingComparisonEligible, NativeAllocationProfileReceipt? NativeAllocationProfile);
+    bool TimingComparisonEligible, NativeAllocationProfileReceipt? NativeAllocationProfile)
+{
+    public long OracleFailuresBefore { get; init; }
+    public long OracleFailuresAfter { get; init; }
+    public long OracleFailures { get; init; }
+    public OracleFailure? FirstOracleFailure { get; init; }
+}
 
 internal static class Measurement
 {
@@ -170,7 +198,10 @@ internal static class Measurement
         try
         {
             for (var i = 0; i < workers.Length; i++) workers[i] = await Worker.Create(source, options);
+            CorrectnessOracle.SetPhase("warmup");
             await Task.WhenAll(workers.Select(worker => worker.Warmup()));
+            CorrectnessOracle.RequireClean();
+            CorrectnessOracle.SetPhase(options.Rate > 0 ? "offered" : "closed-loop");
             var state = new RunState(options);
             var start = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             using var offered = options.Rate > 0 ? new OfferedLoad(options.Seconds, options.Rate, options.QueueCapacity,
@@ -186,6 +217,7 @@ internal static class Measurement
             var startedUtc = DateTimeOffset.UtcNow.ToString("O");
             allocationProfile?.CaptureBefore();
             var before0 = GC.CollectionCount(0); var before1 = GC.CollectionCount(1); var before2 = GC.CollectionCount(2);
+            var beforeOracle = CorrectnessOracle.Failures;
             var beforeBytes = GC.GetTotalAllocatedBytes(precise: true);
             state.StartedAt = Stopwatch.GetTimestamp();
             state.Deadline = state.StartedAt + (long)(options.Seconds * Stopwatch.Frequency);
@@ -194,6 +226,7 @@ internal static class Measurement
             await completed.ConfigureAwait(false);
             var endedAt = Stopwatch.GetTimestamp();
             var afterBytes = GC.GetTotalAllocatedBytes(precise: true);
+            var afterOracle = CorrectnessOracle.Failures;
             var after0 = GC.CollectionCount(0); var after1 = GC.CollectionCount(1); var after2 = GC.CollectionCount(2);
             allocationProfile?.CaptureAfter();
             var finishedUtc = DateTimeOffset.UtcNow.ToString("O");
@@ -218,6 +251,7 @@ internal static class Measurement
             var caseModes = caseIds.Distinct(StringComparer.Ordinal).ToDictionary(name => name, name => name is "tx-commit" or "tx-rollback" or "partial-update" or "stale-conflict"?"ADO.NET transaction controls plus typed Dapper queries and affected-row optimistic checks; command construction included":options.Mode=="prepared"?"constant SQL and generated cached command factory reuse":"SQL construction and generated mapping each operation");
             var sql = workers[0].Sql.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
             var expectations = workers[0].Expectations.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+            CorrectnessOracle.SetPhase("drain");
             for (var i = 0; i < workers.Length; i++) { await workers[i].DisposeAsync(); workers[i] = null!; }
             await source.DisposeAsync();
             var drained = source.Read();
@@ -268,7 +302,11 @@ internal static class Measurement
                 new(Quantile(histogram, success, .50), Quantile(histogram, success, .95), Quantile(histogram, success, .99),
                     "base-2 histogram with 128 subdivisions per exponent; reported upper bounds (<0.782% relative bin width)", histogram),
                 seconds.ToArray(), schedule?.TimeSeriesTruncated ?? state.Truncated != 0, sql, expectations, errors, schedule, caseCounts, idle,
-                allocationProfile is null, allocationProfile?.CreateReceipt());
+                allocationProfile is null, allocationProfile?.CreateReceipt())
+            {
+                OracleFailuresBefore = beforeOracle, OracleFailuresAfter = afterOracle,
+                OracleFailures = CorrectnessOracle.Failures, FirstOracleFailure = CorrectnessOracle.FirstFailure
+            };
         }
         finally
         {

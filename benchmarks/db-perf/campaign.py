@@ -208,7 +208,31 @@ def raw_histogram(value, count, name):
     return value
 
 
+def validate_oracle(raw, *, interval=True):
+    """Require new producer evidence; absent historical counters never mean zero.
+
+    The process-lifetime counter is set where a result or persistence check
+    fails, before cleanup can replace its exception. It cannot be diluted into
+    the permitted rate of ordinary provider errors or reset between phases.
+    """
+    missing = object()
+    total = get(raw, "oracleFailures", default=missing)
+    require(type(total) is int and total >= 0, "Explicit cumulative oracle failure count is required")
+    first = get(raw, "firstOracleFailure", default=missing)
+    require(first is not missing, "Explicit first oracle failure evidence is required")
+    before = after = None
+    if interval:
+        before = get(raw, "oracleFailuresBefore", default=missing)
+        after = get(raw, "oracleFailuresAfter", default=missing)
+        require(type(before) is int and type(after) is int and 0 <= before <= after <= total,
+                "Oracle interval counters are missing or do not reconcile with the process total")
+    require(total == 0 and first is None,
+            "A workload oracle violation invalidates the command regardless of SLO or cleanup error classification")
+    return {"before": before, "after": after, "total": total}
+
+
 def normalized_result(raw, expected_cases, seconds, rate=None, *, require_coverage=True, ownership="final"):
+    oracle = validate_oracle(raw)
     declared = get(raw, "declaredCaseIds", "actualCaseIds")
     require(declared == expected_cases, "Declared case sequence differs from the frozen shared workload")
     case_counts = get(raw, "cases", "caseCounts")
@@ -245,6 +269,9 @@ def normalized_result(raw, expected_cases, seconds, rate=None, *, require_covera
     offered = get(raw, "offeredLoad", "offered")
     if rate is not None:
         require(isinstance(offered, dict), "An open-loop run requires its complete offered-load ledger")
+        offered_oracle = validate_oracle(offered)
+        require(offered_oracle["before"] == oracle["before"] and offered_oracle["after"] == oracle["after"],
+                "Offered and enclosing oracle intervals differ")
         names = ("planned", "attempted", "sent", "started", "completed", "succeeded", "failed", "rejected", "retries", "rows")
         counts = {name: get(offered, name) for name in names}
         require(all(type(value) is int and value >= 0 for value in counts.values()), "Offered operation counters are missing")
@@ -291,7 +318,8 @@ def normalized_result(raw, expected_cases, seconds, rate=None, *, require_covera
         offered_end = end
     raw_histogram(histogram, counts["succeeded"], "Success latency")
     require(all(totals[name] == counts[name] for name in totals), "Per-case totals differ from the global operation/row ledger")
-    return {"counts": counts, "elapsedThroughDrainSeconds": duration, "offeredSeconds": seconds if rate else None,
+    return {"counts": counts, "correctnessPassed": True, "oracleFailures": oracle["total"],
+            "elapsedThroughDrainSeconds": duration, "offeredSeconds": seconds if rate else None,
             "steadyStartMonotonicNs": int(start), "plannedOfferedEndMonotonicNs": int(deadline),
             "offeredEndMonotonicNs": int(offered_end), "drainedMonotonicNs": int(end),
             "missingExecutedCaseIds": missing, "fullCaseCoverage": not missing,
@@ -305,6 +333,7 @@ def normalized_result(raw, expected_cases, seconds, rate=None, *, require_covera
 
 
 def normalized_recovery(raw, expected_cases, settings, fixed_rate):
+    oracle = validate_oracle(raw, interval=False)
     phases = get(raw, "phases")
     require(isinstance(phases, list) and [get(phase, "name") for phase in phases] == ["reference", "overload", "recovery"],
             "Recovery must retain all three ordered phases")
@@ -359,7 +388,8 @@ def normalized_recovery(raw, expected_cases, settings, fixed_rate):
         for key in totals:
             totals[key] += measurement["counts"][key]
         output.append({"name": get(phase, "name"), "measurement": measurement})
-    return {"counts": totals, "phases": output, "sameSourceConnectionsAndWorkers": True,
+    return {"counts": totals, "correctnessPassed": True, "oracleFailures": oracle["total"],
+            "phases": output, "sameSourceConnectionsAndWorkers": True,
             "ownersReturnedToZero": final_zero, "consumerPassed": get(raw, "passed") is True,
             "warmOwners": warm, "finalOwners": final, "connectionIds": connection_ids,
             "saturationObserved": output[1]["measurement"]["counts"]["rejected"] > 0,
@@ -367,7 +397,8 @@ def normalized_recovery(raw, expected_cases, settings, fixed_rate):
 
 
 def recovery_meets_slo(measurement, settings):
-    return (measurement["consumerPassed"] and measurement["saturationObserved"] and measurement["counts"]["failed"] == 0
+    return (measurement.get("correctnessPassed") is True and type(measurement.get("oracleFailures")) is int
+            and measurement["oracleFailures"] == 0 and measurement["consumerPassed"] and measurement["saturationObserved"] and measurement["counts"]["failed"] == 0
             and all(meets_slo(measurement["phases"][index]["measurement"], settings) for index in (0, 2)))
 
 
@@ -472,7 +503,8 @@ def summarize_resources(path, measurement):
 
 
 def meets_slo(value, settings):
-    return (value["p99MicrosecondsUpper"] is not None and value["errorAndRejectionRate"] <= settings["maximumErrorAndRejectionRate"]
+    return (value.get("correctnessPassed") is True and type(value.get("oracleFailures")) is int and value["oracleFailures"] == 0
+            and value["p99MicrosecondsUpper"] is not None and value["errorAndRejectionRate"] <= settings["maximumErrorAndRejectionRate"]
             and value["p99MicrosecondsUpper"] <= settings["maximumP99Microseconds"])
 
 

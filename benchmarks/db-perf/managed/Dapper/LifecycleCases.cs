@@ -59,14 +59,16 @@ internal sealed partial class Workload
         try
         {
         var find=connection.QuerySingleAsync<Order>(FindSql,key,transaction);if(!find.IsCompleted)suspensions++;
-        original=await find.ConfigureAwait(false);
-        if(original!=SeedOrder(id))throw new InvalidOperationException("Write target differs from fixed initial state.");
+
+        try { original = await find.ConfigureAwait(false); }
+        catch (InvalidOperationException error) { throw CorrectnessOracle.Failure("Expected exactly one full order from the fixed key lookup.", name, error); }
+        if(original!=SeedOrder(id))throw CorrectnessOracle.Failure("Write target differs from fixed initial state.", name);
         HashOrder(ref digest,original);
         var changes=new{tenant=1L,id,note=name=="partial-update"?(string?)null:"perf-mutated",version=2L,expected=1L};
         var update=name=="stale-conflict"?connection.ExecuteAsync(CheckedSql,changes,transaction)
             :name=="partial-update"?connection.ExecuteAsync(PartialSql,changes,transaction):connection.ExecuteAsync(UpdateSql,changes,transaction);
         if(!update.IsCompleted)suspensions++;
-        if(await update.ConfigureAwait(false)!=1)throw new InvalidOperationException("Mutation did not affect exactly one order.");
+        if(await update.ConfigureAwait(false)!=1)throw CorrectnessOracle.Failure("Mutation did not affect exactly one order.", name);
         if(name=="stale-conflict")
         {
             var caught=false;
@@ -77,15 +79,17 @@ internal sealed partial class Workload
                 if(await stale.ConfigureAwait(false)==0)throw new ApplicationConcurrencyConflictException();
             }
             catch(ApplicationConcurrencyConflictException){caught=true;}
-            if(!caught)throw new InvalidOperationException("A stale optimistic write was accepted.");
+            if(!caught)throw CorrectnessOracle.Failure("A stale optimistic write was accepted.", name);
             digest.Boolean(true);var rollback=transaction.RollbackAsync();if(!rollback.IsCompleted)suspensions++;await rollback.ConfigureAwait(false);
         }
         else
         {
             var check=connection.QuerySingleAsync<Order>(FindSql,key,transaction);if(!check.IsCompleted)suspensions++;
-            var changed=await check.ConfigureAwait(false);
+            Order changed;
+        try { changed = await check.ConfigureAwait(false); }
+        catch (InvalidOperationException error) { throw CorrectnessOracle.Failure("Expected exactly one full order from the fixed key lookup.", name, error); }
             var expected=name=="partial-update"?original with{Note=null}:original with{Note="perf-mutated",Version=2};
-            if(changed!=expected)throw new InvalidOperationException("Partial mutation changed omitted fields or lost NULL.");
+            if(changed!=expected)throw CorrectnessOracle.Failure("Partial mutation changed omitted fields or lost NULL.", name);
             HashOrder(ref digest,changed);
             if(name=="tx-rollback")
             {
@@ -96,21 +100,28 @@ internal sealed partial class Workload
                 var restore=new{tenant=1L,id,note=original.Note,version=original.Version};
                 var restoring=name=="partial-update"?connection.ExecuteAsync(PartialSql,restore,transaction):connection.ExecuteAsync(UpdateSql,restore,transaction);
                 if(!restoring.IsCompleted)suspensions++;
-                if(await restoring.ConfigureAwait(false)!=1)throw new InvalidOperationException("Restore did not affect exactly one order.");
+                if(await restoring.ConfigureAwait(false)!=1)throw CorrectnessOracle.Failure("Restore did not affect exactly one order.", name);
                 var commit=transaction.CommitAsync();if(!commit.IsCompleted)suspensions++;await commit.ConfigureAwait(false);
             }
         }
         }
+        catch (Exception error) { CorrectnessOracle.ObserveContractFailure(error,name); throw; }
         finally
         {
             // Match the public Korda lifecycle: complete transaction disposal before
             // the independent persisted-state read on the retained connection.
-            var retirement=transaction.DisposeAsync();if(!retirement.IsCompleted)suspensions++;
-            await retirement.ConfigureAwait(false);
+            try
+            {
+                var retirement=transaction.DisposeAsync();if(!retirement.IsCompleted)suspensions++;
+                await retirement.ConfigureAwait(false);
+            }
+            catch(Exception cleanup){CorrectnessOracle.ObserveCleanupFailure(cleanup,name);throw;}
         }
         var final=connection.QuerySingleAsync<Order>(FindSql,key);if(!final.IsCompleted)suspensions++;
-        var persisted=await final.ConfigureAwait(false);
-        if(persisted!=original)throw new InvalidOperationException("Durable state was not restored after transaction.");
+        Order persisted;
+        try { persisted = await final.ConfigureAwait(false); }
+        catch (InvalidOperationException error) { throw CorrectnessOracle.Failure("Expected exactly one full order from the fixed key lookup.", name, error); }
+        if(persisted!=original)throw CorrectnessOracle.Failure("Durable state was not restored after transaction.", name);
         HashOrder(ref digest,persisted);return new(name=="stale-conflict"?2:3,digest.Value,suspensions);
     }
     private sealed class ApplicationConcurrencyConflictException : Exception { }

@@ -29,7 +29,7 @@ internal sealed class OfferedLoad : IDisposable
     private readonly Thread _producer;
     private readonly long[] _plannedBySecond, _sentBySecond, _startedBySecond, _succeededBySecond,
         _failedBySecond, _rejectedBySecond, _rowsBySecond;
-    private long _attempted, _sent, _rejected, _offeredEndTicks, _offeredEndAllocated;
+    private long _attempted, _sent, _rejected, _offeredEndTicks, _offeredEndAllocated, _oracleFailuresBefore;
     private int _offeredEndGen0, _offeredEndGen1, _offeredEndGen2, _truncated, _started;
     internal long Planned { get; }
     internal int QueueCapacity { get; }
@@ -81,6 +81,7 @@ internal sealed class OfferedLoad : IDisposable
     internal void Start()
     {
         if (Interlocked.Exchange(ref _started, 1) != 0) throw new InvalidOperationException("The schedule runs once.");
+        _oracleFailuresBefore = CorrectnessOracle.Failures;
         StartedTicks = Stopwatch.GetTimestamp();
         DeadlineTicks = StartedTicks + checked((long)(_seconds * Stopwatch.Frequency));
         _producerStart.Set();
@@ -198,12 +199,17 @@ internal sealed class OfferedLoad : IDisposable
             foreach (var worker in _workers) { var data = select(worker); for (var i = 0; i < result.Length; i++) result[i] += data[i]; }
             return result;
         }
+        var oracleFailuresAfter = CorrectnessOracle.Failures;
         return new(_rate, _seconds, QueueCapacity, StartedTicks, DeadlineTicks, _offeredEndTicks, end, Stopwatch.Frequency,
             _offeredEndAllocated, _offeredEndGen0, _offeredEndGen1, _offeredEndGen2,
             Planned, _attempted, _sent, started, succeeded + failed, succeeded, failed, _rejected, 0,
             _workers.Sum(w => w.Rows), _workers.Sum(w => w.Suspensions),
             Merge(w => w.Service), Merge(w => w.Response), Merge(w => w.AllResponse), Merge(w => w.Queue),
-            seconds, _truncated != 0, errors, _workers.Where(w => w.FirstError is not null).Select(w => w.FirstError!).ToArray());
+            seconds, _truncated != 0, errors, _workers.Where(w => w.FirstError is not null).Select(w => w.FirstError!).ToArray())
+        {
+            OracleFailuresBefore = _oracleFailuresBefore, OracleFailuresAfter = oracleFailuresAfter,
+            OracleFailures = oracleFailuresAfter, FirstOracleFailure = CorrectnessOracle.FirstFailure
+        };
     }
 
     public void Dispose()
@@ -223,4 +229,10 @@ internal sealed record OfferedReceipt(double RequestsPerSecond, double OfferedSe
     long Rejected, long Retries, long Rows, long Suspensions,
     long[] SuccessServiceHistogram, long[] SuccessScheduledHistogram, long[] AllCompletedScheduledHistogram,
     long[] StartDelayHistogram, OfferedSecond[] Seconds, bool TimeSeriesTruncated,
-    Dictionary<string, long> ErrorClasses, string[] Errors);
+    Dictionary<string, long> ErrorClasses, string[] Errors)
+{
+    public long OracleFailuresBefore { get; init; }
+    public long OracleFailuresAfter { get; init; }
+    public long OracleFailures { get; init; }
+    public OracleFailure? FirstOracleFailure { get; init; }
+}

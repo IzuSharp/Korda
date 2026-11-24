@@ -74,7 +74,7 @@ internal sealed class DatabaseDriver : IAsyncDisposable
             DatabaseVersion=connection.ServerVersion;
             if(await connection.ExecuteScalarAsync<long>("SELECT tenants FROM db_perf_metadata")!=options.Tenants
                 ||await connection.ExecuteScalarAsync<long>("SELECT orders_per_tenant FROM db_perf_metadata")!=options.OrdersPerTenant)
-                throw new InvalidOperationException("Dataset metadata differs from requested oracle inputs.");
+                throw CorrectnessOracle.Failure("Dataset metadata differs from requested oracle inputs.", "dataset");
 #if !POSTGRES
             CompileOptions=connection.Query<string>("PRAGMA compile_options").Order(StringComparer.Ordinal).ToArray();
 #endif

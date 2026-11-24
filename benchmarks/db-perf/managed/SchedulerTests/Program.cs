@@ -44,7 +44,8 @@ static async ValueTask<OperationResult> SometimesFails(long index)
 }
 var failures = await Run(.2, 100, 64, SometimesFails, SometimesFails);
 Require(failures.Planned == 20 && failures.Succeeded == 15 && failures.Failed == 5 && failures.Rejected == 0
-    && failures.ErrorClasses.Values.Sum() == 5 && failures.Rows == 30 && failures.Suspensions == 15,
+    && failures.ErrorClasses.Values.Sum() == 5 && failures.Rows == 30 && failures.Suspensions == 15
+    && failures.OracleFailures == 0 && failures.FirstOracleFailure is null,
     "Asynchronous failures were omitted, retried or counted as successes.");
 Console.WriteLine("PASS true suspension, failure categories and failed latency accounting");
 
@@ -63,4 +64,29 @@ foreach (var bad in new[] { double.NaN, double.PositiveInfinity, 0d, -1d })
 }
 Console.WriteLine("PASS invalid arrival settings rejected before worker creation");
 
-internal readonly record struct OperationResult(long Rows, ulong Digest, long Suspensions);
+CorrectnessOracle.SetPhase("oracle-negative-control");
+var masked = await Run(.03, 100, 8, index =>
+{
+    if (index == 0)
+    {
+        try { throw CorrectnessOracle.Failure("Injected result mismatch before retirement.", "injected"); }
+        finally { throw new IOException("Injected later retirement failure."); }
+    }
+    return ValueTask.FromResult(new OperationResult(1, (ulong)index, 0));
+});
+Require(masked.Failed == 1 && masked.Succeeded == 2 && masked.OracleFailuresBefore == 0
+    && masked.OracleFailuresAfter == 1 && masked.OracleFailures == 1
+    && masked.FirstOracleFailure?.Phase == "oracle-negative-control"
+    && masked.FirstOracleFailure.Message == "Injected result mismatch before retirement.",
+    "A later cleanup error hid the earlier result mismatch or changed the sticky oracle boundary.");
+CorrectnessOracle.SetPhase("subsequent-recovery-control");
+var afterOracle = await Run(.02, 100, 8, index => ValueTask.FromResult(new OperationResult(1, (ulong)index, 0)));
+Require(afterOracle.Failed == 0 && afterOracle.OracleFailuresBefore == 1 && afterOracle.OracleFailuresAfter == 1
+    && afterOracle.OracleFailures == 1 && ReferenceEquals(afterOracle.FirstOracleFailure, masked.FirstOracleFailure),
+    "An independently successful recovery phase reset the process-lifetime failure evidence.");
+var refused = false;
+try { CorrectnessOracle.RequireClean(); } catch (InvalidOperationException) { refused = true; }
+Require(refused, "A prior oracle violation was silently admitted after recovery.");
+Console.WriteLine("PASS sticky result oracle survives masked cleanup and later successful phases; ordinary cancellation remains separate");
+
+ReaderIntegrityTests.Run();

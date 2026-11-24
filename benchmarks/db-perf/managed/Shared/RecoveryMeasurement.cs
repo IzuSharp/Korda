@@ -17,7 +17,13 @@ internal sealed record RecoveryPhase(string Name,long SteadyStartMonotonicNs,lon
     int Gen0,int Gen1,int Gen2,ProcessReading ProcessBefore,ProcessReading ProcessAfter,
     double UserCpuSeconds,double SystemCpuSeconds,RecoveryOwners BeforeOwners,RecoveryOwners AfterOwners,
     bool QueueFullyDrained,bool ReturnedToWarmOwnerBaseline,long PendingThreadPoolWorkAfterDrain,
-    OfferedReceipt OfferedLoad,CaseCount[] Cases);
+    OfferedReceipt OfferedLoad,CaseCount[] Cases)
+{
+    public long OracleFailuresBefore { get; init; }
+    public long OracleFailuresAfter { get; init; }
+    public long OracleFailures { get; init; }
+    public OracleFailure? FirstOracleFailure { get; init; }
+}
 
 internal sealed record RecoveryReceipt(int SchemaVersion,string Route,string Provider,bool NativeAot,
     string PackageVersion,string ExecutableSha256,string? LoadedNativePath,string? LoadedNativeSha256,
@@ -29,7 +35,11 @@ internal sealed record RecoveryReceipt(int SchemaVersion,string Route,string Pro
     bool RecoveryAccepted,bool AllPhasesReturnedToWarmOwnerBaseline,RecoveryOwners Drained,
     bool TrackedResourcesReturnedToZero,bool Passed,double ReferenceScheduledP99Microseconds,
     double RecoveryScheduledP99Microseconds,double? ScheduledP99Ratio,bool LatencyThresholdApplied,
-    IdleReading? Idle,string Scope);
+    IdleReading? Idle,string Scope)
+{
+    public long OracleFailures { get; init; }
+    public OracleFailure? FirstOracleFailure { get; init; }
+}
 
 internal static class RecoveryMeasurement
 {
@@ -42,7 +52,9 @@ internal static class RecoveryMeasurement
         try
         {
             for(var i=0;i<workers.Length;i++)workers[i]=await createWorker().ConfigureAwait(false);
+            CorrectnessOracle.SetPhase("warmup");
             await Task.WhenAll(workers.Select(worker=>worker.Warmup())).ConfigureAwait(false);
+            CorrectnessOracle.RequireClean();
             var selected=workers[0].ActiveNames.ToArray();
             var names=selected.Distinct(StringComparer.Ordinal).ToArray();
             var indices=names.Select(name=>Array.IndexOf(Workload.Names,name)).ToArray();
@@ -56,6 +68,7 @@ internal static class RecoveryMeasurement
 
             // Worker/source construction happens once. Their persistent sessions,
             // plans, command caches and connection pool survive all three phases.
+            CorrectnessOracle.SetPhase("final-drain");
             for(var i=0;i<workers.Length;i++){await workers[i].DisposeAsync().ConfigureAwait(false);workers[i]=null!;}
             await disposeSource().ConfigureAwait(false);
             var drained=readOwners();
@@ -81,26 +94,30 @@ internal static class RecoveryMeasurement
             return new(1,route,provider,true,version,executableSha,nativePath,nativeSha,selected,options.Mode,options.SessionMode,
                 options.Concurrency,options.Warmup,options.QueueCapacity,options.Rows,options.BatchRows,options.Tenants,options.OrdersPerTenant,
                 options.RecoveryRate,options.RecoverySeconds,options.OverloadRate,options.OverloadSeconds,true,true,false,warm,phases,
-                reference,saturation,recovered,returned,drained,ownersZero,reference&&saturation&&recovered&&returned&&ownersZero,
+                reference,saturation,recovered,returned,drained,ownersZero,reference&&saturation&&recovered&&returned&&ownersZero&&CorrectnessOracle.Failures==0,
                 referenceP99,recoveryP99,referenceP99>0?recoveryP99/referenceP99:null,false,idle,
                 "Same process/source/pool and persistent worker/session objects across reference, overload, complete drain, recovery. " +
                 "Passed verifies accepted sustainable requests, observed admission saturation and tracked resource recovery; " +
                 "tail-latency thresholds are not invented here. Raw all-thread allocation totals include business objects and harness; " +
-                "phase scheduler preparation is recorded separately, with no framework-only zero claim. Owner visibility is explicit in each snapshot.");
+                "phase scheduler preparation is recorded separately, with no framework-only zero claim. Owner visibility is explicit in each snapshot.")
+            { OracleFailures = CorrectnessOracle.Failures, FirstOracleFailure = CorrectnessOracle.FirstFailure };
 
             async Task<RecoveryPhase> Phase(string name,double seconds,double rate)
             {
+                CorrectnessOracle.SetPhase(name);
                 if(setPhase is not null)foreach(var worker in workers)setPhase(worker,name);
                 var preparationBefore=GC.GetTotalAllocatedBytes(true);
                 var beforeCases=CaseSnapshot();
                 using var schedule=new OfferedLoad(seconds,rate,options.QueueCapacity,operations);
                 var beforeOwners=readOwners();var beforeProcess=ProcessReading.Read(process);
                 var before0=GC.CollectionCount(0);var before1=GC.CollectionCount(1);var before2=GC.CollectionCount(2);
+                var beforeOracle=CorrectnessOracle.Failures;
                 var beforeBytes=GC.GetTotalAllocatedBytes(true);
                 schedule.Start();
                 await schedule.Completion.ConfigureAwait(false);
                 var ended=Stopwatch.GetTimestamp();
                 var afterBytes=GC.GetTotalAllocatedBytes(true);
+                var afterOracle=CorrectnessOracle.Failures;
                 var after0=GC.CollectionCount(0);var after1=GC.CollectionCount(1);var after2=GC.CollectionCount(2);
                 var afterProcess=ProcessReading.Read(process);var afterOwners=readOwners();
                 var pending=ThreadPool.PendingWorkItemCount;
@@ -122,7 +139,11 @@ internal static class RecoveryMeasurement
                     beforeBytes,afterBytes,afterBytes-beforeBytes,after0-before0,after1-before1,after2-before2,
                     beforeProcess,afterProcess,afterProcess.UserCpuSeconds-beforeProcess.UserCpuSeconds,
                     afterProcess.SystemCpuSeconds-beforeProcess.SystemCpuSeconds,beforeOwners,afterOwners,queueDrained,
-                    beforeOwners.MatchesQuiescent(warm)&&afterOwners.MatchesQuiescent(warm),pending,offered,afterCases);
+                    beforeOwners.MatchesQuiescent(warm)&&afterOwners.MatchesQuiescent(warm),pending,offered,afterCases)
+                {
+                    OracleFailuresBefore=beforeOracle, OracleFailuresAfter=afterOracle,
+                    OracleFailures=CorrectnessOracle.Failures, FirstOracleFailure=CorrectnessOracle.FirstFailure
+                };
             }
 
             CaseCount[] CaseSnapshot()
@@ -147,7 +168,7 @@ internal static class RecoveryMeasurement
         }
     }
 
-    private static bool Accepted(RecoveryPhase phase)=>phase.OfferedLoad.Rejected==0&&phase.OfferedLoad.Failed==0
+    private static bool Accepted(RecoveryPhase phase)=>phase.OracleFailures==0&&phase.OfferedLoad.OracleFailures==0&&phase.OfferedLoad.Rejected==0&&phase.OfferedLoad.Failed==0
         &&phase.OfferedLoad.Succeeded==phase.OfferedLoad.Planned&&phase.QueueFullyDrained;
     private static long MonotonicNs(long ticks)=>checked((long)((Int128)ticks*1_000_000_000/Stopwatch.Frequency));
     private static double Quantile(long[] histogram,long count,double quantile)

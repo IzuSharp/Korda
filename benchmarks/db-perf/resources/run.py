@@ -139,6 +139,9 @@ def validate(raw, provider, package, build, concurrency, processors):
             require(sum(value["PendingAtReturn"]) == value["PendingAtReturnCount"]
                     and sum(value["PendingBeforeConsumption"]) == value["PendingFirstMovesBeforeAnyConsumption"],
                     "Suspension counts differ")
+            require(all(not later or earlier for earlier, later in
+                        zip(value["PendingAtReturn"], value["PendingBeforeConsumption"])),
+                    "A first Move became incomplete after its completed return")
             require(value["SingleIssuingThread"] and value["IssuingThread"] > 0,
                     "First moves did not share the recorded issuing thread")
             require(value["RuntimePoolCacheCapacityForIssuingThread"] == processors + 1
@@ -159,6 +162,12 @@ def validate(raw, provider, package, build, concurrency, processors):
     expected_phases |= {"initial-open-session-baseline", "after-exhaustion", "final-source-close"}
     require(len(settlements) == len(expected_phases) and {item["Phase"] for item in settlements} == expected_phases,
             "Missing, duplicate or unexpected explicit native-drain interval")
+    observations = raw["NativeObservations"]
+    burst_phases = expected_phases - {"initial-open-session-baseline", "after-exhaustion", "final-source-close"}
+    require(len(observations) == len(burst_phases)
+            and {item["Phase"] for item in observations} == burst_phases,
+            "A burst's immediate native-owner observation disappeared")
+    immediate_by_phase = {item["Phase"]: item["Counters"] for item in observations}
     for item in settlements:
         counters(item["Start"], item["End"])
         require(item["Matched"] and item["Polls"] > 0 and len(item["Immediate"]) == len(item["Settled"]) == 8,
@@ -169,6 +178,9 @@ def validate(raw, provider, package, build, concurrency, processors):
         else:
             target = [0] * 6 if item["Phase"] == "final-source-close" else warm[:6]
             require(item["Expected"][:6] == item["Settled"][:6] == target, "Native owners did not return to target")
+        if item["Phase"] in burst_phases:
+            require(item["Immediate"] == immediate_by_phase[item["Phase"]],
+                    "The burst and settlement immediate owner observations disagree")
     require(raw["SourceReleased"] and len(raw["FinalOwners"]) == 8 and raw["FinalOwners"][:6] == [0] * 6,
             "Final native owners did not drain")
     require(raw["MatchingCanceledOpenResults"] + raw["ResourceLimitOpenResults"] == 3,
@@ -196,6 +208,8 @@ def validate(raw, provider, package, build, concurrency, processors):
     return {"windowTotals": totals, "qualifications": qualifications,
             "qualified": all(qualifications.values()), "frameworkAllocatedBytes": None,
             "fullFrameworkZeroAllocation": False, "nativeHeapPeak": None,
+            "osReportedPeakRssIsNonMonotonic": any(later["PeakRssBytes"] < earlier["PeakRssBytes"]
+                for earlier, later in zip(raw["Memory"], raw["Memory"][1:])),
             "nativeHeapScope": "Owner counters and process RSS/PSS are not native malloc/free instrumentation."}
 
 

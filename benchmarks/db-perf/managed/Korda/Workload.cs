@@ -108,28 +108,8 @@ internal sealed partial class Workload : IDisposable
         };
     }
 
-    internal static async ValueTask<OperationResult> Read<T>(IAsyncEnumerable<T> stream, RowDigest<T> hash, int stopAfter = int.MaxValue)
-    {
-        var digest = Digest.Create(); long rows = 0, suspensions = 0;
-        var reader = stream.GetAsyncEnumerator();
-        try
-        {
-            while (rows < stopAfter)
-            {
-                var move = reader.MoveNextAsync();
-                if (!move.IsCompleted) suspensions++;
-                if (!await move.ConfigureAwait(false)) break;
-                hash(ref digest, reader.Current); rows++;
-            }
-        }
-        finally
-        {
-            var close = reader.DisposeAsync();
-            if (!close.IsCompleted) suspensions++;
-            await close.ConfigureAwait(false);
-        }
-        return new(rows, digest.Value, suspensions);
-    }
+    internal static ValueTask<OperationResult> Read<T>(IAsyncEnumerable<T> stream, RowDigest<T> hash, int stopAfter = int.MaxValue)
+        => ReadStream.Consume(stream, hash, stopAfter);
 
     private static void HashInteger(ref Digest digest, long value) => digest.Integer(value);
     private static void HashText(ref Digest digest, TextRow value) { digest.Integer(value.Id); digest.Text(value.Note); }

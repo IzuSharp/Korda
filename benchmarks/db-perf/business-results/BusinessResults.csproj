@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net11.0</TargetFramework>
+    <LangVersion>15.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <PublishAot>true</PublishAot>
+    <IlcTreatWarningsAsErrors>true</IlcTreatWarningsAsErrors>
+    <UseSharedCompilation>false</UseSharedCompilation>
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <InterceptorsNamespaces>$(InterceptorsNamespaces);Dapper.AOT</InterceptorsNamespaces>
+    <Route Condition="'$(Route)' == ''">Korda</Route>
+    <Provider Condition="'$(Provider)' == ''">Sqlite</Provider>
+    <KordaVersion Condition="'$(KordaVersion)' == ''">0.1.0-preview.3</KordaVersion>
+    <DefineConstants Condition="'$(Route)' == 'Korda'">$(DefineConstants);KORDA</DefineConstants>
+    <DefineConstants Condition="'$(Provider)' == 'PostgreSql'">$(DefineConstants);POSTGRES</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(Route)' == 'Korda'">
+    <PackageReference Include="Korda.Database.$(Provider)" Version="$(KordaVersion)" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(Route)' == 'Dapper'">
+    <PackageReference Include="Dapper" Version="2.1.100" />
+    <PackageReference Include="Dapper.AOT" Version="1.1.0" />
+    <PackageReference Include="Npgsql" Version="11.0.0" Condition="'$(Provider)' == 'PostgreSql'" />
+    <PackageReference Include="Microsoft.Data.Sqlite.Core" Version="11.0.0" Condition="'$(Provider)' == 'Sqlite'" />
+    <PackageReference Include="SQLitePCLRaw.provider.sqlite3" Version="3.0.5" Condition="'$(Provider)' == 'Sqlite'" />
+  </ItemGroup>
+  <Target Name="ValidateBusinessProbeInputs" BeforeTargets="PrepareForBuild">
+    <Error Condition="'$(Route)' != 'Korda' and '$(Route)' != 'Dapper'" Text="Route must be Korda or Dapper." />
+    <Error Condition="'$(Provider)' != 'Sqlite' and '$(Provider)' != 'PostgreSql'" Text="Provider must be Sqlite or PostgreSql." />
+  </Target>
+</Project>

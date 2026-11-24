@@ -132,6 +132,75 @@ static std::string utc_now()
 }
 static std::uint64_t monotonic_ns()
 { timespec now{}; if (clock_gettime(CLOCK_MONOTONIC, &now)) throw std::runtime_error("CLOCK_MONOTONIC unavailable"); return now.tv_sec * 1000000000ULL + now.tv_nsec; }
+// A result/state oracle violation invalidates the whole command. The counter
+// is incremented at discovery, before exception construction or cleanup. Only
+// the first detailed failure is retained, so diagnostic storage stays bounded.
+static std::atomic<std::uint64_t> oracle_failures;
+static std::atomic<const char*> oracle_phase{"setup"};
+static thread_local std::string_view oracle_case;
+static std::mutex oracle_gate;
+static Json first_oracle_failure = nullptr;
+struct OracleViolation : std::runtime_error { using std::runtime_error::runtime_error; };
+struct OracleCaseScope
+{
+    std::string_view previous;
+    explicit OracleCaseScope(std::string_view name) : previous(oracle_case) { oracle_case = name; }
+    ~OracleCaseScope() { oracle_case = previous; }
+};
+static OracleViolation oracle_violation(std::string_view message, std::string_view case_id = {})
+{
+    auto sequence = oracle_failures.fetch_add(1) + 1;
+    {
+        std::lock_guard lock(oracle_gate);
+        if (first_oracle_failure.is_null())
+            first_oracle_failure = {{"sequence", sequence}, {"phase", oracle_phase.load()},
+                {"caseId", std::string(case_id.empty() ? oracle_case : case_id)}, {"message", std::string(message)},
+                {"observedTicks", monotonic_ns()}, {"timerFrequency", 1000000000}};
+    }
+    return OracleViolation(std::string(message));
+}
+static Json oracle_first()
+{ std::lock_guard lock(oracle_gate); return first_oracle_failure; }
+static void require_clean_oracle()
+{ if (oracle_failures.load()) throw std::runtime_error("A prior workload oracle violation invalidates this command"); }
+[[noreturn]] static void unexpected_pg_result(PGresult* result, std::string_view context)
+{
+    auto status = PQresultStatus(result);
+    std::string message = std::string(context) + ": status=" + PQresStatus(status) + "; error=" + PQresultErrorMessage(result);
+    // Query cancellation and server errors have a fatal-error result. An
+    // otherwise successful but illegal result sequence is a contract failure,
+    // even if it occurs late enough to fit the operational error-rate budget.
+    if (status == PGRES_FATAL_ERROR) throw std::runtime_error(message);
+    throw oracle_violation(message);
+}
+static void require_sqlite_retired(int reset_status, int clear_status)
+{
+    if (reset_status != SQLITE_OK || clear_status != SQLITE_OK)
+        throw oracle_violation("SQLite statement retirement failed: reset=" + std::to_string(reset_status)
+            + "; clear-bindings=" + std::to_string(clear_status));
+}
+static void write_oracle_failure(const std::string& output)
+{
+    if (!oracle_failures.load()) return;
+    Json receipt{{"schema", "DB-Perf-01.oracle-failure.v1"}, {"oracleFailures", oracle_failures.load()},
+        {"firstOracleFailure", oracle_first()},
+        {"scope", "process-lifetime sticky oracle violations; no SLO, timing, long-segment or correctness credit"}};
+    auto text = receipt.dump(2) + '\n';
+    std::cerr << "DB_PERF_ORACLE_FAILURE " << text;
+    if (!output.empty())
+    {
+        // C11/glibc exclusive-create mode: never overwrite an earlier attempt.
+        auto path = output + ".oracle-failure.json";
+        if (auto* file = std::fopen(path.c_str(), "wx"))
+        {
+            auto written = std::fwrite(text.data(), 1, text.size(), file);
+            int closed = std::fclose(file);
+            if (written != text.size() || closed) std::cerr << "Oracle failure sidecar write failed: " << path << '\n';
+        }
+        else std::cerr << "Oracle failure sidecar unavailable or already retained: " << path << '\n';
+    }
+}
+
 struct AllocationProfile
 {
     db_perf_alloc_snapshot_fn snapshot = nullptr;
@@ -238,7 +307,7 @@ struct SettingsSax final : nlohmann::json_sax<Json>
 static std::unique_ptr<Settings> settings(std::string_view bytes)
 {
     SettingsSax sax;
-    if (!Json::sax_parse(bytes, &sax) || !sax.channel || !sax.gift) throw std::runtime_error("typed Settings JSON differs from the fixed workload");
+    if (!Json::sax_parse(bytes, &sax) || !sax.channel || !sax.gift) throw oracle_violation("typed Settings JSON differs from the fixed workload");
     return std::make_unique<Settings>(std::move(sax.value));
 }
 struct TextRow { std::int64_t id; std::optional<std::string> note; };
@@ -534,21 +603,21 @@ struct SqliteReader
     sqlite3_stmt* statement;
     bool is_null(int column) const { return sqlite3_column_type(statement, column) == SQLITE_NULL; }
     std::int64_t integer(int column) const
-    { if (sqlite3_column_type(statement, column) != SQLITE_INTEGER) throw std::runtime_error("SQLite integer type mismatch"); return sqlite3_column_int64(statement, column); }
+    { if (sqlite3_column_type(statement, column) != SQLITE_INTEGER) throw oracle_violation("SQLite integer type mismatch"); return sqlite3_column_int64(statement, column); }
     std::int32_t ordinal(int column) const
-    { auto value = integer(column); if (value < 0 || value > INT32_MAX) throw std::runtime_error("SQLite ordinal overflow"); return static_cast<std::int32_t>(value); }
+    { auto value = integer(column); if (value < 0 || value > INT32_MAX) throw oracle_violation("SQLite ordinal overflow"); return static_cast<std::int32_t>(value); }
     std::optional<std::int64_t> nullable(int column) const { return sqlite3_column_type(statement, column) == SQLITE_NULL ? std::nullopt : std::optional(integer(column)); }
     std::optional<std::string> text(int column, bool nullable = true) const
     {
         int type = sqlite3_column_type(statement, column); if (type == SQLITE_NULL && nullable) return {};
-        if (type != SQLITE_TEXT) throw std::runtime_error("SQLite text type mismatch");
+        if (type != SQLITE_TEXT) throw oracle_violation("SQLite text type mismatch");
         return std::string(reinterpret_cast<const char*>(sqlite3_column_text(statement, column)), sqlite3_column_bytes(statement, column));
     }
     std::int64_t money(int column) const { return integer(column); }
     std::optional<std::int64_t> nullable_money(int column) const { return is_null(column) ? std::nullopt : std::optional(money(column)); }
     std::unique_ptr<Settings> json(int column) const
     {
-        if (sqlite3_column_type(statement, column) != SQLITE_TEXT) throw std::runtime_error("SQLite JSON type mismatch");
+        if (sqlite3_column_type(statement, column) != SQLITE_TEXT) throw oracle_violation("SQLite JSON type mismatch");
         return settings({reinterpret_cast<const char*>(sqlite3_column_text(statement, column)), static_cast<std::size_t>(sqlite3_column_bytes(statement, column))});
     }
 };
@@ -559,44 +628,44 @@ struct PgReader
     PGresult* result;
     bool is_null(int column) const { return PQgetisnull(result, 0, column) != 0; }
     std::string_view bytes(int column) const
-    { if (PQgetisnull(result, 0, column)) throw std::runtime_error("unexpected PostgreSQL NULL"); return {PQgetvalue(result, 0, column), static_cast<std::size_t>(PQgetlength(result, 0, column))}; }
+    { if (PQgetisnull(result, 0, column)) throw oracle_violation("unexpected PostgreSQL NULL"); return {PQgetvalue(result, 0, column), static_cast<std::size_t>(PQgetlength(result, 0, column))}; }
     std::int64_t integer(int column) const
-    { auto value = bytes(column); if (PQftype(result, column) != 20 || value.size() != 8) throw std::runtime_error("PostgreSQL int8 type mismatch"); return static_cast<std::int64_t>(network_unsigned(value)); }
+    { auto value = bytes(column); if (PQftype(result, column) != 20 || value.size() != 8) throw oracle_violation("PostgreSQL int8 type mismatch"); return static_cast<std::int64_t>(network_unsigned(value)); }
     std::int32_t ordinal(int column) const
-    { auto value = bytes(column); if (PQftype(result, column) != 23 || value.size() != 4) throw std::runtime_error("PostgreSQL int4 ordinal type mismatch"); return static_cast<std::int32_t>(network_unsigned(value)); }
+    { auto value = bytes(column); if (PQftype(result, column) != 23 || value.size() != 4) throw oracle_violation("PostgreSQL int4 ordinal type mismatch"); return static_cast<std::int32_t>(network_unsigned(value)); }
     std::optional<std::int64_t> nullable(int column) const { return PQgetisnull(result, 0, column) ? std::nullopt : std::optional(integer(column)); }
     std::optional<std::string> text(int column, bool nullable = true) const
     {
         if (PQgetisnull(result, 0, column) && nullable) return {};
-        if (PQftype(result, column) != 25) throw std::runtime_error("PostgreSQL text type mismatch"); return std::string(bytes(column));
+        if (PQftype(result, column) != 25) throw oracle_violation("PostgreSQL text type mismatch"); return std::string(bytes(column));
     }
     std::int64_t money(int column) const
     {
         auto value = bytes(column);
-        if (PQftype(result, column) != 1700 || value.size() < 8) throw std::runtime_error("PostgreSQL numeric type mismatch");
+        if (PQftype(result, column) != 1700 || value.size() < 8) throw oracle_violation("PostgreSQL numeric type mismatch");
         int digits = static_cast<int>(network_unsigned(value.substr(0, 2)));
         int weight = static_cast<std::int16_t>(network_unsigned(value.substr(2, 2)));
         auto sign = network_unsigned(value.substr(4, 2)); auto scale = network_unsigned(value.substr(6, 2));
         if (value.size() != static_cast<std::size_t>(8 + digits * 2) || digits > 8 || weight < -8 || weight > 4 || scale > 2 || (sign != 0 && sign != 0x4000))
-            throw std::runtime_error("numeric(18,2) encoding differs");
+            throw oracle_violation("numeric(18,2) encoding differs");
         __int128 cents = 0;
         for (int i = 0; i < digits; ++i)
         {
-            auto digit = network_unsigned(value.substr(8 + i * 2, 2)); if (digit >= 10000) throw std::runtime_error("numeric base digit differs");
+            auto digit = network_unsigned(value.substr(8 + i * 2, 2)); if (digit >= 10000) throw oracle_violation("numeric base digit differs");
             int exponent = weight - i;
             if (exponent >= 0) { __int128 term = digit * 100; for (int p = 0; p < exponent; ++p) term *= 10000; cents += term; }
-            else if (exponent == -1) { if (digit % 100) throw std::runtime_error("money conversion would round"); cents += digit / 100; }
-            else if (digit) throw std::runtime_error("money conversion would round");
+            else if (exponent == -1) { if (digit % 100) throw oracle_violation("money conversion would round"); cents += digit / 100; }
+            else if (digit) throw oracle_violation("money conversion would round");
         }
         if (sign) cents = -cents;
-        if (cents < std::numeric_limits<std::int64_t>::min() || cents > std::numeric_limits<std::int64_t>::max()) throw std::runtime_error("money overflow");
+        if (cents < std::numeric_limits<std::int64_t>::min() || cents > std::numeric_limits<std::int64_t>::max()) throw oracle_violation("money overflow");
         return static_cast<std::int64_t>(cents);
     }
     std::optional<std::int64_t> nullable_money(int column) const { return is_null(column) ? std::nullopt : std::optional(money(column)); }
     std::unique_ptr<Settings> json(int column) const
     {
         auto value = bytes(column);
-        if (PQftype(result, column) != 3802 || value.empty() || value[0] != 1) throw std::runtime_error("PostgreSQL JSONB encoding differs");
+        if (PQftype(result, column) != 3802 || value.empty() || value[0] != 1) throw oracle_violation("PostgreSQL JSONB encoding differs");
         return settings(value.substr(1));
     }
 };
@@ -636,11 +705,11 @@ struct Materializer
         if (query.kind == Kind::Related)
         {
             auto ordinal = source.ordinal(5);
-            if (ordinal < 0 || static_cast<std::size_t>(ordinal) >= groups.size()) throw std::runtime_error("related parent ordinal outside requested keys");
+            if (ordinal < 0 || static_cast<std::size_t>(ordinal) >= groups.size()) throw oracle_violation("related parent ordinal outside requested keys");
             groups[ordinal].push_back(std::make_unique<LineRow>(LineRow{source.integer(0), source.integer(1), source.integer(2), *source.text(3, false), source.integer(4)}));
         }
         else materialize(query.kind, source, digest);
-        if (++rows > static_cast<std::uint64_t>(query.expected_rows)) throw std::runtime_error("row count exceeds the declared bounded result");
+        if (++rows > static_cast<std::uint64_t>(query.expected_rows)) throw oracle_violation("row count exceeds the declared bounded result");
     }
     std::uint64_t finish()
     {
@@ -653,7 +722,7 @@ struct Materializer
                 for (const auto& child : group) consume(digest, *child);
             }
         if (rows != static_cast<std::uint64_t>(query.expected_rows) || digest.value != query.expected_digest)
-            throw std::runtime_error("rows/digest differ for " + query.name);
+            throw oracle_violation("rows/digest differ for ", query.name);
         return rows;
     }
 };
@@ -726,7 +795,7 @@ class Connection
     {
         while (auto* raw = receive())
         {
-            PgResult result(raw); if (PQresultStatus(raw) != PGRES_COMMAND_OK) throw std::runtime_error(PQresultErrorMessage(raw));
+            PgResult result(raw); if (PQresultStatus(raw) != PGRES_COMMAND_OK) unexpected_pg_result(raw, "PostgreSQL prepare result differs");
         }
     }
     void confirm_protocol()
@@ -736,9 +805,9 @@ class Connection
         ++counts.submissions; ++counts.confirmations;
         {
             PgResult sync(receive());
-            if (!sync.value || PQresultStatus(sync.value) != PGRES_PIPELINE_SYNC) throw std::runtime_error("protocol confirmation missing ReadyForQuery");
+            if (!sync.value || PQresultStatus(sync.value) != PGRES_PIPELINE_SYNC) throw oracle_violation("protocol confirmation missing ReadyForQuery");
         }
-        { PgResult extra(receive()); if (extra.value) throw std::runtime_error("protocol confirmation returned an unexpected result"); }
+        { PgResult extra(receive()); if (extra.value) throw oracle_violation("protocol confirmation returned an unexpected result"); }
         if (!PQexitPipelineMode(pg_) || PQpipelineStatus(pg_) != PQ_PIPELINE_OFF) fail_pg();
     }
     void prepare_pg(std::size_t index, const Query& query, const std::string& sql)
@@ -750,10 +819,11 @@ class Connection
         while (auto* raw = receive())
         {
             PgResult result(raw);
-            if (PQresultStatus(raw) != PGRES_COMMAND_OK || PQnfields(raw) != static_cast<int>(query.aliases.size()) || PQnparams(raw) != static_cast<int>(query.parameters.size()))
-                throw std::runtime_error("PostgreSQL prepared description differs");
+            if (PQresultStatus(raw) != PGRES_COMMAND_OK) unexpected_pg_result(raw, "PostgreSQL prepared description status differs");
+            if (PQnfields(raw) != static_cast<int>(query.aliases.size()) || PQnparams(raw) != static_cast<int>(query.parameters.size()))
+                throw oracle_violation("PostgreSQL prepared description differs");
             for (int column = 0; column < PQnfields(raw); ++column)
-                if (query.aliases[column] != PQfname(raw, column)) throw std::runtime_error("PostgreSQL alias differs");
+                if (query.aliases[column] != PQfname(raw, column)) throw oracle_violation("PostgreSQL alias differs");
         }
         prepared_[index] = true;
     }
@@ -832,17 +902,17 @@ public:
         if (sqlite_)
         {
             SqliteStatement query(sqlite_, sql);
-            if (sqlite3_step(query.value) != SQLITE_ROW) throw std::runtime_error("dataset metadata absent");
+            if (sqlite3_step(query.value) != SQLITE_ROW) throw oracle_violation("dataset metadata absent");
             actual_tenants = sqlite3_column_int64(query.value, 0); actual_orders = sqlite3_column_int64(query.value, 1);
-            if (sqlite3_step(query.value) != SQLITE_DONE) throw std::runtime_error("dataset metadata ambiguous");
+            if (sqlite3_step(query.value) != SQLITE_DONE) throw oracle_violation("dataset metadata ambiguous");
         }
         else
         {
             PgResult result(PQexec(pg_, sql.c_str()));
-            if (!result.value || PQresultStatus(result.value) != PGRES_TUPLES_OK || PQntuples(result.value) != 1) throw std::runtime_error("dataset metadata absent or ambiguous");
+            if (!result.value || PQresultStatus(result.value) != PGRES_TUPLES_OK || PQntuples(result.value) != 1) throw oracle_violation("dataset metadata absent or ambiguous");
             actual_tenants = std::stoll(PQgetvalue(result.value, 0, 0)); actual_orders = std::stoll(PQgetvalue(result.value, 0, 1));
         }
-        if (actual_tenants != tenants || actual_orders != orders) throw std::runtime_error("dataset metadata differs from manifest");
+        if (actual_tenants != tenants || actual_orders != orders) throw oracle_violation("dataset metadata differs from manifest");
     }
     Json explain(const Query& query)
     {
@@ -944,24 +1014,26 @@ private:
             else { temporary = std::make_unique<SqliteStatement>(sqlite_, sql); ++counts.prepare; }
             auto* statement = opt_.physical == "reuse" ? cached_[index]->value : temporary->value;
             if (sqlite3_column_count(statement) != static_cast<int>(query.aliases.size()) || sqlite3_bind_parameter_count(statement) != static_cast<int>(query.parameters.size()))
-                throw std::runtime_error("SQLite result or parameter shape differs");
+                throw oracle_violation("SQLite result or parameter shape differs");
             for (int column = 0; column < sqlite3_column_count(statement); ++column)
-                if (query.aliases[column] != sqlite3_column_name(statement, column)) throw std::runtime_error("SQLite alias differs");
+                if (query.aliases[column] != sqlite3_column_name(statement, column)) throw oracle_violation("SQLite alias differs");
             bind_sqlite(statement, query);
             ++counts.executions;
             int status; bool early = false;
             while ((status = sqlite3_step(statement)) == SQLITE_ROW)
             {
-                if (query.kind == Kind::Command) throw std::runtime_error("SQLite command unexpectedly returned a row");
+                if (query.kind == Kind::Command) throw oracle_violation("SQLite command unexpectedly returned a row");
                 on_row(SqliteReader{statement}); ++materialized;
                 if (query.stop_after && materialized == query.stop_after) { early = true; break; }
             }
             if (!early && status != SQLITE_DONE) throw std::runtime_error(sqlite3_errmsg(sqlite_));
             if (query.expected_affected && sqlite3_changes64(sqlite_) != *query.expected_affected)
-                throw std::runtime_error("SQLite affected row count differs for " + query.name);
-            if (sqlite3_reset(statement) != SQLITE_OK || sqlite3_clear_bindings(statement) != SQLITE_OK) throw std::runtime_error("SQLite reset failed");
+                throw oracle_violation("SQLite affected row count differs for ", query.name);
+            int reset_status = sqlite3_reset(statement);
+            int clear_status = sqlite3_clear_bindings(statement);
+            require_sqlite_retired(reset_status, clear_status);
             if ((sqlite3_get_autocommit(sqlite_) == 0) != query.active_transaction_after)
-                throw std::runtime_error("SQLite transaction state differs after " + query.name);
+                throw oracle_violation("SQLite transaction state differs after ", query.name);
         }
         else
         {
@@ -979,7 +1051,7 @@ private:
                 if (status == PGRES_SINGLE_TUPLE)
                 {
                     if (terminal || query.kind == Kind::Command || PQntuples(raw) != 1 || PQnfields(raw) != static_cast<int>(query.aliases.size()))
-                        throw std::runtime_error("single-row result shape differs");
+                        throw oracle_violation("single-row result shape differs");
                     if (!query.stop_after || materialized < query.stop_after) { on_row(PgReader{raw}); ++materialized; }
                     else ++counts.unmaterialized_rows;
                 }
@@ -992,13 +1064,13 @@ private:
                         std::string_view digits(PQcmdTuples(raw)); std::int64_t affected = -1;
                         auto parsed = std::from_chars(digits.data(), digits.data() + digits.size(), affected);
                         if (parsed.ec != std::errc() || parsed.ptr != digits.data() + digits.size() || affected != *query.expected_affected)
-                            throw std::runtime_error("PostgreSQL affected row count differs for " + query.name);
+                            throw oracle_violation("PostgreSQL affected row count differs for ", query.name);
                     }
                 }
-                else throw std::runtime_error(PQresultErrorMessage(raw));
+                else unexpected_pg_result(raw, "PostgreSQL statement result sequence differs");
             }
             if (!terminal || PQtransactionStatus(pg_) != (query.active_transaction_after ? PQTRANS_INTRANS : PQTRANS_IDLE))
-                throw std::runtime_error("PostgreSQL transaction state or terminal drain differs after " + query.name);
+                throw oracle_violation("PostgreSQL transaction state or terminal drain differs after ", query.name);
             confirm_protocol();
         }
         return materialized;
@@ -1006,6 +1078,7 @@ private:
 public:
     std::uint64_t execute(std::size_t, const Query& query)
     {
+        OracleCaseScope oracle_scope(query.name);
         deadline_ = Clock::now() + std::chrono::seconds(30);
         try
         {
@@ -1020,12 +1093,12 @@ public:
             {
                 auto step_rows = statement(step, [&](const auto& source)
                 {
-                    if (!step.expected_order || rows >= owned_orders.size()) throw std::runtime_error("transaction returned an unexpected row");
+                    if (!step.expected_order || rows >= owned_orders.size()) throw oracle_violation("transaction returned an unexpected row");
                     auto owned = read_order(source);
-                    if (!equal_order(*owned, *step.expected_order)) throw std::runtime_error("transaction changed an unexpected field at " + step.name);
+                    if (!equal_order(*owned, *step.expected_order)) throw oracle_violation("transaction changed an unexpected field at ", step.name);
                     hash_order(digest, *owned); owned_orders[rows++] = std::move(owned);
                 });
-                if (step_rows != static_cast<std::uint64_t>(step.expected_rows)) throw std::runtime_error("transaction step row count differs at " + step.name);
+                if (step_rows != static_cast<std::uint64_t>(step.expected_rows)) throw oracle_violation("transaction step row count differs at ", step.name);
                 if (step.hash_conflict)
                 {
                     // Match the business-observable checked-update exception
@@ -1037,7 +1110,7 @@ public:
                 }
             }
             if (rows != static_cast<std::uint64_t>(query.expected_rows) || digest.value != query.expected_digest)
-                throw std::runtime_error("transaction rows/digest differ for " + query.name);
+                throw oracle_violation("transaction rows/digest differ for ", query.name);
             return rows;
         }
         catch (...)
@@ -1058,7 +1131,7 @@ struct Worker
     std::array<std::uint64_t, 8192> scheduled{}, all_scheduled{}, start_delay{};
     std::vector<Second> seconds;
     std::vector<CaseCounts> cases;
-    std::uint64_t started = 0, completed = 0, failed = 0, poisoned_failures = 0, rows = 0, xor_digest = 0;
+    std::uint64_t started = 0, completed = 0, failed = 0, poisoned_failures = 0, oracle_failed_operations = 0, rows = 0, xor_digest = 0;
     std::string error;
     Counters before, after;
     bool truncated = false, poisoned = false;
@@ -1091,8 +1164,9 @@ static double quantile(const std::array<std::uint64_t, 8192>& histogram, std::ui
 static Json count_json(Counters value) { return {{"sqlExecutions", value.executions}, {"protocolSubmissions", value.submissions}, {"physicalPrepareCalls", value.prepare}, {"describeCalls", value.describe}, {"confirmationSyncs", value.confirmations}, {"pollWaitCalls", value.waits}, {"unmaterializedRowsDrained", value.unmaterialized_rows}}; }
 static Json owner_counts()
 { return {{"connections", live_connections.load()}, {"sqliteStatements", live_sqlite_statements.load()}, {"pgResults", live_pg_results.load()}, {"cancellationOwners", live_cancel_owners.load()}}; }
-static Json run(const Options& opt, const Json& manifest, const std::vector<Query>& query, std::vector<std::unique_ptr<Worker>>* retained_workers = nullptr)
+static Json run(const Options& opt, const Json& manifest, const std::vector<Query>& query, std::vector<std::unique_ptr<Worker>>* retained_workers = nullptr, const char* measurement_phase = "measurement")
 {
+    oracle_phase.store("setup");
     AllocationProfile profile(opt.allocation_profile);
     std::vector<std::unique_ptr<Worker>> local_workers;
     auto& workers = retained_workers ? *retained_workers : local_workers;
@@ -1129,7 +1203,9 @@ static Json run(const Options& opt, const Json& manifest, const std::vector<Quer
         worker->seconds.resize(opt.seconds ? static_cast<std::size_t>(std::ceil(opt.seconds)) + 301 : 3602);
         worker->cases.resize(query.size());
         if (i == 0 && opt.explain) for (auto q : active) plans[query[q].name] = worker->connection->explain(query[q]);
+        oracle_phase.store("verification");
         if (opt.verify || retained_workers) for (auto q : active) worker->connection->execute(q, query[q]);
+        oracle_phase.store("warmup");
         for (int warm = 0; warm < opt.warmup; ++warm) { auto q = choose(warm); if (!opt.empty_driver) worker->connection->execute(q, query[q]); }
         workers.push_back(std::move(worker));
     }
@@ -1140,9 +1216,10 @@ static Json run(const Options& opt, const Json& manifest, const std::vector<Quer
             worker->histogram.fill(0); worker->scheduled.fill(0); worker->all_scheduled.fill(0); worker->start_delay.fill(0);
             worker->seconds.assign(opt.seconds ? static_cast<std::size_t>(std::ceil(opt.seconds)) + 301 : 3602, {});
             std::fill(worker->cases.begin(), worker->cases.end(), CaseCounts{});
-            worker->started = worker->completed = worker->failed = worker->poisoned_failures = worker->rows = worker->xor_digest = 0;
+            worker->started = worker->completed = worker->failed = worker->poisoned_failures = worker->oracle_failed_operations = worker->rows = worker->xor_digest = 0;
             worker->error.clear(); worker->truncated = false;
         }
+    require_clean_oracle();
     auto warm_owners = owner_counts(); Json connection_ids = Json::array();
     for (const auto& worker : workers) connection_ids.push_back(reinterpret_cast<std::uintptr_t>(worker->connection.get()));
     struct Job { std::uint64_t index = 0, planned_ns = 0; };
@@ -1188,6 +1265,7 @@ static Json run(const Options& opt, const Json& manifest, const std::vector<Quer
                 {
                     add_latency(worker.all_scheduled, monotonic_ns() - planned_ns);
                     if (poisoned) ++worker.poisoned_failures;
+                    if (dynamic_cast<const OracleViolation*>(&error)) ++worker.oracle_failed_operations;
                     ++worker.failed; ++worker.cases[q].failed; failed = true; poisoned = true;
                     if (worker.error.empty()) worker.error = error.what();
                 }
@@ -1262,6 +1340,8 @@ static Json run(const Options& opt, const Json& manifest, const std::vector<Quer
     sqlite3_status64(SQLITE_STATUS_MEMORY_USED, &sqlite_used_before, &sqlite_peak_before, 1);
     auto before = ProcessReading::read(); auto started_utc = utc_now(); rusage cpu_before{}, cpu_after{};
     profile.take(profile.before, true);
+    oracle_phase.store(measurement_phase);
+    auto oracle_before = oracle_failures.load();
     { std::lock_guard lock(gate); if (getrusage(RUSAGE_SELF, &cpu_before)) throw std::runtime_error("getrusage boundary failed");
       started_monotonic = monotonic_ns(); deadline_monotonic = started_monotonic + static_cast<std::uint64_t>(opt.seconds * 1000000000.);
       started = Clock::now(); deadline = started + std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double>(opt.seconds)); start = true; }
@@ -1269,6 +1349,8 @@ static Json run(const Options& opt, const Json& manifest, const std::vector<Quer
     for (auto& thread : threads) thread.join();
     if (producer.joinable()) producer.join();
     auto ended = Clock::now(); auto ended_monotonic = monotonic_ns();
+    auto oracle_after = oracle_failures.load();
+    oracle_phase.store("drain");
     if (getrusage(RUSAGE_SELF, &cpu_after)) throw std::runtime_error("getrusage boundary failed");
     profile.take(profile.after);
     auto after = ProcessReading::read(); auto finished_utc = utc_now();
@@ -1278,7 +1360,7 @@ static Json run(const Options& opt, const Json& manifest, const std::vector<Quer
     after.system = cpu_after.ru_stime.tv_sec + cpu_after.ru_stime.tv_usec / 1e6;
     sqlite3_int64 sqlite_used_after = 0, sqlite_peak_after = 0;
     sqlite3_status64(SQLITE_STATUS_MEMORY_USED, &sqlite_used_after, &sqlite_peak_after, 0);
-    std::uint64_t actual_started = 0, completed = 0, failed = 0, poisoned_failures = 0, rows = 0; Counters counts;
+    std::uint64_t actual_started = 0, completed = 0, failed = 0, poisoned_failures = 0, oracle_failed_operations = 0, rows = 0; Counters counts;
     std::array<std::uint64_t, 8192> histogram{}, scheduled{}, all_scheduled{}, start_delay{};
     Json errors = Json::array(), sql = Json::object(); bool truncated = producer_truncated;
     if (!producer_error.empty()) errors.push_back("arrival-producer: " + producer_error);
@@ -1288,7 +1370,7 @@ static Json run(const Options& opt, const Json& manifest, const std::vector<Quer
     for (auto& worker : workers)
     {
         actual_started += worker->started; completed += worker->completed; failed += worker->failed; rows += worker->rows;
-        poisoned_failures += worker->poisoned_failures;
+        poisoned_failures += worker->poisoned_failures; oracle_failed_operations += worker->oracle_failed_operations;
         counts.executions += worker->after.executions - worker->before.executions; counts.submissions += worker->after.submissions - worker->before.submissions;
         counts.prepare += worker->after.prepare - worker->before.prepare; counts.describe += worker->after.describe - worker->before.describe;
         counts.confirmations += worker->after.confirmations - worker->before.confirmations; counts.waits += worker->after.waits - worker->before.waits;
@@ -1334,7 +1416,8 @@ static Json run(const Options& opt, const Json& manifest, const std::vector<Quer
         }
     bool reconciled = actual_started == completed + failed;
     if (opt.rate) reconciled = reconciled && attempted == planned && attempted == sent + rejected && actual_started == sent && queue_size == 0 && producer_error.empty();
-    Json error_classes = {{"database-or-validation", failed - poisoned_failures}, {"connection-unavailable-after-error", poisoned_failures}};
+    Json error_classes = {{"operational-database-or-driver", failed - poisoned_failures - oracle_failed_operations},
+        {"oracle-violation", oracle_failed_operations}, {"connection-unavailable-after-error", poisoned_failures}};
     Json offered = nullptr;
     if (opt.rate)
         offered = {{"requestsPerSecond", opt.rate}, {"offeredSeconds", opt.seconds}, {"queueCapacity", opt.queue_capacity}, {"queuePeak", queue_peak},
@@ -1345,7 +1428,9 @@ static Json run(const Options& opt, const Json& manifest, const std::vector<Quer
             {"successServiceHistogram", histogram}, {"successScheduledHistogram", scheduled}, {"allCompletedScheduledHistogram", all_scheduled},
             {"startDelayHistogram", start_delay}, {"seconds", seconds}, {"timeSeriesTruncated", truncated}, {"errorClasses", error_classes},
             {"errors", errors}, {"accountingReconciles", reconciled}, {"producerOverrunSeconds", (static_cast<std::int64_t>(offered_end_monotonic) - static_cast<std::int64_t>(deadline_monotonic)) / 1e9},
-            {"drainSeconds", (ended_monotonic - offered_end_monotonic) / 1e9}};
+            {"drainSeconds", (ended_monotonic - offered_end_monotonic) / 1e9},
+            {"oracleFailuresBefore", oracle_before}, {"oracleFailuresAfter", oracle_after}, {"oracleFailures", oracle_after},
+            {"firstOracleFailure", oracle_first()}};
     const auto& primary_histogram = opt.rate ? scheduled : histogram;
     Json result{{"schemaVersion", 3}, {"route", "direct-native-cpp"}, {"scope", "shared read and restoring-transaction contracts; long-run acceptance requires independent qualified campaign evidence"},
         {"declaredCaseIds", active_cases}, {"executedCaseIds", executed_cases}, {"caseCounts", cases}, {"emptyDriver", opt.empty_driver},
@@ -1393,6 +1478,8 @@ static Json run(const Options& opt, const Json& manifest, const std::vector<Quer
                        {"method", "base-2 histogram with 128 subdivisions per exponent; upper bounds"}, {"histogram", primary_histogram}}},
         {"serviceLatencies", {{"p50MicrosecondsUpper", quantile(histogram, completed, .50)}, {"p95MicrosecondsUpper", quantile(histogram, completed, .95)}, {"p99MicrosecondsUpper", quantile(histogram, completed, .99)}}},
         {"seconds", seconds}, {"timeSeriesTruncated", truncated}, {"errorClasses", error_classes}, {"errors", errors}};
+    result["oracleFailuresBefore"] = oracle_before; result["oracleFailuresAfter"] = oracle_after;
+    result["oracleFailures"] = oracle_failures.load(); result["firstOracleFailure"] = oracle_first();
     return result;
 }
 static Json recovery_checks(const Options& opt, const Json& manifest, const std::vector<Query>& query)
@@ -1414,11 +1501,11 @@ static Json recovery_checks(const Options& opt, const Json& manifest, const std:
     {
         try
         {
-            auto result = run(phase_options[i], manifest, query, &retained);
+            auto result = run(phase_options[i], manifest, query, &retained, names[i]);
             if (!i) identities = result.at("connectionIds");
             same_connections = same_connections && result.at("connectionIds") == identities;
             passed = passed && result.at("connectionIds") == identities && result.at("sameWarmOwners") == true
-                && result.at("failed") == 0 && result.at("accountingReconciles") == true;
+                && result.at("failed") == 0 && result.at("oracleFailures") == 0 && result.at("accountingReconciles") == true;
             passed = passed && (i == 1 ? result.at("rejected").get<std::uint64_t>() > 0 : result.at("rejected") == 0);
             bool failed = result.at("failed") != 0;
             phases.push_back({{"name", names[i]}, {"measurement", std::move(result)}});
@@ -1428,7 +1515,7 @@ static Json recovery_checks(const Options& opt, const Json& manifest, const std:
     }
     retained.clear(); auto final = owner_counts();
     bool owners_zero = live_connections == 0 && live_sqlite_statements == 0 && live_pg_results == 0 && live_cancel_owners == 0;
-    passed = passed && phases.size() == 3 && errors.empty() && owners_zero;
+    passed = passed && phases.size() == 3 && errors.empty() && owners_zero && oracle_failures.load() == 0;
     Json ratio = nullptr;
     if (phases.size() == 3)
     {
@@ -1490,15 +1577,18 @@ static Json lifecycle_checks(const Options& opt, const Json& manifest, const std
 }
 int main(int argc, char** argv)
 {
+    std::string failure_output;
     try
     {
-        auto opt = options(argc, argv);
+        auto opt = options(argc, argv); failure_output = opt.output;
         if (!opt.output.empty() && std::filesystem::exists(opt.output)) throw std::runtime_error("result output already exists; preserve prior evidence");
         auto input_hash = hash_file(opt.manifest);
         std::ifstream input(opt.manifest); if (!input) throw std::runtime_error("query manifest unavailable");
         Json manifest = Json::parse(input); auto query = queries(manifest, opt);
+        if (opt.lifecycle_checks) oracle_phase.store("lifecycle-diagnostic");
         auto result = opt.recovery_checks ? recovery_checks(opt, manifest, query)
             : opt.lifecycle_checks ? lifecycle_checks(opt, manifest, query) : run(opt, manifest, query);
+        result["oracleFailures"] = oracle_failures.load(); result["firstOracleFailure"] = oracle_first();
         auto executable = std::filesystem::canonical("/proc/self/exe");
         result["executableSha256"] = hash_file(executable); result["manifestSha256"] = input_hash;
         result["manifestSha256After"] = hash_file(opt.manifest); result["inputImmutable"] = input_hash == result["manifestSha256After"].get<std::string>();
@@ -1511,6 +1601,7 @@ int main(int argc, char** argv)
         Json defines = Json::array(); for (int i = 0; sqlite3_compileoption_get(i); ++i) defines.push_back(sqlite3_compileoption_get(i)); result["sqliteCompileOptions"] = defines;
         if (opt.output.empty()) std::cout << result.dump() << '\n';
         else { std::ofstream output(opt.output); if (!output) throw std::runtime_error("output unavailable"); output << result.dump(2) << '\n'; std::cout << "DB_PERF_NATIVE_RESULT output=" << opt.output << '\n'; }
+        write_oracle_failure(opt.output);
         bool profile_valid = true;
         if (opt.allocation_profile)
         {
@@ -1519,8 +1610,8 @@ int main(int argc, char** argv)
             if (opt.recovery_checks) for (const auto& phase : result.at("phases")) profile_valid = profile_valid && valid(phase.at("measurement"));
             else profile_valid = valid(result);
         }
-        if (opt.recovery_checks || opt.lifecycle_checks) return result.at("passed") == true && result["inputImmutable"] == true && profile_valid ? 0 : 1;
-        return result["failed"] == 0 && result["ownersReturnedToZero"] == true && result["accountingReconciles"] == true && result["inputImmutable"] == true && profile_valid ? 0 : 1;
+        if (opt.recovery_checks || opt.lifecycle_checks) return oracle_failures.load() == 0 && result.at("passed") == true && result["inputImmutable"] == true && profile_valid ? 0 : 1;
+        return oracle_failures.load() == 0 && result["failed"] == 0 && result["ownersReturnedToZero"] == true && result["accountingReconciles"] == true && result["inputImmutable"] == true && profile_valid ? 0 : 1;
     }
-    catch (const std::exception& failure) { std::cerr << "DB_PERF_NATIVE_ERROR " << failure.what() << '\n'; return 2; }
+    catch (const std::exception& failure) { std::cerr << "DB_PERF_NATIVE_ERROR " << failure.what() << '\n'; write_oracle_failure(failure_output); return 2; }
 }

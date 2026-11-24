@@ -160,6 +160,29 @@ is retained. A qualifying long segment must actually execute all frozen cases.
 Mixed-write IDs must be backed by `writesDatabase: true` in the workload manifest;
 a read-only case cannot receive a write label in the request to pass this gate.
 
+Every new consumer receipt explicitly records process-lifetime oracle failures,
+the first bounded failure detail, and the cumulative counts at the measured
+interval's start and end. Row/type/shape/digest, persisted-state and owner-retirement
+violations invalidate the entire command even if a later cleanup exception replaces
+the original thrown exception. The counters remain sticky across recovery phases.
+Missing fields in older receipts mean unproven, not zero; those earlier receipts
+retain their original historical scope. Ordinary provider failures, cancellations
+and rejected arrivals retain their separate operation/error ledgers and SLO budget.
+The workload's deliberately caught stale-write conflict is a successful checked
+business outcome. The two managed routes use the same reader, retain both primary
+and retirement exceptions on a double failure, and dispose each acquired reader
+exactly once.
+
+Managed allocation totals cover the complete consumer process, including async
+and concurrent worker activity. Lists, DTOs, strings and typed JSON results are
+business-result allocations even when Korda's generated mapper creates them.
+Framework overhead is the additional query/binding/transport/mapping-control/
+ownership cost; harness work remains a separately described contribution to the
+raw total. No business-result-zero requirement is imposed. A numeric row-advance
+window with zero raw bytes does not establish a zero-byte query, result DTO, or
+whole framework. Allocation attribution uses the separately retained measured
+boundaries; the controller does not subtract estimated result or harness bytes.
+
 `shortQueries` runs five basic projections (`numeric`, `text`, `money`, `json`,
 `wide`) for 15 seconds at one connection in both dynamic and prepared modes.
 All four routes run both modes on each database: sixteen independent short

@@ -11,6 +11,8 @@ using Korda.Database.Sqlite;
 
 if (RuntimeFeature.IsDynamicCodeSupported) throw new InvalidOperationException("DB-Perf-01 must execute a published Native AOT binary.");
 var options = Options.Parse(args);
+try
+{
 var builder = new DataSourceBuilder().WithName("DB-Perf-01")
     .ConfigureLimits(new DatabaseLimits
     {
@@ -45,7 +47,7 @@ await using (var validation = await source.OpenSessionAsync())
 {
     var tenants = await validation.ScalarAsync(SqlCommand.Create("SELECT tenants FROM db_perf_metadata WHERE schema_version=1"), Codecs.Int64);
     var count = await validation.ScalarAsync(SqlCommand.Create("SELECT orders_per_tenant FROM db_perf_metadata WHERE schema_version=1"), Codecs.Int64);
-    if (tenants != options.Tenants || count != options.OrdersPerTenant) throw new InvalidOperationException("Dataset metadata does not match requested workload.");
+    if (tenants != options.Tenants || count != options.OrdersPerTenant) throw CorrectnessOracle.Failure("Dataset metadata does not match requested workload.", "dataset");
 }
 using var native = new NativeDiagnostics(source.Provider);
 if(options.RecoveryChecks)
@@ -63,18 +65,22 @@ if(options.RecoveryChecks)
     var recoveryJson=JsonSerializer.Serialize(recovery,PerfJson.Default.RecoveryReceipt);
     if(options.Output is {} path)await File.WriteAllTextAsync(path,recoveryJson+Environment.NewLine);
     Console.WriteLine("DB_PERF_RECOVERY "+recoveryJson);
-    return recovery.Passed?0:1;
+    return recovery.Passed && CorrectnessOracle.Failures == 0 ? 0 : 1;
 }
 if(options.LifecycleChecks)
 {
+    CorrectnessOracle.SetPhase("lifecycle-diagnostic");
     var lifecycle=await LifecycleVerification.Run(source,options,native);
+    lifecycle = lifecycle with { OracleFailures = CorrectnessOracle.Failures, FirstOracleFailure = CorrectnessOracle.FirstFailure };
     var lifecycleJson=JsonSerializer.Serialize(lifecycle,PerfJson.Default.LifecycleReceipt);
     if(options.Output is {} path)await File.WriteAllTextAsync(path,lifecycleJson+Environment.NewLine);
     Console.WriteLine("DB_PERF_LIFECYCLE "+lifecycleJson);
-    return lifecycle.Checks.All(check=>check.Status=="passed")?0:1;
+    return lifecycle.Checks.All(check=>check.Status=="passed") && CorrectnessOracle.Failures == 0 ? 0 : 1;
 }
 var receipt = await Measurement.Run(source, options, native);
 var json = JsonSerializer.Serialize(receipt, PerfJson.Default.RunReceipt);
 if (options.Output is { } output) await File.WriteAllTextAsync(output, json + Environment.NewLine);
 Console.WriteLine("DB_PERF_RESULT " + json);
-return receipt.Failed == 0 && receipt.OwnersReturnedToZero && receipt.NativeAllocationProfile?.Passed != false ? 0 : 1;
+return receipt.Failed == 0 && receipt.OracleFailures == 0 && receipt.OwnersReturnedToZero && receipt.NativeAllocationProfile?.Passed != false ? 0 : 1;
+}
+finally { CorrectnessOracle.WriteFailure(options.Output); }
