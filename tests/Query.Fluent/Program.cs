@@ -221,7 +221,15 @@ internal static class Suite
             await using (var a = await session.Source.OpenSessionAsync())
             await using (var b = await session.Source.OpenSessionAsync())
             {
-                var parallel = await Task.WhenAll(prepared.ToListAsync(a), prepared.ToListAsync(b, new QueryParameters()));
+                using var rendezvous = new Barrier(3);
+                var first = Task.Factory.StartNew(() => { rendezvous.SignalAndWait(); return prepared.AsAsyncEnumerable(a); },
+                    CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+                var second = Task.Factory.StartNew(() => { rendezvous.SignalAndWait(); return prepared.AsAsyncEnumerable(b, new QueryParameters()); },
+                    CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+                rendezvous.SignalAndWait(); var streams = await Task.WhenAll(first, second);
+                static async Task<List<long>> Consume(IAsyncEnumerable<long> stream)
+                { var result = new List<long>(); await foreach (var item in stream) result.Add(item); return result; }
+                var parallel = await Task.WhenAll(Consume(streams[0]), Consume(streams[1]));
                 Check(parallel.All(rows => rows.SequenceEqual([0L, 1L, 2L])), "Concurrent parameterless executions retain independent cursors");
             }
             using var parameterQuery = Q(); var extra = parameterQuery.Parameter("extra", Codecs.Int64);
@@ -250,6 +258,8 @@ internal static class Suite
             Throws<ArgumentException>(() => q.Select(q.ParameterValue(one)).Combine(right));
         }
         await Done("prepared-isolation");
+        await CheckPreparedStreamFailureTiming(session, diagnostic);
+        await Done("prepared-stream-validation-timing");
         MeasurePreparedConstruction(session, diagnostic);
         await Done("prepared-construction-allocation-regression");
         using (var q = Q())
@@ -361,12 +371,33 @@ internal static class Suite
             var gen0 = GC.CollectionCount(0) - before0; var gen1 = GC.CollectionCount(1) - before1; var gen2 = GC.CollectionCount(2) - before2;
             // These are bounded construction regressions, not a zero-allocation
             // claim. The old metadata rebuild exceeds both ceilings by a wide margin.
-            var maximum = lane == 0 ? 9_000_000L : 17_000_000L;
+            var maximum = lane == 0 ? 2_000_000L : 10_000_000L;
             PreparedCosts.Add(new(session.Source.Provider.ToString(), lane == 0 ? "parameterless" : "one-int64-snapshot",
                 window, iterations, before, after, after - before, gen0, gen1, gen2, maximum));
             Check(after - before <= maximum, "Prepared public construction allocation ceiling");
             Check(diagnostic.Count(6) == sql && diagnostic.Counts().SequenceEqual(owners), "Lazy construction performs no SQL or native ownership change");
         }
+    }
+    private static async Task CheckPreparedStreamFailureTiming(DataSession session, Diagnostic diagnostic)
+    {
+        var file = Path.Combine(Path.GetTempPath(), "nw-b13-limits-" + Guid.NewGuid().ToString("N") + ".db");
+        try
+        {
+            var builder = new DataSourceBuilder().ConfigureLimits(new DatabaseLimits { MaxBatchBytes = 128 });
+            if (session.Source.Provider == DatabaseProvider.Sqlite) builder.UseSqlite(file);
+            else builder.UsePostgreSql(Environment.GetEnvironmentVariable("NW_TEST_POSTGRES")!, options => options.TlsMode = PostgreSqlTlsMode.DisableForLocalDevelopment);
+            await using var source = builder.Build(); await using var limited = await source.OpenSessionAsync();
+            using var query = limited.From(Models.People);
+            using var prepared = query.Select(query.Column(Models.Id)).Prepare();
+            using var extraQuery = limited.From(Models.People); var extra = extraQuery.Parameter("extra", Codecs.Int64);
+            var before = diagnostic.Count(6);
+            Throws<ArgumentException>(() => prepared.AsAsyncEnumerable(limited, new QueryParameters().Set(extra, 1L)));
+            var error = Throws<DatabaseException>(() => prepared.AsAsyncEnumerable(limited));
+            Check(error.Kind == DatabaseErrorKind.ResourceLimit && error.ProviderCode == "LargeValueRequiresStreaming",
+                "Prepare retains lazy row-capacity validation after execution parameter checks");
+            Check(diagnostic.Count(6) == before, "Invalid prepared stream never dispatches SQL");
+        }
+        finally { File.Delete(file); }
     }
     private sealed class MappingFailure : Exception;
     private sealed record Joined(long Id, long? Child, bool Matched);

@@ -2,6 +2,16 @@ using Korda.Data;
 
 namespace Korda.Database.Internal;
 
+// Shape metadata only: no session, factory, cancellation or cursor state can be
+// retained here. The prepared owner publishes one immutable layout after its
+// first successful stream-construction validation.
+internal sealed class StreamProjectionLayout(object projection, WireExpectation expectation, int minimumBatchBytes)
+{
+    internal object Projection { get; } = projection;
+    internal WireExpectation Expectation { get; } = expectation;
+    internal int MinimumBatchBytes { get; } = minimumBatchBytes;
+}
+
 /// <summary>One-shot typed stream adapter used by the Database host and query terminal owners.</summary>
 /// <remarks>Creation validates and freezes the projection identity without dispatch. The factory captures an
 /// already-snapshotted command and starts only at first MoveNext. Both cancellation tokens are linked.
@@ -22,6 +32,37 @@ internal sealed class TypedStream<T> : IAsyncEnumerable<T>
         ArgumentNullException.ThrowIfNull(start);
         ArgumentNullException.ThrowIfNull(projection);
         limits.Validate();
+        _expected = CreateExpectation(projection, profile, projectionId, boundCodecs, out var minimumBatchBytes);
+        ValidateBatchCapacity(minimumBatchBytes, limits);
+        _start = start; _projection = projection; _limits = limits; _methodToken = cancellationToken;
+    }
+
+    internal TypedStream(Func<int, CancellationToken, Task<IStreamTransport>> start, Projection<T> projection,
+        StreamProjectionLayout layout, StreamLimits limits, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(start);
+        ArgumentNullException.ThrowIfNull(projection);
+        limits.Validate();
+        ArgumentNullException.ThrowIfNull(layout);
+        if (!ReferenceEquals(layout.Projection, projection)) throw new ArgumentException("The frozen stream layout belongs to another projection.", nameof(layout));
+        ValidateBatchCapacity(layout.MinimumBatchBytes, limits);
+        _expected = layout.Expectation;
+        _start = start; _projection = projection; _limits = limits; _methodToken = cancellationToken;
+    }
+
+    internal static StreamProjectionLayout CreateProjectionLayout(Projection<T> projection, uint profile, uint projectionId,
+        ReadOnlySpan<uint> boundCodecs, StreamLimits limits)
+    {
+        ArgumentNullException.ThrowIfNull(projection);
+        limits.Validate();
+        var expectation = CreateExpectation(projection, profile, projectionId, boundCodecs, out var minimumBatchBytes);
+        ValidateBatchCapacity(minimumBatchBytes, limits);
+        return new(projection, expectation, minimumBatchBytes);
+    }
+
+    private static WireExpectation CreateExpectation(Projection<T> projection, uint profile, uint projectionId,
+        ReadOnlySpan<uint> boundCodecs, out int minimumBatchBytes)
+    {
         if (boundCodecs.Length != projection.Fields.Length) throw new ArgumentException("Bound codec count differs from the exact projection.", nameof(boundCodecs));
         var descriptors = new WireDescriptor[boundCodecs.Length];
         var configured = new Dictionary<uint, CodecDescriptor>();
@@ -38,11 +79,16 @@ internal sealed class TypedStream<T> : IAsyncEnumerable<T>
             }
             descriptors[i] = new((uint)i, codec, boundCodecs[i]);
         }
-        _expected = new(PayloadKind.Rows, profile, Convert.FromHexString(projection.ShapeHash), 0, projectionId, descriptors);
-        var empty = DbWire.Encode(_expected, 0, Array.Empty<ReadOnlyMemory<byte>?>());
-        if (checked(empty.Length + descriptors.Length * WireSchema.CellBytes) > limits.MaxBatchBytes)
+        var expectation = new WireExpectation(PayloadKind.Rows, profile, Convert.FromHexString(projection.ShapeHash), 0, projectionId, descriptors);
+        var empty = DbWire.Encode(expectation, 0, Array.Empty<ReadOnlyMemory<byte>?>());
+        minimumBatchBytes = checked(empty.Length + descriptors.Length * WireSchema.CellBytes);
+        return expectation;
+    }
+
+    private static void ValidateBatchCapacity(int minimumBatchBytes, StreamLimits limits)
+    {
+        if (minimumBatchBytes > limits.MaxBatchBytes)
             throw new DatabaseException("LargeValueRequiresStreaming: a single row descriptor table exceeds the batch limit.", DatabaseErrorKind.ResourceLimit, "LargeValueRequiresStreaming");
-        _start = start; _projection = projection; _limits = limits; _methodToken = cancellationToken;
     }
 
     public IAsyncEnumerator<T> GetAsyncEnumerator(CancellationToken cancellationToken = default) => CreateEnumerator(cancellationToken, _limits.MaxBatchRows, false);

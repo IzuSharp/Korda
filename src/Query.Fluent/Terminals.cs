@@ -147,6 +147,7 @@ public sealed class PreparedQuery<T> : IDisposable
     private readonly uint _projectionId;
     private readonly uint[] _codecs;
     private PreparedParameterLayout? _parameters;
+    private StreamProjectionLayout? _streamLayout;
     private int _disposed;
     internal PreparedQuery(DataSource source, DatabaseOwner plan, Projection<T> projection, uint projectionId, uint[] codecs, PreparedParameterLayout parameters)
     { _source = source; _plan = plan; _projection = projection; _projectionId = projectionId; _codecs = codecs; _parameters = parameters; }
@@ -157,11 +158,28 @@ public sealed class PreparedQuery<T> : IDisposable
         var layout = Volatile.Read(ref _parameters);
         ObjectDisposedException.ThrowIf(layout is null, this);
         var values = layout.Encode(_source, parameters);
+        var limits = session.StreamingLimits;
+        var streamLayout = Volatile.Read(ref _streamLayout);
+        if (streamLayout is null)
+        {
+            // Preserve lazy error timing: validate row capability and capacity
+            // only after this execution's parameter snapshot, never at Prepare.
+            var created = TypedStream<T>.CreateProjectionLayout(_projection, _source.Binding.SemanticProfile, _projectionId, _codecs, limits);
+            streamLayout = Interlocked.CompareExchange(ref _streamLayout, created, null) ?? created;
+            if (Volatile.Read(ref _disposed) != 0)
+            {
+                // Dispose may have cleared the field before our late CAS. Do not
+                // republish a cache into a closed wrapper; concurrent local users
+                // retain safe immutable references independently.
+                Interlocked.CompareExchange(ref _streamLayout, null, streamLayout);
+                throw new ObjectDisposedException(GetType().FullName);
+            }
+        }
         return new(async (rows, cancellation) =>
         {
             ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
             return await session.OpenPlanStreamAsync(_plan, values, rows, cancellation).ConfigureAwait(false);
-        }, _projection, _source.Binding.SemanticProfile, _projectionId, _codecs, session.StreamingLimits, token);
+        }, _projection, streamLayout, limits, token);
     }
     /// <summary>Snapshots the exact declared parameter set before await and executes a bounded owned list.</summary>
     /// <inheritdoc cref="PreparedQuery{T}"/>
@@ -201,6 +219,7 @@ public sealed class PreparedQuery<T> : IDisposable
         // In-flight construction holds its own immutable layout reference. New
         // dispatch is already closed, and the disposed wrapper retains no cache.
         Interlocked.Exchange(ref _parameters, null);
+        Interlocked.Exchange(ref _streamLayout, null);
         _plan.Dispose();
     }
 }
