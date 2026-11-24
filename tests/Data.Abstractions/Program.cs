@@ -34,6 +34,16 @@ if (args.Contains("--configured-scalar-correctness", StringComparer.Ordinal))
     ConfiguredScalarProbe.Verify(output);
     return;
 }
+if (args.Contains("--control-record-correctness", StringComparer.Ordinal))
+{
+    ControlRecordTests.Run(output);
+    return;
+}
+if (args.Contains("--control-record-allocation-regression", StringComparer.Ordinal))
+{
+    ControlRecordTests.RunAllocation(output);
+    return;
+}
 Console.WriteLine("Dynamic code supported: " + RuntimeFeature.IsDynamicCodeSupported);
 var cases = new List<string>();
 void Check(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
@@ -41,6 +51,7 @@ void Reject<T>(Action action) where T : Exception { try { action(); } catch (T) 
 void Test(string name, Action action) { action(); cases.Add(name); Console.WriteLine("PASS " + name); }
 
 Test("configured_codec_configuration_and_precision_oracle", () => ConfiguredScalarProbe.Verify(output));
+Test("control_record_order_ownership_errors_and_size_contract", () => ControlRecordTests.Run(output));
 
 var parentBuilder = new TableBuilder<Parent>("Parents");
 var id = parentBuilder.Column("Id", Codecs.Int64, new() { IsPrimaryKey = true });

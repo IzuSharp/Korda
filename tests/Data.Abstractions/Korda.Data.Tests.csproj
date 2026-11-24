@@ -12,6 +12,7 @@
     <Compile Include="AllocationProbe.cs" />
     <Compile Include="BatchAllocationProbe.cs" />
     <Compile Include="WireValidationTests.cs" />
+    <Compile Include="ControlRecordTests.cs" />
     <Compile Include="ConfiguredScalarProbe.cs" />
     <ProjectReference Include="../../src/Data.Abstractions/Korda.Data.csproj" />
   </ItemGroup>

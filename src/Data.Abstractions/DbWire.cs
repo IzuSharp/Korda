@@ -284,13 +284,33 @@ internal static class ControlRecord
 {
     internal static byte[] Encode(ushort kind, params ControlField[] fields)
     {
-        if (fields.Select(f => f.Id).Distinct().Count() != fields.Length || fields.Any(f => f.Id == 0)) throw new ArgumentException("Invalid control field IDs.");
-        fields = fields.OrderBy(f => f.Id).ToArray(); var start = checked(16 + fields.Length * 16); var size = checked(start + fields.Sum(f => f.Bytes.Length));
+        // Most library records already declare positive IDs in wire order.
+        // Keep that caller-owned array unchanged and avoid temporary set/sort state.
+        // The fallback retains validation and error ordering for all other inputs.
+        if (!StrictlyOrdered(fields))
+        {
+            if (fields.Select(f => f.Id).Distinct().Count() != fields.Length || fields.Any(f => f.Id == 0)) throw new ArgumentException("Invalid control field IDs.");
+            fields = fields.OrderBy(f => f.Id).ToArray();
+        }
+        var start = checked(16 + fields.Length * 16); var payload = 0;
+        foreach (var field in fields) payload = checked(payload + field.Bytes.Length);
+        var size = checked(start + payload);
         if (size > DbWire.MaxEncodedBytes) throw new ArgumentException("Control record exceeds limit.");
         var bytes = new byte[size]; DbWire.U16(bytes, 0, 1); DbWire.U16(bytes, 2, kind); DbWire.U32(bytes, 4, (uint)size); DbWire.U32(bytes, 8, (uint)fields.Length);
         for (var i = 0; i < fields.Length; i++)
         { var f = fields[i]; var o = 16 + i * 16; DbWire.U16(bytes, o, f.Id); DbWire.U16(bytes, o + 2, f.Type); DbWire.U32(bytes, o + 4, (uint)f.Bytes.Length); DbWire.U64(bytes, o + 8, (ulong)start); f.Bytes.CopyTo(bytes, start); start += f.Bytes.Length; }
         return bytes;
+    }
+    private static bool StrictlyOrdered(ControlField[]? fields)
+    {
+        if (fields is null) return false;
+        ushort previous = 0;
+        foreach (var field in fields)
+        {
+            if (field.Id <= previous) return false;
+            previous = field.Id;
+        }
+        return true;
     }
     internal static byte[] U32(uint value) { var bytes = new byte[4]; DbWire.U32(bytes, 0, value); return bytes; }
     internal static byte[] Vector(IEnumerable<uint> values)
