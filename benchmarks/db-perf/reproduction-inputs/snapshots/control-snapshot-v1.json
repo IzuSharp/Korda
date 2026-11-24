@@ -1,0 +1,141 @@
+{
+  "schemaVersion": 1,
+  "task": "DB-Perf-01",
+  "purpose": "Historical tenth control-snapshot source inputs, excluded from normal product/consumer build.",
+  "originEvidenceIndex": "ledger/evidence/batches/DB-Perf-01/checkpoints/iteration-10-v1/files.json",
+  "inputs": [
+    {
+      "sha256": "cb8d511970dbed4ec0804c9d485ca6455fe29157404745983c2cb5cb394be2a0",
+      "bytes": 23032,
+      "sourcePath": "control-snapshot-after-v1/source-inputs/src/Data.Abstractions/Codecs.cs",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/cb8d511970dbed4ec0804c9d485ca6455fe29157404745983c2cb5cb394be2a0/Codecs.cs",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "eba3b8b86e28a5e5f8093eb330f1ad9eb081610533d929fd759f4f848eaecf3c",
+      "bytes": 20507,
+      "sourcePath": "control-snapshot-after-v1/source-inputs/src/Data.Abstractions/DbWire.cs",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/eba3b8b86e28a5e5f8093eb330f1ad9eb081610533d929fd759f4f848eaecf3c/DbWire.cs",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "29c9a0b45f64f7422460f0d695817bbed85b25b8961b5b768543504b66c1a90d",
+      "bytes": 7986,
+      "sourcePath": "control-snapshot-after-v1/source-inputs/src/Data.NativeHost/HostEncoding.cs",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/29c9a0b45f64f7422460f0d695817bbed85b25b8961b5b768543504b66c1a90d/HostEncoding.cs",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "5253b0382ab1d4d38a5035058a0a8dae6d5b4768ea6dc87cc9e1ea858a829682",
+      "bytes": 16534,
+      "sourcePath": "control-snapshot-after-v1/source-inputs/src/Data.Streaming/TypedStream.cs",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/5253b0382ab1d4d38a5035058a0a8dae6d5b4768ea6dc87cc9e1ea858a829682/TypedStream.cs",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "79fb9c2a6350e9b2b9b22cc5c4de20d338cb368866ab196add71d3d6feec2bc4",
+      "bytes": 994,
+      "sourcePath": "control-snapshot-after-v1/source-inputs/src/Data.Transactions/Korda.Database.Transactions.csproj",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/79fb9c2a6350e9b2b9b22cc5c4de20d338cb368866ab196add71d3d6feec2bc4/Korda.Database.Transactions.csproj",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "272ac781ea8b4488b1a30e2dad4d3a301edf505afb703fc5f2cef6865b060573",
+      "bytes": 29395,
+      "sourcePath": "control-snapshot-after-v1/source-inputs/src/Query.Fluent/Terminals.cs",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/272ac781ea8b4488b1a30e2dad4d3a301edf505afb703fc5f2cef6865b060573/Terminals.cs",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "0c93dbbcf9ef88af3c7ed8c77c0c4982ee8cfc3ea222a02df937f44654dfdf10",
+      "bytes": 1005,
+      "sourcePath": "control-snapshot-after-v1/source-inputs/tests/Data.NativeHost/Korda.Data.NativeHost.Tests.csproj",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/0c93dbbcf9ef88af3c7ed8c77c0c4982ee8cfc3ea222a02df937f44654dfdf10/Korda.Data.NativeHost.Tests.csproj",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "7afa2e9c106ffc961799194dcf6da103c05e7a4ee68f43ecb52a0d55a66da3b8",
+      "bytes": 18004,
+      "sourcePath": "control-snapshot-after-v1/source-inputs/tests/Data.NativeHost/Program.cs",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/7afa2e9c106ffc961799194dcf6da103c05e7a4ee68f43ecb52a0d55a66da3b8/Program.cs",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "06e3c19660ae8777cb53244dc5e0e24eb7929561ecddf0bac39003db2414ba16",
+      "bytes": 19022,
+      "sourcePath": "control-snapshot-after-v1/source-inputs/tests/Data.NativeHost/SnapshotProbe.cs",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/06e3c19660ae8777cb53244dc5e0e24eb7929561ecddf0bac39003db2414ba16/SnapshotProbe.cs",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "cb8d511970dbed4ec0804c9d485ca6455fe29157404745983c2cb5cb394be2a0",
+      "bytes": 23032,
+      "sourcePath": "control-snapshot-after-v2-gate/source-inputs/src/Data.Abstractions/Codecs.cs",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/cb8d511970dbed4ec0804c9d485ca6455fe29157404745983c2cb5cb394be2a0/Codecs.cs",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "eba3b8b86e28a5e5f8093eb330f1ad9eb081610533d929fd759f4f848eaecf3c",
+      "bytes": 20507,
+      "sourcePath": "control-snapshot-after-v2-gate/source-inputs/src/Data.Abstractions/DbWire.cs",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/eba3b8b86e28a5e5f8093eb330f1ad9eb081610533d929fd759f4f848eaecf3c/DbWire.cs",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "29c9a0b45f64f7422460f0d695817bbed85b25b8961b5b768543504b66c1a90d",
+      "bytes": 7986,
+      "sourcePath": "control-snapshot-after-v2-gate/source-inputs/src/Data.NativeHost/HostEncoding.cs",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/29c9a0b45f64f7422460f0d695817bbed85b25b8961b5b768543504b66c1a90d/HostEncoding.cs",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "5253b0382ab1d4d38a5035058a0a8dae6d5b4768ea6dc87cc9e1ea858a829682",
+      "bytes": 16534,
+      "sourcePath": "control-snapshot-after-v2-gate/source-inputs/src/Data.Streaming/TypedStream.cs",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/5253b0382ab1d4d38a5035058a0a8dae6d5b4768ea6dc87cc9e1ea858a829682/TypedStream.cs",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "79fb9c2a6350e9b2b9b22cc5c4de20d338cb368866ab196add71d3d6feec2bc4",
+      "bytes": 994,
+      "sourcePath": "control-snapshot-after-v2-gate/source-inputs/src/Data.Transactions/Korda.Database.Transactions.csproj",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/79fb9c2a6350e9b2b9b22cc5c4de20d338cb368866ab196add71d3d6feec2bc4/Korda.Database.Transactions.csproj",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "272ac781ea8b4488b1a30e2dad4d3a301edf505afb703fc5f2cef6865b060573",
+      "bytes": 29395,
+      "sourcePath": "control-snapshot-after-v2-gate/source-inputs/src/Query.Fluent/Terminals.cs",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/272ac781ea8b4488b1a30e2dad4d3a301edf505afb703fc5f2cef6865b060573/Terminals.cs",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "0c93dbbcf9ef88af3c7ed8c77c0c4982ee8cfc3ea222a02df937f44654dfdf10",
+      "bytes": 1005,
+      "sourcePath": "control-snapshot-after-v2-gate/source-inputs/tests/Data.NativeHost/Korda.Data.NativeHost.Tests.csproj",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/0c93dbbcf9ef88af3c7ed8c77c0c4982ee8cfc3ea222a02df937f44654dfdf10/Korda.Data.NativeHost.Tests.csproj",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "ad666389af2a0c04f9faf1de06a6a8da454d63d312ae4e9a90fd1b2adc0477ff",
+      "bytes": 18044,
+      "sourcePath": "control-snapshot-after-v2-gate/source-inputs/tests/Data.NativeHost/Program.cs",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/ad666389af2a0c04f9faf1de06a6a8da454d63d312ae4e9a90fd1b2adc0477ff/Program.cs",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "2ab3d9b08f692f784f84d0161b6b072e0b4e0b358fb3219be736d2f0d81c255c",
+      "bytes": 20499,
+      "sourcePath": "control-snapshot-after-v2-gate/source-inputs/tests/Data.NativeHost/SnapshotProbe.cs",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/2ab3d9b08f692f784f84d0161b6b072e0b4e0b358fb3219be736d2f0d81c255c/SnapshotProbe.cs",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "52a2ab2b48a049133a70995262120bdd6e1c899ca081cbb684749c4a4decf660",
+      "bytes": 5610,
+      "sourcePath": "measurements/control-snapshot-frozen-v1/HostEncoding.before.cs",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/52a2ab2b48a049133a70995262120bdd6e1c899ca081cbb684749c4a4decf660/HostEncoding.before.cs",
+      "bindingStatus": "pending_harness_commit"
+    }
+  ]
+}

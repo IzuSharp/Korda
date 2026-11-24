@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "task": "DB-Perf-01",
+  "snapshot": "json-validation-candidate-v2",
+  "purpose": "Exact sixth-candidate source before subsequent configured-codec optimization; historical inputs excluded from current product and consumer builds. The successful AOT build is observed; correctness/allocation observations remain separately bound.",
+  "buildReceiptPath": "/workspace/scratch/b94e2a0e0c3f/measurements/json-validation-candidate-v2/build-receipt.json",
+  "buildReceiptSha256": "db2915a284a8f3516696c74bf94e7cb00c05cb925b46f3cad7acc2c071585c64",
+  "executableSha256": "34b0e5eabcd4b1b28b33894dd376b572ca8ea747f2f94fff40cc523327456c1a",
+  "sourceStableDuringBuild": true,
+  "sourceStableDuringArchive": true,
+  "inputs": [
+    {
+      "sourcePath": "src/Data.Abstractions/DbWire.cs",
+      "sha256": "68580c2f47f2c6b420361e8d7965a79aa2f9cb1f1c3c8c122bde500899471b40",
+      "bytes": 16790,
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/68580c2f47f2c6b420361e8d7965a79aa2f9cb1f1c3c8c122bde500899471b40/DbWire.cs",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sourcePath": "tests/Data.Abstractions/Program.cs",
+      "sha256": "7d4cdce6fcd3f11bfd3cc688a575d5c29312cde019ffc4b3893d3a092c053707",
+      "bytes": 28026,
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/7d4cdce6fcd3f11bfd3cc688a575d5c29312cde019ffc4b3893d3a092c053707/Program.cs",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sourcePath": "tests/Data.Abstractions/AllocationProbe.cs",
+      "sha256": "2dfb814a5cdfbbd153db8b15250762ad762ea5ed69aee5ffecf1445cba583967",
+      "bytes": 4931,
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/2dfb814a5cdfbbd153db8b15250762ad762ea5ed69aee5ffecf1445cba583967/AllocationProbe.cs",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sourcePath": "src/Data.Abstractions/Codecs.cs",
+      "sha256": "fc7ab82e410fd9d10dbca2e7bcf127f166dd1a0e23a9e4ea7294d7c226a66760",
+      "bytes": 21936,
+      "reference": {
+        "repository": "IzuSharp/Korda",
+        "commit": "3d3b093acdd067dd4351019a083e49e5cd7166e1",
+        "tree": "5820f1cb0d0a3dde623a6b6b9ea2fd8eac41b0f4",
+        "path": "src/Data.Abstractions/Codecs.cs"
+      }
+    }
+  ]
+}

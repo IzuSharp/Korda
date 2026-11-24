@@ -1,0 +1,262 @@
+{
+  "schemaVersion": 1,
+  "dataset": {
+    "tenants": 8,
+    "ordersPerTenant": 1024,
+    "customers": 256,
+    "schemaMetadata": "db_perf_metadata"
+  },
+  "digest": {
+    "algorithm": "FNV-1a 64 bit",
+    "offset": "14695981039346656037",
+    "prime": "1099511628211",
+    "integer": "signed Int64 little-endian bytes",
+    "nullable-int64": "one-byte presence then integer only if present",
+    "string": "signed Int64 UTF-8 byte length then UTF-8; NULL length=-1",
+    "cents-from-decimal": "exact decimal value times 100 to signed Int64; SQLite already stores cents",
+    "settings": "string Channel then one-byte boolean Gift",
+    "rowSeparator": "none"
+  },
+  "queries": [
+    {
+      "name": "numeric",
+      "entry": "fluent",
+      "sql": {
+        "sqlite": "SELECT \"orders\".\"Id\" AS \"value\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ? ORDER BY \"orders\".\"Id\" ASC NULLS LAST LIMIT ?",
+        "postgresql": "SELECT \"orders\".\"Id\" AS \"value\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $1 ORDER BY \"orders\".\"Id\" ASC NULLS LAST LIMIT $2"
+      },
+      "parameters": [
+        {
+          "name": "tenant",
+          "kind": "int64",
+          "value": 1
+        },
+        {
+          "name": "take",
+          "kind": "int64",
+          "value": 32
+        }
+      ],
+      "columns": [
+        {
+          "name": "Id",
+          "alias": "value",
+          "kind": "int64",
+          "nullable": false
+        }
+      ],
+      "expectedRows": 32,
+      "expectedDigest": "7556371084242497349",
+      "expectedDigestHex": "68dd9f773b4eaf45",
+      "materialization": "stream",
+      "businessObjects": "scalar long",
+      "validationStatus": "contract only; acceptance requires a matching executable hash and actual execution receipt"
+    },
+    {
+      "name": "text",
+      "entry": "fluent",
+      "sql": {
+        "sqlite": "SELECT \"orders\".\"Id\" AS \"Id\", \"orders\".\"Note\" AS \"Note\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ? ORDER BY \"orders\".\"Id\" ASC NULLS LAST LIMIT ?",
+        "postgresql": "SELECT \"orders\".\"Id\" AS \"Id\", \"orders\".\"Note\" AS \"Note\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $1 ORDER BY \"orders\".\"Id\" ASC NULLS LAST LIMIT $2"
+      },
+      "parameters": [
+        {
+          "name": "tenant",
+          "kind": "int64",
+          "value": 1
+        },
+        {
+          "name": "take",
+          "kind": "int64",
+          "value": 32
+        }
+      ],
+      "columns": [
+        {
+          "name": "Id",
+          "alias": "Id",
+          "kind": "int64",
+          "nullable": false
+        },
+        {
+          "name": "Note",
+          "alias": "Note",
+          "kind": "string",
+          "nullable": true
+        }
+      ],
+      "expectedRows": 32,
+      "expectedDigest": "12487621479036523840",
+      "expectedDigestHex": "ad4cf192ab829540",
+      "materialization": "stream",
+      "businessObjects": "one owned typed DTO per row; strings/JSON objects retained until row consumed",
+      "validationStatus": "contract only; acceptance requires a matching executable hash and actual execution receipt"
+    },
+    {
+      "name": "money",
+      "entry": "fluent",
+      "sql": {
+        "sqlite": "SELECT \"orders\".\"Id\" AS \"Id\", \"orders\".\"Total\" AS \"Total\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ? ORDER BY \"orders\".\"Id\" ASC NULLS LAST LIMIT ?",
+        "postgresql": "SELECT \"orders\".\"Id\" AS \"Id\", \"orders\".\"Total\" AS \"Total\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $1 ORDER BY \"orders\".\"Id\" ASC NULLS LAST LIMIT $2"
+      },
+      "parameters": [
+        {
+          "name": "tenant",
+          "kind": "int64",
+          "value": 1
+        },
+        {
+          "name": "take",
+          "kind": "int64",
+          "value": 32
+        }
+      ],
+      "columns": [
+        {
+          "name": "Id",
+          "alias": "Id",
+          "kind": "int64",
+          "nullable": false
+        },
+        {
+          "name": "Total",
+          "alias": "Total",
+          "kind": "cents-from-decimal",
+          "nullable": false,
+          "sqliteStorage": "integer-cents",
+          "postgresqlStorage": "numeric(18,2)"
+        }
+      ],
+      "expectedRows": 32,
+      "expectedDigest": "652630223626968177",
+      "expectedDigestHex": "090e9bbb08f81c71",
+      "materialization": "stream",
+      "businessObjects": "one owned typed DTO per row; strings/JSON objects retained until row consumed",
+      "validationStatus": "contract only; acceptance requires a matching executable hash and actual execution receipt"
+    },
+    {
+      "name": "json",
+      "entry": "fluent",
+      "sql": {
+        "sqlite": "SELECT \"orders\".\"Id\" AS \"Id\", \"orders\".\"Settings\" AS \"Settings\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ? ORDER BY \"orders\".\"Id\" ASC NULLS LAST LIMIT ?",
+        "postgresql": "SELECT \"orders\".\"Id\" AS \"Id\", \"orders\".\"Settings\" AS \"Settings\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $1 ORDER BY \"orders\".\"Id\" ASC NULLS LAST LIMIT $2"
+      },
+      "parameters": [
+        {
+          "name": "tenant",
+          "kind": "int64",
+          "value": 1
+        },
+        {
+          "name": "take",
+          "kind": "int64",
+          "value": 32
+        }
+      ],
+      "columns": [
+        {
+          "name": "Id",
+          "alias": "Id",
+          "kind": "int64",
+          "nullable": false
+        },
+        {
+          "name": "Settings",
+          "alias": "Settings",
+          "kind": "settings",
+          "nullable": false
+        }
+      ],
+      "expectedRows": 32,
+      "expectedDigest": "6739049677655155469",
+      "expectedDigestHex": "5d85e9fa1058a30d",
+      "materialization": "stream",
+      "businessObjects": "one owned typed DTO per row; strings/JSON objects retained until row consumed",
+      "validationStatus": "contract only; acceptance requires a matching executable hash and actual execution receipt"
+    },
+    {
+      "name": "wide",
+      "entry": "fluent",
+      "sql": {
+        "sqlite": "SELECT \"orders\".\"TenantId\" AS \"TenantId\", \"orders\".\"Id\" AS \"Id\", \"orders\".\"CreatedAt\" AS \"CreatedAt\", \"orders\".\"CustomerId\" AS \"CustomerId\", \"orders\".\"Total\" AS \"Total\", \"orders\".\"Note\" AS \"Note\", \"orders\".\"Version\" AS \"Version\", \"orders\".\"Settings\" AS \"Settings\", \"orders\".\"InternalMemo\" AS \"InternalMemo\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ? ORDER BY \"orders\".\"Id\" ASC NULLS LAST LIMIT ?",
+        "postgresql": "SELECT \"orders\".\"TenantId\" AS \"TenantId\", \"orders\".\"Id\" AS \"Id\", \"orders\".\"CreatedAt\" AS \"CreatedAt\", \"orders\".\"CustomerId\" AS \"CustomerId\", \"orders\".\"Total\" AS \"Total\", \"orders\".\"Note\" AS \"Note\", \"orders\".\"Version\" AS \"Version\", \"orders\".\"Settings\" AS \"Settings\", \"orders\".\"InternalMemo\" AS \"InternalMemo\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $1 ORDER BY \"orders\".\"Id\" ASC NULLS LAST LIMIT $2"
+      },
+      "parameters": [
+        {
+          "name": "tenant",
+          "kind": "int64",
+          "value": 1
+        },
+        {
+          "name": "take",
+          "kind": "int64",
+          "value": 32
+        }
+      ],
+      "columns": [
+        {
+          "name": "TenantId",
+          "alias": "TenantId",
+          "kind": "int64",
+          "nullable": false
+        },
+        {
+          "name": "Id",
+          "alias": "Id",
+          "kind": "int64",
+          "nullable": false
+        },
+        {
+          "name": "CreatedAt",
+          "alias": "CreatedAt",
+          "kind": "int64",
+          "nullable": false
+        },
+        {
+          "name": "CustomerId",
+          "alias": "CustomerId",
+          "kind": "nullable-int64",
+          "nullable": true
+        },
+        {
+          "name": "Total",
+          "alias": "Total",
+          "kind": "cents-from-decimal",
+          "nullable": false,
+          "sqliteStorage": "integer-cents",
+          "postgresqlStorage": "numeric(18,2)"
+        },
+        {
+          "name": "Note",
+          "alias": "Note",
+          "kind": "string",
+          "nullable": true
+        },
+        {
+          "name": "Version",
+          "alias": "Version",
+          "kind": "int64",
+          "nullable": false
+        },
+        {
+          "name": "Settings",
+          "alias": "Settings",
+          "kind": "settings",
+          "nullable": false
+        },
+        {
+          "name": "InternalMemo",
+          "alias": "InternalMemo",
+          "kind": "string",
+          "nullable": false
+        }
+      ],
+      "expectedRows": 32,
+      "expectedDigest": "13935510392633324490",
+      "expectedDigestHex": "c164e0de5cac73ca",
+      "materialization": "stream",
+      "businessObjects": "one owned typed DTO per row; strings/JSON objects retained until row consumed",
+      "validationStatus": "contract only; acceptance requires a matching executable hash and actual execution receipt"
+    }
+  ]
+}

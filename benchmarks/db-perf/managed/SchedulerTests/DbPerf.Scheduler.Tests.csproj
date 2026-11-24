@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>DbPerf.Scheduler.Tests</AssemblyName>
+    <PublishAot>true</PublishAot>
+    <IlcTreatWarningsAsErrors>true</IlcTreatWarningsAsErrors>
+    <NuGetLockFilePath>$(MSBuildProjectDirectory)/packages.linux-x64.aot.lock.json</NuGetLockFilePath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../Shared/OfferedLoad.cs" Link="OfferedLoad.cs" />
+  </ItemGroup>
+</Project>

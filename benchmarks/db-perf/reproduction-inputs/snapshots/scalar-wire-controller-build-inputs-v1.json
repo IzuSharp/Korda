@@ -1,0 +1,196 @@
+{
+  "schemaVersion": 1,
+  "task": "DB-Perf-01",
+  "purpose": "Exact historical successful scalar/wire builds and reviewed disabled campaign source inputs; not part of active product/consumer compilation.",
+  "inputs": [
+    {
+      "sha256": "68580c2f47f2c6b420361e8d7965a79aa2f9cb1f1c3c8c122bde500899471b40",
+      "bytes": 16790,
+      "sourcePath": "measurements/json-validation-candidate-v2/build-inputs/src/Data.Abstractions/DbWire.cs",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/68580c2f47f2c6b420361e8d7965a79aa2f9cb1f1c3c8c122bde500899471b40/DbWire.cs",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "7d4cdce6fcd3f11bfd3cc688a575d5c29312cde019ffc4b3893d3a092c053707",
+      "bytes": 28026,
+      "sourcePath": "measurements/json-validation-candidate-v2/build-inputs/tests/Data.Abstractions/Program.cs",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/7d4cdce6fcd3f11bfd3cc688a575d5c29312cde019ffc4b3893d3a092c053707/Program.cs",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "2dfb814a5cdfbbd153db8b15250762ad762ea5ed69aee5ffecf1445cba583967",
+      "bytes": 4931,
+      "sourcePath": "measurements/json-validation-candidate-v2/build-inputs/tests/Data.Abstractions/AllocationProbe.cs",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/2dfb814a5cdfbbd153db8b15250762ad762ea5ed69aee5ffecf1445cba583967/AllocationProbe.cs",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "fc7ab82e410fd9d10dbca2e7bcf127f166dd1a0e23a9e4ea7294d7c226a66760",
+      "bytes": 21936,
+      "sourcePath": "measurements/json-validation-candidate-v2/build-inputs/src/Data.Abstractions/Codecs.cs",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/fc7ab82e410fd9d10dbca2e7bcf127f166dd1a0e23a9e4ea7294d7c226a66760/Codecs.cs",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "eba3b8b86e28a5e5f8093eb330f1ad9eb081610533d929fd759f4f848eaecf3c",
+      "bytes": 20507,
+      "sourcePath": "measurements/wire-validation-candidate-v1/build-inputs/src/Data.Abstractions/DbWire.cs",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/eba3b8b86e28a5e5f8093eb330f1ad9eb081610533d929fd759f4f848eaecf3c/DbWire.cs",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "cb8d511970dbed4ec0804c9d485ca6455fe29157404745983c2cb5cb394be2a0",
+      "bytes": 23032,
+      "sourcePath": "measurements/wire-validation-candidate-v1/build-inputs/src/Data.Abstractions/Codecs.cs",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/cb8d511970dbed4ec0804c9d485ca6455fe29157404745983c2cb5cb394be2a0/Codecs.cs",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "aad964a5f6d10f2818312774a636934f5cf8d9b851ad1cef71b277af89cef5c2",
+      "bytes": 5323,
+      "sourcePath": "measurements/wire-validation-candidate-v1/build-inputs/src/Data.Streaming/StreamTransport.cs",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/aad964a5f6d10f2818312774a636934f5cf8d9b851ad1cef71b277af89cef5c2/StreamTransport.cs",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "b3c3918c05dc1afb3829c781afb2e6e58d0b2b8a87a163d65fc849eaa3d52e45",
+      "bytes": 37498,
+      "sourcePath": "measurements/wire-validation-candidate-v1/build-inputs/tests/Data.Abstractions/Program.cs",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/b3c3918c05dc1afb3829c781afb2e6e58d0b2b8a87a163d65fc849eaa3d52e45/Program.cs",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "8c291609efc4fd63788723da3dcda0cb75635ef79d885be73429a158e35d38c7",
+      "bytes": 8479,
+      "sourcePath": "measurements/wire-validation-candidate-v1/build-inputs/tests/Data.Abstractions/WireValidationTests.cs",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/8c291609efc4fd63788723da3dcda0cb75635ef79d885be73429a158e35d38c7/WireValidationTests.cs",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "dbc6d370cffd33f61091f2ed000876e2c6090dac56ea6c37088f5f95b9baba1c",
+      "bytes": 4927,
+      "sourcePath": "measurements/wire-validation-candidate-v1/build-inputs/tests/Data.Abstractions/AllocationProbe.cs",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/dbc6d370cffd33f61091f2ed000876e2c6090dac56ea6c37088f5f95b9baba1c/AllocationProbe.cs",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "8ad3a13be90e5e0983b87bc6bf9c964525ff7d8d6e5254ebfbab2e7c13e1e1cd",
+      "bytes": 4524,
+      "sourcePath": "measurements/wire-validation-candidate-v1/build-inputs/tests/Data.Abstractions/BatchAllocationProbe.cs",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/8ad3a13be90e5e0983b87bc6bf9c964525ff7d8d6e5254ebfbab2e7c13e1e1cd/BatchAllocationProbe.cs",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "a3fac1678a04a2126fc5d3664e868396b37b04184400f71e7f7e6fd0ebd3ec32",
+      "bytes": 937,
+      "sourcePath": "measurements/wire-validation-candidate-v1/build-inputs/tests/Data.Abstractions/Korda.Data.Tests.csproj",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/a3fac1678a04a2126fc5d3664e868396b37b04184400f71e7f7e6fd0ebd3ec32/Korda.Data.Tests.csproj",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "677e3a0544808e44970793fd3115e2704531ce3863592f484df3c6ae212847ec",
+      "bytes": 16847,
+      "sourcePath": "measurements/wire-validation-candidate-v1/build-inputs/tests/Data.Abstractions/verify.py",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/677e3a0544808e44970793fd3115e2704531ce3863592f484df3c6ae212847ec/verify.py",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "eba3b8b86e28a5e5f8093eb330f1ad9eb081610533d929fd759f4f848eaecf3c",
+      "bytes": 20507,
+      "sourcePath": "measurements/wire-streaming-integration-v1/build-inputs/src/Data.Abstractions/DbWire.cs",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/eba3b8b86e28a5e5f8093eb330f1ad9eb081610533d929fd759f4f848eaecf3c/DbWire.cs",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "aad964a5f6d10f2818312774a636934f5cf8d9b851ad1cef71b277af89cef5c2",
+      "bytes": 5323,
+      "sourcePath": "measurements/wire-streaming-integration-v1/build-inputs/src/Data.Streaming/StreamTransport.cs",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/aad964a5f6d10f2818312774a636934f5cf8d9b851ad1cef71b277af89cef5c2/StreamTransport.cs",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "5253b0382ab1d4d38a5035058a0a8dae6d5b4768ea6dc87cc9e1ea858a829682",
+      "bytes": 16534,
+      "sourcePath": "measurements/wire-streaming-integration-v1/build-inputs/src/Data.Streaming/TypedStream.cs",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/5253b0382ab1d4d38a5035058a0a8dae6d5b4768ea6dc87cc9e1ea858a829682/TypedStream.cs",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "28e253e4cda909439c16d47539b6f6eaa4343ce3b456525dc32c1251eff1f049",
+      "bytes": 19804,
+      "sourcePath": "measurements/wire-streaming-integration-v1/build-inputs/tests/Data.Streaming/Program.cs",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/28e253e4cda909439c16d47539b6f6eaa4343ce3b456525dc32c1251eff1f049/Program.cs",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "3d68b925ea51aba56ddd74b961d03759de88264fe274238d98ab5f243a877af8",
+      "bytes": 4147,
+      "sourcePath": "measurements/wire-streaming-integration-v1/build-inputs/tests/Data.Streaming/StableBatchTests.cs",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/3d68b925ea51aba56ddd74b961d03759de88264fe274238d98ab5f243a877af8/StableBatchTests.cs",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "4454d2c7731f31c525e1d31f18f90200f15fe95a3c89bd5067a0f136147c6ffe",
+      "bytes": 13304,
+      "sourcePath": "measurements/wire-streaming-integration-v1/build-inputs/tests/Data.Streaming/AllocationProbeRaces.cs",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/4454d2c7731f31c525e1d31f18f90200f15fe95a3c89bd5067a0f136147c6ffe/AllocationProbeRaces.cs",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "367956a0a9c034325789c356a57ec61aa7fd4f5feb1638151fed24bab39610ba",
+      "bytes": 2281,
+      "sourcePath": "measurements/wire-streaming-integration-v1/build-inputs/tests/Data.Streaming/AllocationProbeGate.cs",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/367956a0a9c034325789c356a57ec61aa7fd4f5feb1638151fed24bab39610ba/AllocationProbeGate.cs",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "1d352f52c2f42f4b011b950f3ce92dee8e6c40ebee31ca43170de1e704d43d49",
+      "bytes": 20968,
+      "sourcePath": "measurements/controller-final-review-v3/build-inputs/benchmarks/db-perf/run.py",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/1d352f52c2f42f4b011b950f3ce92dee8e6c40ebee31ca43170de1e704d43d49/run.py",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "ac87882950942b3e288bdde083186c0941ccec85fc2a88438969d075bc88df93",
+      "bytes": 80841,
+      "sourcePath": "measurements/controller-final-review-v3/build-inputs/benchmarks/db-perf/campaign.py",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/ac87882950942b3e288bdde083186c0941ccec85fc2a88438969d075bc88df93/campaign.py",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "211217362c74b3c887258487e5d09cf2ca2ddf2b666c4839d426976db50ebbec",
+      "bytes": 25272,
+      "sourcePath": "measurements/controller-final-review-v3/build-inputs/benchmarks/db-perf/campaign_build.py",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/211217362c74b3c887258487e5d09cf2ca2ddf2b666c4839d426976db50ebbec/campaign_build.py",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "28c8d49d90c73ec0dde3a8a2032302bf4f0a2d4a462c2bc4310f57e0c9c1bef5",
+      "bytes": 6607,
+      "sourcePath": "measurements/controller-final-review-v3/build-inputs/benchmarks/db-perf/campaign-request.json",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/28c8d49d90c73ec0dde3a8a2032302bf4f0a2d4a462c2bc4310f57e0c9c1bef5/campaign-request.json",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "3ce3611c681e6fa9a1737ac15bf90dc0ba0e61fad819052bcec088135a016e68",
+      "bytes": 28343,
+      "sourcePath": "measurements/controller-final-review-v3/build-inputs/benchmarks/db-perf/test_controller.py",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/3ce3611c681e6fa9a1737ac15bf90dc0ba0e61fad819052bcec088135a016e68/test_controller.py",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "44d26446809c3cde1e95c8c075b96d9d1c09ad4b1c9a71649631280e6e6dc38b",
+      "bytes": 17444,
+      "sourcePath": "measurements/controller-final-review-v3/build-inputs/benchmarks/db-perf/CAMPAIGN.md",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/44d26446809c3cde1e95c8c075b96d9d1c09ad4b1c9a71649631280e6e6dc38b/CAMPAIGN.md",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "f25fd4d7479703d90a8728042be1143add431243a340ae9faf053004aa7d7b86",
+      "bytes": 12889,
+      "sourcePath": "measurements/controller-final-review-v3/build-inputs/.github/workflows/db-perf-campaign.yml",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/f25fd4d7479703d90a8728042be1143add431243a340ae9faf053004aa7d7b86/db-perf-campaign.yml",
+      "bindingStatus": "pending_harness_commit"
+    }
+  ]
+}

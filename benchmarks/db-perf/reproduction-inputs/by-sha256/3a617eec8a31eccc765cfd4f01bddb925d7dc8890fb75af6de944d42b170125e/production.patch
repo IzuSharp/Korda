@@ -1,0 +1,81 @@
+diff --git a/src/Data.Abstractions/DbWire.cs b/src/Data.Abstractions/DbWire.cs
+index 5c213c3..0b08699 100644
+--- a/src/Data.Abstractions/DbWire.cs
++++ b/src/Data.Abstractions/DbWire.cs
+@@ -55,6 +55,15 @@ internal static byte[] Encode(WireExpectation expected, uint rows, IReadOnlyList
+         return result;
+     }
+     internal static DbWire Parse(ReadOnlySpan<byte> bytes, WireExpectation expected)
++        => ParseCore(bytes, expected, null);
++    // Only the internal host's independently allocated, immutable managed batch
++    // may transfer this storage. The caller must never clear or pool the array.
++    internal static DbWire ParseOwned(byte[] bytes, WireExpectation expected)
++    {
++        ArgumentNullException.ThrowIfNull(bytes);
++        return ParseCore(bytes, expected, bytes);
++    }
++    private static DbWire ParseCore(ReadOnlySpan<byte> bytes, WireExpectation expected, byte[]? owned)
+     {
+         try
+         {
+@@ -89,7 +98,7 @@ internal static DbWire Parse(ReadOnlySpan<byte> bytes, WireExpectation expected)
+             }
+             ranges.Sort((x, y) => x.Start.CompareTo(y.Start));
+             for (var i = 1; i < ranges.Count; i++) if (ranges[i].Start < ranges[i - 1].End) Bad("Nonempty cell ranges overlap.");
+-            return new(bytes.ToArray(), expected, rows);
++            return new(owned ?? bytes.ToArray(), expected, rows);
+         }
+         catch (Exception e) when (e is OverflowException or ArgumentOutOfRangeException or JsonException)
+         { throw new ArgumentException("Malformed bounded db-wire payload.", nameof(bytes), e); }
+diff --git a/src/Data.NativeHost/HostStreamTransport.cs b/src/Data.NativeHost/HostStreamTransport.cs
+index ef464c3..73fe293 100644
+--- a/src/Data.NativeHost/HostStreamTransport.cs
++++ b/src/Data.NativeHost/HostStreamTransport.cs
+@@ -23,7 +23,7 @@ public Task<IStreamBatch> FetchAsync() => _source.Start(() => NativeHost.Fetch(_
+     public async Task<StreamRetirement> JoinAsync()
+     { _close.Request(); await _close.JoinAsync().ConfigureAwait(false); var snapshot = _close.Snapshot; return new(snapshot.LocalResourcesReleased, snapshot.ConnectionDisposition == ConnectionDisposition.Usable, 0); }
+ }
+-internal sealed class HostStreamBatch : IStreamBatch
++internal sealed class HostStreamBatch : IStableManagedBatch
+ {
+     private NativeBuffer? _owner;
+     private byte[]? _bytes;
+@@ -34,6 +34,7 @@ internal HostStreamBatch(NativeBuffer owner, int maximum)
+         End = BinaryPrimitives.ReadUInt32LittleEndian(_bytes.AsSpan(56)) == 0;
+     }
+     public ReadOnlyMemory<byte> Bytes => _bytes ?? throw new ObjectDisposedException(nameof(HostStreamBatch));
++    public byte[] OwnedBytes => _bytes ?? throw new ObjectDisposedException(nameof(HostStreamBatch));
+     public bool End { get; }
+     public void Dispose() { _bytes = null; Interlocked.Exchange(ref _owner, null)?.Dispose(); }
+ }
+diff --git a/src/Data.Streaming/StreamTransport.cs b/src/Data.Streaming/StreamTransport.cs
+index 3202534..c180806 100644
+--- a/src/Data.Streaming/StreamTransport.cs
++++ b/src/Data.Streaming/StreamTransport.cs
+@@ -11,6 +11,15 @@ internal interface IStreamBatch : IDisposable
+     bool End { get; }
+ }
+ 
++/// <summary>A batch whose single managed copy can be retained without another snapshot.</summary>
++/// <remarks>The array is independently allocated, immutable, and never cleared or returned to a pool,
++/// including during disposal. Bytes must expose that whole array. Native ownership and byte permits
++/// still belong to the batch and are released normally; no native pointer escapes.</remarks>
++internal interface IStableManagedBatch : IStreamBatch
++{
++    byte[] OwnedBytes { get; }
++}
++
+ /// <summary>Provider-confirmed native retirement, distinct from physical protocol reuse and managed disposal.</summary>
+ internal readonly record struct StreamRetirement(bool NativeRetired, bool ConnectionReusable, long ProviderRowsPeak);
+ 
+@@ -52,7 +61,9 @@ internal RowBatchLease(IStreamBatch owner, WireExpectation expected, ResultField
+         try
+         {
+             if (owner.Bytes.Length > limits.MaxBatchBytes) throw new DatabaseException("Native batch exceeds its admitted byte limit.", DatabaseErrorKind.ResourceLimit);
+-            _wire = DbWire.Parse(owner.Bytes.Span, expected);
++            _wire = owner is IStableManagedBatch stable
++                ? DbWire.ParseOwned(stable.OwnedBytes, expected)
++                : DbWire.Parse(owner.Bytes.Span, expected);
+             if (_wire.Rows > limits.MaxBatchRows || _wire.Rows == 0 && !owner.End)
+                 throw new DatabaseException("Native batch row count or end marker is invalid.", DatabaseErrorKind.ShapeMismatch);
+             _owner = owner;

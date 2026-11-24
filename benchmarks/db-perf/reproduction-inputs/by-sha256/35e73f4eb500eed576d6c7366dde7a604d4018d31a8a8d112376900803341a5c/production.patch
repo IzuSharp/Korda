@@ -1,0 +1,130 @@
+diff --git a/src/Data.Streaming/TypedStream.cs b/src/Data.Streaming/TypedStream.cs
+index 8b05b47..9d3c682 100644
+--- a/src/Data.Streaming/TypedStream.cs
++++ b/src/Data.Streaming/TypedStream.cs
+@@ -2,6 +2,16 @@
+ 
+ namespace Korda.Database.Internal;
+ 
++// Shape metadata only: no session, factory, cancellation or cursor state can be
++// retained here. The prepared owner publishes one immutable layout after its
++// first successful stream-construction validation.
++internal sealed class StreamProjectionLayout(object projection, WireExpectation expectation, int minimumBatchBytes)
++{
++    internal object Projection { get; } = projection;
++    internal WireExpectation Expectation { get; } = expectation;
++    internal int MinimumBatchBytes { get; } = minimumBatchBytes;
++}
++
+ /// <summary>One-shot typed stream adapter used by the Database host and query terminal owners.</summary>
+ /// <remarks>Creation validates and freezes the projection identity without dispatch. The factory captures an
+ /// already-snapshotted command and starts only at first MoveNext. Both cancellation tokens are linked.
+@@ -22,6 +32,37 @@ internal TypedStream(Func<int, CancellationToken, Task<IStreamTransport>> start,
+         ArgumentNullException.ThrowIfNull(start);
+         ArgumentNullException.ThrowIfNull(projection);
+         limits.Validate();
++        _expected = CreateExpectation(projection, profile, projectionId, boundCodecs, out var minimumBatchBytes);
++        ValidateBatchCapacity(minimumBatchBytes, limits);
++        _start = start; _projection = projection; _limits = limits; _methodToken = cancellationToken;
++    }
++
++    internal TypedStream(Func<int, CancellationToken, Task<IStreamTransport>> start, Projection<T> projection,
++        StreamProjectionLayout layout, StreamLimits limits, CancellationToken cancellationToken = default)
++    {
++        ArgumentNullException.ThrowIfNull(start);
++        ArgumentNullException.ThrowIfNull(projection);
++        limits.Validate();
++        ArgumentNullException.ThrowIfNull(layout);
++        if (!ReferenceEquals(layout.Projection, projection)) throw new ArgumentException("The frozen stream layout belongs to another projection.", nameof(layout));
++        ValidateBatchCapacity(layout.MinimumBatchBytes, limits);
++        _expected = layout.Expectation;
++        _start = start; _projection = projection; _limits = limits; _methodToken = cancellationToken;
++    }
++
++    internal static StreamProjectionLayout CreateProjectionLayout(Projection<T> projection, uint profile, uint projectionId,
++        ReadOnlySpan<uint> boundCodecs, StreamLimits limits)
++    {
++        ArgumentNullException.ThrowIfNull(projection);
++        limits.Validate();
++        var expectation = CreateExpectation(projection, profile, projectionId, boundCodecs, out var minimumBatchBytes);
++        ValidateBatchCapacity(minimumBatchBytes, limits);
++        return new(projection, expectation, minimumBatchBytes);
++    }
++
++    private static WireExpectation CreateExpectation(Projection<T> projection, uint profile, uint projectionId,
++        ReadOnlySpan<uint> boundCodecs, out int minimumBatchBytes)
++    {
+         if (boundCodecs.Length != projection.Fields.Length) throw new ArgumentException("Bound codec count differs from the exact projection.", nameof(boundCodecs));
+         var descriptors = new WireDescriptor[boundCodecs.Length];
+         var configured = new Dictionary<uint, CodecDescriptor>();
+@@ -38,11 +79,16 @@ internal TypedStream(Func<int, CancellationToken, Task<IStreamTransport>> start,
+             }
+             descriptors[i] = new((uint)i, codec, boundCodecs[i]);
+         }
+-        _expected = new(PayloadKind.Rows, profile, Convert.FromHexString(projection.ShapeHash), 0, projectionId, descriptors);
+-        var empty = DbWire.Encode(_expected, 0, Array.Empty<ReadOnlyMemory<byte>?>());
+-        if (checked(empty.Length + descriptors.Length * WireSchema.CellBytes) > limits.MaxBatchBytes)
++        var expectation = new WireExpectation(PayloadKind.Rows, profile, Convert.FromHexString(projection.ShapeHash), 0, projectionId, descriptors);
++        var empty = DbWire.Encode(expectation, 0, Array.Empty<ReadOnlyMemory<byte>?>());
++        minimumBatchBytes = checked(empty.Length + descriptors.Length * WireSchema.CellBytes);
++        return expectation;
++    }
++
++    private static void ValidateBatchCapacity(int minimumBatchBytes, StreamLimits limits)
++    {
++        if (minimumBatchBytes > limits.MaxBatchBytes)
+             throw new DatabaseException("LargeValueRequiresStreaming: a single row descriptor table exceeds the batch limit.", DatabaseErrorKind.ResourceLimit, "LargeValueRequiresStreaming");
+-        _start = start; _projection = projection; _limits = limits; _methodToken = cancellationToken;
+     }
+ 
+     public IAsyncEnumerator<T> GetAsyncEnumerator(CancellationToken cancellationToken = default) => CreateEnumerator(cancellationToken, _limits.MaxBatchRows, false);
+diff --git a/src/Query.Fluent/Terminals.cs b/src/Query.Fluent/Terminals.cs
+index 90ffb4a..d3f13fd 100644
+--- a/src/Query.Fluent/Terminals.cs
++++ b/src/Query.Fluent/Terminals.cs
+@@ -147,6 +147,7 @@ public sealed class PreparedQuery<T> : IDisposable
+     private readonly uint _projectionId;
+     private readonly uint[] _codecs;
+     private PreparedParameterLayout? _parameters;
++    private StreamProjectionLayout? _streamLayout;
+     private int _disposed;
+     internal PreparedQuery(DataSource source, DatabaseOwner plan, Projection<T> projection, uint projectionId, uint[] codecs, PreparedParameterLayout parameters)
+     { _source = source; _plan = plan; _projection = projection; _projectionId = projectionId; _codecs = codecs; _parameters = parameters; }
+@@ -157,11 +158,28 @@ private TypedStream<T> Stream(DataSession session, QueryParameters? parameters,
+         var layout = Volatile.Read(ref _parameters);
+         ObjectDisposedException.ThrowIf(layout is null, this);
+         var values = layout.Encode(_source, parameters);
++        var limits = session.StreamingLimits;
++        var streamLayout = Volatile.Read(ref _streamLayout);
++        if (streamLayout is null)
++        {
++            // Preserve lazy error timing: validate row capability and capacity
++            // only after this execution's parameter snapshot, never at Prepare.
++            var created = TypedStream<T>.CreateProjectionLayout(_projection, _source.Binding.SemanticProfile, _projectionId, _codecs, limits);
++            streamLayout = Interlocked.CompareExchange(ref _streamLayout, created, null) ?? created;
++            if (Volatile.Read(ref _disposed) != 0)
++            {
++                // Dispose may have cleared the field before our late CAS. Do not
++                // republish a cache into a closed wrapper; concurrent local users
++                // retain safe immutable references independently.
++                Interlocked.CompareExchange(ref _streamLayout, null, streamLayout);
++                throw new ObjectDisposedException(GetType().FullName);
++            }
++        }
+         return new(async (rows, cancellation) =>
+         {
+             ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
+             return await session.OpenPlanStreamAsync(_plan, values, rows, cancellation).ConfigureAwait(false);
+-        }, _projection, _source.Binding.SemanticProfile, _projectionId, _codecs, session.StreamingLimits, token);
++        }, _projection, streamLayout, limits, token);
+     }
+     /// <summary>Snapshots the exact declared parameter set before await and executes a bounded owned list.</summary>
+     /// <inheritdoc cref="PreparedQuery{T}"/>
+@@ -201,6 +219,7 @@ public void Dispose()
+         // In-flight construction holds its own immutable layout reference. New
+         // dispatch is already closed, and the disposed wrapper retains no cache.
+         Interlocked.Exchange(ref _parameters, null);
++        Interlocked.Exchange(ref _streamLayout, null);
+         _plan.Dispose();
+     }
+ }

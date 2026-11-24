@@ -1,0 +1,2093 @@
+{
+  "schemaVersion": 1,
+  "dataset": {
+    "tenants": 8,
+    "ordersPerTenant": 1024,
+    "customers": 256,
+    "requestedRows": 32,
+    "batchRows": 32
+  },
+  "digest": {
+    "algorithm": "FNV-1a 64 bit",
+    "offset": "14695981039346656037",
+    "prime": "1099511628211",
+    "integer": "signed Int64 little-endian bytes",
+    "nullable-int64": "presence byte then Int64 if present",
+    "string": "Int64 UTF-8 byte length then bytes; NULL length -1",
+    "cents-from-decimal": "exact decimal *100 to Int64; SQLite already stores cents",
+    "nullable-cents-from-decimal": "presence byte then cents Int64 if present",
+    "settings": "Channel string then one-byte boolean Gift",
+    "rowSeparator": "none"
+  },
+  "validationInputs": {
+    "korda-sqlite": {
+      "path": "/workspace/scratch/b94e2a0e0c3f/consumer-before-sqlite-v4/probe-prepared.json",
+      "sha256": "a614e862b700bce9d6f41fb46ce1be3d88b7dd095a7feae453b2816698184875",
+      "executableSha256": "4093b7e93fbe80f39382cdf949f7204e24e792e48a9594d35b1b179e7a28c61f",
+      "packageVersion": "0.1.0-preview.3"
+    },
+    "korda-postgresql": {
+      "path": "/workspace/scratch/b94e2a0e0c3f/measurements/pg-normal35-v4/korda-prepared.json",
+      "sha256": "c4eafdbc4a3f61a7133bbed2d28150d5187637fbaedef9492fcc870580b1681b",
+      "executableSha256": "8d0d59a392dca40a82e6af798cf158e1782bd0f7a629afda8661e9c6c94afbd4",
+      "packageVersion": "0.1.0-preview.3"
+    },
+    "dapper-sqlite": {
+      "path": "/workspace/scratch/b94e2a0e0c3f/dapper-benchmark-sqlite-v4/probe-prepared.json",
+      "sha256": "f86a763e2fc7d6bafa665a7313053de496720daa1b22b87122a22a3b2b7a5b4d",
+      "executableSha256": "98dbb7bf923c1f6646c3a06d9296c6a87bd36dd28449ef008519270d9ed28e15",
+      "packageVersion": "Dapper.AOT/1.1.0;Dapper/2.1.100;Microsoft.Data.Sqlite.Core/11.0.0"
+    },
+    "dapper-postgresql": {
+      "path": "/workspace/scratch/b94e2a0e0c3f/measurements/pg-normal35-v4/dapper-prepared.json",
+      "sha256": "9b4cbe3ff7508188724f52a67e912121c4b945ee1bd186f32b1b0f9a872ec27b",
+      "executableSha256": "4e71021269e8989e95be1b9ad6211104d004605bc53ae96e6a2bf9e667e5bf37",
+      "packageVersion": "Dapper.AOT/1.1.0;Dapper/2.1.100;Npgsql/11.0.0"
+    }
+  },
+  "postgresStatementLog": {
+    "path": "/workspace/scratch/b94e2a0e0c3f/measurements/pg-normal35-v4/postgres.log",
+    "sha256": "98bf126d97ce7a4d97f81e46474c66c760e2e7da44f84df669ff4ff7f237a94c"
+  },
+  "sqliteStatementProvenance": "Same CRUD renderer with positional placeholders; SQL text derived from captured PostgreSQL form. Whole-operation SQLite result, affected rows and persistent-state checks ran independently.",
+  "queries": [
+    {
+      "name": "tx-commit",
+      "entry": "public-crud-and-transactions",
+      "operationKind": "transaction-read-write",
+      "writesDatabase": true,
+      "expectedRows": 3,
+      "expectedDigest": "2994971384347016340",
+      "expectedDigestHex": "2990469b2476bc94",
+      "columns": [
+        {
+          "name": "TenantId",
+          "alias": "TenantId",
+          "kind": "int64",
+          "nullable": false
+        },
+        {
+          "name": "Id",
+          "alias": "Id",
+          "kind": "int64",
+          "nullable": false
+        },
+        {
+          "name": "CreatedAt",
+          "alias": "CreatedAt",
+          "kind": "int64",
+          "nullable": false
+        },
+        {
+          "name": "CustomerId",
+          "alias": "CustomerId",
+          "kind": "nullable-int64",
+          "nullable": true
+        },
+        {
+          "name": "Total",
+          "alias": "Total",
+          "kind": "cents-from-decimal",
+          "nullable": false
+        },
+        {
+          "name": "Note",
+          "alias": "Note",
+          "kind": "string",
+          "nullable": true
+        },
+        {
+          "name": "Version",
+          "alias": "Version",
+          "kind": "int64",
+          "nullable": false
+        },
+        {
+          "name": "Settings",
+          "alias": "Settings",
+          "kind": "settings",
+          "nullable": false
+        },
+        {
+          "name": "InternalMemo",
+          "alias": "InternalMemo",
+          "kind": "string",
+          "nullable": false
+        }
+      ],
+      "validation": {
+        "kind": "actual Native AOT execution on both databases and both managed routes",
+        "performanceAcceptance": false
+      },
+      "sql": {
+        "postgresql": "SELECT \"orders\".\"TenantId\" AS \"TenantId\", \"orders\".\"Id\" AS \"Id\", \"orders\".\"CreatedAt\" AS \"CreatedAt\", \"orders\".\"CustomerId\" AS \"CustomerId\", \"orders\".\"Total\" AS \"Total\", \"orders\".\"Note\" AS \"Note\", \"orders\".\"Version\" AS \"Version\", \"orders\".\"Settings\" AS \"Settings\", \"orders\".\"InternalMemo\" AS \"InternalMemo\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $1 AND \"orders\".\"Id\" = $2 LIMIT $3",
+        "sqlite": "SELECT \"orders\".\"TenantId\" AS \"TenantId\", \"orders\".\"Id\" AS \"Id\", \"orders\".\"CreatedAt\" AS \"CreatedAt\", \"orders\".\"CustomerId\" AS \"CustomerId\", \"orders\".\"Total\" AS \"Total\", \"orders\".\"Note\" AS \"Note\", \"orders\".\"Version\" AS \"Version\", \"orders\".\"Settings\" AS \"Settings\", \"orders\".\"InternalMemo\" AS \"InternalMemo\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ? AND \"orders\".\"Id\" = ? LIMIT ?"
+      },
+      "parameters": [
+        {
+          "name": "p1",
+          "kind": "int64",
+          "value": 1
+        },
+        {
+          "name": "p2",
+          "kind": "int64",
+          "value": 1024
+        },
+        {
+          "name": "p3",
+          "kind": "int64",
+          "value": 2
+        }
+      ],
+      "materialization": "transaction",
+      "queryExecutionsPerOperation": 7,
+      "preparedContract": "Public CRUD has no prepared-plan overload; construct typed key/changes/commands during each operation in both requested modes",
+      "lifecycle": {
+        "kind": "tx-commit",
+        "target": {
+          "tenant": 1,
+          "id": 1024
+        },
+        "initial": {
+          "TenantId": 1,
+          "Id": 1024,
+          "CreatedAt": 1700000256,
+          "CustomerId": 1,
+          "TotalCents": 38997,
+          "Note": "note-0",
+          "Version": 1,
+          "Settings": {
+            "Channel": "web",
+            "Gift": false
+          },
+          "InternalMemo": "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm"
+        },
+        "begin": {
+          "postgresql": "BEGIN ISOLATION LEVEL READ COMMITTED READ WRITE",
+          "sqlite": "BEGIN IMMEDIATE"
+        },
+        "steps": [
+          {
+            "name": "find-original",
+            "sql": {
+              "postgresql": "SELECT \"orders\".\"TenantId\" AS \"TenantId\", \"orders\".\"Id\" AS \"Id\", \"orders\".\"CreatedAt\" AS \"CreatedAt\", \"orders\".\"CustomerId\" AS \"CustomerId\", \"orders\".\"Total\" AS \"Total\", \"orders\".\"Note\" AS \"Note\", \"orders\".\"Version\" AS \"Version\", \"orders\".\"Settings\" AS \"Settings\", \"orders\".\"InternalMemo\" AS \"InternalMemo\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $1 AND \"orders\".\"Id\" = $2 LIMIT $3",
+              "sqlite": "SELECT \"orders\".\"TenantId\" AS \"TenantId\", \"orders\".\"Id\" AS \"Id\", \"orders\".\"CreatedAt\" AS \"CreatedAt\", \"orders\".\"CustomerId\" AS \"CustomerId\", \"orders\".\"Total\" AS \"Total\", \"orders\".\"Note\" AS \"Note\", \"orders\".\"Version\" AS \"Version\", \"orders\".\"Settings\" AS \"Settings\", \"orders\".\"InternalMemo\" AS \"InternalMemo\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ? AND \"orders\".\"Id\" = ? LIMIT ?"
+            },
+            "parameters": [
+              {
+                "name": "p1",
+                "kind": "int64",
+                "value": 1
+              },
+              {
+                "name": "p2",
+                "kind": "int64",
+                "value": 1024
+              },
+              {
+                "name": "p3",
+                "kind": "int64",
+                "value": 2
+              }
+            ],
+            "expectedRows": 1,
+            "hash": "full-order"
+          },
+          {
+            "name": "change",
+            "sql": {
+              "postgresql": "UPDATE \"orders\" SET \"Note\" = $1, \"Version\" = $2 WHERE \"TenantId\" = $3 AND \"Id\" = $4",
+              "sqlite": "UPDATE \"orders\" SET \"Note\" = ?, \"Version\" = ? WHERE \"TenantId\" = ? AND \"Id\" = ?"
+            },
+            "parameters": [
+              {
+                "name": "p1",
+                "kind": "string",
+                "value": "perf-mutated"
+              },
+              {
+                "name": "p2",
+                "kind": "int64",
+                "value": 2
+              },
+              {
+                "name": "p3",
+                "kind": "int64",
+                "value": 1
+              },
+              {
+                "name": "p4",
+                "kind": "int64",
+                "value": 1024
+              }
+            ],
+            "expectedAffected": 1
+          },
+          {
+            "name": "find-changed",
+            "sql": {
+              "postgresql": "SELECT \"orders\".\"TenantId\" AS \"TenantId\", \"orders\".\"Id\" AS \"Id\", \"orders\".\"CreatedAt\" AS \"CreatedAt\", \"orders\".\"CustomerId\" AS \"CustomerId\", \"orders\".\"Total\" AS \"Total\", \"orders\".\"Note\" AS \"Note\", \"orders\".\"Version\" AS \"Version\", \"orders\".\"Settings\" AS \"Settings\", \"orders\".\"InternalMemo\" AS \"InternalMemo\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $1 AND \"orders\".\"Id\" = $2 LIMIT $3",
+              "sqlite": "SELECT \"orders\".\"TenantId\" AS \"TenantId\", \"orders\".\"Id\" AS \"Id\", \"orders\".\"CreatedAt\" AS \"CreatedAt\", \"orders\".\"CustomerId\" AS \"CustomerId\", \"orders\".\"Total\" AS \"Total\", \"orders\".\"Note\" AS \"Note\", \"orders\".\"Version\" AS \"Version\", \"orders\".\"Settings\" AS \"Settings\", \"orders\".\"InternalMemo\" AS \"InternalMemo\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ? AND \"orders\".\"Id\" = ? LIMIT ?"
+            },
+            "parameters": [
+              {
+                "name": "p1",
+                "kind": "int64",
+                "value": 1
+              },
+              {
+                "name": "p2",
+                "kind": "int64",
+                "value": 1024
+              },
+              {
+                "name": "p3",
+                "kind": "int64",
+                "value": 2
+              }
+            ],
+            "expectedRows": 1,
+            "hash": "full-order",
+            "changedFields": {
+              "Note": "perf-mutated",
+              "Version": 2
+            }
+          },
+          {
+            "name": "restore-before-commit",
+            "sql": {
+              "postgresql": "UPDATE \"orders\" SET \"Note\" = $1, \"Version\" = $2 WHERE \"TenantId\" = $3 AND \"Id\" = $4",
+              "sqlite": "UPDATE \"orders\" SET \"Note\" = ?, \"Version\" = ? WHERE \"TenantId\" = ? AND \"Id\" = ?"
+            },
+            "parameters": [
+              {
+                "name": "p1",
+                "kind": "string",
+                "value": "note-0"
+              },
+              {
+                "name": "p2",
+                "kind": "int64",
+                "value": 1
+              },
+              {
+                "name": "p3",
+                "kind": "int64",
+                "value": 1
+              },
+              {
+                "name": "p4",
+                "kind": "int64",
+                "value": 1024
+              }
+            ],
+            "expectedAffected": 1
+          },
+          {
+            "name": "commit",
+            "sql": {
+              "sqlite": "COMMIT",
+              "postgresql": "COMMIT"
+            },
+            "parameters": [],
+            "completion": "confirm transaction completion before final lookup"
+          },
+          {
+            "name": "find-persisted",
+            "sql": {
+              "postgresql": "SELECT \"orders\".\"TenantId\" AS \"TenantId\", \"orders\".\"Id\" AS \"Id\", \"orders\".\"CreatedAt\" AS \"CreatedAt\", \"orders\".\"CustomerId\" AS \"CustomerId\", \"orders\".\"Total\" AS \"Total\", \"orders\".\"Note\" AS \"Note\", \"orders\".\"Version\" AS \"Version\", \"orders\".\"Settings\" AS \"Settings\", \"orders\".\"InternalMemo\" AS \"InternalMemo\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $1 AND \"orders\".\"Id\" = $2 LIMIT $3",
+              "sqlite": "SELECT \"orders\".\"TenantId\" AS \"TenantId\", \"orders\".\"Id\" AS \"Id\", \"orders\".\"CreatedAt\" AS \"CreatedAt\", \"orders\".\"CustomerId\" AS \"CustomerId\", \"orders\".\"Total\" AS \"Total\", \"orders\".\"Note\" AS \"Note\", \"orders\".\"Version\" AS \"Version\", \"orders\".\"Settings\" AS \"Settings\", \"orders\".\"InternalMemo\" AS \"InternalMemo\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ? AND \"orders\".\"Id\" = ? LIMIT ?"
+            },
+            "parameters": [
+              {
+                "name": "p1",
+                "kind": "int64",
+                "value": 1
+              },
+              {
+                "name": "p2",
+                "kind": "int64",
+                "value": 1024
+              },
+              {
+                "name": "p3",
+                "kind": "int64",
+                "value": 2
+              }
+            ],
+            "expectedRows": 1,
+            "hash": "full-order",
+            "expectedEquals": "original all nine fields"
+          }
+        ],
+        "digest": "Concatenate only steps marked hash; all full orders use wide column order",
+        "finalState": "Exact original durable row; other rows and all omitted fields unchanged",
+        "actualProviderOverhead": {
+          "korda-postgresql": "Commit path adds SELECT 1 before COMMIT; rollback does not. This internal query is included in Korda counters, not imposed on direct native business contract.",
+          "korda-sqlite": "Transaction begin additionally executes PRAGMA query_only=OFF. Internal controls belong to framework overhead.",
+          "dapper": "Uses normal provider transaction API; full QuerySingle<Order> SQL omits LIMIT 2 but composite key guarantees at most one row."
+        },
+        "independentOrmSql": {
+          "FindSql": "SELECT \"TenantId\",\"Id\",\"CreatedAt\",\"CustomerId\",\"Total\",\"Note\",\"Version\",\"Settings\",\"InternalMemo\" FROM orders WHERE \"TenantId\"=@tenant AND \"Id\"=@id",
+          "UpdateSql": "UPDATE orders SET \"Note\"=@note,\"Version\"=@version WHERE \"TenantId\"=@tenant AND \"Id\"=@id",
+          "PartialSql": "UPDATE orders SET \"Note\"=@note WHERE \"TenantId\"=@tenant AND \"Id\"=@id",
+          "CheckedSql": "UPDATE orders SET \"Note\"=@note,\"Version\"=@version WHERE \"TenantId\"=@tenant AND \"Id\"=@id AND \"Version\"=@expected",
+          "StaleSql": "UPDATE orders SET \"Note\"=@note WHERE \"TenantId\"=@tenant AND \"Id\"=@id AND \"Version\"=@expected"
+        },
+        "transactionModeValidation": "v4 single-worker SQLite correctness used default Korda deferred BEGIN; final harness explicitly selects Immediate to match Microsoft.Data.Sqlite Serializable and direct native. Final binaries require their own correctness check."
+      },
+      "construction": {
+        "postgresql": {
+          "kind": "SQL-token-concatenation; distinct from typed Fluent/CRUD construction",
+          "fragments": [
+            "SELECT",
+            " ",
+            "\"orders\".\"TenantId\"",
+            " ",
+            "AS",
+            " ",
+            "\"TenantId\",",
+            " ",
+            "\"orders\".\"Id\"",
+            " ",
+            "AS",
+            " ",
+            "\"Id\",",
+            " ",
+            "\"orders\".\"CreatedAt\"",
+            " ",
+            "AS",
+            " ",
+            "\"CreatedAt\",",
+            " ",
+            "\"orders\".\"CustomerId\"",
+            " ",
+            "AS",
+            " ",
+            "\"CustomerId\",",
+            " ",
+            "\"orders\".\"Total\"",
+            " ",
+            "AS",
+            " ",
+            "\"Total\",",
+            " ",
+            "\"orders\".\"Note\"",
+            " ",
+            "AS",
+            " ",
+            "\"Note\",",
+            " ",
+            "\"orders\".\"Version\"",
+            " ",
+            "AS",
+            " ",
+            "\"Version\",",
+            " ",
+            "\"orders\".\"Settings\"",
+            " ",
+            "AS",
+            " ",
+            "\"Settings\",",
+            " ",
+            "\"orders\".\"InternalMemo\"",
+            " ",
+            "AS",
+            " ",
+            "\"InternalMemo\"",
+            " ",
+            "FROM",
+            " ",
+            "\"orders\"",
+            " ",
+            "WHERE",
+            " ",
+            "\"orders\".\"TenantId\"",
+            " ",
+            "=",
+            " ",
+            "$1",
+            " ",
+            "AND",
+            " ",
+            "\"orders\".\"Id\"",
+            " ",
+            "=",
+            " ",
+            "$2",
+            " ",
+            "LIMIT",
+            " ",
+            "$3"
+          ]
+        },
+        "sqlite": {
+          "kind": "SQL-token-concatenation; distinct from typed Fluent/CRUD construction",
+          "fragments": [
+            "SELECT",
+            " ",
+            "\"orders\".\"TenantId\"",
+            " ",
+            "AS",
+            " ",
+            "\"TenantId\",",
+            " ",
+            "\"orders\".\"Id\"",
+            " ",
+            "AS",
+            " ",
+            "\"Id\",",
+            " ",
+            "\"orders\".\"CreatedAt\"",
+            " ",
+            "AS",
+            " ",
+            "\"CreatedAt\",",
+            " ",
+            "\"orders\".\"CustomerId\"",
+            " ",
+            "AS",
+            " ",
+            "\"CustomerId\",",
+            " ",
+            "\"orders\".\"Total\"",
+            " ",
+            "AS",
+            " ",
+            "\"Total\",",
+            " ",
+            "\"orders\".\"Note\"",
+            " ",
+            "AS",
+            " ",
+            "\"Note\",",
+            " ",
+            "\"orders\".\"Version\"",
+            " ",
+            "AS",
+            " ",
+            "\"Version\",",
+            " ",
+            "\"orders\".\"Settings\"",
+            " ",
+            "AS",
+            " ",
+            "\"Settings\",",
+            " ",
+            "\"orders\".\"InternalMemo\"",
+            " ",
+            "AS",
+            " ",
+            "\"InternalMemo\"",
+            " ",
+            "FROM",
+            " ",
+            "\"orders\"",
+            " ",
+            "WHERE",
+            " ",
+            "\"orders\".\"TenantId\"",
+            " ",
+            "=",
+            " ",
+            "?",
+            " ",
+            "AND",
+            " ",
+            "\"orders\".\"Id\"",
+            " ",
+            "=",
+            " ",
+            "?",
+            " ",
+            "LIMIT",
+            " ",
+            "?"
+          ]
+        }
+      }
+    },
+    {
+      "name": "tx-rollback",
+      "entry": "public-crud-and-transactions",
+      "operationKind": "transaction-write-rollback",
+      "writesDatabase": true,
+      "expectedRows": 3,
+      "expectedDigest": "2994971384347016340",
+      "expectedDigestHex": "2990469b2476bc94",
+      "columns": [
+        {
+          "name": "TenantId",
+          "alias": "TenantId",
+          "kind": "int64",
+          "nullable": false
+        },
+        {
+          "name": "Id",
+          "alias": "Id",
+          "kind": "int64",
+          "nullable": false
+        },
+        {
+          "name": "CreatedAt",
+          "alias": "CreatedAt",
+          "kind": "int64",
+          "nullable": false
+        },
+        {
+          "name": "CustomerId",
+          "alias": "CustomerId",
+          "kind": "nullable-int64",
+          "nullable": true
+        },
+        {
+          "name": "Total",
+          "alias": "Total",
+          "kind": "cents-from-decimal",
+          "nullable": false
+        },
+        {
+          "name": "Note",
+          "alias": "Note",
+          "kind": "string",
+          "nullable": true
+        },
+        {
+          "name": "Version",
+          "alias": "Version",
+          "kind": "int64",
+          "nullable": false
+        },
+        {
+          "name": "Settings",
+          "alias": "Settings",
+          "kind": "settings",
+          "nullable": false
+        },
+        {
+          "name": "InternalMemo",
+          "alias": "InternalMemo",
+          "kind": "string",
+          "nullable": false
+        }
+      ],
+      "validation": {
+        "kind": "actual Native AOT execution on both databases and both managed routes",
+        "performanceAcceptance": false
+      },
+      "sql": {
+        "postgresql": "SELECT \"orders\".\"TenantId\" AS \"TenantId\", \"orders\".\"Id\" AS \"Id\", \"orders\".\"CreatedAt\" AS \"CreatedAt\", \"orders\".\"CustomerId\" AS \"CustomerId\", \"orders\".\"Total\" AS \"Total\", \"orders\".\"Note\" AS \"Note\", \"orders\".\"Version\" AS \"Version\", \"orders\".\"Settings\" AS \"Settings\", \"orders\".\"InternalMemo\" AS \"InternalMemo\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $1 AND \"orders\".\"Id\" = $2 LIMIT $3",
+        "sqlite": "SELECT \"orders\".\"TenantId\" AS \"TenantId\", \"orders\".\"Id\" AS \"Id\", \"orders\".\"CreatedAt\" AS \"CreatedAt\", \"orders\".\"CustomerId\" AS \"CustomerId\", \"orders\".\"Total\" AS \"Total\", \"orders\".\"Note\" AS \"Note\", \"orders\".\"Version\" AS \"Version\", \"orders\".\"Settings\" AS \"Settings\", \"orders\".\"InternalMemo\" AS \"InternalMemo\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ? AND \"orders\".\"Id\" = ? LIMIT ?"
+      },
+      "parameters": [
+        {
+          "name": "p1",
+          "kind": "int64",
+          "value": 1
+        },
+        {
+          "name": "p2",
+          "kind": "int64",
+          "value": 1024
+        },
+        {
+          "name": "p3",
+          "kind": "int64",
+          "value": 2
+        }
+      ],
+      "materialization": "transaction",
+      "queryExecutionsPerOperation": 6,
+      "preparedContract": "Public CRUD has no prepared-plan overload; construct typed key/changes/commands during each operation in both requested modes",
+      "lifecycle": {
+        "kind": "tx-rollback",
+        "target": {
+          "tenant": 1,
+          "id": 1024
+        },
+        "initial": {
+          "TenantId": 1,
+          "Id": 1024,
+          "CreatedAt": 1700000256,
+          "CustomerId": 1,
+          "TotalCents": 38997,
+          "Note": "note-0",
+          "Version": 1,
+          "Settings": {
+            "Channel": "web",
+            "Gift": false
+          },
+          "InternalMemo": "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm"
+        },
+        "begin": {
+          "postgresql": "BEGIN ISOLATION LEVEL READ COMMITTED READ WRITE",
+          "sqlite": "BEGIN IMMEDIATE"
+        },
+        "steps": [
+          {
+            "name": "find-original",
+            "sql": {
+              "postgresql": "SELECT \"orders\".\"TenantId\" AS \"TenantId\", \"orders\".\"Id\" AS \"Id\", \"orders\".\"CreatedAt\" AS \"CreatedAt\", \"orders\".\"CustomerId\" AS \"CustomerId\", \"orders\".\"Total\" AS \"Total\", \"orders\".\"Note\" AS \"Note\", \"orders\".\"Version\" AS \"Version\", \"orders\".\"Settings\" AS \"Settings\", \"orders\".\"InternalMemo\" AS \"InternalMemo\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $1 AND \"orders\".\"Id\" = $2 LIMIT $3",
+              "sqlite": "SELECT \"orders\".\"TenantId\" AS \"TenantId\", \"orders\".\"Id\" AS \"Id\", \"orders\".\"CreatedAt\" AS \"CreatedAt\", \"orders\".\"CustomerId\" AS \"CustomerId\", \"orders\".\"Total\" AS \"Total\", \"orders\".\"Note\" AS \"Note\", \"orders\".\"Version\" AS \"Version\", \"orders\".\"Settings\" AS \"Settings\", \"orders\".\"InternalMemo\" AS \"InternalMemo\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ? AND \"orders\".\"Id\" = ? LIMIT ?"
+            },
+            "parameters": [
+              {
+                "name": "p1",
+                "kind": "int64",
+                "value": 1
+              },
+              {
+                "name": "p2",
+                "kind": "int64",
+                "value": 1024
+              },
+              {
+                "name": "p3",
+                "kind": "int64",
+                "value": 2
+              }
+            ],
+            "expectedRows": 1,
+            "hash": "full-order"
+          },
+          {
+            "name": "change",
+            "sql": {
+              "postgresql": "UPDATE \"orders\" SET \"Note\" = $1, \"Version\" = $2 WHERE \"TenantId\" = $3 AND \"Id\" = $4",
+              "sqlite": "UPDATE \"orders\" SET \"Note\" = ?, \"Version\" = ? WHERE \"TenantId\" = ? AND \"Id\" = ?"
+            },
+            "parameters": [
+              {
+                "name": "p1",
+                "kind": "string",
+                "value": "perf-mutated"
+              },
+              {
+                "name": "p2",
+                "kind": "int64",
+                "value": 2
+              },
+              {
+                "name": "p3",
+                "kind": "int64",
+                "value": 1
+              },
+              {
+                "name": "p4",
+                "kind": "int64",
+                "value": 1024
+              }
+            ],
+            "expectedAffected": 1
+          },
+          {
+            "name": "find-changed",
+            "sql": {
+              "postgresql": "SELECT \"orders\".\"TenantId\" AS \"TenantId\", \"orders\".\"Id\" AS \"Id\", \"orders\".\"CreatedAt\" AS \"CreatedAt\", \"orders\".\"CustomerId\" AS \"CustomerId\", \"orders\".\"Total\" AS \"Total\", \"orders\".\"Note\" AS \"Note\", \"orders\".\"Version\" AS \"Version\", \"orders\".\"Settings\" AS \"Settings\", \"orders\".\"InternalMemo\" AS \"InternalMemo\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $1 AND \"orders\".\"Id\" = $2 LIMIT $3",
+              "sqlite": "SELECT \"orders\".\"TenantId\" AS \"TenantId\", \"orders\".\"Id\" AS \"Id\", \"orders\".\"CreatedAt\" AS \"CreatedAt\", \"orders\".\"CustomerId\" AS \"CustomerId\", \"orders\".\"Total\" AS \"Total\", \"orders\".\"Note\" AS \"Note\", \"orders\".\"Version\" AS \"Version\", \"orders\".\"Settings\" AS \"Settings\", \"orders\".\"InternalMemo\" AS \"InternalMemo\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ? AND \"orders\".\"Id\" = ? LIMIT ?"
+            },
+            "parameters": [
+              {
+                "name": "p1",
+                "kind": "int64",
+                "value": 1
+              },
+              {
+                "name": "p2",
+                "kind": "int64",
+                "value": 1024
+              },
+              {
+                "name": "p3",
+                "kind": "int64",
+                "value": 2
+              }
+            ],
+            "expectedRows": 1,
+            "hash": "full-order",
+            "changedFields": {
+              "Note": "perf-mutated",
+              "Version": 2
+            }
+          },
+          {
+            "name": "rollback",
+            "sql": {
+              "sqlite": "ROLLBACK",
+              "postgresql": "ROLLBACK"
+            },
+            "parameters": [],
+            "completion": "confirm transaction completion before final lookup"
+          },
+          {
+            "name": "find-persisted",
+            "sql": {
+              "postgresql": "SELECT \"orders\".\"TenantId\" AS \"TenantId\", \"orders\".\"Id\" AS \"Id\", \"orders\".\"CreatedAt\" AS \"CreatedAt\", \"orders\".\"CustomerId\" AS \"CustomerId\", \"orders\".\"Total\" AS \"Total\", \"orders\".\"Note\" AS \"Note\", \"orders\".\"Version\" AS \"Version\", \"orders\".\"Settings\" AS \"Settings\", \"orders\".\"InternalMemo\" AS \"InternalMemo\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $1 AND \"orders\".\"Id\" = $2 LIMIT $3",
+              "sqlite": "SELECT \"orders\".\"TenantId\" AS \"TenantId\", \"orders\".\"Id\" AS \"Id\", \"orders\".\"CreatedAt\" AS \"CreatedAt\", \"orders\".\"CustomerId\" AS \"CustomerId\", \"orders\".\"Total\" AS \"Total\", \"orders\".\"Note\" AS \"Note\", \"orders\".\"Version\" AS \"Version\", \"orders\".\"Settings\" AS \"Settings\", \"orders\".\"InternalMemo\" AS \"InternalMemo\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ? AND \"orders\".\"Id\" = ? LIMIT ?"
+            },
+            "parameters": [
+              {
+                "name": "p1",
+                "kind": "int64",
+                "value": 1
+              },
+              {
+                "name": "p2",
+                "kind": "int64",
+                "value": 1024
+              },
+              {
+                "name": "p3",
+                "kind": "int64",
+                "value": 2
+              }
+            ],
+            "expectedRows": 1,
+            "hash": "full-order",
+            "expectedEquals": "original all nine fields"
+          }
+        ],
+        "digest": "Concatenate only steps marked hash; all full orders use wide column order",
+        "finalState": "Exact original durable row; other rows and all omitted fields unchanged",
+        "actualProviderOverhead": {
+          "korda-postgresql": "Commit path adds SELECT 1 before COMMIT; rollback does not. This internal query is included in Korda counters, not imposed on direct native business contract.",
+          "korda-sqlite": "Transaction begin additionally executes PRAGMA query_only=OFF. Internal controls belong to framework overhead.",
+          "dapper": "Uses normal provider transaction API; full QuerySingle<Order> SQL omits LIMIT 2 but composite key guarantees at most one row."
+        },
+        "independentOrmSql": {
+          "FindSql": "SELECT \"TenantId\",\"Id\",\"CreatedAt\",\"CustomerId\",\"Total\",\"Note\",\"Version\",\"Settings\",\"InternalMemo\" FROM orders WHERE \"TenantId\"=@tenant AND \"Id\"=@id",
+          "UpdateSql": "UPDATE orders SET \"Note\"=@note,\"Version\"=@version WHERE \"TenantId\"=@tenant AND \"Id\"=@id",
+          "PartialSql": "UPDATE orders SET \"Note\"=@note WHERE \"TenantId\"=@tenant AND \"Id\"=@id",
+          "CheckedSql": "UPDATE orders SET \"Note\"=@note,\"Version\"=@version WHERE \"TenantId\"=@tenant AND \"Id\"=@id AND \"Version\"=@expected",
+          "StaleSql": "UPDATE orders SET \"Note\"=@note WHERE \"TenantId\"=@tenant AND \"Id\"=@id AND \"Version\"=@expected"
+        },
+        "transactionModeValidation": "v4 single-worker SQLite correctness used default Korda deferred BEGIN; final harness explicitly selects Immediate to match Microsoft.Data.Sqlite Serializable and direct native. Final binaries require their own correctness check."
+      },
+      "construction": {
+        "postgresql": {
+          "kind": "SQL-token-concatenation; distinct from typed Fluent/CRUD construction",
+          "fragments": [
+            "SELECT",
+            " ",
+            "\"orders\".\"TenantId\"",
+            " ",
+            "AS",
+            " ",
+            "\"TenantId\",",
+            " ",
+            "\"orders\".\"Id\"",
+            " ",
+            "AS",
+            " ",
+            "\"Id\",",
+            " ",
+            "\"orders\".\"CreatedAt\"",
+            " ",
+            "AS",
+            " ",
+            "\"CreatedAt\",",
+            " ",
+            "\"orders\".\"CustomerId\"",
+            " ",
+            "AS",
+            " ",
+            "\"CustomerId\",",
+            " ",
+            "\"orders\".\"Total\"",
+            " ",
+            "AS",
+            " ",
+            "\"Total\",",
+            " ",
+            "\"orders\".\"Note\"",
+            " ",
+            "AS",
+            " ",
+            "\"Note\",",
+            " ",
+            "\"orders\".\"Version\"",
+            " ",
+            "AS",
+            " ",
+            "\"Version\",",
+            " ",
+            "\"orders\".\"Settings\"",
+            " ",
+            "AS",
+            " ",
+            "\"Settings\",",
+            " ",
+            "\"orders\".\"InternalMemo\"",
+            " ",
+            "AS",
+            " ",
+            "\"InternalMemo\"",
+            " ",
+            "FROM",
+            " ",
+            "\"orders\"",
+            " ",
+            "WHERE",
+            " ",
+            "\"orders\".\"TenantId\"",
+            " ",
+            "=",
+            " ",
+            "$1",
+            " ",
+            "AND",
+            " ",
+            "\"orders\".\"Id\"",
+            " ",
+            "=",
+            " ",
+            "$2",
+            " ",
+            "LIMIT",
+            " ",
+            "$3"
+          ]
+        },
+        "sqlite": {
+          "kind": "SQL-token-concatenation; distinct from typed Fluent/CRUD construction",
+          "fragments": [
+            "SELECT",
+            " ",
+            "\"orders\".\"TenantId\"",
+            " ",
+            "AS",
+            " ",
+            "\"TenantId\",",
+            " ",
+            "\"orders\".\"Id\"",
+            " ",
+            "AS",
+            " ",
+            "\"Id\",",
+            " ",
+            "\"orders\".\"CreatedAt\"",
+            " ",
+            "AS",
+            " ",
+            "\"CreatedAt\",",
+            " ",
+            "\"orders\".\"CustomerId\"",
+            " ",
+            "AS",
+            " ",
+            "\"CustomerId\",",
+            " ",
+            "\"orders\".\"Total\"",
+            " ",
+            "AS",
+            " ",
+            "\"Total\",",
+            " ",
+            "\"orders\".\"Note\"",
+            " ",
+            "AS",
+            " ",
+            "\"Note\",",
+            " ",
+            "\"orders\".\"Version\"",
+            " ",
+            "AS",
+            " ",
+            "\"Version\",",
+            " ",
+            "\"orders\".\"Settings\"",
+            " ",
+            "AS",
+            " ",
+            "\"Settings\",",
+            " ",
+            "\"orders\".\"InternalMemo\"",
+            " ",
+            "AS",
+            " ",
+            "\"InternalMemo\"",
+            " ",
+            "FROM",
+            " ",
+            "\"orders\"",
+            " ",
+            "WHERE",
+            " ",
+            "\"orders\".\"TenantId\"",
+            " ",
+            "=",
+            " ",
+            "?",
+            " ",
+            "AND",
+            " ",
+            "\"orders\".\"Id\"",
+            " ",
+            "=",
+            " ",
+            "?",
+            " ",
+            "LIMIT",
+            " ",
+            "?"
+          ]
+        }
+      }
+    },
+    {
+      "name": "partial-update",
+      "entry": "public-crud-and-transactions",
+      "operationKind": "partial-update",
+      "writesDatabase": true,
+      "expectedRows": 3,
+      "expectedDigest": "8359773139214255609",
+      "expectedDigestHex": "7403e160cdb7c5f9",
+      "columns": [
+        {
+          "name": "TenantId",
+          "alias": "TenantId",
+          "kind": "int64",
+          "nullable": false
+        },
+        {
+          "name": "Id",
+          "alias": "Id",
+          "kind": "int64",
+          "nullable": false
+        },
+        {
+          "name": "CreatedAt",
+          "alias": "CreatedAt",
+          "kind": "int64",
+          "nullable": false
+        },
+        {
+          "name": "CustomerId",
+          "alias": "CustomerId",
+          "kind": "nullable-int64",
+          "nullable": true
+        },
+        {
+          "name": "Total",
+          "alias": "Total",
+          "kind": "cents-from-decimal",
+          "nullable": false
+        },
+        {
+          "name": "Note",
+          "alias": "Note",
+          "kind": "string",
+          "nullable": true
+        },
+        {
+          "name": "Version",
+          "alias": "Version",
+          "kind": "int64",
+          "nullable": false
+        },
+        {
+          "name": "Settings",
+          "alias": "Settings",
+          "kind": "settings",
+          "nullable": false
+        },
+        {
+          "name": "InternalMemo",
+          "alias": "InternalMemo",
+          "kind": "string",
+          "nullable": false
+        }
+      ],
+      "validation": {
+        "kind": "actual Native AOT execution on both databases and both managed routes",
+        "performanceAcceptance": false
+      },
+      "sql": {
+        "postgresql": "SELECT \"orders\".\"TenantId\" AS \"TenantId\", \"orders\".\"Id\" AS \"Id\", \"orders\".\"CreatedAt\" AS \"CreatedAt\", \"orders\".\"CustomerId\" AS \"CustomerId\", \"orders\".\"Total\" AS \"Total\", \"orders\".\"Note\" AS \"Note\", \"orders\".\"Version\" AS \"Version\", \"orders\".\"Settings\" AS \"Settings\", \"orders\".\"InternalMemo\" AS \"InternalMemo\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $1 AND \"orders\".\"Id\" = $2 LIMIT $3",
+        "sqlite": "SELECT \"orders\".\"TenantId\" AS \"TenantId\", \"orders\".\"Id\" AS \"Id\", \"orders\".\"CreatedAt\" AS \"CreatedAt\", \"orders\".\"CustomerId\" AS \"CustomerId\", \"orders\".\"Total\" AS \"Total\", \"orders\".\"Note\" AS \"Note\", \"orders\".\"Version\" AS \"Version\", \"orders\".\"Settings\" AS \"Settings\", \"orders\".\"InternalMemo\" AS \"InternalMemo\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ? AND \"orders\".\"Id\" = ? LIMIT ?"
+      },
+      "parameters": [
+        {
+          "name": "p1",
+          "kind": "int64",
+          "value": 1
+        },
+        {
+          "name": "p2",
+          "kind": "int64",
+          "value": 1024
+        },
+        {
+          "name": "p3",
+          "kind": "int64",
+          "value": 2
+        }
+      ],
+      "materialization": "transaction",
+      "queryExecutionsPerOperation": 7,
+      "preparedContract": "Public CRUD has no prepared-plan overload; construct typed key/changes/commands during each operation in both requested modes",
+      "lifecycle": {
+        "kind": "partial-update",
+        "target": {
+          "tenant": 1,
+          "id": 1024
+        },
+        "initial": {
+          "TenantId": 1,
+          "Id": 1024,
+          "CreatedAt": 1700000256,
+          "CustomerId": 1,
+          "TotalCents": 38997,
+          "Note": "note-0",
+          "Version": 1,
+          "Settings": {
+            "Channel": "web",
+            "Gift": false
+          },
+          "InternalMemo": "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm"
+        },
+        "begin": {
+          "postgresql": "BEGIN ISOLATION LEVEL READ COMMITTED READ WRITE",
+          "sqlite": "BEGIN IMMEDIATE"
+        },
+        "steps": [
+          {
+            "name": "find-original",
+            "sql": {
+              "postgresql": "SELECT \"orders\".\"TenantId\" AS \"TenantId\", \"orders\".\"Id\" AS \"Id\", \"orders\".\"CreatedAt\" AS \"CreatedAt\", \"orders\".\"CustomerId\" AS \"CustomerId\", \"orders\".\"Total\" AS \"Total\", \"orders\".\"Note\" AS \"Note\", \"orders\".\"Version\" AS \"Version\", \"orders\".\"Settings\" AS \"Settings\", \"orders\".\"InternalMemo\" AS \"InternalMemo\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $1 AND \"orders\".\"Id\" = $2 LIMIT $3",
+              "sqlite": "SELECT \"orders\".\"TenantId\" AS \"TenantId\", \"orders\".\"Id\" AS \"Id\", \"orders\".\"CreatedAt\" AS \"CreatedAt\", \"orders\".\"CustomerId\" AS \"CustomerId\", \"orders\".\"Total\" AS \"Total\", \"orders\".\"Note\" AS \"Note\", \"orders\".\"Version\" AS \"Version\", \"orders\".\"Settings\" AS \"Settings\", \"orders\".\"InternalMemo\" AS \"InternalMemo\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ? AND \"orders\".\"Id\" = ? LIMIT ?"
+            },
+            "parameters": [
+              {
+                "name": "p1",
+                "kind": "int64",
+                "value": 1
+              },
+              {
+                "name": "p2",
+                "kind": "int64",
+                "value": 1024
+              },
+              {
+                "name": "p3",
+                "kind": "int64",
+                "value": 2
+              }
+            ],
+            "expectedRows": 1,
+            "hash": "full-order"
+          },
+          {
+            "name": "change",
+            "sql": {
+              "postgresql": "UPDATE \"orders\" SET \"Note\" = $1 WHERE \"TenantId\" = $2 AND \"Id\" = $3",
+              "sqlite": "UPDATE \"orders\" SET \"Note\" = ? WHERE \"TenantId\" = ? AND \"Id\" = ?"
+            },
+            "parameters": [
+              {
+                "name": "p1",
+                "kind": "nullable-string",
+                "value": null
+              },
+              {
+                "name": "p2",
+                "kind": "int64",
+                "value": 1
+              },
+              {
+                "name": "p3",
+                "kind": "int64",
+                "value": 1024
+              }
+            ],
+            "expectedAffected": 1
+          },
+          {
+            "name": "find-changed",
+            "sql": {
+              "postgresql": "SELECT \"orders\".\"TenantId\" AS \"TenantId\", \"orders\".\"Id\" AS \"Id\", \"orders\".\"CreatedAt\" AS \"CreatedAt\", \"orders\".\"CustomerId\" AS \"CustomerId\", \"orders\".\"Total\" AS \"Total\", \"orders\".\"Note\" AS \"Note\", \"orders\".\"Version\" AS \"Version\", \"orders\".\"Settings\" AS \"Settings\", \"orders\".\"InternalMemo\" AS \"InternalMemo\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $1 AND \"orders\".\"Id\" = $2 LIMIT $3",
+              "sqlite": "SELECT \"orders\".\"TenantId\" AS \"TenantId\", \"orders\".\"Id\" AS \"Id\", \"orders\".\"CreatedAt\" AS \"CreatedAt\", \"orders\".\"CustomerId\" AS \"CustomerId\", \"orders\".\"Total\" AS \"Total\", \"orders\".\"Note\" AS \"Note\", \"orders\".\"Version\" AS \"Version\", \"orders\".\"Settings\" AS \"Settings\", \"orders\".\"InternalMemo\" AS \"InternalMemo\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ? AND \"orders\".\"Id\" = ? LIMIT ?"
+            },
+            "parameters": [
+              {
+                "name": "p1",
+                "kind": "int64",
+                "value": 1
+              },
+              {
+                "name": "p2",
+                "kind": "int64",
+                "value": 1024
+              },
+              {
+                "name": "p3",
+                "kind": "int64",
+                "value": 2
+              }
+            ],
+            "expectedRows": 1,
+            "hash": "full-order",
+            "changedFields": {
+              "Note": null
+            }
+          },
+          {
+            "name": "restore-before-commit",
+            "sql": {
+              "postgresql": "UPDATE \"orders\" SET \"Note\" = $1 WHERE \"TenantId\" = $2 AND \"Id\" = $3",
+              "sqlite": "UPDATE \"orders\" SET \"Note\" = ? WHERE \"TenantId\" = ? AND \"Id\" = ?"
+            },
+            "parameters": [
+              {
+                "name": "p1",
+                "kind": "string",
+                "value": "note-0"
+              },
+              {
+                "name": "p2",
+                "kind": "int64",
+                "value": 1
+              },
+              {
+                "name": "p3",
+                "kind": "int64",
+                "value": 1024
+              }
+            ],
+            "expectedAffected": 1
+          },
+          {
+            "name": "commit",
+            "sql": {
+              "sqlite": "COMMIT",
+              "postgresql": "COMMIT"
+            },
+            "parameters": [],
+            "completion": "confirm transaction completion before final lookup"
+          },
+          {
+            "name": "find-persisted",
+            "sql": {
+              "postgresql": "SELECT \"orders\".\"TenantId\" AS \"TenantId\", \"orders\".\"Id\" AS \"Id\", \"orders\".\"CreatedAt\" AS \"CreatedAt\", \"orders\".\"CustomerId\" AS \"CustomerId\", \"orders\".\"Total\" AS \"Total\", \"orders\".\"Note\" AS \"Note\", \"orders\".\"Version\" AS \"Version\", \"orders\".\"Settings\" AS \"Settings\", \"orders\".\"InternalMemo\" AS \"InternalMemo\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $1 AND \"orders\".\"Id\" = $2 LIMIT $3",
+              "sqlite": "SELECT \"orders\".\"TenantId\" AS \"TenantId\", \"orders\".\"Id\" AS \"Id\", \"orders\".\"CreatedAt\" AS \"CreatedAt\", \"orders\".\"CustomerId\" AS \"CustomerId\", \"orders\".\"Total\" AS \"Total\", \"orders\".\"Note\" AS \"Note\", \"orders\".\"Version\" AS \"Version\", \"orders\".\"Settings\" AS \"Settings\", \"orders\".\"InternalMemo\" AS \"InternalMemo\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ? AND \"orders\".\"Id\" = ? LIMIT ?"
+            },
+            "parameters": [
+              {
+                "name": "p1",
+                "kind": "int64",
+                "value": 1
+              },
+              {
+                "name": "p2",
+                "kind": "int64",
+                "value": 1024
+              },
+              {
+                "name": "p3",
+                "kind": "int64",
+                "value": 2
+              }
+            ],
+            "expectedRows": 1,
+            "hash": "full-order",
+            "expectedEquals": "original all nine fields"
+          }
+        ],
+        "digest": "Concatenate only steps marked hash; all full orders use wide column order",
+        "finalState": "Exact original durable row; other rows and all omitted fields unchanged",
+        "actualProviderOverhead": {
+          "korda-postgresql": "Commit path adds SELECT 1 before COMMIT; rollback does not. This internal query is included in Korda counters, not imposed on direct native business contract.",
+          "korda-sqlite": "Transaction begin additionally executes PRAGMA query_only=OFF. Internal controls belong to framework overhead.",
+          "dapper": "Uses normal provider transaction API; full QuerySingle<Order> SQL omits LIMIT 2 but composite key guarantees at most one row."
+        },
+        "independentOrmSql": {
+          "FindSql": "SELECT \"TenantId\",\"Id\",\"CreatedAt\",\"CustomerId\",\"Total\",\"Note\",\"Version\",\"Settings\",\"InternalMemo\" FROM orders WHERE \"TenantId\"=@tenant AND \"Id\"=@id",
+          "UpdateSql": "UPDATE orders SET \"Note\"=@note,\"Version\"=@version WHERE \"TenantId\"=@tenant AND \"Id\"=@id",
+          "PartialSql": "UPDATE orders SET \"Note\"=@note WHERE \"TenantId\"=@tenant AND \"Id\"=@id",
+          "CheckedSql": "UPDATE orders SET \"Note\"=@note,\"Version\"=@version WHERE \"TenantId\"=@tenant AND \"Id\"=@id AND \"Version\"=@expected",
+          "StaleSql": "UPDATE orders SET \"Note\"=@note WHERE \"TenantId\"=@tenant AND \"Id\"=@id AND \"Version\"=@expected"
+        },
+        "transactionModeValidation": "v4 single-worker SQLite correctness used default Korda deferred BEGIN; final harness explicitly selects Immediate to match Microsoft.Data.Sqlite Serializable and direct native. Final binaries require their own correctness check."
+      },
+      "construction": {
+        "postgresql": {
+          "kind": "SQL-token-concatenation; distinct from typed Fluent/CRUD construction",
+          "fragments": [
+            "SELECT",
+            " ",
+            "\"orders\".\"TenantId\"",
+            " ",
+            "AS",
+            " ",
+            "\"TenantId\",",
+            " ",
+            "\"orders\".\"Id\"",
+            " ",
+            "AS",
+            " ",
+            "\"Id\",",
+            " ",
+            "\"orders\".\"CreatedAt\"",
+            " ",
+            "AS",
+            " ",
+            "\"CreatedAt\",",
+            " ",
+            "\"orders\".\"CustomerId\"",
+            " ",
+            "AS",
+            " ",
+            "\"CustomerId\",",
+            " ",
+            "\"orders\".\"Total\"",
+            " ",
+            "AS",
+            " ",
+            "\"Total\",",
+            " ",
+            "\"orders\".\"Note\"",
+            " ",
+            "AS",
+            " ",
+            "\"Note\",",
+            " ",
+            "\"orders\".\"Version\"",
+            " ",
+            "AS",
+            " ",
+            "\"Version\",",
+            " ",
+            "\"orders\".\"Settings\"",
+            " ",
+            "AS",
+            " ",
+            "\"Settings\",",
+            " ",
+            "\"orders\".\"InternalMemo\"",
+            " ",
+            "AS",
+            " ",
+            "\"InternalMemo\"",
+            " ",
+            "FROM",
+            " ",
+            "\"orders\"",
+            " ",
+            "WHERE",
+            " ",
+            "\"orders\".\"TenantId\"",
+            " ",
+            "=",
+            " ",
+            "$1",
+            " ",
+            "AND",
+            " ",
+            "\"orders\".\"Id\"",
+            " ",
+            "=",
+            " ",
+            "$2",
+            " ",
+            "LIMIT",
+            " ",
+            "$3"
+          ]
+        },
+        "sqlite": {
+          "kind": "SQL-token-concatenation; distinct from typed Fluent/CRUD construction",
+          "fragments": [
+            "SELECT",
+            " ",
+            "\"orders\".\"TenantId\"",
+            " ",
+            "AS",
+            " ",
+            "\"TenantId\",",
+            " ",
+            "\"orders\".\"Id\"",
+            " ",
+            "AS",
+            " ",
+            "\"Id\",",
+            " ",
+            "\"orders\".\"CreatedAt\"",
+            " ",
+            "AS",
+            " ",
+            "\"CreatedAt\",",
+            " ",
+            "\"orders\".\"CustomerId\"",
+            " ",
+            "AS",
+            " ",
+            "\"CustomerId\",",
+            " ",
+            "\"orders\".\"Total\"",
+            " ",
+            "AS",
+            " ",
+            "\"Total\",",
+            " ",
+            "\"orders\".\"Note\"",
+            " ",
+            "AS",
+            " ",
+            "\"Note\",",
+            " ",
+            "\"orders\".\"Version\"",
+            " ",
+            "AS",
+            " ",
+            "\"Version\",",
+            " ",
+            "\"orders\".\"Settings\"",
+            " ",
+            "AS",
+            " ",
+            "\"Settings\",",
+            " ",
+            "\"orders\".\"InternalMemo\"",
+            " ",
+            "AS",
+            " ",
+            "\"InternalMemo\"",
+            " ",
+            "FROM",
+            " ",
+            "\"orders\"",
+            " ",
+            "WHERE",
+            " ",
+            "\"orders\".\"TenantId\"",
+            " ",
+            "=",
+            " ",
+            "?",
+            " ",
+            "AND",
+            " ",
+            "\"orders\".\"Id\"",
+            " ",
+            "=",
+            " ",
+            "?",
+            " ",
+            "LIMIT",
+            " ",
+            "?"
+          ]
+        }
+      }
+    },
+    {
+      "name": "stale-conflict",
+      "entry": "public-crud-and-transactions",
+      "operationKind": "optimistic-write-conflict",
+      "writesDatabase": true,
+      "expectedRows": 2,
+      "expectedDigest": "11358637336320375014",
+      "expectedDigestHex": "9da1fc7a0bdd78e6",
+      "columns": [
+        {
+          "name": "TenantId",
+          "alias": "TenantId",
+          "kind": "int64",
+          "nullable": false
+        },
+        {
+          "name": "Id",
+          "alias": "Id",
+          "kind": "int64",
+          "nullable": false
+        },
+        {
+          "name": "CreatedAt",
+          "alias": "CreatedAt",
+          "kind": "int64",
+          "nullable": false
+        },
+        {
+          "name": "CustomerId",
+          "alias": "CustomerId",
+          "kind": "nullable-int64",
+          "nullable": true
+        },
+        {
+          "name": "Total",
+          "alias": "Total",
+          "kind": "cents-from-decimal",
+          "nullable": false
+        },
+        {
+          "name": "Note",
+          "alias": "Note",
+          "kind": "string",
+          "nullable": true
+        },
+        {
+          "name": "Version",
+          "alias": "Version",
+          "kind": "int64",
+          "nullable": false
+        },
+        {
+          "name": "Settings",
+          "alias": "Settings",
+          "kind": "settings",
+          "nullable": false
+        },
+        {
+          "name": "InternalMemo",
+          "alias": "InternalMemo",
+          "kind": "string",
+          "nullable": false
+        }
+      ],
+      "validation": {
+        "kind": "actual Native AOT execution on both databases and both managed routes",
+        "performanceAcceptance": false
+      },
+      "sql": {
+        "postgresql": "SELECT \"orders\".\"TenantId\" AS \"TenantId\", \"orders\".\"Id\" AS \"Id\", \"orders\".\"CreatedAt\" AS \"CreatedAt\", \"orders\".\"CustomerId\" AS \"CustomerId\", \"orders\".\"Total\" AS \"Total\", \"orders\".\"Note\" AS \"Note\", \"orders\".\"Version\" AS \"Version\", \"orders\".\"Settings\" AS \"Settings\", \"orders\".\"InternalMemo\" AS \"InternalMemo\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $1 AND \"orders\".\"Id\" = $2 LIMIT $3",
+        "sqlite": "SELECT \"orders\".\"TenantId\" AS \"TenantId\", \"orders\".\"Id\" AS \"Id\", \"orders\".\"CreatedAt\" AS \"CreatedAt\", \"orders\".\"CustomerId\" AS \"CustomerId\", \"orders\".\"Total\" AS \"Total\", \"orders\".\"Note\" AS \"Note\", \"orders\".\"Version\" AS \"Version\", \"orders\".\"Settings\" AS \"Settings\", \"orders\".\"InternalMemo\" AS \"InternalMemo\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ? AND \"orders\".\"Id\" = ? LIMIT ?"
+      },
+      "parameters": [
+        {
+          "name": "p1",
+          "kind": "int64",
+          "value": 1
+        },
+        {
+          "name": "p2",
+          "kind": "int64",
+          "value": 1024
+        },
+        {
+          "name": "p3",
+          "kind": "int64",
+          "value": 2
+        }
+      ],
+      "materialization": "transaction",
+      "queryExecutionsPerOperation": 6,
+      "preparedContract": "Public CRUD has no prepared-plan overload; construct typed key/changes/commands during each operation in both requested modes",
+      "lifecycle": {
+        "kind": "stale-conflict",
+        "target": {
+          "tenant": 1,
+          "id": 1024
+        },
+        "initial": {
+          "TenantId": 1,
+          "Id": 1024,
+          "CreatedAt": 1700000256,
+          "CustomerId": 1,
+          "TotalCents": 38997,
+          "Note": "note-0",
+          "Version": 1,
+          "Settings": {
+            "Channel": "web",
+            "Gift": false
+          },
+          "InternalMemo": "mmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmm"
+        },
+        "begin": {
+          "postgresql": "BEGIN ISOLATION LEVEL READ COMMITTED READ WRITE",
+          "sqlite": "BEGIN IMMEDIATE"
+        },
+        "steps": [
+          {
+            "name": "find-original",
+            "sql": {
+              "postgresql": "SELECT \"orders\".\"TenantId\" AS \"TenantId\", \"orders\".\"Id\" AS \"Id\", \"orders\".\"CreatedAt\" AS \"CreatedAt\", \"orders\".\"CustomerId\" AS \"CustomerId\", \"orders\".\"Total\" AS \"Total\", \"orders\".\"Note\" AS \"Note\", \"orders\".\"Version\" AS \"Version\", \"orders\".\"Settings\" AS \"Settings\", \"orders\".\"InternalMemo\" AS \"InternalMemo\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $1 AND \"orders\".\"Id\" = $2 LIMIT $3",
+              "sqlite": "SELECT \"orders\".\"TenantId\" AS \"TenantId\", \"orders\".\"Id\" AS \"Id\", \"orders\".\"CreatedAt\" AS \"CreatedAt\", \"orders\".\"CustomerId\" AS \"CustomerId\", \"orders\".\"Total\" AS \"Total\", \"orders\".\"Note\" AS \"Note\", \"orders\".\"Version\" AS \"Version\", \"orders\".\"Settings\" AS \"Settings\", \"orders\".\"InternalMemo\" AS \"InternalMemo\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ? AND \"orders\".\"Id\" = ? LIMIT ?"
+            },
+            "parameters": [
+              {
+                "name": "p1",
+                "kind": "int64",
+                "value": 1
+              },
+              {
+                "name": "p2",
+                "kind": "int64",
+                "value": 1024
+              },
+              {
+                "name": "p3",
+                "kind": "int64",
+                "value": 2
+              }
+            ],
+            "expectedRows": 1,
+            "hash": "full-order"
+          },
+          {
+            "name": "change",
+            "sql": {
+              "postgresql": "UPDATE \"orders\" SET \"Note\" = $1, \"Version\" = $2 WHERE \"TenantId\" = $3 AND \"Id\" = $4 AND \"Version\" = $5",
+              "sqlite": "UPDATE \"orders\" SET \"Note\" = ?, \"Version\" = ? WHERE \"TenantId\" = ? AND \"Id\" = ? AND \"Version\" = ?"
+            },
+            "parameters": [
+              {
+                "name": "p1",
+                "kind": "string",
+                "value": "perf-mutated"
+              },
+              {
+                "name": "p2",
+                "kind": "int64",
+                "value": 2
+              },
+              {
+                "name": "p3",
+                "kind": "int64",
+                "value": 1
+              },
+              {
+                "name": "p4",
+                "kind": "int64",
+                "value": 1024
+              },
+              {
+                "name": "p5",
+                "kind": "int64",
+                "value": 1
+              }
+            ],
+            "expectedAffected": 1
+          },
+          {
+            "name": "stale-change",
+            "sql": {
+              "postgresql": "UPDATE \"orders\" SET \"Note\" = $1 WHERE \"TenantId\" = $2 AND \"Id\" = $3 AND \"Version\" = $4",
+              "sqlite": "UPDATE \"orders\" SET \"Note\" = ? WHERE \"TenantId\" = ? AND \"Id\" = ? AND \"Version\" = ?"
+            },
+            "parameters": [
+              {
+                "name": "p1",
+                "kind": "string",
+                "value": "stale-write"
+              },
+              {
+                "name": "p2",
+                "kind": "int64",
+                "value": 1
+              },
+              {
+                "name": "p3",
+                "kind": "int64",
+                "value": 1024
+              },
+              {
+                "name": "p4",
+                "kind": "int64",
+                "value": 1
+              }
+            ],
+            "expectedAffected": 0,
+            "hash": "boolean true",
+            "expectedOutcome": "optimistic conflict"
+          },
+          {
+            "name": "rollback",
+            "sql": {
+              "sqlite": "ROLLBACK",
+              "postgresql": "ROLLBACK"
+            },
+            "parameters": [],
+            "completion": "confirm transaction completion before final lookup"
+          },
+          {
+            "name": "find-persisted",
+            "sql": {
+              "postgresql": "SELECT \"orders\".\"TenantId\" AS \"TenantId\", \"orders\".\"Id\" AS \"Id\", \"orders\".\"CreatedAt\" AS \"CreatedAt\", \"orders\".\"CustomerId\" AS \"CustomerId\", \"orders\".\"Total\" AS \"Total\", \"orders\".\"Note\" AS \"Note\", \"orders\".\"Version\" AS \"Version\", \"orders\".\"Settings\" AS \"Settings\", \"orders\".\"InternalMemo\" AS \"InternalMemo\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $1 AND \"orders\".\"Id\" = $2 LIMIT $3",
+              "sqlite": "SELECT \"orders\".\"TenantId\" AS \"TenantId\", \"orders\".\"Id\" AS \"Id\", \"orders\".\"CreatedAt\" AS \"CreatedAt\", \"orders\".\"CustomerId\" AS \"CustomerId\", \"orders\".\"Total\" AS \"Total\", \"orders\".\"Note\" AS \"Note\", \"orders\".\"Version\" AS \"Version\", \"orders\".\"Settings\" AS \"Settings\", \"orders\".\"InternalMemo\" AS \"InternalMemo\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ? AND \"orders\".\"Id\" = ? LIMIT ?"
+            },
+            "parameters": [
+              {
+                "name": "p1",
+                "kind": "int64",
+                "value": 1
+              },
+              {
+                "name": "p2",
+                "kind": "int64",
+                "value": 1024
+              },
+              {
+                "name": "p3",
+                "kind": "int64",
+                "value": 2
+              }
+            ],
+            "expectedRows": 1,
+            "hash": "full-order",
+            "expectedEquals": "original all nine fields"
+          }
+        ],
+        "digest": "Concatenate only steps marked hash; all full orders use wide column order",
+        "finalState": "Exact original durable row; other rows and all omitted fields unchanged",
+        "actualProviderOverhead": {
+          "korda-postgresql": "Commit path adds SELECT 1 before COMMIT; rollback does not. This internal query is included in Korda counters, not imposed on direct native business contract.",
+          "korda-sqlite": "Transaction begin additionally executes PRAGMA query_only=OFF. Internal controls belong to framework overhead.",
+          "dapper": "Uses normal provider transaction API; full QuerySingle<Order> SQL omits LIMIT 2 but composite key guarantees at most one row."
+        },
+        "independentOrmSql": {
+          "FindSql": "SELECT \"TenantId\",\"Id\",\"CreatedAt\",\"CustomerId\",\"Total\",\"Note\",\"Version\",\"Settings\",\"InternalMemo\" FROM orders WHERE \"TenantId\"=@tenant AND \"Id\"=@id",
+          "UpdateSql": "UPDATE orders SET \"Note\"=@note,\"Version\"=@version WHERE \"TenantId\"=@tenant AND \"Id\"=@id",
+          "PartialSql": "UPDATE orders SET \"Note\"=@note WHERE \"TenantId\"=@tenant AND \"Id\"=@id",
+          "CheckedSql": "UPDATE orders SET \"Note\"=@note,\"Version\"=@version WHERE \"TenantId\"=@tenant AND \"Id\"=@id AND \"Version\"=@expected",
+          "StaleSql": "UPDATE orders SET \"Note\"=@note WHERE \"TenantId\"=@tenant AND \"Id\"=@id AND \"Version\"=@expected"
+        },
+        "transactionModeValidation": "v4 single-worker SQLite correctness used default Korda deferred BEGIN; final harness explicitly selects Immediate to match Microsoft.Data.Sqlite Serializable and direct native. Final binaries require their own correctness check."
+      },
+      "construction": {
+        "postgresql": {
+          "kind": "SQL-token-concatenation; distinct from typed Fluent/CRUD construction",
+          "fragments": [
+            "SELECT",
+            " ",
+            "\"orders\".\"TenantId\"",
+            " ",
+            "AS",
+            " ",
+            "\"TenantId\",",
+            " ",
+            "\"orders\".\"Id\"",
+            " ",
+            "AS",
+            " ",
+            "\"Id\",",
+            " ",
+            "\"orders\".\"CreatedAt\"",
+            " ",
+            "AS",
+            " ",
+            "\"CreatedAt\",",
+            " ",
+            "\"orders\".\"CustomerId\"",
+            " ",
+            "AS",
+            " ",
+            "\"CustomerId\",",
+            " ",
+            "\"orders\".\"Total\"",
+            " ",
+            "AS",
+            " ",
+            "\"Total\",",
+            " ",
+            "\"orders\".\"Note\"",
+            " ",
+            "AS",
+            " ",
+            "\"Note\",",
+            " ",
+            "\"orders\".\"Version\"",
+            " ",
+            "AS",
+            " ",
+            "\"Version\",",
+            " ",
+            "\"orders\".\"Settings\"",
+            " ",
+            "AS",
+            " ",
+            "\"Settings\",",
+            " ",
+            "\"orders\".\"InternalMemo\"",
+            " ",
+            "AS",
+            " ",
+            "\"InternalMemo\"",
+            " ",
+            "FROM",
+            " ",
+            "\"orders\"",
+            " ",
+            "WHERE",
+            " ",
+            "\"orders\".\"TenantId\"",
+            " ",
+            "=",
+            " ",
+            "$1",
+            " ",
+            "AND",
+            " ",
+            "\"orders\".\"Id\"",
+            " ",
+            "=",
+            " ",
+            "$2",
+            " ",
+            "LIMIT",
+            " ",
+            "$3"
+          ]
+        },
+        "sqlite": {
+          "kind": "SQL-token-concatenation; distinct from typed Fluent/CRUD construction",
+          "fragments": [
+            "SELECT",
+            " ",
+            "\"orders\".\"TenantId\"",
+            " ",
+            "AS",
+            " ",
+            "\"TenantId\",",
+            " ",
+            "\"orders\".\"Id\"",
+            " ",
+            "AS",
+            " ",
+            "\"Id\",",
+            " ",
+            "\"orders\".\"CreatedAt\"",
+            " ",
+            "AS",
+            " ",
+            "\"CreatedAt\",",
+            " ",
+            "\"orders\".\"CustomerId\"",
+            " ",
+            "AS",
+            " ",
+            "\"CustomerId\",",
+            " ",
+            "\"orders\".\"Total\"",
+            " ",
+            "AS",
+            " ",
+            "\"Total\",",
+            " ",
+            "\"orders\".\"Note\"",
+            " ",
+            "AS",
+            " ",
+            "\"Note\",",
+            " ",
+            "\"orders\".\"Version\"",
+            " ",
+            "AS",
+            " ",
+            "\"Version\",",
+            " ",
+            "\"orders\".\"Settings\"",
+            " ",
+            "AS",
+            " ",
+            "\"Settings\",",
+            " ",
+            "\"orders\".\"InternalMemo\"",
+            " ",
+            "AS",
+            " ",
+            "\"InternalMemo\"",
+            " ",
+            "FROM",
+            " ",
+            "\"orders\"",
+            " ",
+            "WHERE",
+            " ",
+            "\"orders\".\"TenantId\"",
+            " ",
+            "=",
+            " ",
+            "?",
+            " ",
+            "AND",
+            " ",
+            "\"orders\".\"Id\"",
+            " ",
+            "=",
+            " ",
+            "?",
+            " ",
+            "LIMIT",
+            " ",
+            "?"
+          ]
+        }
+      }
+    },
+    {
+      "name": "early-stop",
+      "entry": "fluent",
+      "operationKind": "early-read-termination",
+      "writesDatabase": false,
+      "expectedRows": 3,
+      "expectedDigest": "10895462554246971929",
+      "expectedDigestHex": "9734757769760219",
+      "columns": [
+        {
+          "name": "TenantId",
+          "alias": "TenantId",
+          "kind": "int64",
+          "nullable": false
+        },
+        {
+          "name": "Id",
+          "alias": "Id",
+          "kind": "int64",
+          "nullable": false
+        },
+        {
+          "name": "CreatedAt",
+          "alias": "CreatedAt",
+          "kind": "int64",
+          "nullable": false
+        },
+        {
+          "name": "CustomerId",
+          "alias": "CustomerId",
+          "kind": "nullable-int64",
+          "nullable": true
+        },
+        {
+          "name": "Total",
+          "alias": "Total",
+          "kind": "cents-from-decimal",
+          "nullable": false
+        },
+        {
+          "name": "Note",
+          "alias": "Note",
+          "kind": "string",
+          "nullable": true
+        },
+        {
+          "name": "Version",
+          "alias": "Version",
+          "kind": "int64",
+          "nullable": false
+        },
+        {
+          "name": "Settings",
+          "alias": "Settings",
+          "kind": "settings",
+          "nullable": false
+        },
+        {
+          "name": "InternalMemo",
+          "alias": "InternalMemo",
+          "kind": "string",
+          "nullable": false
+        }
+      ],
+      "validation": {
+        "kind": "actual Native AOT execution on both databases and both managed routes",
+        "performanceAcceptance": false
+      },
+      "sql": {
+        "sqlite": "SELECT \"orders\".\"TenantId\" AS \"TenantId\", \"orders\".\"Id\" AS \"Id\", \"orders\".\"CreatedAt\" AS \"CreatedAt\", \"orders\".\"CustomerId\" AS \"CustomerId\", \"orders\".\"Total\" AS \"Total\", \"orders\".\"Note\" AS \"Note\", \"orders\".\"Version\" AS \"Version\", \"orders\".\"Settings\" AS \"Settings\", \"orders\".\"InternalMemo\" AS \"InternalMemo\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ? ORDER BY \"orders\".\"Id\" ASC NULLS LAST LIMIT ?",
+        "postgresql": "SELECT \"orders\".\"TenantId\" AS \"TenantId\", \"orders\".\"Id\" AS \"Id\", \"orders\".\"CreatedAt\" AS \"CreatedAt\", \"orders\".\"CustomerId\" AS \"CustomerId\", \"orders\".\"Total\" AS \"Total\", \"orders\".\"Note\" AS \"Note\", \"orders\".\"Version\" AS \"Version\", \"orders\".\"Settings\" AS \"Settings\", \"orders\".\"InternalMemo\" AS \"InternalMemo\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $1 ORDER BY \"orders\".\"Id\" ASC NULLS LAST LIMIT $2"
+      },
+      "parameters": [
+        {
+          "name": "p1",
+          "kind": "int64",
+          "value": 1
+        },
+        {
+          "name": "p2",
+          "kind": "int64",
+          "value": 1024
+        }
+      ],
+      "materialization": "stream-early-stop",
+      "consumeRows": 3,
+      "queryExecutionsPerOperation": 1,
+      "preparedContract": "Reuse the full typed query shape; consume first three owned rows and await enumerator disposal",
+      "lifecycle": {
+        "kind": "early-stop",
+        "limit": 1024,
+        "consumeRows": 3,
+        "digest": "First three full orders, in Id order, with the same wide field encodings",
+        "cleanup": "Await stream/enumerator disposal; remaining result cleanup is part of the operation"
+      },
+      "construction": {
+        "sqlite": {
+          "kind": "SQL-token-concatenation; distinct from typed Fluent/CRUD construction",
+          "fragments": [
+            "SELECT",
+            " ",
+            "\"orders\".\"TenantId\"",
+            " ",
+            "AS",
+            " ",
+            "\"TenantId\",",
+            " ",
+            "\"orders\".\"Id\"",
+            " ",
+            "AS",
+            " ",
+            "\"Id\",",
+            " ",
+            "\"orders\".\"CreatedAt\"",
+            " ",
+            "AS",
+            " ",
+            "\"CreatedAt\",",
+            " ",
+            "\"orders\".\"CustomerId\"",
+            " ",
+            "AS",
+            " ",
+            "\"CustomerId\",",
+            " ",
+            "\"orders\".\"Total\"",
+            " ",
+            "AS",
+            " ",
+            "\"Total\",",
+            " ",
+            "\"orders\".\"Note\"",
+            " ",
+            "AS",
+            " ",
+            "\"Note\",",
+            " ",
+            "\"orders\".\"Version\"",
+            " ",
+            "AS",
+            " ",
+            "\"Version\",",
+            " ",
+            "\"orders\".\"Settings\"",
+            " ",
+            "AS",
+            " ",
+            "\"Settings\",",
+            " ",
+            "\"orders\".\"InternalMemo\"",
+            " ",
+            "AS",
+            " ",
+            "\"InternalMemo\"",
+            " ",
+            "FROM",
+            " ",
+            "\"orders\"",
+            " ",
+            "WHERE",
+            " ",
+            "\"orders\".\"TenantId\"",
+            " ",
+            "=",
+            " ",
+            "?",
+            " ",
+            "ORDER",
+            " ",
+            "BY",
+            " ",
+            "\"orders\".\"Id\"",
+            " ",
+            "ASC",
+            " ",
+            "NULLS",
+            " ",
+            "LAST",
+            " ",
+            "LIMIT",
+            " ",
+            "?"
+          ]
+        },
+        "postgresql": {
+          "kind": "SQL-token-concatenation; distinct from typed Fluent/CRUD construction",
+          "fragments": [
+            "SELECT",
+            " ",
+            "\"orders\".\"TenantId\"",
+            " ",
+            "AS",
+            " ",
+            "\"TenantId\",",
+            " ",
+            "\"orders\".\"Id\"",
+            " ",
+            "AS",
+            " ",
+            "\"Id\",",
+            " ",
+            "\"orders\".\"CreatedAt\"",
+            " ",
+            "AS",
+            " ",
+            "\"CreatedAt\",",
+            " ",
+            "\"orders\".\"CustomerId\"",
+            " ",
+            "AS",
+            " ",
+            "\"CustomerId\",",
+            " ",
+            "\"orders\".\"Total\"",
+            " ",
+            "AS",
+            " ",
+            "\"Total\",",
+            " ",
+            "\"orders\".\"Note\"",
+            " ",
+            "AS",
+            " ",
+            "\"Note\",",
+            " ",
+            "\"orders\".\"Version\"",
+            " ",
+            "AS",
+            " ",
+            "\"Version\",",
+            " ",
+            "\"orders\".\"Settings\"",
+            " ",
+            "AS",
+            " ",
+            "\"Settings\",",
+            " ",
+            "\"orders\".\"InternalMemo\"",
+            " ",
+            "AS",
+            " ",
+            "\"InternalMemo\"",
+            " ",
+            "FROM",
+            " ",
+            "\"orders\"",
+            " ",
+            "WHERE",
+            " ",
+            "\"orders\".\"TenantId\"",
+            " ",
+            "=",
+            " ",
+            "$1",
+            " ",
+            "ORDER",
+            " ",
+            "BY",
+            " ",
+            "\"orders\".\"Id\"",
+            " ",
+            "ASC",
+            " ",
+            "NULLS",
+            " ",
+            "LAST",
+            " ",
+            "LIMIT",
+            " ",
+            "$2"
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "task": "DB-Perf-01",
+  "snapshot": "configured-codecs-candidate-v1",
+  "purpose": "Exact eighth-candidate source retained before subsequent wire-parser optimization. Historical reproduction inputs are excluded from current builds; execution evidence stays separately identified.",
+  "buildReceiptPath": "/workspace/scratch/b94e2a0e0c3f/measurements/configured-codecs-candidate-v1/build-receipt.json",
+  "buildReceiptSha256": "89ba883102e4e540b9a970da28eaf2b57c33c66eab88fea21bfe2ef412b49111",
+  "executableSha256": "89078094bbda658f4c6010468f17e6f83aff1c1b35f68434131c242e74480c59",
+  "sourceStableDuringBuild": true,
+  "inputs": [
+    {
+      "sourcePath": "src/Data.Abstractions/DbWire.cs",
+      "sha256": "9edb8888b7eadaa40b3425cb53504a38c2f96fe5db1a3aeaef6306280e75c04e",
+      "bytes": 18975,
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/9edb8888b7eadaa40b3425cb53504a38c2f96fe5db1a3aeaef6306280e75c04e/DbWire.cs",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sourcePath": "src/Data.Abstractions/Codecs.cs",
+      "sha256": "cb8d511970dbed4ec0804c9d485ca6455fe29157404745983c2cb5cb394be2a0",
+      "bytes": 23032,
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/cb8d511970dbed4ec0804c9d485ca6455fe29157404745983c2cb5cb394be2a0/Codecs.cs",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sourcePath": "tests/Data.Abstractions/Program.cs",
+      "sha256": "afac7e50ed71b07c2da550bd0481a0c11cb3bad10b9dde5ba9c19bacb6538dbb",
+      "bytes": 37255,
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/afac7e50ed71b07c2da550bd0481a0c11cb3bad10b9dde5ba9c19bacb6538dbb/Program.cs",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sourcePath": "tests/Data.Abstractions/AllocationProbe.cs",
+      "sha256": "dbc6d370cffd33f61091f2ed000876e2c6090dac56ea6c37088f5f95b9baba1c",
+      "bytes": 4927,
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/dbc6d370cffd33f61091f2ed000876e2c6090dac56ea6c37088f5f95b9baba1c/AllocationProbe.cs",
+      "bindingStatus": "pending_harness_commit"
+    }
+  ]
+}
