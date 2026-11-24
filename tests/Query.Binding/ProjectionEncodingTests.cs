@@ -248,8 +248,179 @@ internal static class ProjectionEncodingTests
             "Caller-owned output mutation affected another encoding.");
         Check(SharedExpressions.AsSpan().SequenceEqual(Expressions(4))
             && SharedProjection.CanonicalBytes.AsSpan().SequenceEqual(canonical), "Parallel encoding mutated shared input.");
+        assertions += RunScratchContracts(projection, malformed, innerOverflow, outerOverflow);
         File.WriteAllText(Path.Combine(output, "projection-encoding-assertions.txt"), assertions.ToString(CultureInfo.InvariantCulture));
         Console.WriteLine("PASS projection encoding goldens, binding/error order, 4 MiB boundaries and concurrent output ownership.");
+    }
+
+    private static bool IsFilled(ReadOnlySpan<byte> bytes, byte expected)
+    {
+        foreach (var value in bytes) if (value != expected) return false;
+        return true;
+    }
+    private static byte[] ScratchCopy(Projection<long> projection, Func<CodecDescriptor, uint> binder, ulong[] expressions)
+    {
+        Span<byte> scratch = stackalloc byte[OperandEncoding.StackScratchBytes];
+        scratch.Fill(0xa5);
+        return OperandEncoding.ProjectionInto(projection, binder, scratch, expressions).ToArray();
+    }
+    private static int RunScratchContracts(Projection<long> projection, Projection<long> malformed,
+        Projection<long> innerOverflow, Projection<long> outerOverflow)
+    {
+        var checks = 0;
+        void Check(bool value, string message) { checks++; if (!value) throw new InvalidOperationException(message); }
+        Check(OperandEncoding.StackScratchBytes == 4096, "Scratch cutoff changed without recalibration.");
+        Span<byte> guarded = stackalloc byte[4096 + 32];
+        var scratch = guarded.Slice(16, 4096);
+        foreach (var hasExpressions in new[] { false, true })
+        {
+            var tokens = hasExpressions ? Expressions(4) : Array.Empty<ulong>();
+            guarded.Fill(0xa5);
+            var encoded = OperandEncoding.ProjectionInto(projection, Bind, scratch, tokens);
+            Check(encoded.SequenceEqual(hasExpressions ? ExpressionsGolden : MetadataGolden), "Poisoned scratch changed complete projection wire or reserved bytes.");
+            Check(IsFilled(guarded[..16], 0xa5) && IsFilled(guarded[(16 + encoded.Length)..], 0xa5), "Projection writer escaped its exact slice.");
+            var copy = encoded.ToArray();
+            scratch.Fill(0xcc);
+            Check(encoded[0] == 0xcc && copy[0] == 1, "Small projection did not borrow caller scratch, or owned copy aliases it.");
+            foreach (var extra in new[] { 0, 1 })
+            {
+                var name = new string('x', 4096 - (hasExpressions ? 204 : 180) + extra);
+                var boundary = Projection<long>.Create([ResultField.Create(name, Codecs.Int64)], static _ => 0L);
+                var boundaryTokens = hasExpressions ? new ulong[] { ulong.MaxValue } : Array.Empty<ulong>();
+                var expected = OperandEncoding.Projection(boundary, Bind, boundaryTokens);
+                Check(expected.Length == 4096 + extra, "Scratch boundary fixture size changed.");
+                guarded.Fill(0xa5);
+                var result = OperandEncoding.ProjectionInto(boundary, Bind, scratch, boundaryTokens);
+                Check(result.SequenceEqual(expected), "4096/4097 scratch boundary wire differs from owned encoding.");
+                Check(IsFilled(guarded[..16], 0xa5) && IsFilled(guarded[(16 + (extra == 0 ? 4096 : 0))..], 0xa5), "Scratch boundary guard or fallback storage was modified.");
+                scratch.Fill(0xcc);
+                Check(extra == 0 ? result[0] == 0xcc : result.SequenceEqual(expected), "4096 must borrow scratch; 4097 must survive scratch overwrite through heap fallback.");
+            }
+        }
+        void SameFailure(Projection<long> item, ulong[] tokens, int throwAt = 0, bool nullBinder = false)
+        {
+            Exception? previous = null;
+            uint[] previousOrder = [];
+            foreach (var useScratch in new[] { false, true })
+            {
+                var order = new List<uint>();
+                Func<CodecDescriptor, uint> binder = descriptor =>
+                {
+                    order.Add(descriptor.Id);
+                    if (order.Count == throwAt) throw new ApplicationException("scratch binding failure");
+                    return descriptor.Id;
+                };
+                if (nullBinder) binder = null!;
+                Exception? observed = null;
+                try
+                {
+                    if (useScratch) _ = ScratchCopy(item, binder, tokens);
+                    else _ = OperandEncoding.Projection(item, binder, tokens);
+                }
+                catch (Exception error) { observed = error; }
+                Check(observed is not null, "Scratch failure fixture unexpectedly succeeded.");
+                if (previous is not null)
+                    Check(observed!.GetType() == previous.GetType() && observed.Message == previous.Message
+                        && order.SequenceEqual(previousOrder), "Into changed exception type/message or binding side-effect order.");
+                previous = observed; previousOrder = order.ToArray();
+            }
+        }
+        SameFailure(null!, []);
+        SameFailure(projection, [], nullBinder: true);
+        SameFailure(projection, [1]);
+        SameFailure(projection, [], throwAt: 3);
+        SameFailure(malformed, []);
+        SameFailure(malformed, [], throwAt: 1);
+        SameFailure(innerOverflow, []);
+        SameFailure(outerOverflow, []);
+        SameFailure(outerOverflow, [], throwAt: 3);
+        Parallel.For(0, 16, new ParallelOptions { MaxDegreeOfParallelism = 4 }, index =>
+        {
+            Span<byte> local = stackalloc byte[OperandEncoding.StackScratchBytes];
+            local.Fill((byte)(0x80 + index));
+            var view = OperandEncoding.ProjectionInto(SharedProjection, Bind, local, SharedExpressions);
+            if (!view.SequenceEqual(ExpressionsGolden)) throw new InvalidOperationException("Concurrent poisoned scratch changed wire.");
+            var owned = view.ToArray();
+            local.Fill(0xa5);
+            if (!owned.AsSpan().SequenceEqual(ExpressionsGolden) || view[0] != 0xa5)
+                throw new InvalidOperationException("Concurrent call failed its local scratch/owned-copy boundary.");
+        });
+        checks++;
+        return checks;
+    }
+
+    private static byte[] OwnedSelection<T>(QueryBinding query, Projection<T> projection, ExpressionReference[] expressions)
+    {
+        var tokens = OperandEncoding.Tokens(query, expressions);
+        var handles = expressions.Select(expression => expression.In(query)).ToArray();
+        return OperandEncoding.Clause(OperandEncoding.Bytes(1, tokens, 8),
+            OperandEncoding.Bytes(2, OperandEncoding.Projection(projection, Bind, handles)));
+    }
+    internal static int RunSelection<T>(QueryBinding query, Projection<T> projection,
+        ExpressionReference[] expressions, ExpressionReference foreign)
+    {
+        var checks = 0;
+        void Check(bool value, string message) { checks++; if (!value) throw new InvalidOperationException(message); }
+        var original = expressions.ToArray();
+        var expected = OwnedSelection(query, projection, expressions);
+        Span<byte> guarded = stackalloc byte[4096 + 32];
+        var scratch = guarded.Slice(16, 4096);
+        var calls = 0;
+        uint CountBind(CodecDescriptor descriptor) { calls++; return descriptor.Id; }
+        guarded.Fill(0xa5);
+        Check(OperandEncoding.TrySelectionInto(query, projection, CountBind, expressions, scratch, out var length), "Small selection did not use scratch.");
+        Check(scratch[..length].SequenceEqual(expected) && calls == expressions.Length,
+            "Poisoned SELECT wire/reserved bytes or binder count differs from owned encoding.");
+        Check(IsFilled(guarded[..16], 0xa5) && IsFilled(guarded[(16 + length)..], 0xa5), "SELECT writer escaped its slice.");
+        guarded.Fill(0xa5); calls = 0;
+        Check(!OperandEncoding.TrySelectionInto(query, projection, CountBind, expressions, scratch[..1], out length)
+            && length == 0 && calls == 0 && IsFilled(guarded, 0xa5), "Insufficient scratch wrote bytes or bound codecs before fallback.");
+        var wide = Projection<long>.Create(Enumerable.Range(0, 33).Select(i => ResultField.Create("wide_" + i.ToString(CultureInfo.InvariantCulture), Codecs.Int64)).ToArray(), static _ => 0L);
+        var repeated = Enumerable.Repeat(expressions[0], 33).ToArray();
+        guarded.Fill(0xa5); calls = 0;
+        Check(!OperandEncoding.TrySelectionInto(query, wide, CountBind, repeated, scratch, out length)
+            && length == 0 && calls == 0 && IsFilled(guarded, 0xa5), "More than 32 fields did not preserve untouched fallback.");
+        foreach (var extra in new[] { 0, 1 })
+        {
+            var boundary = Projection<long>.Create([ResultField.Create(new string('x', 4096 - 260 + extra), Codecs.Int64)], static _ => 0L);
+            ExpressionReference[] one = [expressions[0]];
+            var boundaryExpected = OwnedSelection(query, boundary, one);
+            Check(boundaryExpected.Length == 4096 + extra, "SELECT boundary fixture length changed.");
+            guarded.Fill(0xa5); calls = 0;
+            var fit = OperandEncoding.TrySelectionInto(query, boundary, CountBind, one, scratch, out length);
+            if (extra == 0)
+                Check(fit && length == 4096 && calls == 1 && scratch.SequenceEqual(boundaryExpected), "Exact 4096-byte SELECT should borrow and fill scratch.");
+            else
+                Check(!fit && length == 0 && calls == 0 && IsFilled(guarded, 0xa5), "4097-byte SELECT changed fallback side effects.");
+            Check(IsFilled(guarded[..16], 0xa5) && IsFilled(guarded[4112..], 0xa5), "SELECT boundary guard changed.");
+        }
+        foreach (var invalid in new ExpressionReference[] { default, foreign })
+        {
+            var bad = expressions.ToArray(); bad[^1] = invalid;
+            guarded.Fill(0xa5); calls = 0;
+            Exception? observed = null;
+            try { OperandEncoding.TrySelectionInto(query, projection, CountBind, bad, scratch, out _); }
+            catch (Exception error) { observed = error; }
+            Check(observed is ArgumentException argument && argument.GetType() == typeof(ArgumentException)
+                && argument.Message == "Default or foreign expression reference." && calls == 0,
+                "All tokens must be validated before any codec binding.");
+        }
+        guarded.Fill(0xa5); calls = 0;
+        Exception? bindFailure = null;
+        try
+        {
+            OperandEncoding.TrySelectionInto(query, projection, descriptor =>
+            { calls++; throw new ApplicationException("selection binding failure"); }, expressions, scratch, out _);
+        }
+        catch (Exception error) { bindFailure = error; }
+        Check(bindFailure is ApplicationException application && application.Message == "selection binding failure" && calls == 1,
+            "Selection binder failure changed or retried a bind.");
+        Check(expressions.AsSpan().SequenceEqual(original), "SELECT changed caller expression references.");
+        guarded.Fill(0xa5); calls = 0;
+        Check(OperandEncoding.TrySelectionInto(query, projection, CountBind, expressions, scratch, out length), "Final borrowed selection failed.");
+        query.Clause(6, scratch[..length]);
+        scratch.Fill(0xa5); // Native must already own its persistent fields before this point.
+        return checks;
     }
 
     internal static void RunAllocation(string output)
@@ -303,6 +474,63 @@ internal static class ProjectionEncodingTests
         }
         GC.KeepAlive(projection); GC.KeepAlive(expressions);
         Console.WriteLine("PASS projection raw allocation <=9438704 B / 8192 operations; framework output arrays included, business result absent only in this fixture.");
+    }
+
+    internal static void RunScratchAllocation(string output)
+    {
+        if (RuntimeFeature.IsDynamicCodeSupported || !OperatingSystem.IsLinux()
+            || RuntimeInformation.ProcessArchitecture != Architecture.X64)
+            throw new InvalidOperationException("Projection scratch allocation requires Linux x64 Native AOT.");
+        const int warmup = 1024, operations = 4096, repeats = 3;
+        var projection = CreateProjection(8);
+        var expressions = Expressions(8);
+        var samples = new ProjectionAllocationSample[repeats];
+        var checksumPerOperation = Consume(EightExpressionsGolden, EightExpressionsGolden);
+        long warmChecksum = 0;
+        for (var i = 0; i < warmup; i++) warmChecksum += ScratchConsume(projection, expressions);
+        if (warmChecksum != checksumPerOperation * warmup) throw new InvalidOperationException("Scratch allocation warmup changed.");
+        _ = Stopwatch.GetTimestamp(); _ = GC.GetTotalAllocatedBytes(true); _ = GC.GetAllocatedBytesForCurrentThread();
+        _ = GC.CollectionCount(0); _ = GC.CollectionCount(1); _ = GC.CollectionCount(2);
+        for (var repeat = 0; repeat < repeats; repeat++)
+        {
+            var gen0Before = GC.CollectionCount(0); var gen1Before = GC.CollectionCount(1); var gen2Before = GC.CollectionCount(2);
+            var started = Stopwatch.GetTimestamp(); var before = GC.GetTotalAllocatedBytes(true);
+            var threadBefore = GC.GetAllocatedBytesForCurrentThread();
+            long checksum = 0;
+            for (var i = 0; i < operations; i++) checksum += ScratchConsume(projection, expressions);
+            var threadAfter = GC.GetAllocatedBytesForCurrentThread(); var after = GC.GetTotalAllocatedBytes(true); var ended = Stopwatch.GetTimestamp();
+            var gen0After = GC.CollectionCount(0); var gen1After = GC.CollectionCount(1); var gen2After = GC.CollectionCount(2);
+            samples[repeat] = new(repeat, operations, before, after, after - before, threadBefore, threadAfter,
+                gen0Before, gen0After, gen1Before, gen1After, gen2Before, gen2After, checksum, ended - started);
+        }
+        var receipt = new ProjectionAllocationReceipt("DB-Perf-01", "internal-projection-scratch-short-regression", true,
+            RuntimeInformation.FrameworkDescription, RuntimeInformation.ProcessArchitecture.ToString(), Environment.ProcessId,
+            warmup, EightExpressionsGolden.Length, 1152,
+            "c5c02b3c5a772619bba00983070c9c3bf665863bf710eb51d8b1d9214158e073",
+            0, 0, 0, "36b309cf2fbd5871668ccf231c05af34607d5c52401860be45a24c08bcd34eb2",
+            "Raw whole-process cumulative allocation and GC endpoints, plus separate current-thread endpoints. Each synchronous call borrows bounded stack scratch, compares all fixed wire bytes and consumes them before return. Prebuilt metadata/binder and reporting are outside. No subtraction or public-query attribution.",
+            "No business result is produced by this fixture. Borrowed fitting projection frames are library internals; larger projections retain allocated fallback. GC counts belong to the shared process heap.",
+            "Budget per 4096-operation window is the maximum raw whole-process count across three independent AOT processes with three windows each plus the observed range: 0 + 0 = 0 B. Current-thread endpoints also remain zero; no background bytes are subtracted.",
+            0, true, Stopwatch.Frequency, samples);
+        File.WriteAllText(Path.Combine(output, "projection-scratch-allocation.json"),
+            JsonSerializer.Serialize(receipt, ProjectionTestJson.Default.ProjectionAllocationReceipt));
+        foreach (var sample in samples)
+        {
+            if (sample.Checksum != checksumPerOperation * operations) throw new InvalidOperationException("Scratch measured consumption changed.");
+            if (sample.AllocatedBytes != 0 || sample.ThreadAfter != sample.ThreadBefore)
+                throw new InvalidOperationException($"Scratch encoding allocated {sample.AllocatedBytes} whole-process B / {sample.Operations} operations; the calibrated budget is 0 B.");
+        }
+        GC.KeepAlive(projection); GC.KeepAlive(expressions);
+        Console.WriteLine("PASS scratch allocation 0 whole-process B / 4096 operations in the scoped synchronous prebuilt encoder; public-query allocation remains separate.");
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static long ScratchConsume(Projection<long> projection, ulong[] expressions)
+    {
+        Span<byte> scratch = stackalloc byte[OperandEncoding.StackScratchBytes];
+        var bytes = OperandEncoding.ProjectionInto(projection, Bind, scratch, expressions);
+        if (!bytes.SequenceEqual(EightExpressionsGolden)) throw new InvalidOperationException("Complete scratch projection wire changed.");
+        long checksum = 0; foreach (var value in bytes) checksum += value; return checksum;
     }
 
     private static ResultField[] CreateFields(int count)

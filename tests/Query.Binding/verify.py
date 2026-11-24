@@ -62,6 +62,7 @@ try:
     if golden!=actual:raise RuntimeError('Cross-language golden inputs drifted.')
     run('actual-aot',[out/'aot/Korda.Query.Binding.Tests',asset,out/'aot-results','--require-aot'])
     run('projection-allocation-aot',[out/'aot/Korda.Query.Binding.Tests','--projection-allocation',out/'projection-allocation'])
+    run('projection-scratch-allocation-aot',[out/'aot/Korda.Query.Binding.Tests','--projection-scratch-allocation',out/'projection-scratch-allocation'])
     run('restore-sample-aot',['dotnet','restore',sample,'-r','linux-x64','-p:PublishAot=true','--locked-mode',*config,*common])
     run('publish-sample-aot',['dotnet','publish',sample,'-c','Release','-r','linux-x64','-p:PublishAot=true','-p:IlcTreatWarningsAsErrors=true','--no-restore','-o',out/'sample-aot',*common])
     if (out/'sample-aot/Korda.Query.Binding.Sample').read_bytes()[:4]!=b'\x7fELF' or (out/'sample-aot/Korda.Query.Binding.Sample.dll').exists():raise RuntimeError('Expected an actual standalone Native AOT sample executable.')

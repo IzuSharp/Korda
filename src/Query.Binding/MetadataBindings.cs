@@ -17,7 +17,8 @@ internal static unsafe class MetadataBindings
     }
     internal static uint RegisterProjection<T>(DatabaseOwner source, Projection<T> projection, Func<CodecDescriptor, uint> bindCodec)
     {
-        var bytes = OperandEncoding.Projection(projection, bindCodec); var calls = source.Source.Calls; BindingChecks.Require((nint)calls.nw_db_projection_register_v1, "projection_register");
+        Span<byte> scratch = stackalloc byte[OperandEncoding.StackScratchBytes];
+        var bytes = OperandEncoding.ProjectionInto(projection, bindCodec, scratch); var calls = source.Source.Calls; BindingChecks.Require((nint)calls.nw_db_projection_register_v1, "projection_register");
         using var lease = source.Borrow(DatabaseOwnerKind.Source); uint result = 0; var error = BindingChecks.Error();
         fixed (byte* input = bytes) BindingChecks.Status(calls.nw_db_projection_register_v1(lease.Pointer, BindingChecks.View(input, bytes.Length), &result, &error), error);
         if (result == 0) throw new BindingFailure(NativeStatus.ContractViolation, 0, 0, 0); return result;

@@ -64,11 +64,12 @@ internal static unsafe class Program
     }
     public static int Main(string[] args)
     {
-        if (args.Length == 2 && args[0] is "--projection-encoding" or "--projection-allocation")
+        if (args.Length == 2 && args[0] is "--projection-encoding" or "--projection-allocation" or "--projection-scratch-allocation")
         {
             Directory.CreateDirectory(args[1]);
             if (RuntimeFeature.IsDynamicCodeSupported) throw new InvalidOperationException("Actual Native AOT execution required.");
             if (args[0] == "--projection-allocation") ProjectionEncodingTests.RunAllocation(args[1]);
+            else if (args[0] == "--projection-scratch-allocation") ProjectionEncodingTests.RunScratchAllocation(args[1]);
             else ProjectionEncodingTests.Run(args[1]);
             return 0;
         }
@@ -95,6 +96,17 @@ internal static unsafe class Program
             _live = (delegate* unmanaged[Cdecl]<uint, ulong>)NativeLibrary.GetExport(library, "nw_test_live_v1"); _session = (delegate* unmanaged[Cdecl]<nint, nint*, NwErrorInfoV1*, uint>)NativeLibrary.GetExport(library, "nw_test_session_v1");
             using (var source = Source()) using (var session = Session(source)) using (var model = MetadataBindings.RegisterModel(source, parent)) using (var childModel = MetadataBindings.RegisterModel(source, child))
             {
+                Test("projection_scratch_poison_boundaries_and_native_borrow", () =>
+                {
+                    using var q = QueryBinding.Create(session, model, parent.Identity.Id);
+                    using var other = QueryBinding.Create(session, model, parent.Identity.Id);
+                    _assertions += ProjectionEncodingTests.RunSelection(q, parent.Row,
+                        [q.Column(id.Id), q.Column(name.Id)], other.Column(id.Id));
+                    using var plan = q.Seal(0);
+                    using var lease = plan.Borrow(DatabaseOwnerKind.Plan);
+                    Check(System.Text.Encoding.UTF8.GetString(Snapshot(lease.Pointer)) == "{\"version\":1,\"parameters\":[]}",
+                        "Native plan did not survive caller scratch overwrite before sealing.");
+                });
                 Test("direct_filter_projection_order_paging_seal", () =>
                 {
                     using var q = QueryBinding.Create(session, model, parent.Identity.Id); var column = q.Column(id.Id); var text = q.Column(name.Id); var literal = q.Value(value); var predicate = q.Binary(1, column, literal);

@@ -73,6 +73,19 @@ internal sealed class QueryContext : IDisposable
     internal ExpressionReference Binary(uint operation, ExpressionReference a, ExpressionReference b) => Run(() => Binding.Binary(operation, a, b));
     internal ExpressionReference Unary(uint operation, ExpressionReference a) => Run(() => Binding.Unary(operation, a));
     internal ulong Clause(uint operation, params ControlField[] fields) => Run(() => Binding.Clause(operation, OperandEncoding.Clause(fields)));
+    // Keep the same nested admission and failure translation without capturing a
+    // borrowed span in a delegate or extending its lifetime beyond the ABI call.
+    private ulong Clause(uint operation, ReadOnlySpan<byte> operands)
+    {
+        using var admission = Enter();
+        try { return Binding.Clause(operation, operands); }
+        catch (BindingFailure failure)
+        {
+            if (failure.Status == Korda.Interop.Abi.NativeStatus.NotSupported)
+                throw new DatabaseException("The native query operation is unavailable for this provider, codec or shape.", DatabaseErrorKind.UnsupportedCapability, correlationId: failure.Correlation);
+            throw HostFailure.Binding(Source.Binding, failure);
+        }
+    }
     internal static ControlField U(ushort id, ulong value, ushort type = 2) => OperandEncoding.U64(id, value, type);
     internal static ControlField N(ushort id, uint value) => OperandEncoding.U32(id, value);
     internal static ControlField B(ushort id, byte[] value, ushort type = 5) => OperandEncoding.Bytes(id, value, type);
@@ -87,7 +100,12 @@ internal sealed class QueryContext : IDisposable
     {
         ArgumentNullException.ThrowIfNull(projection);
         if (expressions is null && !_projections.TryGetValue(projection, out expressions)) throw new ArgumentException("The projection was not built by this query.", nameof(projection));
-        Clause(6, B(1, OperandEncoding.Tokens(Binding, expressions), 8), B(2, OperandEncoding.Projection(projection, Source.BindCodec, expressions.Select(e => e.In(Binding)).ToArray())));
+        Span<byte> scratch = stackalloc byte[OperandEncoding.StackScratchBytes];
+        Func<CodecDescriptor, uint> bindCodec = Source.BindCodec;
+        if (OperandEncoding.TrySelectionInto(Binding, projection, bindCodec, expressions, scratch, out var length))
+            Clause(6, scratch[..length]);
+        else
+            Clause(6, B(1, OperandEncoding.Tokens(Binding, expressions), 8), B(2, OperandEncoding.Projection(projection, bindCodec, expressions.Select(e => e.In(Binding)).ToArray())));
         _selection = projection; return new QuerySelection<T>(this, projection);
     });
     internal void Selection<T>(Projection<T> projection)
