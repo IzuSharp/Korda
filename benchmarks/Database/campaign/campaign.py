@@ -588,7 +588,8 @@ class Campaign:
         total=sum(segment['accepted_effective_seconds'] for segment in segments)
         complete=not failures and len(segments)==8 and total>=14400
         save(self.root/'campaign-summary.json',dict(schema_version=1,complete=complete,segments=segments,
-            accepted_segment_count=len(segments),accepted_effective_seconds=total,
+            observed_segment_count=len(segments),observed_effective_seconds=total,
+            accepted_segment_count=len(segments) if complete else 0,accepted_effective_seconds=total if complete else 0,
             contract_sha256=self.contract_sha,config_sha256=self.config_sha,
             integrity_failures=failures,framework_zero_allocation_claimed=False,physical_host_exclusivity='not established'))
         if not complete:raise RuntimeError('The campaign does not have eight complete same-VM segments: '+','.join(failures))

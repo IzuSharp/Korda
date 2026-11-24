@@ -206,6 +206,7 @@ jobs:
             ${{ runner.temp }}/db-perf-01-build/*/*.log
             ${{ runner.temp }}/db-perf-01-build/*/*.json
             ${{ runner.temp }}/db-perf-01-build/*/evidence/
+            ${{ runner.temp }}/db-perf-01-build/*/logs/
             ${{ runner.temp }}/db-perf-01-build/*/generated/
             ${{ runner.temp }}/db-perf-01-build/*/app/*.cs
             ${{ runner.temp }}/db-perf-01-build/*/common/*.cs
