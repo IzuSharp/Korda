@@ -1,6 +1,6 @@
 # Korda.Data API reference
 
-Generated from the compiled product assembly and its XML comments by `tests/Data.Abstractions/ApiCheck`. Covers data descriptors and transport, static model annotations, and shared ORM errors. Database provider execution remains in the database assemblies. Exact declarations retain the pinned Design identity in `public-api.expected.json`.
+Generated from the compiled product assembly and its XML comments by `tests/Data.Abstractions/ApiCheck`. Covers data descriptors and transport, static model annotations, and shared ORM errors. Database provider execution remains in the database assemblies. Exact declarations retain the pinned Design identity in `public-api.expected.json`, with the explicit DB-Rename-01 Attribute name migration recorded in `src/Query.Generator/db-rename-01.names.json`.
 
 ## `F:Korda.Data.DatabaseErrorKind.ConcurrentUse`
 
@@ -415,6 +415,136 @@ public Korda.Data.DatabaseException.DatabaseException(string message, Korda.Data
 **exception:** is null.
 
 **exception:** is undefined.
+
+## `M:Korda.Data.DbCodecAttribute.#ctor(System.Type,System.Type,System.String)`
+
+```csharp
+public Korda.Data.DbCodecAttribute.DbCodecAttribute(System.Type valueType, System.Type providerType, string memberName)
+```
+
+**summary:** Declares a reusable static codec policy.
+
+**param valueType:** The closed, nonnullable CLR type whose properties use this default.
+
+**param providerType:** The accessible type declaring the static codec field or getter.
+
+**param memberName:** The exact accessible static member name, normally supplied with nameof.
+
+**exception:** A type is null.
+
+**exception:** The member name is empty or whitespace.
+
+**inheritdoc:**
+
+## `M:Korda.Data.DbColumnAttribute.#ctor(System.String)`
+
+```csharp
+public Korda.Data.DbColumnAttribute.DbColumnAttribute(string name)
+```
+
+**summary:** Declares the exact store column name.
+
+**param name:** A nonempty store identifier.
+
+**exception:** The name is empty or whitespace.
+
+**inheritdoc:**
+
+## `M:Korda.Data.DbConstructorAttribute.#ctor`
+
+```csharp
+public Korda.Data.DbConstructorAttribute.DbConstructorAttribute()
+```
+
+Compiler-generated member; inherits the documented type semantics.
+
+## `M:Korda.Data.DbIgnoreAttribute.#ctor`
+
+```csharp
+public Korda.Data.DbIgnoreAttribute.DbIgnoreAttribute()
+```
+
+Compiler-generated member; inherits the documented type semantics.
+
+## `M:Korda.Data.DbKeyAttribute.#ctor`
+
+```csharp
+public Korda.Data.DbKeyAttribute.DbKeyAttribute()
+```
+
+Compiler-generated member; inherits the documented type semantics.
+
+## `M:Korda.Data.DbParameterAttribute.#ctor(System.String)`
+
+```csharp
+public Korda.Data.DbParameterAttribute.DbParameterAttribute(string propertyName)
+```
+
+**summary:** Declares the exact CLR property supplying this parameter.
+
+**param propertyName:** A nonempty, case-sensitive CLR property name.
+
+**exception:** The name is empty or whitespace.
+
+**inheritdoc:**
+
+## `M:Korda.Data.DbProjectionAttribute.#ctor`
+
+```csharp
+public Korda.Data.DbProjectionAttribute.DbProjectionAttribute()
+```
+
+Compiler-generated member; inherits the documented type semantics.
+
+## `M:Korda.Data.DbTableAttribute.#ctor`
+
+```csharp
+public Korda.Data.DbTableAttribute.DbTableAttribute()
+```
+
+**summary:** Uses the exact CLR type name and infers a unique non-null Id primary key.
+
+**remarks:** There is no pluralization or casing conversion. Explicit keys take precedence; set InferPrimaryKey to false to declare a keyless model.
+
+## `M:Korda.Data.DbTableAttribute.#ctor(System.String)`
+
+```csharp
+public Korda.Data.DbTableAttribute.DbTableAttribute(string name)
+```
+
+**summary:** Declares the exact store table name.
+
+**param name:** A nonempty table identifier; casing is preserved.
+
+**exception:** The name is empty or whitespace.
+
+**inheritdoc:**
+
+## `M:Korda.Data.DbUseCodecAttribute.#ctor(System.Type,System.String)`
+
+```csharp
+public Korda.Data.DbUseCodecAttribute.DbUseCodecAttribute(System.Type providerType, string memberName)
+```
+
+**summary:** Selects an accessible static codec field or getter.
+
+**param providerType:** The accessible declaring type.
+
+**param memberName:** The exact static member name, normally supplied with nameof.
+
+**exception:** The provider type is null.
+
+**exception:** The member name is empty or whitespace.
+
+**inheritdoc:**
+
+## `M:Korda.Data.DbVersionAttribute.#ctor`
+
+```csharp
+public Korda.Data.DbVersionAttribute.DbVersionAttribute()
+```
+
+Compiler-generated member; inherits the documented type semantics.
 
 ## `M:Korda.Data.EntityKey`1.And``1(Korda.Data.Column{`0,``0},``0)`
 
@@ -988,136 +1118,6 @@ public bool Korda.Data.Table<TEntity>.TryGetColumn<T>(string name, Korda.Data.Va
 
 **exception:** A required argument is null.
 
-## `M:Korda.Data.WeaveCodecAttribute.#ctor(System.Type,System.Type,System.String)`
-
-```csharp
-public Korda.Data.WeaveCodecAttribute.WeaveCodecAttribute(System.Type valueType, System.Type providerType, string memberName)
-```
-
-**summary:** Declares a reusable static codec policy.
-
-**param valueType:** The closed, nonnullable CLR type whose properties use this default.
-
-**param providerType:** The accessible type declaring the static codec field or getter.
-
-**param memberName:** The exact accessible static member name, normally supplied with nameof.
-
-**exception:** A type is null.
-
-**exception:** The member name is empty or whitespace.
-
-**inheritdoc:**
-
-## `M:Korda.Data.WeaveColumnAttribute.#ctor(System.String)`
-
-```csharp
-public Korda.Data.WeaveColumnAttribute.WeaveColumnAttribute(string name)
-```
-
-**summary:** Declares the exact store column name.
-
-**param name:** A nonempty store identifier.
-
-**exception:** The name is empty or whitespace.
-
-**inheritdoc:**
-
-## `M:Korda.Data.WeaveConstructorAttribute.#ctor`
-
-```csharp
-public Korda.Data.WeaveConstructorAttribute.WeaveConstructorAttribute()
-```
-
-Compiler-generated member; inherits the documented type semantics.
-
-## `M:Korda.Data.WeaveIgnoreAttribute.#ctor`
-
-```csharp
-public Korda.Data.WeaveIgnoreAttribute.WeaveIgnoreAttribute()
-```
-
-Compiler-generated member; inherits the documented type semantics.
-
-## `M:Korda.Data.WeaveKeyAttribute.#ctor`
-
-```csharp
-public Korda.Data.WeaveKeyAttribute.WeaveKeyAttribute()
-```
-
-Compiler-generated member; inherits the documented type semantics.
-
-## `M:Korda.Data.WeaveParameterAttribute.#ctor(System.String)`
-
-```csharp
-public Korda.Data.WeaveParameterAttribute.WeaveParameterAttribute(string propertyName)
-```
-
-**summary:** Declares the exact CLR property supplying this parameter.
-
-**param propertyName:** A nonempty, case-sensitive CLR property name.
-
-**exception:** The name is empty or whitespace.
-
-**inheritdoc:**
-
-## `M:Korda.Data.WeaveProjectionAttribute.#ctor`
-
-```csharp
-public Korda.Data.WeaveProjectionAttribute.WeaveProjectionAttribute()
-```
-
-Compiler-generated member; inherits the documented type semantics.
-
-## `M:Korda.Data.WeaveTableAttribute.#ctor`
-
-```csharp
-public Korda.Data.WeaveTableAttribute.WeaveTableAttribute()
-```
-
-**summary:** Uses the exact CLR type name and infers a unique non-null Id primary key.
-
-**remarks:** There is no pluralization or casing conversion. Explicit keys take precedence; set InferPrimaryKey to false to declare a keyless model.
-
-## `M:Korda.Data.WeaveTableAttribute.#ctor(System.String)`
-
-```csharp
-public Korda.Data.WeaveTableAttribute.WeaveTableAttribute(string name)
-```
-
-**summary:** Declares the exact store table name.
-
-**param name:** A nonempty table identifier; casing is preserved.
-
-**exception:** The name is empty or whitespace.
-
-**inheritdoc:**
-
-## `M:Korda.Data.WeaveUseCodecAttribute.#ctor(System.Type,System.String)`
-
-```csharp
-public Korda.Data.WeaveUseCodecAttribute.WeaveUseCodecAttribute(System.Type providerType, string memberName)
-```
-
-**summary:** Selects an accessible static codec field or getter.
-
-**param providerType:** The accessible declaring type.
-
-**param memberName:** The exact static member name, normally supplied with nameof.
-
-**exception:** The provider type is null.
-
-**exception:** The member name is empty or whitespace.
-
-**inheritdoc:**
-
-## `M:Korda.Data.WeaveVersionAttribute.#ctor`
-
-```csharp
-public Korda.Data.WeaveVersionAttribute.WeaveVersionAttribute()
-```
-
-Compiler-generated member; inherits the documented type semantics.
-
 ## `P:Korda.Data.Codecs.Boolean`
 
 ```csharp
@@ -1358,6 +1358,56 @@ public string? Korda.Data.DatabaseException.ProviderCode { get; }
 
 **summary:** Gets the optional provider code without interpreting it as retry authorization.
 
+## `P:Korda.Data.DbColumnAttribute.Generated`
+
+```csharp
+public bool Korda.Data.DbColumnAttribute.Generated { get; init; }
+```
+
+**summary:** Gets or initializes whether the database supplies the value on insertion.
+
+**inheritdoc:**
+
+## `P:Korda.Data.DbProjectionAttribute.DescriptorName`
+
+```csharp
+public string? Korda.Data.DbProjectionAttribute.DescriptorName { get; init; }
+```
+
+**summary:** Gets or initializes the generated descriptor class name; default is DtoNameMapping.
+
+**inheritdoc:**
+
+## `P:Korda.Data.DbTableAttribute.DescriptorName`
+
+```csharp
+public string? Korda.Data.DbTableAttribute.DescriptorName { get; init; }
+```
+
+**summary:** Gets or initializes the generated static descriptor class name; default is EntityNameMapping.
+
+**inheritdoc:**
+
+## `P:Korda.Data.DbTableAttribute.InferPrimaryKey`
+
+```csharp
+public bool Korda.Data.DbTableAttribute.InferPrimaryKey { get; init; }
+```
+
+**summary:** Gets or initializes whether a unique Id property supplies the key when no explicit key is declared.
+
+**remarks:** The parameterless constructor enables this convention. The existing named-table constructor keeps it disabled by default. A nullable or ambiguous inferred key is a compilation error.
+
+## `P:Korda.Data.DbTableAttribute.Schema`
+
+```csharp
+public string? Korda.Data.DbTableAttribute.Schema { get; init; }
+```
+
+**summary:** Gets or initializes the optional exact schema name.
+
+**inheritdoc:**
+
 ## `P:Korda.Data.Projection`1.ShapeHash`
 
 ```csharp
@@ -1458,56 +1508,6 @@ public string Korda.Data.ValueCodec<T>.Name { get; }
 
 **summary:** Gets the descriptive scalar codec name.
 
-## `P:Korda.Data.WeaveColumnAttribute.Generated`
-
-```csharp
-public bool Korda.Data.WeaveColumnAttribute.Generated { get; init; }
-```
-
-**summary:** Gets or initializes whether the database supplies the value on insertion.
-
-**inheritdoc:**
-
-## `P:Korda.Data.WeaveProjectionAttribute.DescriptorName`
-
-```csharp
-public string? Korda.Data.WeaveProjectionAttribute.DescriptorName { get; init; }
-```
-
-**summary:** Gets or initializes the generated descriptor class name; default is DtoNameMapping.
-
-**inheritdoc:**
-
-## `P:Korda.Data.WeaveTableAttribute.DescriptorName`
-
-```csharp
-public string? Korda.Data.WeaveTableAttribute.DescriptorName { get; init; }
-```
-
-**summary:** Gets or initializes the generated static descriptor class name; default is EntityNameMapping.
-
-**inheritdoc:**
-
-## `P:Korda.Data.WeaveTableAttribute.InferPrimaryKey`
-
-```csharp
-public bool Korda.Data.WeaveTableAttribute.InferPrimaryKey { get; init; }
-```
-
-**summary:** Gets or initializes whether a unique Id property supplies the key when no explicit key is declared.
-
-**remarks:** The parameterless constructor enables this convention. The existing named-table constructor keeps it disabled by default. A nullable or ambiguous inferred key is a compilation error.
-
-## `P:Korda.Data.WeaveTableAttribute.Schema`
-
-```csharp
-public string? Korda.Data.WeaveTableAttribute.Schema { get; init; }
-```
-
-**summary:** Gets or initializes the optional exact schema name.
-
-**inheritdoc:**
-
 ## `T:Korda.Data.Changes`1`
 
 ```csharp
@@ -1603,6 +1603,116 @@ public class Korda.Data.DatabaseException : System.Exception
 **summary:** Preserves a bounded provider-neutral failure and correlation identity.
 
 **remarks:** Diagnostic values are immutable and remain readable after cleanup. Construction loads no native engine. A transient cause is not permission to retry a write; outcome and application idempotency remain separate.
+
+## `T:Korda.Data.DbCodecAttribute`
+
+```csharp
+[System.AttributeUsageAttribute(System.AttributeTargets.Assembly, AllowMultiple = true)]
+public sealed class Korda.Data.DbCodecAttribute : System.Attribute
+```
+
+**summary:** Declares one compilation-wide default codec for a closed non-null CLR value type.
+
+**remarks:** The generator reads an accessible static field or getter of exactly ValueCodec<T> from the supplied provider type. The value is captured when each generated descriptor initializes. Nullable properties wrap this base policy. Duplicate defaults and incompatible members fail compilation; no runtime type registry is created.
+
+## `T:Korda.Data.DbColumnAttribute`
+
+```csharp
+[System.AttributeUsageAttribute(System.AttributeTargets.Property, Inherited = false)]
+public sealed class Korda.Data.DbColumnAttribute : System.Attribute
+```
+
+**summary:** Overrides a property's exact store name and generated-value policy.
+
+**remarks:** Without this attribute the CLR property symbol name is used unchanged. The generated column member keeps its CLR spelling.
+
+## `T:Korda.Data.DbConstructorAttribute`
+
+```csharp
+[System.AttributeUsageAttribute(System.AttributeTargets.Constructor, Inherited = false)]
+public sealed class Korda.Data.DbConstructorAttribute : System.Attribute
+```
+
+**summary:** Selects the accessible constructor used by generated table and DTO readers.
+
+**remarks:** Exactly one constructor may be selected. Every parameter must map to one compatible property and remaining properties must have accessible setters or init accessors. Without this attribute the existing unique-constructor rule applies.
+
+## `T:Korda.Data.DbIgnoreAttribute`
+
+```csharp
+[System.AttributeUsageAttribute(System.AttributeTargets.Property, Inherited = false)]
+public sealed class Korda.Data.DbIgnoreAttribute : System.Attribute
+```
+
+**summary:** Excludes a property from generated metadata and row serialization.
+
+**remarks:** Combining Ignore with another mapping annotation is inconsistent and rejected. Required constructor inputs still need a supported static mapping.
+
+## `T:Korda.Data.DbKeyAttribute`
+
+```csharp
+[System.AttributeUsageAttribute(System.AttributeTargets.Property, Inherited = false)]
+public sealed class Korda.Data.DbKeyAttribute : System.Attribute
+```
+
+**summary:** Marks a non-null primary-key property in deterministic projection order.
+
+**remarks:** Nullable keys are rejected at compilation and again by the static descriptor builder. Explicit keys take precedence over the opt-in Id convention.
+
+## `T:Korda.Data.DbParameterAttribute`
+
+```csharp
+[System.AttributeUsageAttribute(System.AttributeTargets.Parameter, Inherited = false)]
+public sealed class Korda.Data.DbParameterAttribute : System.Attribute
+```
+
+**summary:** Associates a generated reader's constructor parameter with an exact CLR property name.
+
+**remarks:** Use nameof(Property) when a constructor parameter has a different name. This does not rename the store column or result alias. Duplicate, missing and type-incompatible associations fail compilation.
+
+## `T:Korda.Data.DbProjectionAttribute`
+
+```csharp
+[System.AttributeUsageAttribute(System.AttributeTargets.Class, Inherited = false)]
+public sealed class Korda.Data.DbProjectionAttribute : System.Attribute
+```
+
+**summary:** Generates a reusable static SQL row projection and a typed Fluent expression binder.
+
+**remarks:** The attributed ordinary class or record is an owned DTO, not a table. Its descriptor exposes Row for parameterized SQL and Bind for exactly selected Fluent expressions. Explicit column attributes supply result aliases; no reflection or native recompilation is required.
+
+## `T:Korda.Data.DbTableAttribute`
+
+```csharp
+[System.AttributeUsageAttribute(System.AttributeTargets.Class, Inherited = false)]
+public sealed class Korda.Data.DbTableAttribute : System.Attribute
+```
+
+**summary:** Opts a model into deterministic, static table and DTO mapping generation.
+
+**remarks:** The generator reads source symbols and emits the same TableBuilder calls as manual metadata. It never opens a database, loads a native module, compiles native code or discovers runtime model types.
+
+## `T:Korda.Data.DbUseCodecAttribute`
+
+```csharp
+[System.AttributeUsageAttribute(System.AttributeTargets.Property, Inherited = false)]
+public sealed class Korda.Data.DbUseCodecAttribute : System.Attribute
+```
+
+**summary:** Overrides a property's automatic or compilation-wide codec with one exact static policy.
+
+**remarks:** The member must expose ValueCodec<T> for the nonnullable property type; the generator adds the nullable wrapper when needed. The same policy is used by writes, generated readers and Fluent projections.
+
+## `T:Korda.Data.DbVersionAttribute`
+
+```csharp
+[System.AttributeUsageAttribute(System.AttributeTargets.Property, Inherited = false)]
+public sealed class Korda.Data.DbVersionAttribute : System.Attribute
+```
+
+**summary:** Marks an explicit optimistic-concurrency token.
+
+**remarks:** Generated metadata sets IsConcurrencyToken. The application supplies expected and changed values; no automatic version increment occurs.
 
 ## `T:Korda.Data.EntityKey`1`
 
@@ -1779,114 +1889,4 @@ public sealed class Korda.Data.ValueCodec<T>
 **typeparam T:** The statically known CLR value type.
 
 **remarks:** Instances are immutable and shareable. IDs are logical metadata, not source-owned native handles. Nullable wrappers preserve the logical ID. Configured decimal identities include precision and scale. No native runtime is loaded; provider conversions and capability enforcement belong to B07.
-
-## `T:Korda.Data.WeaveCodecAttribute`
-
-```csharp
-[System.AttributeUsageAttribute(System.AttributeTargets.Assembly, AllowMultiple = true)]
-public sealed class Korda.Data.WeaveCodecAttribute : System.Attribute
-```
-
-**summary:** Declares one compilation-wide default codec for a closed non-null CLR value type.
-
-**remarks:** The generator reads an accessible static field or getter of exactly ValueCodec<T> from the supplied provider type. The value is captured when each generated descriptor initializes. Nullable properties wrap this base policy. Duplicate defaults and incompatible members fail compilation; no runtime type registry is created.
-
-## `T:Korda.Data.WeaveColumnAttribute`
-
-```csharp
-[System.AttributeUsageAttribute(System.AttributeTargets.Property, Inherited = false)]
-public sealed class Korda.Data.WeaveColumnAttribute : System.Attribute
-```
-
-**summary:** Overrides a property's exact store name and generated-value policy.
-
-**remarks:** Without this attribute the CLR property symbol name is used unchanged. The generated column member keeps its CLR spelling.
-
-## `T:Korda.Data.WeaveConstructorAttribute`
-
-```csharp
-[System.AttributeUsageAttribute(System.AttributeTargets.Constructor, Inherited = false)]
-public sealed class Korda.Data.WeaveConstructorAttribute : System.Attribute
-```
-
-**summary:** Selects the accessible constructor used by generated table and DTO readers.
-
-**remarks:** Exactly one constructor may be selected. Every parameter must map to one compatible property and remaining properties must have accessible setters or init accessors. Without this attribute the existing unique-constructor rule applies.
-
-## `T:Korda.Data.WeaveIgnoreAttribute`
-
-```csharp
-[System.AttributeUsageAttribute(System.AttributeTargets.Property, Inherited = false)]
-public sealed class Korda.Data.WeaveIgnoreAttribute : System.Attribute
-```
-
-**summary:** Excludes a property from generated metadata and row serialization.
-
-**remarks:** Combining Ignore with another mapping annotation is inconsistent and rejected. Required constructor inputs still need a supported static mapping.
-
-## `T:Korda.Data.WeaveKeyAttribute`
-
-```csharp
-[System.AttributeUsageAttribute(System.AttributeTargets.Property, Inherited = false)]
-public sealed class Korda.Data.WeaveKeyAttribute : System.Attribute
-```
-
-**summary:** Marks a non-null primary-key property in deterministic projection order.
-
-**remarks:** Nullable keys are rejected at compilation and again by the static descriptor builder. Explicit keys take precedence over the opt-in Id convention.
-
-## `T:Korda.Data.WeaveParameterAttribute`
-
-```csharp
-[System.AttributeUsageAttribute(System.AttributeTargets.Parameter, Inherited = false)]
-public sealed class Korda.Data.WeaveParameterAttribute : System.Attribute
-```
-
-**summary:** Associates a generated reader's constructor parameter with an exact CLR property name.
-
-**remarks:** Use nameof(Property) when a constructor parameter has a different name. This does not rename the store column or result alias. Duplicate, missing and type-incompatible associations fail compilation.
-
-## `T:Korda.Data.WeaveProjectionAttribute`
-
-```csharp
-[System.AttributeUsageAttribute(System.AttributeTargets.Class, Inherited = false)]
-public sealed class Korda.Data.WeaveProjectionAttribute : System.Attribute
-```
-
-**summary:** Generates a reusable static SQL row projection and a typed Fluent expression binder.
-
-**remarks:** The attributed ordinary class or record is an owned DTO, not a table. Its descriptor exposes Row for parameterized SQL and Bind for exactly selected Fluent expressions. Explicit column attributes supply result aliases; no reflection or native recompilation is required.
-
-## `T:Korda.Data.WeaveTableAttribute`
-
-```csharp
-[System.AttributeUsageAttribute(System.AttributeTargets.Class, Inherited = false)]
-public sealed class Korda.Data.WeaveTableAttribute : System.Attribute
-```
-
-**summary:** Opts a model into deterministic, static table and DTO mapping generation.
-
-**remarks:** The generator reads source symbols and emits the same TableBuilder calls as manual metadata. It never opens a database, loads a native module, compiles native code or discovers runtime model types.
-
-## `T:Korda.Data.WeaveUseCodecAttribute`
-
-```csharp
-[System.AttributeUsageAttribute(System.AttributeTargets.Property, Inherited = false)]
-public sealed class Korda.Data.WeaveUseCodecAttribute : System.Attribute
-```
-
-**summary:** Overrides a property's automatic or compilation-wide codec with one exact static policy.
-
-**remarks:** The member must expose ValueCodec<T> for the nonnullable property type; the generator adds the nullable wrapper when needed. The same policy is used by writes, generated readers and Fluent projections.
-
-## `T:Korda.Data.WeaveVersionAttribute`
-
-```csharp
-[System.AttributeUsageAttribute(System.AttributeTargets.Property, Inherited = false)]
-public sealed class Korda.Data.WeaveVersionAttribute : System.Attribute
-```
-
-**summary:** Marks an explicit optimistic-concurrency token.
-
-**remarks:** Generated metadata sets IsConcurrencyToken. The application supplies expected and changed values; no automatic version increment occurs.
 

@@ -30,10 +30,10 @@ public sealed class ModelGenerator : IIncrementalGenerator
     /// <summary>Discovers only explicit model attributes and bounded compile-time profile hints.</summary>
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        var tables = context.SyntaxProvider.ForAttributeWithMetadataName(Prefix + "WeaveTableAttribute",
+        var tables = context.SyntaxProvider.ForAttributeWithMetadataName(Prefix + "DbTableAttribute",
             static (node, _) => node is TypeDeclarationSyntax,
             static (input, _) => (INamedTypeSymbol)input.TargetSymbol).Collect();
-        var projections = context.SyntaxProvider.ForAttributeWithMetadataName(Prefix + "WeaveProjectionAttribute",
+        var projections = context.SyntaxProvider.ForAttributeWithMetadataName(Prefix + "DbProjectionAttribute",
             static (node, _) => node is TypeDeclarationSyntax,
             static (input, _) => (INamedTypeSymbol)input.TargetSymbol).Collect();
         var inputs = tables.Combine(projections).Select(static (input, _) => input.Left.AddRange(input.Right).Distinct<INamedTypeSymbol>(SymbolEqualityComparer.Default).ToImmutableArray());
@@ -55,16 +55,16 @@ public sealed class ModelGenerator : IIncrementalGenerator
     {
         var names = new HashSet<string>(StringComparer.Ordinal);
         HashSet<string>? codecs = enabled.Length == 0 ? null : new HashSet<string>(enabled.Split(',').Select(x => x.Trim()), StringComparer.Ordinal);
-        var policies = compilation.Assembly.GetAttributes().Where(x => Has(x, "WeaveCodecAttribute")).ToArray();
+        var policies = compilation.Assembly.GetAttributes().Where(x => Has(x, "DbCodecAttribute")).ToArray();
         foreach (var model in models.OrderBy(x => x.ToDisplayString(), StringComparer.Ordinal))
         {
             output.CancellationToken.ThrowIfCancellationRequested();
             if (model.TypeKind != TypeKind.Class || model.IsStatic || model.IsAbstract || model.IsFileLocal || model.TypeParameters.Length != 0 || model.ContainingType is not null || model.BaseType?.SpecialType != SpecialType.System_Object)
             { Report(output, InputError, model, model.Name, "models must be closed, concrete top-level classes or records with no model base class"); continue; }
-            var declarations = model.GetAttributes().Where(x => Has(x, "WeaveTableAttribute") || Has(x, "WeaveProjectionAttribute")).ToArray();
+            var declarations = model.GetAttributes().Where(x => Has(x, "DbTableAttribute") || Has(x, "DbProjectionAttribute")).ToArray();
             if (declarations.Length != 1) { Report(output, MetadataError, model, model.Name, "a model requires exactly one table or projection declaration"); continue; }
             var table = declarations[0];
-            bool projection = Has(table, "WeaveProjectionAttribute");
+            bool projection = Has(table, "DbProjectionAttribute");
             bool convention = !projection && (Named(table, "InferPrimaryKey") is bool infer ? infer : table.ConstructorArguments.Length == 0);
             string? tableName = projection ? null : table.ConstructorArguments.Length == 0 ? model.Name : table.ConstructorArguments[0].Value as string;
             string? schema = Named(table, "Schema") as string;
@@ -76,27 +76,27 @@ public sealed class ModelGenerator : IIncrementalGenerator
             var members = new List<Property>();
             var storeNames = new HashSet<string>(StringComparer.Ordinal);
             var publicProperties = model.GetMembers().OfType<IPropertySymbol>().Where(x => !x.IsStatic && x.DeclaredAccessibility == Accessibility.Public).ToArray();
-            var explicitKeys = publicProperties.Any(x => x.GetAttributes().Any(a => Has(a, "WeaveKeyAttribute")));
-            var inferredKeys = publicProperties.Where(x => !x.GetAttributes().Any(a => Has(a, "WeaveIgnoreAttribute")) && string.Equals(x.Name, "Id", StringComparison.OrdinalIgnoreCase)).ToArray();
+            var explicitKeys = publicProperties.Any(x => x.GetAttributes().Any(a => Has(a, "DbKeyAttribute")));
+            var inferredKeys = publicProperties.Where(x => !x.GetAttributes().Any(a => Has(a, "DbIgnoreAttribute")) && string.Equals(x.Name, "Id", StringComparison.OrdinalIgnoreCase)).ToArray();
             if (convention && !explicitKeys && inferredKeys.Length != 1)
             { Report(output, MetadataError, model, model.Name, "the key convention requires one unambiguous Id property, an explicit key, or InferPrimaryKey=false"); continue; }
             foreach (var property in model.GetMembers().OfType<IPropertySymbol>().OrderBy(x => x.Name, StringComparer.Ordinal))
             {
                 var attributes = property.GetAttributes();
-                bool ignore = attributes.Any(x => Has(x, "WeaveIgnoreAttribute"));
+                bool ignore = attributes.Any(x => Has(x, "DbIgnoreAttribute"));
                 if (ignore)
                 {
-                    if (attributes.Any(x => x.AttributeClass?.ContainingNamespace.ToDisplayString() == "Korda.Data" && !Has(x, "WeaveIgnoreAttribute")))
+                    if (attributes.Any(x => x.AttributeClass?.ContainingNamespace.ToDisplayString() == "Korda.Data" && !Has(x, "DbIgnoreAttribute")))
                     { Report(output, MetadataError, property, property.Name, "Ignore cannot be combined with mapping annotations"); valid = false; }
                     continue;
                 }
                 if (property.IsStatic || property.DeclaredAccessibility != Accessibility.Public) continue;
                 if (property.IsIndexer || property.GetMethod?.DeclaredAccessibility != Accessibility.Public || property.RefKind != RefKind.None)
                 { Report(output, InputError, property, property.Name, "mapped properties require a public ordinary getter"); valid = false; continue; }
-                var column = attributes.FirstOrDefault(x => Has(x, "WeaveColumnAttribute"));
+                var column = attributes.FirstOrDefault(x => Has(x, "DbColumnAttribute"));
                 string store = column?.ConstructorArguments.FirstOrDefault().Value as string ?? property.Name;
-                bool key = attributes.Any(x => Has(x, "WeaveKeyAttribute")) || convention && !explicitKeys && SymbolEqualityComparer.Default.Equals(property, inferredKeys[0]);
-                bool version = attributes.Any(x => Has(x, "WeaveVersionAttribute"));
+                bool key = attributes.Any(x => Has(x, "DbKeyAttribute")) || convention && !explicitKeys && SymbolEqualityComparer.Default.Equals(property, inferredKeys[0]);
+                bool version = attributes.Any(x => Has(x, "DbVersionAttribute"));
                 bool generated = column is not null && Named(column, "Generated") is true;
                 if (string.IsNullOrWhiteSpace(store) || !storeNames.Add(store) || !projection && (property.Name is "Table" or "Row" || property.Name == descriptor))
                 { Report(output, MetadataError, property, property.Name, "duplicate/invalid store name or reserved descriptor member"); valid = false; continue; }
@@ -118,7 +118,7 @@ public sealed class ModelGenerator : IIncrementalGenerator
             if (!valid) continue;
             if (members.Count == 0)
             { Report(output, MetadataError, model, model.Name, "at least one supported mapped property is required"); continue; }
-            var selected = model.InstanceConstructors.Where(x => x.GetAttributes().Any(a => Has(a, "WeaveConstructorAttribute"))).ToArray();
+            var selected = model.InstanceConstructors.Where(x => x.GetAttributes().Any(a => Has(a, "DbConstructorAttribute"))).ToArray();
             if (selected.Length > 1) { Report(output, ConstructorError, model, model.Name, "more than one constructor is explicitly selected"); continue; }
             var constructors = (selected.Length == 1 ? selected : model.InstanceConstructors.AsEnumerable())
                 .Where(x => x.DeclaredAccessibility is Accessibility.Public or Accessibility.Internal or Accessibility.ProtectedOrInternal)
@@ -230,7 +230,7 @@ public sealed class ModelGenerator : IIncrementalGenerator
         valid = true;
         ITypeSymbol value = property.Type is INamedTypeSymbol nullable && nullable.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T
             ? nullable.TypeArguments[0] : property.Type.WithNullableAnnotation(NullableAnnotation.NotAnnotated);
-        var policy = property.GetAttributes().FirstOrDefault(x => Has(x, "WeaveUseCodecAttribute"));
+        var policy = property.GetAttributes().FirstOrDefault(x => Has(x, "DbUseCodecAttribute"));
         int offset = 0;
         if (policy is null)
         {
@@ -259,7 +259,7 @@ public sealed class ModelGenerator : IIncrementalGenerator
 
     private static bool Matches(IParameterSymbol parameter, Property property)
     {
-        var explicitName = parameter.GetAttributes().FirstOrDefault(a => Has(a, "WeaveParameterAttribute"));
+        var explicitName = parameter.GetAttributes().FirstOrDefault(a => Has(a, "DbParameterAttribute"));
         return explicitName is null ? string.Equals(property.Symbol.Name, parameter.Name, StringComparison.OrdinalIgnoreCase)
             : explicitName.ConstructorArguments.Length == 1 && explicitName.ConstructorArguments[0].Value is string name && property.Symbol.Name == name;
     }

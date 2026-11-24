@@ -132,7 +132,7 @@ try:
                     'labels (Id INTEGER PRIMARY KEY, Text TEXT NOT NULL)': 'labels (Id INTEGER PRIMARY KEY, Text TEXT NOT NULL, Rank INTEGER NOT NULL)',
                     "labels VALUES (1,'second')": "labels VALUES (1,'second',9)",
                     'new Label(1, "second")': 'new Label(1, "second", 9)',
-                    'record Label([property: WeaveKey] long Id, string Text);': 'record Label([property: WeaveKey] long Id, string Text, long Rank);',
+                    'record Label([property: DbKey] long Id, string Text);': 'record Label([property: DbKey] long Id, string Text, long Rank);',
                     'internal static readonly Table<Label> Table': 'private static readonly Column<Label, long> Rank = Builder.Column("Rank", Codecs.Int64);\n    internal static readonly Table<Label> Table',
                     'new Label(row.Get(Id), row.Get(Text))': 'new Label(row.Get(Id), row.Get(Text), row.Get(Rank))',
                     'row.Set(Text, value.Text);': 'row.Set(Text, value.Text); row.Set(Rank, value.Rank);'

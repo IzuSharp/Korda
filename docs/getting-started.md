@@ -10,21 +10,23 @@ dotnet add package Korda.Database.PostgreSql --prerelease
 
 Each provider contains the shared managed assemblies, generator, build integration and its precompiled native library in one package. PostgreSQL applications need a reachable database server. For an unpublished development build, the candidate feed is `artifacts/public/feed` and its manifest records the exact versions.
 
+For existing models, apply the [database annotation rename](guides/db-attribute-upgrade.md) before rebuilding.
+
 ## 1. Define ordinary C# models
 
 The bundled source generator creates static descriptors. A parameterless
-`[WeaveTable]` preserves the CLR type/property spelling and infers a nonnullable
+`[DbTable]` preserves the CLR type/property spelling and infers a nonnullable
 `Id` key. Use exact names and explicit keys for an existing schema:
 
 ```csharp
 using Korda.Data;
 
-[WeaveTable("orders", DescriptorName = "Orders")]
+[DbTable("orders", DescriptorName = "Orders")]
 public sealed record Order(
-    [property: WeaveKey] long Id, string? Note,
-    [property: WeaveVersion] long Version);
+    [property: DbKey] long Id, string? Note,
+    [property: DbVersion] long Version);
 
-[WeaveProjection(DescriptorName = "OrderCards")]
+[DbProjection(DescriptorName = "OrderCards")]
 public sealed record OrderCard(long Id, string? Note);
 ```
 

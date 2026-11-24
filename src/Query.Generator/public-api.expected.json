@@ -1,18 +1,19 @@
 {
   "design_commit": "c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9",
+  "naming_migration": "DB-Rename-01",
   "symbols": {
-    "M:Korda.Data.WeaveColumnAttribute.#ctor(System.String)": "public Korda.Data.WeaveColumnAttribute.WeaveColumnAttribute(System.String name)",
-    "M:Korda.Data.WeaveIgnoreAttribute.#ctor": "public Korda.Data.WeaveIgnoreAttribute.WeaveIgnoreAttribute()",
-    "M:Korda.Data.WeaveKeyAttribute.#ctor": "public Korda.Data.WeaveKeyAttribute.WeaveKeyAttribute()",
-    "M:Korda.Data.WeaveTableAttribute.#ctor(System.String)": "public Korda.Data.WeaveTableAttribute.WeaveTableAttribute(System.String name)",
-    "M:Korda.Data.WeaveVersionAttribute.#ctor": "public Korda.Data.WeaveVersionAttribute.WeaveVersionAttribute()",
-    "P:Korda.Data.WeaveColumnAttribute.Generated": "public System.Boolean Korda.Data.WeaveColumnAttribute.Generated | getter=Public;setter=Public;init=True",
-    "P:Korda.Data.WeaveTableAttribute.DescriptorName": "public System.String? Korda.Data.WeaveTableAttribute.DescriptorName | getter=Public;setter=Public;init=True",
-    "P:Korda.Data.WeaveTableAttribute.Schema": "public System.String? Korda.Data.WeaveTableAttribute.Schema | getter=Public;setter=Public;init=True",
-    "T:Korda.Data.WeaveColumnAttribute": "Korda.Data.WeaveColumnAttribute | kind=Class;static=False;sealed=True;abstract=False;base=System.Attribute;interfaces=",
-    "T:Korda.Data.WeaveIgnoreAttribute": "Korda.Data.WeaveIgnoreAttribute | kind=Class;static=False;sealed=True;abstract=False;base=System.Attribute;interfaces=",
-    "T:Korda.Data.WeaveKeyAttribute": "Korda.Data.WeaveKeyAttribute | kind=Class;static=False;sealed=True;abstract=False;base=System.Attribute;interfaces=",
-    "T:Korda.Data.WeaveTableAttribute": "Korda.Data.WeaveTableAttribute | kind=Class;static=False;sealed=True;abstract=False;base=System.Attribute;interfaces=",
-    "T:Korda.Data.WeaveVersionAttribute": "Korda.Data.WeaveVersionAttribute | kind=Class;static=False;sealed=True;abstract=False;base=System.Attribute;interfaces="
+    "M:Korda.Data.DbColumnAttribute.#ctor(System.String)": "public Korda.Data.DbColumnAttribute.DbColumnAttribute(System.String name)",
+    "M:Korda.Data.DbIgnoreAttribute.#ctor": "public Korda.Data.DbIgnoreAttribute.DbIgnoreAttribute()",
+    "M:Korda.Data.DbKeyAttribute.#ctor": "public Korda.Data.DbKeyAttribute.DbKeyAttribute()",
+    "M:Korda.Data.DbTableAttribute.#ctor(System.String)": "public Korda.Data.DbTableAttribute.DbTableAttribute(System.String name)",
+    "M:Korda.Data.DbVersionAttribute.#ctor": "public Korda.Data.DbVersionAttribute.DbVersionAttribute()",
+    "P:Korda.Data.DbColumnAttribute.Generated": "public System.Boolean Korda.Data.DbColumnAttribute.Generated | getter=Public;setter=Public;init=True",
+    "P:Korda.Data.DbTableAttribute.DescriptorName": "public System.String? Korda.Data.DbTableAttribute.DescriptorName | getter=Public;setter=Public;init=True",
+    "P:Korda.Data.DbTableAttribute.Schema": "public System.String? Korda.Data.DbTableAttribute.Schema | getter=Public;setter=Public;init=True",
+    "T:Korda.Data.DbColumnAttribute": "Korda.Data.DbColumnAttribute | kind=Class;static=False;sealed=True;abstract=False;base=System.Attribute;interfaces=",
+    "T:Korda.Data.DbIgnoreAttribute": "Korda.Data.DbIgnoreAttribute | kind=Class;static=False;sealed=True;abstract=False;base=System.Attribute;interfaces=",
+    "T:Korda.Data.DbKeyAttribute": "Korda.Data.DbKeyAttribute | kind=Class;static=False;sealed=True;abstract=False;base=System.Attribute;interfaces=",
+    "T:Korda.Data.DbTableAttribute": "Korda.Data.DbTableAttribute | kind=Class;static=False;sealed=True;abstract=False;base=System.Attribute;interfaces=",
+    "T:Korda.Data.DbVersionAttribute": "Korda.Data.DbVersionAttribute | kind=Class;static=False;sealed=True;abstract=False;base=System.Attribute;interfaces="
   }
 }

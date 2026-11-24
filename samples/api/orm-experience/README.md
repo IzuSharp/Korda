@@ -2,7 +2,11 @@
 
 This is the complete example behind the [short integration tutorial](../../../docs/getting-started.md).
 `Models.cs` contains ordinary classes/records, shared custom-ID/money/JSON codecs
-and immutable DTOs. `Program.cs` uses generated descriptors with the existing
+and immutable DTOs. Its `[DbTable]`, `[DbProjection]`, `[DbKey]`,
+`[DbColumn]`, `[DbVersion]` and assembly `[DbCodec]` annotations use the current
+database names in `Korda.Data`; see the
+[annotation upgrade guide](../../../docs/guides/db-attribute-upgrade.md).
+`Program.cs` uses generated descriptors with the existing
 Fluent, SQL, write and administration APIs.
 
 The acceptance driver copies these files outside the Korda source tree and

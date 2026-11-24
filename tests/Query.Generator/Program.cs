@@ -28,17 +28,17 @@ Check(second.Key == Guid.Empty && second.Optional is null && second.When.Kind ==
 checks += ExperienceChecks.Run();
 Console.WriteLine($"B10 generated static DTO component: {checks} assertions; runtime dynamic code supported={System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported}. Native Host/Fluent composition is a separate acceptance row.");
 
-[WeaveTable("students", DescriptorName = "Students")]
-public sealed partial record Student([property: WeaveKey, WeaveColumn("id")] long Id, string Name, [property: WeaveColumn("email")] string? Email, [property: WeaveVersion, WeaveColumn("version")] long Version);
-[WeaveTable("class_models")]
+[DbTable("students", DescriptorName = "Students")]
+public sealed partial record Student([property: DbKey, DbColumn("id")] long Id, string Name, [property: DbColumn("email")] string? Email, [property: DbVersion, DbColumn("version")] long Version);
+[DbTable("class_models")]
 public sealed partial class ClassModel
 {
     public int Code { get; init; }
     public string Label { get; set; } = "";
-    [WeaveIgnore] public object? LocalOnly { get; set; }
+    [DbIgnore] public object? LocalOnly { get; set; }
 }
-[WeaveTable("second")]
-public sealed partial record Second([property: WeaveKey] Guid Key, short? Optional, DateTime When);
+[DbTable("second")]
+public sealed partial record Second([property: DbKey] Guid Key, short? Optional, DateTime When);
 
 internal sealed class OracleLease<T>(Projection<T> projection, object?[] values) : IRowLease, IDisposable
 {

@@ -1,6 +1,7 @@
 {
   "design_commit": "c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9",
   "source": "docs/api/public-api.json",
+  "naming_migration": "DB-Rename-01",
   "types": [
     "Korda.Data.Changes",
     "Korda.Data.Codecs",
@@ -26,11 +27,11 @@
     "Korda.Data.Table",
     "Korda.Data.TableBuilder",
     "Korda.Data.ValueCodec",
-    "Korda.Data.WeaveColumnAttribute",
-    "Korda.Data.WeaveIgnoreAttribute",
-    "Korda.Data.WeaveKeyAttribute",
-    "Korda.Data.WeaveTableAttribute",
-    "Korda.Data.WeaveVersionAttribute"
+    "Korda.Data.DbColumnAttribute",
+    "Korda.Data.DbIgnoreAttribute",
+    "Korda.Data.DbKeyAttribute",
+    "Korda.Data.DbTableAttribute",
+    "Korda.Data.DbVersionAttribute"
   ],
   "symbols": [
     {
@@ -3214,18 +3215,18 @@
       "semantic_policy": "Korda.Data.ValueCodec"
     },
     {
-      "id": "T:Korda.Data.WeaveColumnAttribute",
-      "signature": "[System.AttributeUsageAttribute(System.AttributeTargets.Property, Inherited = false)]\npublic sealed class Korda.Data.WeaveColumnAttribute : System.Attribute",
+      "id": "T:Korda.Data.DbColumnAttribute",
+      "signature": "[System.AttributeUsageAttribute(System.AttributeTargets.Property, Inherited = false)]\npublic sealed class Korda.Data.DbColumnAttribute : System.Attribute",
       "implicit_member": false,
       "kind": "NamedType",
       "type_kind": "Class",
       "parameters": [],
       "type_parameters": [],
-      "semantic_policy": "Korda.Data.WeaveColumnAttribute"
+      "semantic_policy": "Korda.Data.DbColumnAttribute"
     },
     {
-      "id": "M:Korda.Data.WeaveColumnAttribute.#ctor(System.String)",
-      "signature": "public Korda.Data.WeaveColumnAttribute.WeaveColumnAttribute(string name)",
+      "id": "M:Korda.Data.DbColumnAttribute.#ctor(System.String)",
+      "signature": "public Korda.Data.DbColumnAttribute.DbColumnAttribute(string name)",
       "implicit_member": false,
       "kind": "Method",
       "type_kind": null,
@@ -3244,71 +3245,71 @@
         }
       ],
       "type_parameters": [],
-      "semantic_policy": "Korda.Data.WeaveColumnAttribute"
+      "semantic_policy": "Korda.Data.DbColumnAttribute"
     },
     {
-      "id": "P:Korda.Data.WeaveColumnAttribute.Generated",
-      "signature": "public bool Korda.Data.WeaveColumnAttribute.Generated { get; init; }",
+      "id": "P:Korda.Data.DbColumnAttribute.Generated",
+      "signature": "public bool Korda.Data.DbColumnAttribute.Generated { get; init; }",
       "implicit_member": false,
       "kind": "Property",
       "type_kind": null,
       "parameters": [],
       "type_parameters": [],
-      "semantic_policy": "Korda.Data.WeaveColumnAttribute"
+      "semantic_policy": "Korda.Data.DbColumnAttribute"
     },
     {
-      "id": "T:Korda.Data.WeaveIgnoreAttribute",
-      "signature": "[System.AttributeUsageAttribute(System.AttributeTargets.Property, Inherited = false)]\npublic sealed class Korda.Data.WeaveIgnoreAttribute : System.Attribute",
+      "id": "T:Korda.Data.DbIgnoreAttribute",
+      "signature": "[System.AttributeUsageAttribute(System.AttributeTargets.Property, Inherited = false)]\npublic sealed class Korda.Data.DbIgnoreAttribute : System.Attribute",
       "implicit_member": false,
       "kind": "NamedType",
       "type_kind": "Class",
       "parameters": [],
       "type_parameters": [],
-      "semantic_policy": "Korda.Data.WeaveIgnoreAttribute"
+      "semantic_policy": "Korda.Data.DbIgnoreAttribute"
     },
     {
-      "id": "M:Korda.Data.WeaveIgnoreAttribute.#ctor",
-      "signature": "public Korda.Data.WeaveIgnoreAttribute.WeaveIgnoreAttribute()",
+      "id": "M:Korda.Data.DbIgnoreAttribute.#ctor",
+      "signature": "public Korda.Data.DbIgnoreAttribute.DbIgnoreAttribute()",
       "implicit_member": true,
       "kind": "Method",
       "type_kind": null,
       "parameters": [],
       "type_parameters": [],
-      "semantic_policy": "Korda.Data.WeaveIgnoreAttribute"
+      "semantic_policy": "Korda.Data.DbIgnoreAttribute"
     },
     {
-      "id": "T:Korda.Data.WeaveKeyAttribute",
-      "signature": "[System.AttributeUsageAttribute(System.AttributeTargets.Property, Inherited = false)]\npublic sealed class Korda.Data.WeaveKeyAttribute : System.Attribute",
+      "id": "T:Korda.Data.DbKeyAttribute",
+      "signature": "[System.AttributeUsageAttribute(System.AttributeTargets.Property, Inherited = false)]\npublic sealed class Korda.Data.DbKeyAttribute : System.Attribute",
       "implicit_member": false,
       "kind": "NamedType",
       "type_kind": "Class",
       "parameters": [],
       "type_parameters": [],
-      "semantic_policy": "Korda.Data.WeaveKeyAttribute"
+      "semantic_policy": "Korda.Data.DbKeyAttribute"
     },
     {
-      "id": "M:Korda.Data.WeaveKeyAttribute.#ctor",
-      "signature": "public Korda.Data.WeaveKeyAttribute.WeaveKeyAttribute()",
+      "id": "M:Korda.Data.DbKeyAttribute.#ctor",
+      "signature": "public Korda.Data.DbKeyAttribute.DbKeyAttribute()",
       "implicit_member": true,
       "kind": "Method",
       "type_kind": null,
       "parameters": [],
       "type_parameters": [],
-      "semantic_policy": "Korda.Data.WeaveKeyAttribute"
+      "semantic_policy": "Korda.Data.DbKeyAttribute"
     },
     {
-      "id": "T:Korda.Data.WeaveTableAttribute",
-      "signature": "[System.AttributeUsageAttribute(System.AttributeTargets.Class, Inherited = false)]\npublic sealed class Korda.Data.WeaveTableAttribute : System.Attribute",
+      "id": "T:Korda.Data.DbTableAttribute",
+      "signature": "[System.AttributeUsageAttribute(System.AttributeTargets.Class, Inherited = false)]\npublic sealed class Korda.Data.DbTableAttribute : System.Attribute",
       "implicit_member": false,
       "kind": "NamedType",
       "type_kind": "Class",
       "parameters": [],
       "type_parameters": [],
-      "semantic_policy": "Korda.Data.WeaveTableAttribute"
+      "semantic_policy": "Korda.Data.DbTableAttribute"
     },
     {
-      "id": "M:Korda.Data.WeaveTableAttribute.#ctor(System.String)",
-      "signature": "public Korda.Data.WeaveTableAttribute.WeaveTableAttribute(string name)",
+      "id": "M:Korda.Data.DbTableAttribute.#ctor(System.String)",
+      "signature": "public Korda.Data.DbTableAttribute.DbTableAttribute(string name)",
       "implicit_member": false,
       "kind": "Method",
       "type_kind": null,
@@ -3327,47 +3328,47 @@
         }
       ],
       "type_parameters": [],
-      "semantic_policy": "Korda.Data.WeaveTableAttribute"
+      "semantic_policy": "Korda.Data.DbTableAttribute"
     },
     {
-      "id": "P:Korda.Data.WeaveTableAttribute.DescriptorName",
-      "signature": "public string? Korda.Data.WeaveTableAttribute.DescriptorName { get; init; }",
+      "id": "P:Korda.Data.DbTableAttribute.DescriptorName",
+      "signature": "public string? Korda.Data.DbTableAttribute.DescriptorName { get; init; }",
       "implicit_member": false,
       "kind": "Property",
       "type_kind": null,
       "parameters": [],
       "type_parameters": [],
-      "semantic_policy": "Korda.Data.WeaveTableAttribute"
+      "semantic_policy": "Korda.Data.DbTableAttribute"
     },
     {
-      "id": "P:Korda.Data.WeaveTableAttribute.Schema",
-      "signature": "public string? Korda.Data.WeaveTableAttribute.Schema { get; init; }",
+      "id": "P:Korda.Data.DbTableAttribute.Schema",
+      "signature": "public string? Korda.Data.DbTableAttribute.Schema { get; init; }",
       "implicit_member": false,
       "kind": "Property",
       "type_kind": null,
       "parameters": [],
       "type_parameters": [],
-      "semantic_policy": "Korda.Data.WeaveTableAttribute"
+      "semantic_policy": "Korda.Data.DbTableAttribute"
     },
     {
-      "id": "T:Korda.Data.WeaveVersionAttribute",
-      "signature": "[System.AttributeUsageAttribute(System.AttributeTargets.Property, Inherited = false)]\npublic sealed class Korda.Data.WeaveVersionAttribute : System.Attribute",
+      "id": "T:Korda.Data.DbVersionAttribute",
+      "signature": "[System.AttributeUsageAttribute(System.AttributeTargets.Property, Inherited = false)]\npublic sealed class Korda.Data.DbVersionAttribute : System.Attribute",
       "implicit_member": false,
       "kind": "NamedType",
       "type_kind": "Class",
       "parameters": [],
       "type_parameters": [],
-      "semantic_policy": "Korda.Data.WeaveVersionAttribute"
+      "semantic_policy": "Korda.Data.DbVersionAttribute"
     },
     {
-      "id": "M:Korda.Data.WeaveVersionAttribute.#ctor",
-      "signature": "public Korda.Data.WeaveVersionAttribute.WeaveVersionAttribute()",
+      "id": "M:Korda.Data.DbVersionAttribute.#ctor",
+      "signature": "public Korda.Data.DbVersionAttribute.DbVersionAttribute()",
       "implicit_member": true,
       "kind": "Method",
       "type_kind": null,
       "parameters": [],
       "type_parameters": [],
-      "semantic_policy": "Korda.Data.WeaveVersionAttribute"
+      "semantic_policy": "Korda.Data.DbVersionAttribute"
     }
   ]
 }

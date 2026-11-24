@@ -208,6 +208,6 @@ internal sealed class DatabaseFixture : IAsyncDisposable
 }
 
 #if PUBLIC_PROVIDER_BUNDLE
-[WeaveTable("bundle_items", DescriptorName = "BundleItems")]
-internal sealed partial record BundleItem([property: WeaveKey] long Id);
+[DbTable("bundle_items", DescriptorName = "BundleItems")]
+internal sealed partial record BundleItem([property: DbKey] long Id);
 #endif

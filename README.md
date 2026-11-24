@@ -15,7 +15,7 @@ dotnet add package Korda.Database.Sqlite --prerelease
 dotnet add package Korda.Database.PostgreSql --prerelease
 ```
 
-Korda was formerly NativeWeave. When upgrading existing applications, replace the old provider references and namespaces together, then rebuild. Existing database files and migration history remain usable.
+Korda was formerly NativeWeave. When upgrading existing applications, replace the old provider references and namespaces together, then rebuild. Existing database files and migration history remain usable. Database annotations now use `[DbTable]`, `[DbProjection]` and the other `Db` names; follow the [annotation upgrade guide](docs/guides/db-attribute-upgrade.md) when moving an existing model to this API.
 
 See [getting started](docs/getting-started.md), the [package guide](docs/guides/packaging-domain.md) and the [API index](docs/api-reference.md).
 

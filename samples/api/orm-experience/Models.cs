@@ -1,9 +1,9 @@
 using System.Text.Json.Serialization;
 using Korda.Data;
 
-[assembly: WeaveCodec(typeof(OrderId), typeof(OrderCodecs), nameof(OrderCodecs.Id))]
-[assembly: WeaveCodec(typeof(decimal), typeof(OrderCodecs), nameof(OrderCodecs.Money))]
-[assembly: WeaveCodec(typeof(OrderSettings), typeof(OrderCodecs), nameof(OrderCodecs.Settings))]
+[assembly: DbCodec(typeof(OrderId), typeof(OrderCodecs), nameof(OrderCodecs.Id))]
+[assembly: DbCodec(typeof(decimal), typeof(OrderCodecs), nameof(OrderCodecs.Money))]
+[assembly: DbCodec(typeof(OrderSettings), typeof(OrderCodecs), nameof(OrderCodecs.Settings))]
 
 public readonly record struct OrderId(long Value);
 public sealed record OrderSettings(string Channel, bool Gift);
@@ -21,7 +21,7 @@ internal static class OrderCodecs
 
 // The explicit table spelling keeps the existing store contract; only Id-key
 // inference is opted in. Other models keep explicit composite-key declarations.
-[WeaveTable("customers", DescriptorName = "Customers", InferPrimaryKey = true)]
+[DbTable("customers", DescriptorName = "Customers", InferPrimaryKey = true)]
 internal sealed class Customer
 {
     public long Id { get; init; }
@@ -29,40 +29,40 @@ internal sealed class Customer
     public string? Email { get; init; }
 }
 
-[WeaveTable("orders", DescriptorName = "Orders")]
+[DbTable("orders", DescriptorName = "Orders")]
 internal sealed record Order(
-    [property: WeaveKey] long TenantId,
-    [property: WeaveKey] OrderId Id,
+    [property: DbKey] long TenantId,
+    [property: DbKey] OrderId Id,
     long CreatedAt,
     long? CustomerId,
     decimal Total,
     string? Note,
-    [property: WeaveVersion] long Version,
+    [property: DbVersion] long Version,
     OrderSettings Settings,
     string InternalMemo);
 
-[WeaveTable("order_lines", DescriptorName = "OrderLines")]
+[DbTable("order_lines", DescriptorName = "OrderLines")]
 internal sealed record OrderLine(
-    [property: WeaveKey] long Id,
+    [property: DbKey] long Id,
     long TenantId,
     OrderId OrderId,
     string Product,
     long Quantity);
 
-[WeaveProjection(DescriptorName = "OrderCards")]
+[DbProjection(DescriptorName = "OrderCards")]
 internal sealed record OrderCard(
     long TenantId,
-    [property: WeaveColumn("order_id")] OrderId Id,
+    [property: DbColumn("order_id")] OrderId Id,
     long CreatedAt,
-    [property: WeaveColumn("customer_name")] string? Customer,
+    [property: DbColumn("customer_name")] string? Customer,
     decimal Total,
-    [property: WeaveColumn("score")] long Score
+    [property: DbColumn("score")] long Score
 #if DTO_EDIT
     , long Version
 #endif
 );
 
-[WeaveProjection(DescriptorName = "CustomerSummaries")]
+[DbProjection(DescriptorName = "CustomerSummaries")]
 internal sealed record CustomerSummary(long? CustomerId, long Count, decimal? TotalSpent);
 
 [JsonSerializable(typeof(OrderSettings))]

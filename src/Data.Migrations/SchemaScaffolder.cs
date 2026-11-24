@@ -97,7 +97,7 @@ public static class SchemaScaffolder
         // A selected constructor establishes mapping/key order. A parameterless
         // class alone would retain the generator's alphabetical property order.
         var ordered = keys.Select(key => columns.Single(column => column.Name == key)).Concat(columns.Where(column => !column.IsPrimaryKey)).ToArray();
-        var output = new StringBuilder("#nullable enable\nnamespace ").Append(options.Namespace).Append(";\n\n[global::Korda.Data.WeaveTableAttribute(").Append(Literal(table.Name));
+        var output = new StringBuilder("#nullable enable\nnamespace ").Append(options.Namespace).Append(";\n\n[global::Korda.Data.DbTableAttribute(").Append(Literal(table.Name));
         if (table.Schema is not null) output.Append(", Schema = ").Append(Literal(table.Schema));
         output.Append(")]\npublic sealed class ").Append(options.TypeName).Append("\n{\n");
         var properties = new HashSet<string>(StringComparer.Ordinal);
@@ -109,22 +109,22 @@ public static class SchemaScaffolder
             var property = hint?.PropertyName ?? (IsIdentifier(column.Name) && !Reserved(column.Name) ? column.Name : "Column" + (index + 1));
             if (Reserved(property) || !properties.Add(property)) throw new ArgumentException("Generated property names collide or use a reserved descriptor member; supply explicit PropertyName hints.", nameof(options));
             var type = hint?.ClrType ?? Infer(provider, column);
-            output.Append("    [global::Korda.Data.WeaveColumnAttribute(").Append(Literal(column.Name));
+            output.Append("    [global::Korda.Data.DbColumnAttribute(").Append(Literal(column.Name));
             if (generated.Contains(column.Name)) output.Append(", Generated = true");
             output.Append(")]\n");
-            if (column.IsPrimaryKey) output.Append("    [global::Korda.Data.WeaveKeyAttribute]\n");
+            if (column.IsPrimaryKey) output.Append("    [global::Korda.Data.DbKeyAttribute]\n");
             if (hint?.CodecDeclaringType is { } codecType)
-                output.Append("    [global::Korda.Data.WeaveUseCodecAttribute(typeof(").Append(codecType).Append("), ").Append(Literal(hint.CodecMember!)).Append(")]\n");
+                output.Append("    [global::Korda.Data.DbUseCodecAttribute(typeof(").Append(codecType).Append("), ").Append(Literal(hint.CodecMember!)).Append(")]\n");
             output.Append("    public ").Append(type).Append(column.IsNullable ? "?" : "").Append(' ').Append(property).Append(" { get; init; } = default!;\n\n");
             parameters.Add((type + (column.IsNullable ? "?" : ""), property));
             if (output.Length > DbWire.MaxEncodedBytes) throw new ArgumentException("Generated source exceeds the finite byte budget.", nameof(table));
         }
-        output.Append("    [global::Korda.Data.WeaveConstructorAttribute]\n    public ").Append(options.TypeName).Append('(');
+        output.Append("    [global::Korda.Data.DbConstructorAttribute]\n    public ").Append(options.TypeName).Append('(');
         for (var index = 0; index < parameters.Count; index++)
         {
             if (index != 0) output.Append(", ");
             var parameter = parameters[index];
-            output.Append("[global::Korda.Data.WeaveParameterAttribute(nameof(").Append(parameter.Property).Append("))] ")
+            output.Append("[global::Korda.Data.DbParameterAttribute(nameof(").Append(parameter.Property).Append("))] ")
                 .Append(parameter.Type).Append(" value").Append(index);
         }
         output.Append(")\n    {\n");

@@ -12,25 +12,29 @@ features with joins, cursor paging, batched relations and checked writes. The
 [earlier generator sample](../../samples/api/query-generator/) retains the
 equivalent handwritten mapping path.
 
+All database annotations use the `Db` prefix in `Korda.Data`. See the
+[upgrade guide](db-attribute-upgrade.md) for the complete rename and compatibility
+requirements.
+
 ## Conventions are explicit
 
 ```csharp
-[WeaveTable]
+[DbTable]
 public sealed record Customer(long Id, string Name, string? Email);
 ```
 
 This generates `CustomerMapping.Table` for the exact table name `Customer`, the
 three typed columns and `CustomerMapping.Row`. The parameterless attribute
 infers a unique nonnullable `Id` property as the primary key. It does not
-pluralize names, change casing or infer generated values. Explicit `WeaveKey`
+pluralize names, change casing or infer generated values. Explicit `[DbKey]`
 properties take precedence and support composite keys. Use
-`[WeaveTable(InferPrimaryKey = false)]` for a keyless model.
+`[DbTable(InferPrimaryKey = false)]` for a keyless model.
 
 Existing named-table declarations preserve their behavior. To opt a named table
 into key inference, write:
 
 ```csharp
-[WeaveTable("customers", DescriptorName = "Customers", InferPrimaryKey = true)]
+[DbTable("customers", DescriptorName = "Customers", InferPrimaryKey = true)]
 public sealed class Customer
 {
     public long Id { get; init; }
@@ -39,34 +43,57 @@ public sealed class Customer
 }
 ```
 
-`WeaveColumn("store_name")` supplies an exact column name;
-`WeaveColumn("id", Generated = true)` declares an insert-generated column.
-`WeaveVersion` marks an optimistic concurrency token without incrementing it.
-`WeaveIgnore` excludes a property from both reader and writer. No attribute
+`[DbColumn("store_name")]` supplies an exact column name;
+`[DbColumn("id", Generated = true)]` declares an insert-generated column.
+`[DbVersion]` marks an optimistic concurrency token without incrementing it.
+`[DbIgnore]` excludes a property from both reader and writer. No attribute
 requires the entity to inherit a framework base class or be partial.
 
 ## Select only the DTO's columns
 
-Use `WeaveProjection` when a DTO has no table identity. Its generated descriptor
+Use `[DbProjection]` when a DTO has no table identity. Its generated descriptor
 exposes `Row` for parameterized SQL and `Bind` for Fluent expressions. A binder's
 arguments have the exact types and names of the DTO's mapped properties.
 
-```csharp
-[WeaveProjection(DescriptorName = "OrderRows")]
-public sealed record OrderRow(
-    [property: WeaveColumn("order_id")] OrderId Id,
-    [property: WeaveColumn("customer_name")] string? Customer,
-    decimal Total);
+Add this DTO in `OrderRow.cs` beside the [order sample's models and codec
+registrations](../../samples/api/orm-experience/Models.cs):
 
-using var query = session.From(Orders.Table);
-var customer = query.LeftJoin(Customers.Table, "customer",
-    on => on.Left(Orders.CustomerId).Equal(on.Right(Customers.Id).AsNullable()));
-var projection = OrderRows.Bind(query,
-    Id: query.Column(Orders.Id),
-    Customer: query.NullableReference(customer, Customers.Name),
-    Total: query.Column(Orders.Total));
-var rows = await query.OrderBy(Orders.TenantId).OrderBy(Orders.Id).Take(20)
-    .Select(projection).ToListAsync(cancellationToken);
+```csharp
+using Korda.Data;
+
+[DbProjection(DescriptorName = "OrderRows")]
+public sealed record OrderRow(
+    [property: DbColumn("order_id")] OrderId Id,
+    [property: DbColumn("customer_name")] string? Customer,
+    decimal Total);
+```
+
+Add the query method in a separate `OrderQueries.cs` file. It uses the sample's
+`Orders` and `Customers` descriptors and the supplied session:
+
+```csharp
+using System.Collections.Generic;
+using System.Threading;
+using System.Threading.Tasks;
+using Korda.Database;
+using Korda.Query;
+
+internal static class OrderQueries
+{
+    internal static async Task<IReadOnlyList<OrderRow>> ReadAsync(
+        DataSession session, CancellationToken cancellationToken)
+    {
+        using var query = session.From(Orders.Table);
+        var customer = query.LeftJoin(Customers.Table, "customer",
+            on => on.Left(Orders.CustomerId).Equal(on.Right(Customers.Id).AsNullable()));
+        var projection = OrderRows.Bind(query,
+            Id: query.Column(Orders.Id),
+            Customer: query.NullableReference(customer, Customers.Name),
+            Total: query.Column(Orders.Total));
+        return await query.OrderBy(Orders.TenantId).OrderBy(Orders.Id).Take(20)
+            .Select(projection).ToListAsync(cancellationToken);
+    }
+}
 ```
 
 The query selects those three expressions. Other entity fields, including large
@@ -102,7 +129,7 @@ properties, plus accessible set/init assignment for remaining members. When
 several constructors qualify, select one explicitly:
 
 ```csharp
-[WeaveProjection]
+[DbProjection]
 public sealed class OrderLabel
 {
     public long Id { get; init; }
@@ -110,8 +137,8 @@ public sealed class OrderLabel
 
     public OrderLabel() { }
 
-    [WeaveConstructor]
-    public OrderLabel([WeaveParameter(nameof(Id))] long key, string? label)
+    [DbConstructor]
+    public OrderLabel([DbParameter(nameof(Id))] long key, string? label)
     {
         Id = key;
         Label = label;
@@ -119,7 +146,7 @@ public sealed class OrderLabel
 }
 ```
 
-`WeaveParameter` names the CLR property, while `WeaveColumn` names the database
+`[DbParameter]` names the CLR property, while `[DbColumn]` names the database
 column or result alias. Duplicate constructor inputs, missing associations,
 inaccessible constructors and nullable-to-nonnullable assignments fail at
 compilation. Models must be concrete, closed top-level classes or records without
@@ -135,9 +162,9 @@ value on static initialization; keep policy members stable and share their
 immutable codec instances.
 
 ```csharp
-[assembly: WeaveCodec(typeof(OrderId), typeof(OrderCodecs), nameof(OrderCodecs.Id))]
-[assembly: WeaveCodec(typeof(decimal), typeof(OrderCodecs), nameof(OrderCodecs.Money))]
-[assembly: WeaveCodec(typeof(OrderSettings), typeof(OrderCodecs), nameof(OrderCodecs.Settings))]
+[assembly: DbCodec(typeof(OrderId), typeof(OrderCodecs), nameof(OrderCodecs.Id))]
+[assembly: DbCodec(typeof(decimal), typeof(OrderCodecs), nameof(OrderCodecs.Money))]
+[assembly: DbCodec(typeof(OrderSettings), typeof(OrderCodecs), nameof(OrderCodecs.Settings))]
 
 public readonly record struct OrderId(long Value);
 public sealed record OrderSettings(string Channel, bool Gift);
@@ -179,7 +206,7 @@ money policy separately.
 A property can override its compilation default:
 
 ```csharp
-[property: WeaveUseCodec(typeof(OtherCodecs), nameof(OtherCodecs.Tax))]
+[property: DbUseCodec(typeof(OtherCodecs), nameof(OtherCodecs.Tax))]
 ```
 
 The override member follows the same nonnullable `ValueCodec<T>` rule. Reused

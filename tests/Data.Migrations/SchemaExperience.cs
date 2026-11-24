@@ -108,13 +108,13 @@ internal static partial class Suite
         var composite = catalog with { Columns = [new("Id", integer, false, true), new("Tenant", integer, false, true)] };
         await Throws<ArgumentException>(() => Task.FromResult(SchemaScaffolder.Generate(provider, composite, options)));
         var ordered = SchemaScaffolder.Generate(provider, composite, options with { PrimaryKeyOrder = ["Tenant", "Id"] });
-        Check(ordered.Source.Contains("WeaveConstructorAttribute", StringComparison.Ordinal) &&
+        Check(ordered.Source.Contains("DbConstructorAttribute", StringComparison.Ordinal) &&
             ordered.Source.IndexOf("nameof(Tenant)", StringComparison.Ordinal) < ordered.Source.IndexOf("nameof(Id)", StringComparison.Ordinal), "selected constructor explicitly carries the reviewed composite-key order");
         var money = catalog with { Columns = [new("Amount", "NUMERIC(18,2)", false, false)] };
         await Throws<ArgumentException>(() => Task.FromResult(SchemaScaffolder.Generate(provider, money, options)));
         await Throws<ArgumentException>(() => Task.FromResult(SchemaScaffolder.Generate(provider, money, options with { ColumnHints = [new("Amount", "decimal")] })));
         var configured = SchemaScaffolder.Generate(provider, money, options with { ColumnHints = [new("Amount", "decimal", "Review.Codecs", "Money")] });
-        Check(configured.Source.Contains("[global::Korda.Data.WeaveUseCodecAttribute(typeof(Review.Codecs), \"Money\")]", StringComparison.Ordinal), "ambiguous money mapping requires reusable explicit codec source");
+        Check(configured.Source.Contains("[global::Korda.Data.DbUseCodecAttribute(typeof(Review.Codecs), \"Money\")]", StringComparison.Ordinal), "ambiguous money mapping requires reusable explicit codec source");
         var unusual = catalog with { Name = "table\"\u2028name", Columns = [new("class", "TEXT", true, false)] };
         var escaped = SchemaScaffolder.Generate(provider, unusual, options).Source;
         Check(escaped.Contains("table\\\"\\u2028name", StringComparison.Ordinal) && escaped.Contains("string? Column1", StringComparison.Ordinal), "C# line terminators and keyword column names cannot break generated source");

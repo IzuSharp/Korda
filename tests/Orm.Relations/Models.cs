@@ -1,11 +1,11 @@
 using Korda.Data;
 
-[WeaveTable("b14_items", DescriptorName = "Items")]
-public sealed partial record Item([property: WeaveKey] long Tenant, [property: WeaveKey] long Id, string? Name, [property: WeaveVersion] long Version);
-[WeaveTable("b14_children", DescriptorName = "Children")]
-public sealed partial record Child([property: WeaveKey] long Id, long? Tenant, long? ParentId, string? Name, long? Amount);
-[WeaveTable("b14_generated", DescriptorName = "Generated")]
-public sealed partial record GeneratedItem([property: WeaveKey, WeaveColumn("Id", Generated = true)] long Id);
+[DbTable("b14_items", DescriptorName = "Items")]
+public sealed partial record Item([property: DbKey] long Tenant, [property: DbKey] long Id, string? Name, [property: DbVersion] long Version);
+[DbTable("b14_children", DescriptorName = "Children")]
+public sealed partial record Child([property: DbKey] long Id, long? Tenant, long? ParentId, string? Name, long? Amount);
+[DbTable("b14_generated", DescriptorName = "Generated")]
+public sealed partial record GeneratedItem([property: DbKey, DbColumn("Id", Generated = true)] long Id);
 
 internal static class Manual
 {

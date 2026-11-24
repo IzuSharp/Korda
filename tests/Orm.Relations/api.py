@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare compiled B14 declarations/XML to the exact Plan-pinned inventory."""
+"""Compare compiled B14 declarations/XML to pinned contracts with reviewed public names."""
 import argparse
 import json
 import os
@@ -48,7 +48,7 @@ for name, project, assembly, folders in [
         'sources': [str(root / 'src' / folder) for folder in folders],
         'baselines': [],
         'title': assembly + ' explicit relationship and mutation API',
-        'scope': 'Compiled product declarations compared to Design commit ' + pin + '. B14 owns explicit relation loading, native CRUD, optimistic concurrency and bounded bulk; docs/guides/orm-relations.md explains ownership, limits and cost.',
+        'scope': 'Compiled product declarations compared to Design commit ' + pin + ', the DB-API-01 additions and the explicit DB-Rename-01 Attribute name mapping. B14 owns explicit relation loading, native CRUD, optimistic concurrency and bounded bulk; docs/guides/orm-relations.md explains ownership, limits and cost.',
         'output': str(reference),
     }
     path = output / (name + '-config.json')

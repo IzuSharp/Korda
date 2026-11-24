@@ -8,7 +8,7 @@ Current application APIs are the compiled database and required Core surfaces. T
 | PostgreSQL and SQLite | [PostgreSQL](guides/data-postgres.md), [SQLite](guides/data-sqlite.md) |
 | Data contracts and parameter codecs | [Data abstractions](guides/data-abstractions.md), [codecs](guides/data-codecs.md) |
 | Transactions and migrations | [Transactions](guides/data-transactions.md), [migrations](guides/data-migrations.md) |
-| Fluent queries and static models | [Fluent](guides/query-fluent.md), [query generator](guides/query-generator.md) |
+| Fluent queries and static models | [Fluent](guides/query-fluent.md), [query generator](guides/query-generator.md), [annotation upgrade](guides/db-attribute-upgrade.md) |
 | DTO mapping, relations and CRUD | [Materialization](guides/data-materialization.md), [relations](guides/orm-relations.md) |
 | Streaming and resource lifetime | [Streaming](guides/data-streaming.md), [lifetime](guides/interop-lifetime.md) |
 | Errors and cancellation | [Errors](guides/interop-errors.md), [async](guides/interop-async.md), [execution](guides/interop-execution.md) |
