@@ -5,7 +5,7 @@ using Korda.Interop.Abi;
 using Korda.Interop.Async;
 using Korda.Interop.Callbacks;
 
-internal static class Program
+internal static partial class Program
 {
     private static int s_assertions;
     private static readonly TimeSpan Deadline = TimeSpan.FromSeconds(15);
@@ -454,6 +454,7 @@ internal static class Program
     {
         if (args.Contains("--require-aot")) Check(!RuntimeFeature.IsDynamicCodeSupported && !RuntimeFeature.IsDynamicCodeCompiled, "Expected actual Native AOT execution.");
         if (args.Contains("--retire-fault")) { await RetireFaultQuarantine(); return; }
+        if (args.Contains("--retired-value-task-quarantine")) { RetiredValueTaskQuarantine(); return; }
         if (args.Contains("--binding-diagnostics")) { await BindingDiagnostics(); Console.WriteLine("A07 copied binding diagnostics regression passed."); return; }
         string? isolation = args.FirstOrDefault(a => a is "--indeterminate-start" or "--callback-then-reject");
         if (isolation is not null) { await Quarantine(isolation); return; }
@@ -467,6 +468,7 @@ internal static class Program
         await BindingFailureAndRejectedScheduling();
         await BindingDiagnostics();
         await ResultBeforeNativeQuiet();
+        await RetiredValueTaskChecks();
         await NativeWorkersAndGc();
         await ContextAndSelfWait();
         await DiscardedTaskCleanup();

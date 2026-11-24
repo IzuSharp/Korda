@@ -304,17 +304,17 @@ internal static class AllocationProbe
         }
         internal Task<IStreamTransport> Start(int rows, CancellationToken token) { token.ThrowIfCancellationRequested(); return _start; }
         internal void Reset() { AssertDrained(); _fetch = 0; _stopped = 0; }
-        public Task<IStreamBatch> FetchAsync()
+        public ValueTask<IStreamBatch> FetchAsync()
         {
             if (_stopped != 0 || LiveBatches != 0 || _fetch > _batches) throw new InvalidOperationException("Invalid bounded probe fetch.");
             var batch = _fetch++ == _batches ? _end : _data;
             batch.Acquire(); Fetches++;
-            if (_worker is null) return batch.End ? _endTask : _dataTask;
+            if (_worker is null) return new(batch.End ? _endTask : _dataTask);
             lock (_gate)
             {
                 if (_pending is not null) throw new InvalidOperationException("A probe fetch is already pending.");
                 _pendingBatch = batch; _pending = new(TaskCreationOptions.RunContinuationsAsynchronously);
-                return _pending.Task;
+                return new(_pending.Task);
             }
         }
         internal void ReleasePending()

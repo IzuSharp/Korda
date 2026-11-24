@@ -59,7 +59,7 @@ internal readonly record struct StreamRetirement(bool NativeRetired, bool Connec
 /// complete an accepted fetch before its native terminal result. B06 never infers retirement from a dropped task.</remarks>
 internal interface IStreamTransport
 {
-    Task<IStreamBatch> FetchAsync();
+    ValueTask<IStreamBatch> FetchAsync();
     void RequestStop();
     Task<StreamRetirement> JoinAsync();
 }

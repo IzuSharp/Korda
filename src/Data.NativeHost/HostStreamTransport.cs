@@ -20,7 +20,7 @@ internal sealed class HostStreamTransport : IStreamTransport
         _source = source; _cursor = cursor; _rows = rows; _token = token; _close = new(source, cursor, cursor.Dispose);
         _createFetch = CreateFetch; _takeBatch = TakeBatch;
     }
-    public Task<IStreamBatch> FetchAsync() => _source.Start(_createFetch, _takeBatch, _token);
+    public ValueTask<IStreamBatch> FetchAsync() => _source.StartRetiredValueTask(_createFetch, _takeBatch, _token);
     private nint CreateFetch() => NativeHost.Fetch(_cursor, _rows, _source.Limits.MaxBatchBytes);
     private IStreamBatch TakeBatch(nint operation)
     {

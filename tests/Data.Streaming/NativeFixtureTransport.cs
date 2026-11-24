@@ -33,7 +33,7 @@ internal sealed class NativeFixtureTransport : IStreamTransport
             }
             catch { handle.Dispose(); throw; }
         }, CancellationToken.None);
-    public Task<IStreamBatch> FetchAsync() => Run<IStreamBatch>(() =>
+    public ValueTask<IStreamBatch> FetchAsync() => new(Run<IStreamBatch>(() =>
     {
         Fetches++;
         Throw(Native.Fetch(_handle), _token);
@@ -47,7 +47,7 @@ internal sealed class NativeFixtureTransport : IStreamTransport
             return new NativeBatch(owner);
         }
         catch { owner.Dispose(); throw; }
-    });
+    }));
     public void RequestStop() { lock (_gate) { if (!_handle.IsClosed) Native.Stop(_handle); } }
     public Task<StreamRetirement> JoinAsync() { lock (_gate) return _join ??= JoinCoreAsync(); }
     private async Task<StreamRetirement> JoinCoreAsync()

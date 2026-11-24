@@ -28,7 +28,7 @@ internal sealed class CountedResources
     private sealed class CountedTransport(IStreamTransport inner, CountedResources owner) : IStreamTransport
     {
         private int _joined;
-        public async Task<IStreamBatch> FetchAsync()
+        public async ValueTask<IStreamBatch> FetchAsync()
         {
             var batch = await inner.FetchAsync();
             Interlocked.Increment(ref owner.Batches);

@@ -74,6 +74,21 @@ public sealed partial class DataSource : IDisposable, IAsyncDisposable
         }
         catch { if (resource is not null) resource.Dispose(); else handle?.Dispose(); throw; }
     }
+    // Only the internal single-consumer fetch seam uses this result form. Public
+    // Task APIs keep their independently awaitable result and cleanup bridge.
+    internal ValueTask<T> StartRetiredValueTask<T>(Func<nint> create, Func<nint, T> take, CancellationToken token)
+    {
+        CheckOpen(); if (token.IsCancellationRequested) return new(Task.FromCanceled<T>(token));
+        OperationHandle? handle = null; NativeResourceOwner? resource = null;
+        try
+        {
+            handle = new(Binding, create()); resource = new(handle, this);
+            var operation = new AsyncOperation.RetiredValueTask<T>(resource, _async, _resources.Coordinator, take, token,
+                testBoundary: TestBoundary);
+            return operation.Start();
+        }
+        catch { if (resource is not null) resource.Dispose(); else handle?.Dispose(); throw; }
+    }
     private async Task<T> Complete<T>(AsyncOperation<T> operation, Task<T> result)
     {
         try { return await result.ConfigureAwait(false); }

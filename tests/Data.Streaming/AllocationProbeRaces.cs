@@ -243,10 +243,10 @@ internal static class AllocationProbeRaces
             if (pendingFetch) _fetch = new(TaskCreationOptions.RunContinuationsAsynchronously);
         }
         internal Task<IStreamTransport> Start(int rows, CancellationToken token) => _start;
-        public Task<IStreamBatch> FetchAsync()
+        public ValueTask<IStreamBatch> FetchAsync()
         {
             if (Interlocked.Increment(ref Fetches) != 1) throw new InvalidOperationException("Race fixture fetched twice.");
-            Batch.Acquire(); FetchEntered.TrySetResult(); return _fetch?.Task ?? _ready;
+            Batch.Acquire(); FetchEntered.TrySetResult(); return new(_fetch?.Task ?? _ready);
         }
         internal void CompleteFetch() => _fetch?.TrySetResult(Batch);
         internal void CancelFetch(CancellationToken token)

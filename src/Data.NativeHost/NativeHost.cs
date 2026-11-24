@@ -78,6 +78,7 @@ internal sealed unsafe class HostAsyncCalls(DataSource source) : AsyncNativeCall
     internal override uint RequestCancel(nint operation) => source.Binding.Calls.nw_db_operation_request_cancel_v1(operation);
     internal override uint TryRetire(nint operation) => source.Binding.Calls.nw_db_operation_try_retire_v1(operation);
     internal override void Poison() => source.Poison();
+    internal override void ObserveRetirement(AsyncOperation operation) => source.TestRetirement?.Invoke(operation.Snapshot);
     internal override Exception MapFailure(nint operation, uint status, in NwErrorInfoV1 error, CancellationToken token)
     {
         string? provider = null; bool cleanupFailed = false; BulkProgress? nativeProgress = null;

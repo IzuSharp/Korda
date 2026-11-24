@@ -280,7 +280,7 @@ internal sealed record Item(long Id, string? Label);
 internal sealed record Observation(string Name, uint Provider, int Rows, int Fetches, int DuplicateTakes, ulong[] Stats);
 internal sealed class FailingCleanupTransport(IStreamTransport inner) : IStreamTransport
 {
-    public Task<IStreamBatch> FetchAsync() => inner.FetchAsync();
+    public ValueTask<IStreamBatch> FetchAsync() => inner.FetchAsync();
     public void RequestStop() => inner.RequestStop();
     public async Task<StreamRetirement> JoinAsync()
     {
@@ -290,7 +290,7 @@ internal sealed class FailingCleanupTransport(IStreamTransport inner) : IStreamT
 }
 internal sealed class CorruptTransport(IStreamTransport inner, int mutation) : IStreamTransport
 {
-    public async Task<IStreamBatch> FetchAsync()
+    public async ValueTask<IStreamBatch> FetchAsync()
     {
         var owner = await inner.FetchAsync();
         var bytes = owner.Bytes.ToArray();
