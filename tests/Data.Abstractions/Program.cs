@@ -19,6 +19,11 @@ if (args.Contains("--batch-allocation-probe", StringComparer.Ordinal))
     BatchAllocationProbe.Run(output);
     return;
 }
+if (args.Contains("--owned-wire-allocation-regression", StringComparer.Ordinal))
+{
+    WireValidationTests.RunAllocation(output);
+    return;
+}
 Console.WriteLine("Dynamic code supported: " + RuntimeFeature.IsDynamicCodeSupported);
 var cases = new List<string>();
 void Check(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
@@ -439,6 +444,7 @@ Test("db_wire_all_scalar_golden_and_malformed_inputs", () =>
     Reject<ArgumentException>(() => DbWire.Parse(wire, expectation with { MetadataHash = Enumerable.Repeat((byte)1, 32).ToArray() }));
     Reject<ArgumentException>(() => DbWire.Parse(wire.AsSpan(0, 95), expectation));
 });
+Test("wire_range_order_and_descriptor_fallback_contracts", () => WireValidationTests.Run(output));
 Test("wire_owned_storage_is_explicit_and_default_parse_still_snapshots", () =>
 {
     var input = (byte[])wire.Clone();

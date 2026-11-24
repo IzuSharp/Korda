@@ -11,6 +11,7 @@
     <Compile Include="Program.cs" />
     <Compile Include="AllocationProbe.cs" />
     <Compile Include="BatchAllocationProbe.cs" />
+    <Compile Include="WireValidationTests.cs" />
     <ProjectReference Include="../../src/Data.Abstractions/Korda.Data.csproj" />
   </ItemGroup>
 </Project>

@@ -11,7 +11,7 @@ internal sealed record WireExpectation(PayloadKind Kind, uint Profile, byte[] Me
 }
 
 // One field serialization contract, not a CLR/native struct ABI. Only owned bytes escape parsing.
-internal sealed class DbWire
+internal readonly struct DbWire
 {
     internal const int MaxEncodedBytes = 4 * 1024 * 1024;
     internal const int MaxDescriptors = 4096;
@@ -84,7 +84,8 @@ internal sealed class DbWire
                 if (R32(bytes, o) != d.Id || R16(bytes, o + 4) != d.Codec.Id || R16(bytes, o + 6) != (d.Codec.Nullable ? 1 : 0) || R32(bytes, o + 8) != d.BoundCodecId || R32(bytes, o + 12) != 0)
                     Bad("Descriptor count, order, ID, codec, nullability or reserved bits differ.");
             }
-            var ranges = new List<(int Start, int End)>();
+            var needsRangeSort = false;
+            var previousEnd = (ulong)payloadOffset;
             for (var i = 0; i < count; i++)
             {
                 var d = expected.Descriptors[i % expected.Descriptors.Length]; var o = cellsOffset + i * WireSchema.CellBytes;
@@ -93,11 +94,33 @@ internal sealed class DbWire
                 if (flags == 1)
                 { if (!d.Codec.Nullable || dataOffset != 0 || length != 0) Bad("Invalid SQL NULL cell."); continue; }
                 if (dataOffset < (ulong)payloadOffset || dataOffset > (ulong)bytes.Length || length > (ulong)bytes.Length - dataOffset || (length == 0 && dataOffset != (ulong)payloadOffset)) Bad("Invalid cell range.");
-                if (length > 0) ranges.Add(((int)dataOffset, (int)(dataOffset + length)));
+                if (length > 0)
+                {
+                    if (dataOffset < previousEnd) needsRangeSort = true;
+                    previousEnd = dataOffset + length;
+                }
                 ValidateScalar(d.Codec, bytes.Slice((int)dataOffset, (int)length));
             }
-            ranges.Sort((x, y) => x.Start.CompareTo(y.Start));
-            for (var i = 1; i < ranges.Count; i++) if (ranges[i].Start < ranges[i - 1].End) Bad("Nonempty cell ranges overlap.");
+            // Product encoders append nonempty cells in row-major order. That
+            // layout proves non-overlap in one pass without a temporary list.
+            // The wire contract also allows other non-overlapping orders: retain
+            // the complete previous sort/check path for every such input.
+            if (needsRangeSort)
+            {
+                var ranges = new List<(int Start, int End)>();
+                for (var i = 0; i < count; i++)
+                {
+                    var o = cellsOffset + i * WireSchema.CellBytes;
+                    var length = R64(bytes, o + 16);
+                    if (R16(bytes, o + 2) == 0 && length > 0)
+                    {
+                        var start = R64(bytes, o + 8);
+                        ranges.Add(((int)start, (int)(start + length)));
+                    }
+                }
+                ranges.Sort((x, y) => x.Start.CompareTo(y.Start));
+                for (var i = 1; i < ranges.Count; i++) if (ranges[i].Start < ranges[i - 1].End) Bad("Nonempty cell ranges overlap.");
+            }
             return new(owned ?? bytes.ToArray(), expected, rows);
         }
         catch (Exception e) when (e is OverflowException or ArgumentOutOfRangeException or JsonException)
@@ -126,12 +149,22 @@ internal sealed class DbWire
         if (expected.Kind == PayloadKind.Parameters && rows != 1 || expected.Kind == PayloadKind.MutationValues && (rows == 0 || expected.EntityId == 0)
             || expected.Kind == PayloadKind.ExpressionValues && (expected.Descriptors.Length != 1 || expected.Descriptors[0].Id != 1 || expected.MetadataHash.Any(b => b != 0))
             || expected.Kind != PayloadKind.MutationValues && expected.EntityId != 0 || (expected.Kind == PayloadKind.Rows) != (expected.ProjectionId > 0)) Bad("Invalid kind-specific identity/count.");
-        var ids = new HashSet<uint>();
-        foreach (var d in expected.Descriptors)
+        HashSet<uint>? ids = null;
+        uint previousId = 0;
+        for (var i = 0; i < expected.Descriptors.Length; i++)
         {
+            var d = expected.Descriptors[i];
             CodecRegistry.Validate(d.Codec);
-            if (!ids.Add(d.Id) || (expected.Kind != PayloadKind.Rows && d.Id == 0)) Bad("Duplicate/reserved descriptor ID.");
+            if (ids is null && i != 0 && d.Id <= previousId)
+            {
+                // The prefix is strictly increasing. Populate it before the
+                // original per-descriptor duplicate check, preserving its order.
+                ids = new HashSet<uint>();
+                for (var j = 0; j < i; j++) ids.Add(expected.Descriptors[j].Id);
+            }
+            if (ids is not null && !ids.Add(d.Id) || (expected.Kind != PayloadKind.Rows && d.Id == 0)) Bad("Duplicate/reserved descriptor ID.");
             if (d.Codec.Configuration is null ? d.BoundCodecId != d.Codec.Id : d.BoundCodecId < 1024) Bad("Invalid source-bound codec ID.");
+            previousId = d.Id;
         }
     }
     internal static void ValidateScalar(CodecDescriptor codec, ReadOnlySpan<byte> bytes)

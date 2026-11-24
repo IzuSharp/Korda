@@ -61,10 +61,11 @@ internal sealed class RowBatchLease : IRowLease, IDisposable
         try
         {
             if (owner.Bytes.Length > limits.MaxBatchBytes) throw new DatabaseException("Native batch exceeds its admitted byte limit.", DatabaseErrorKind.ResourceLimit);
-            _wire = owner is IStableManagedBatch stable
+            var wire = owner is IStableManagedBatch stable
                 ? DbWire.ParseOwned(stable.OwnedBytes, expected)
                 : DbWire.Parse(owner.Bytes.Span, expected);
-            if (_wire.Rows > limits.MaxBatchRows || _wire.Rows == 0 && !owner.End)
+            _wire = wire;
+            if (wire.Rows > limits.MaxBatchRows || wire.Rows == 0 && !owner.End)
                 throw new DatabaseException("Native batch row count or end marker is invalid.", DatabaseErrorKind.ShapeMismatch);
             _owner = owner;
             End = owner.End;

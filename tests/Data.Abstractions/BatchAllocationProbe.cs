@@ -59,7 +59,7 @@ internal static class BatchAllocationProbe
         // Large allocation loops can trigger different GC/runtime work. The raw
         // whole-process difference need not equal the separate array-only control;
         // no control is subtracted to claim exact framework attribution or zero.
-        Console.WriteLine("PASS stable managed batch: allocation reduced in every window; validation still allocates; raw controls and GC counts retained.");
+        Console.WriteLine("PASS stable managed batch: defensive copy allocation is explicit; raw parser controls and GC counts retained.");
     }
 }
 internal sealed record BatchCopyMeasurement(int Rows, int EncodedBytes, int Repeat, int Operations,
