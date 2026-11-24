@@ -12,12 +12,23 @@ from collections import Counter
 from datetime import datetime, timezone
 from decimal import Decimal
 import hashlib
+import importlib.util
 import json
 from pathlib import Path
 import subprocess
 import sys
-import xml.etree.ElementTree as ET
 import zipfile
+
+
+REPO = Path(__file__).resolve().parents[3]
+# The committed producer in eng/task07_native.py records this complete set.
+NATIVE_INPUT_PATHS = ("native", "CMakeLists.txt", "CMakePresets.json", ".clang-format", ".clang-tidy",
+                      "eng/cpp_toolchain.py", "eng/task07_native.py", "eng/postgres-tools.sh",
+                      "eng/postgres-cache-key.py")
+_compat_spec = importlib.util.spec_from_file_location(
+    "db_perf_package_compatibility", REPO / "src/Verification.Compatibility/compatibility.py")
+COMPAT = importlib.util.module_from_spec(_compat_spec)
+_compat_spec.loader.exec_module(COMPAT)
 
 
 def require(value, message):
@@ -37,6 +48,45 @@ def write(path, value):
     Path(path).write_text(json.dumps(value, indent=2) + "\n")
 
 
+def native_provenance(archive, entry, provider, commit):
+    """Allow verified native input reuse without relabeling its producer commit."""
+    native = entry["native"]
+    source = native["source_commit"]
+    require(native["rid"] == "linux-x64" and native["abi_major"] == 1,
+            f"{provider}: native RID or ABI differs")
+    require(isinstance(source, str) and len(source) == 40 and all(c in "0123456789abcdef" for c in source),
+            f"{provider}: missing complete native source identity")
+    manifest = json.loads(archive.read("korda/manifest.json"))
+    require(manifest["packagingProducerCommit"] == commit,
+            f"{provider}: packaging producer differs from the accepted candidate")
+    dependencies = json.loads(archive.read("korda/dependencies.json"))
+    require(dependencies["schemaVersion"] == 2 and dependencies["engineId"] == "database." + provider
+            and dependencies["sourceCommit"] == source and dependencies["sourceDirty"] is False
+            and dependencies["nativeSha256"] == native["sha256"]
+            and dependencies["preset"] == "linux-x64-" + provider,
+            f"{provider}: native dependency provenance differs")
+    tree = subprocess.check_output(["git", "rev-parse", source + "^{tree}"], cwd=REPO, text=True).strip()
+    require(dependencies["sourceTree"] == tree, f"{provider}: native source tree differs")
+    inputs = dependencies["inputSha256"]
+    require(inputs and inputs.get("native/dependencies.lock.json") == dependencies["dependenciesLockSha256"],
+            f"{provider}: native inputs or lock binding are missing")
+    for revision in {source, commit}:
+        names = subprocess.check_output(
+            ["git", "ls-tree", "-r", "--name-only", revision, "--", *NATIVE_INPUT_PATHS], cwd=REPO, text=True).splitlines()
+        require(set(inputs) == set(names), f"{provider}: incomplete native input inventory at {revision}")
+    # Both trees must contain the exact native inputs. A managed-only package
+    # change may reuse an older native build; changing native inputs may not.
+    for name, digest in inputs.items():
+        COMPAT.canonical_path(name)
+        for revision in {source, commit}:
+            data = subprocess.check_output(["git", "show", revision + ":" + name], cwd=REPO)
+            require(hashlib.sha256(data).hexdigest() == digest,
+                    f"{provider}: native input differs at {revision}: {name}")
+    return {"source_commit": source, "source_tree": tree, "input_count": len(inputs),
+            "dependencies_lock_sha256": dependencies["dependenciesLockSha256"],
+            "packaging_producer_commit": commit}
+
+
 def candidate_inputs(directory, commit):
     result = {}
     require(len(commit) == 40 and all(c in "0123456789abcdef" for c in commit), "Expected a complete lowercase source commit")
@@ -46,35 +96,27 @@ def candidate_inputs(directory, commit):
         release = json.loads(release_path.read_text())
         require(release["source_commit"] == commit and release["source_dirty"] is False,
                 f"{provider}: final CI source identity or cleanliness differs")
+        package_tree = subprocess.check_output(["git", "rev-parse", commit + "^{tree}"], cwd=REPO, text=True).strip()
+        require(release["source_tree"] == package_tree, f"{provider}: package source tree differs")
         require(release["rid"] == "linux-x64", f"{provider}: wrong RID")
         packages = list((candidate / "feed").glob("*.nupkg"))
         require(len(packages) == 1, f"{provider}: expected exactly one top-level package")
         package = packages[0]
         package_id = "Korda.Database." + suffix
         entries = [item for item in release["packages"] if item["id"] == package_id]
-        require(len(entries) == 1, f"{provider}: missing or duplicate package receipt")
+        require(len(entries) == len(release["packages"]) == 1, f"{provider}: missing or non-independent package receipt")
         entry = entries[0]
-        require(entry["source_commit"] == commit and entry["native"]["source_commit"] == commit,
-                f"{provider}: package/native provenance differs")
+        require(entry["source_commit"] == commit, f"{provider}: package source differs")
         require(sha(package) == entry["upload_archive_sha256"], f"{provider}: archive differs from exact CI upload")
+        # Reuse the repository's bounded package inventory, native ELF/ABI,
+        # manifest and nuspec checks instead of weakening provenance for reuse.
+        COMPAT.package_payload(package, entry)
         with zipfile.ZipFile(package) as archive:
-            unsigned = {name for name in archive.namelist() if not name.endswith("/") and name != ".signature.p7s"}
-            require(unsigned == set(entry["unsigned_entries"]), f"{provider}: package entry inventory differs")
-            for name, digest in entry["unsigned_entries"].items():
-                require(hashlib.sha256(archive.read(name)).hexdigest() == digest, f"{provider}: entry hash differs: {name}")
-            nuspecs = [name for name in unsigned if name.endswith(".nuspec")]
-            require(len(nuspecs) == 1, f"{provider}: ambiguous package metadata")
-            metadata = ET.fromstring(archive.read(nuspecs[0])).find("{*}metadata")
-            require(metadata is not None, f"{provider}: missing metadata")
-            require(metadata.findtext("{*}id") == package_id and metadata.findtext("{*}version") == entry["version"],
-                    f"{provider}: nuspec ID/version differs")
-            repository = metadata.find("{*}repository")
-            require(repository is not None and repository.get("commit") == commit, f"{provider}: nuspec source differs")
-            require(hashlib.sha256(archive.read(entry["native"]["path"])).hexdigest() == entry["native"]["sha256"],
-                    f"{provider}: native bytes differ")
+            provenance = native_provenance(archive, entry, provider, commit)
         result[provider] = {"package_id": package_id, "version": entry["version"], "source_commit": commit,
                             "package_path": str(package), "package_sha256": sha(package),
-                            "release_receipt_sha256": sha(release_path), "native_sha256": entry["native"]["sha256"]}
+                            "release_receipt_sha256": sha(release_path), "native_sha256": entry["native"]["sha256"],
+                            "native_provenance": provenance}
     return result
 
 
@@ -176,6 +218,8 @@ def main():
     require(not report_dir.exists() or not any(report_dir.iterdir()), "Do not overwrite prior validation evidence")
     report_dir.mkdir(parents=True, exist_ok=True)
     receipt = {"schemaVersion": 1, "label": args.label, "startedUtc": utc(), "driverSha256": sha(__file__),
+               "validationSourceFiles": {name: sha(REPO / name) for name in
+                    ("src/Verification.Compatibility/compatibility.py", "eng/task07_native.py")},
                "status": "started", "validationOnly": args.validate_only, "fullFrameworkZeroAllocation": False,
                "frameworkSplit": "unproved; no estimated control subtraction", "subtractedBytes": 0,
                "scope": "Exact-CI-package external Native AOT allocation preflight, not NuGet publication verification or a dedicated long performance segment"}
