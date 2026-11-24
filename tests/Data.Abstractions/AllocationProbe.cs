@@ -18,13 +18,22 @@ internal static class AllocationProbe
         var zero = DecimalBytes.Encode(0m);
         var json = Validation.Utf8.GetBytes("{\"channel\":\"web\",\"gift\":false,\"tags\":[1,null,\"订单\"]}");
         var descriptor = new CodecDescriptor(16, "json", null, false);
+        var decimal18 = Codecs.Decimal(18, 2);
+        var decimal29 = Codecs.Decimal(29, 2);
+        var decimal18Bytes = decimal18.Encode(12345678901234.56m)!;
+        var money = Codecs.FixedScaleMoney(2);
+        var moneyBytes = money.Encode(12345678901234.56m)!;
         var probes = new (string Name, Action Run, bool ExactZero)[]
         {
             ("empty-driver", static () => { }, true),
             ("strict-utf8-validation", () => DbWire.ValidateScalar(Codecs.String.Descriptor, text), true),
             ("decimal96-canonical-decode", () => _sink = DecimalBytes.Decode(number), true),
             ("decimal-zero-canonical-decode", () => _sink = DecimalBytes.Decode(zero), true),
-            ("typed-json-validation", () => DbWire.ValidateScalar(descriptor, json), false)
+            ("typed-json-validation", () => DbWire.ValidateScalar(descriptor, json), true),
+            ("configured-decimal18-validation", () => DbWire.ValidateScalar(decimal18.Descriptor, decimal18Bytes), false),
+            ("configured-decimal29-validation", () => DbWire.ValidateScalar(decimal29.Descriptor, number), false),
+            ("configured-money-validation", () => DbWire.ValidateScalar(money.Descriptor, moneyBytes), false),
+            ("configured-decimal29-decode", () => _sink = decimal29.Decode(number), false)
         };
         var results = new ScalarAllocation[probes.Length * 3];
         // Exercise runtime and codec initialization outside each measured interval.

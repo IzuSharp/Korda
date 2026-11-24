@@ -180,6 +180,59 @@ Test("strict_utf8_validation_preserves_rejections", () =>
         Reject<System.Text.DecoderFallbackException>(() => DbWire.ValidateScalar(Codecs.Json(TestJson.Default.Payload).Descriptor, json));
     }
 });
+Test("json_validation_matches_document_parser", () =>
+{
+    var descriptor = new CodecDescriptor(16, "json", null, false);
+    var checkedInputs = 0;
+    string Outcome(byte[] input, bool previous)
+    {
+        try
+        {
+            if (previous)
+            {
+                _ = Validation.Utf8.GetCharCount(input);
+                if (input.AsSpan().StartsWith(new byte[] { 0xef, 0xbb, 0xbf })) throw new ArgumentException("JSON BOM.");
+                using (JsonDocument.Parse(input.AsSpan().ToArray(), new JsonDocumentOptions { MaxDepth = 64 })) { }
+            }
+            else DbWire.ValidateScalar(descriptor, input);
+            return "accepted";
+        }
+        catch (System.Text.DecoderFallbackException) { return "invalid-utf8"; }
+        catch (JsonException) { return "invalid-json"; }
+        catch (ArgumentException) { return "invalid-bom"; }
+    }
+    void Compare(byte[] input)
+    {
+        var expected = Outcome(input, true);
+        Check(Outcome(input, false) == expected, "JSON validation changed for " + Convert.ToHexString(input));
+        checkedInputs++;
+    }
+    string[] seeds = [
+        "", " \r\n\t", "null", "true", "false", "0", "-0", "1e400", "-1.25e-400", "01", "+1", "1.", "1e", "NaN",
+        "[]", "{}", "[1,]", "{\"x\":1,}", "[/*x*/1]", "[1] //x", "null false", "[1]{}", "\"unterminated",
+        "{\"channel\":\"web\",\"gift\":false,\"tags\":[1,null,\"订单 / café / 😀\"]}",
+        "\"\\\"\\\\\\/\\b\\f\\n\\r\\t\\u0000\\uD83D\\uDE00\"", "\"\\uD800\"", "\"\\uDC00\"", "\"\\uZZZZ\"", "\"a\0b\"",
+        "{\"x\":1,\"x\":2}", "{\"x\":[true,false,null,{},[]],\"long\":123456789012345678901234567890}",
+        new string('[', 64) + "0" + new string(']', 64), new string('[', 65) + new string(']', 65),
+        string.Concat(Enumerable.Repeat("{\"a\":", 64)) + "null" + new string('}', 64),
+        string.Concat(Enumerable.Repeat("{\"a\":", 65)) + "0" + new string('}', 65)
+    ];
+    byte[] replacements = [0, 0x22, 0x5c, 0xff, 0x7d, 0x5d, 0x2c, 0x3a];
+    foreach (var seed in seeds)
+    {
+        var input = Validation.Utf8.GetBytes(seed); Compare(input);
+        for (var length = 0; length < input.Length; length++) Compare(input.AsSpan(0, length).ToArray());
+        for (var offset = 0; offset < input.Length; offset++)
+            foreach (var replacement in replacements)
+            {
+                var changed = (byte[])input.Clone(); changed[offset] = replacement; Compare(changed);
+            }
+        Compare(Validation.Utf8.GetBytes(seed + " null"));
+        Compare(Validation.Utf8.GetBytes(" \r\n" + seed + "\t "));
+    }
+    foreach (var input in new byte[][] { [0xef, 0xbb, 0xbf, (byte)'0'], [0x80], [0x22, 0xc0, 0x80, 0x22], [0x22, 0xed, 0xa0, 0x80, 0x22] }) Compare(input);
+    File.WriteAllText(Path.Combine(output, "json-validation-differential-count.txt"), checkedInputs.ToString(System.Globalization.CultureInfo.InvariantCulture));
+});
 Test("decimal_decode_preserves_canonical_96_bit_contract", () =>
 {
     var random = new Random(0xDB01);

@@ -157,7 +157,12 @@ internal sealed class DbWire
             case 16:
                 _ = Validation.Utf8.GetCharCount(bytes);
                 if (bytes.StartsWith(new byte[] { 0xef, 0xbb, 0xbf })) Bad("JSON BOM.");
-                using (JsonDocument.Parse(bytes.ToArray(), new JsonDocumentOptions { MaxDepth = 64 })) { }
+                // Validate the complete value without owning a copy or materializing
+                // a document. The default reader options reject comments, trailing
+                // commas and multiple root values, as the document parser did.
+                var reader = new Utf8JsonReader(bytes, new JsonReaderOptions { MaxDepth = 64 });
+                if (!reader.Read()) throw new JsonException("JSON requires a value.");
+                while (reader.Read()) { }
                 break;
         }
     }
