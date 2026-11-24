@@ -272,7 +272,22 @@ internal static class DecimalBytes
         return negative ? -scaled : scaled;
     }
     internal static void CheckFit(decimal value, byte precision, byte scale)
-    { if (BigInteger.Abs(Scaled(value, scale)) >= BigInteger.Pow(10, precision)) throw new OverflowException("Decimal exceeds configured precision."); }
+    {
+        Span<int> bits = stackalloc int[4]; decimal.GetBits(value, bits);
+        var coefficient = (UInt128)unchecked((uint)bits[0]) | (UInt128)unchecked((uint)bits[1]) << 32 | (UInt128)unchecked((uint)bits[2]) << 64;
+        if (coefficient == 0) return;
+        var valueScale = (byte)((bits[3] >> 16) & 255);
+        while (valueScale > 0 && coefficient % 10 == 0) { coefficient /= 10; valueScale--; }
+        if (valueScale > scale) throw new ArgumentException("Conversion would round the value.");
+        // Compare before scaling: a decimal's coefficient is below 10^29,
+        // while expanding it to the configured scale can exceed even 128 bits.
+        var exponent = precision - (scale - valueScale);
+        if (exponent >= 29) return;
+        if (exponent < 0) throw new OverflowException("Decimal exceeds configured precision.");
+        UInt128 limit = 1;
+        for (var i = 0; i < exponent; i++) limit *= 10;
+        if (coefficient >= limit) throw new OverflowException("Decimal exceeds configured precision.");
+    }
     internal static decimal Power10(byte scale) { decimal result = 1; for (var i = 0; i < scale; i++) result *= 10; return result; }
 }
 

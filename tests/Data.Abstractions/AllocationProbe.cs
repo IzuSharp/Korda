@@ -24,7 +24,7 @@ internal static class AllocationProbe
             ("strict-utf8-validation", () => DbWire.ValidateScalar(Codecs.String.Descriptor, text), true),
             ("decimal96-canonical-decode", () => _sink = DecimalBytes.Decode(number), true),
             ("decimal-zero-canonical-decode", () => _sink = DecimalBytes.Decode(zero), true),
-            ("typed-json-validation", () => DbWire.ValidateScalar(descriptor, json), false)
+            ("typed-json-validation", () => DbWire.ValidateScalar(descriptor, json), true)
         };
         var results = new ScalarAllocation[probes.Length * 3];
         // Exercise runtime and codec initialization outside each measured interval.

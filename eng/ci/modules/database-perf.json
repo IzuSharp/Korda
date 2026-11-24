@@ -1,6 +1,6 @@
 {
   "database-perf-probes": {
-    "tests": ["benchmarks/Database/"],
+    "tests": ["benchmarks/Database/", ".github/workflows/db-perf-01-linux.yml"],
     "run": ["python3", "benchmarks/Database/check.py"]
   }
 }

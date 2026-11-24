@@ -156,8 +156,19 @@ internal static class Suite
         {
             using (var first = await Fetch(1))
             {
-                Check(BinaryPrimitives.ReadUInt32LittleEndian(first.Copy().AsSpan(56)) == 1, "native per-fetch one-row demand");
+                using var batch = new HostStreamBatch(first, checked((int)source.Limits.MaxBatchBytes));
+                var borrowed = batch.Bytes;
+                var transferred = batch.TakeBytes();
+                Check(System.Runtime.InteropServices.MemoryMarshal.TryGetArray(borrowed, out var segment)
+                    && ReferenceEquals(segment.Array, transferred), "host transfers its existing managed copy without cloning");
+                Check(BinaryPrimitives.ReadUInt32LittleEndian(transferred.AsSpan(56)) == 1, "native per-fetch one-row demand");
+                await Throws<ObjectDisposedException>(() => { _ = batch.Bytes; return Task.CompletedTask; });
+                await Throws<ObjectDisposedException>(() => { _ = batch.TakeBytes(); return Task.CompletedTask; });
                 await Throws<InvalidOperationException>(async () => { using var blocked = await Fetch(1); });
+                Check(!first.IsClosed, "managed transfer retains the native byte permit until batch disposal");
+                batch.Dispose(); batch.Dispose();
+                Check(first.IsClosed && BinaryPrimitives.ReadUInt32LittleEndian(transferred.AsSpan(56)) == 1,
+                    "host batch disposal releases native owner once while transferred managed bytes survive");
             }
             using var second = await Fetch(2);
             Check(BinaryPrimitives.ReadUInt32LittleEndian(second.Copy().AsSpan(56)) == 2, "native per-fetch two-row demand after prior buffer release");

@@ -13,9 +13,19 @@ if (args.Contains("--allocation-probe", StringComparer.Ordinal))
     AllocationProbe.Run(output, args.Contains("--allocation-regression", StringComparer.Ordinal));
     return;
 }
+if (args.Contains("--configured-scalar-probe", StringComparer.Ordinal))
+{
+    ConfiguredScalarProbe.Measure(output, args.Contains("--allocation-regression", StringComparer.Ordinal));
+    return;
+}
 if (args.Contains("--batch-allocation-probe", StringComparer.Ordinal))
 {
     BatchAllocationProbe.Run(output);
+    return;
+}
+if (args.Contains("--configured-scalar-correctness", StringComparer.Ordinal))
+{
+    ConfiguredScalarProbe.Verify(output);
     return;
 }
 Console.WriteLine("Dynamic code supported: " + RuntimeFeature.IsDynamicCodeSupported);
@@ -23,6 +33,8 @@ var cases = new List<string>();
 void Check(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
 void Reject<T>(Action action) where T : Exception { try { action(); } catch (T) { return; } throw new InvalidOperationException("Expected " + typeof(T).Name); }
 void Test(string name, Action action) { action(); cases.Add(name); Console.WriteLine("PASS " + name); }
+
+Test("configured_codec_configuration_and_precision_oracle", () => ConfiguredScalarProbe.Verify(output));
 
 var parentBuilder = new TableBuilder<Parent>("Parents");
 var id = parentBuilder.Column("Id", Codecs.Int64, new() { IsPrimaryKey = true });
@@ -180,6 +192,57 @@ Test("strict_utf8_validation_preserves_rejections", () =>
         Reject<System.Text.DecoderFallbackException>(() => DbWire.ValidateScalar(Codecs.Json(TestJson.Default.Payload).Descriptor, json));
     }
 });
+Test("json_validation_matches_document_single_value_contract", () =>
+{
+    var json = Codecs.Json(TestJson.Default.Payload).Descriptor;
+    using var proofStream = File.Create(Path.Combine(output, "json-validation-differential.json"));
+    using var proof = new Utf8JsonWriter(proofStream);
+    proof.WriteStartArray();
+    // Independent legacy validation is retained only as a correctness oracle.
+    // No allocation result subtracts this oracle's cost from the production lane.
+    static Type? Outcome(byte[] bytes, CodecDescriptor descriptor, bool legacy)
+    {
+        try
+        {
+            if (!legacy) DbWire.ValidateScalar(descriptor, bytes);
+            else
+            {
+                _ = Validation.Utf8.GetCharCount(bytes);
+                if (bytes.AsSpan().StartsWith(new byte[] { 0xef, 0xbb, 0xbf })) throw new ArgumentException("JSON BOM.");
+                using var document = JsonDocument.Parse(bytes.AsMemory(), new JsonDocumentOptions { MaxDepth = 64 });
+            }
+            return null;
+        }
+        catch (Exception error) when (error is ArgumentException or JsonException) { return error.GetType(); }
+    }
+    void Compare(byte[] bytes)
+    {
+        var before = Outcome(bytes, json, true); var after = Outcome(bytes, json, false);
+        proof.WriteStartObject(); proof.WriteString("input_hex", Convert.ToHexString(bytes));
+        proof.WriteString("legacy_error", before?.FullName); proof.WriteString("production_error", after?.FullName);
+        proof.WriteBoolean("matched", before == after); proof.WriteEndObject();
+        Check(before == after, "JSON accept/reject or exception type changed for " + Convert.ToHexString(bytes));
+    }
+    string[] corpus = ["", " \t\r\n", "null", "false", "0", "-0", "1e400", "1E-400", "1.", ".1", "01", "NaN",
+        "true false", "{}[]", "0 x", "[1,]", "{\"a\":1,}", "/*c*/0", "[/*c*/0]", "\"\\uD800\"", "\"\\uDC00\"",
+        "\"\\uD83D\\uDE00\"", "\"\\u0000\"", "\"\\x20\"", "\"\\q\"", "\"line\nfeed\"", "\"订单 / café / 😀\"",
+        "{\"a\":1,\"a\":2}", "[null,true,false,0,-1,1.25e+3,{},[]]", "{\"a\":[{\"b\":\"x\"}]}\r\n",
+        new string('[', 64) + "0" + new string(']', 64), new string('[', 64) + new string(']', 64),
+        new string('[', 65) + new string(']', 65), new string('[', 64) + "{}" + new string(']', 64),
+        new string('[', 63) + "{}" + new string(']', 63)];
+    var random = new Random(0xDB016);
+    foreach (var text in corpus)
+    {
+        var input = Validation.Utf8.GetBytes(text); Compare(input);
+        for (var length = 0; length < input.Length; length++) Compare(input.AsSpan(0, length).ToArray());
+        for (var attempt = 0; attempt < 32 && input.Length != 0; attempt++)
+        {
+            var mutated = (byte[])input.Clone(); mutated[random.Next(mutated.Length)] = (byte)random.Next(256); Compare(mutated);
+        }
+    }
+    foreach (var input in new byte[][] { [0xef, 0xbb, 0xbf, (byte)'0'], [0xff], [(byte)'"', 0xc0, 0x80, (byte)'"'] }) Compare(input);
+    proof.WriteEndArray(); proof.Flush();
+});
 Test("decimal_decode_preserves_canonical_96_bit_contract", () =>
 {
     var random = new Random(0xDB01);
@@ -247,6 +310,54 @@ Test("db_wire_all_scalar_golden_and_malformed_inputs", () =>
     Mutation(b => { var offset = (int)BinaryPrimitives.ReadUInt64LittleEndian(b.AsSpan(co + 4 * 24 + 8)); b[offset] = 255; });
     Reject<ArgumentException>(() => DbWire.Parse(wire, expectation with { MetadataHash = Enumerable.Repeat((byte)1, 32).ToArray() }));
     Reject<ArgumentException>(() => DbWire.Parse(wire.AsSpan(0, 95), expectation));
+});
+Test("db_wire_disordered_ranges_preserve_full_validation", () =>
+{
+    var shape = new WireExpectation(PayloadKind.Rows, 2, new byte[32], 0, 1, [new(1, Codecs.Int64.Descriptor, 3)]);
+    ReadOnlyMemory<byte>?[] values = [Codecs.Int64.Encode(11), Codecs.Int64.Encode(22), Codecs.Int64.Encode(33), Codecs.Int64.Encode(44)];
+    var original = DbWire.Encode(shape, 4, values);
+    const int cellsOffset = WireSchema.HeaderBytes + WireSchema.DescriptorBytes;
+    var offsets = Enumerable.Range(0, 4).Select(i => DbWire.R64(original, cellsOffset + i * WireSchema.CellBytes + 8)).ToArray();
+    var permutations = 0;
+    for (var a = 0; a < 4; a++) for (var b = 0; b < 4; b++)
+    for (var c = 0; c < 4; c++) for (var d = 0; d < 4; d++)
+    {
+        int[] order = [a, b, c, d]; if (order.Distinct().Count() != 4) continue;
+        permutations++;
+        var input = (byte[])original.Clone();
+        for (var i = 0; i < 4; i++) DbWire.U64(input, cellsOffset + i * WireSchema.CellBytes + 8, offsets[order[i]]);
+        foreach (var parsed in new[] { DbWire.Parse(input, shape), DbWire.ParseOwned((byte[])input.Clone(), shape) })
+            for (uint row = 0; row < 4; row++)
+                Check(BinaryPrimitives.ReadInt64LittleEndian(parsed.Cell(row, 0)!.Value.Span) == 11L * (order[row] + 1), "Disordered non-overlapping row changed.");
+        for (var first = 0; first < 4; first++) for (var second = 0; second < 4; second++)
+        {
+            if (first == second) continue;
+            var overlap = (byte[])input.Clone();
+            DbWire.U64(overlap, cellsOffset + second * WireSchema.CellBytes + 8, offsets[order[first]]);
+            Reject<ArgumentException>(() => DbWire.Parse(overlap, shape));
+            Reject<ArgumentException>(() => DbWire.ParseOwned(overlap, shape));
+        }
+    }
+    Check(permutations == 24, "The complete range-order permutation matrix was not exercised.");
+    var partial = (byte[])original.Clone();
+    DbWire.U64(partial, cellsOffset + 3 * WireSchema.CellBytes + 8, offsets[0] + 1);
+    Reject<ArgumentException>(() => DbWire.Parse(partial, shape));
+    Reject<ArgumentException>(() => DbWire.ParseOwned(partial, shape));
+});
+Test("db_wire_defensive_copy_and_exclusive_owned_handoff", () =>
+{
+    var borrowed = (byte[])wire.Clone();
+    var defensive = DbWire.Parse(borrowed, expectation);
+    Array.Clear(borrowed);
+    Check(defensive.Bytes.AsSpan().SequenceEqual(wire), "Borrowed input mutation changed a parsed wire snapshot.");
+    Check(!ReferenceEquals(defensive.Bytes, borrowed), "The borrowed parse entry point lost its defensive copy.");
+    var exclusive = (byte[])wire.Clone();
+    var owned = DbWire.ParseOwned(exclusive, expectation);
+    Check(ReferenceEquals(owned.Bytes, exclusive), "The exclusive owned parse allocated a second payload copy.");
+    Check(owned.Cell(0, 17) is null && owned.Cell(0, 18) is { Length: 0 }, "Owned parsing changed NULL/empty semantics.");
+    Reject<ArgumentNullException>(() => DbWire.ParseOwned(null!, expectation));
+    Reject<ArgumentException>(() => DbWire.ParseOwned((byte[])wire.Clone(), expectation with { MetadataHash = Enumerable.Repeat((byte)1, 32).ToArray() }));
+    Reject<ArgumentException>(() => DbWire.ParseOwned(wire.AsSpan(0, 95).ToArray(), expectation));
 });
 Test("wire_owned_storage_is_explicit_and_default_parse_still_snapshots", () =>
 {

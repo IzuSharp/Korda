@@ -1,0 +1,3326 @@
+{
+  "schema_version": 1,
+  "task": "DB-Perf-01",
+  "baseline_commit": "771bc77cbd68d3f932b99ed2497c0697bbba5f02",
+  "dataset": {
+    "tenants": 8,
+    "orders_per_tenant": 8192,
+    "customers": 256,
+    "rows": 32,
+    "batch_rows": 128,
+    "skew": "70% of non-null order references target 8 hot customers; tenant 1 is the measured hot tenant",
+    "nullable": "every seventh customer reference and every fifth note",
+    "empty_relations": "every fifth order has no lines",
+    "state_rows": 128,
+    "state_schema": "perf_state(Id bigint primary key, Counter bigint not null, Version bigint not null, Note text null)",
+    "state_ownership": "Logical worker i exclusively uses Id=i+1; initial row is (i+1,0,1,NULL). Read dataset is immutable."
+  },
+  "digest": {
+    "algorithm": "FNV-1a 64 bit",
+    "integer": "signed int64 little-endian",
+    "nullable": "one-byte presence plus value",
+    "string": "int64 UTF-8 byte length then bytes; null length -1",
+    "money": "exact signed int64 cents",
+    "settings": "UTF-8 Channel then one byte Gift",
+    "related": "parent id, child count, child fields; groups in input order, children by Id"
+  },
+  "cases": [
+    {
+      "id": "R01",
+      "name": "numeric",
+      "entry": "fluent",
+      "semantically_distinct": true,
+      "sql": {
+        "sqlite": "SELECT \"orders\".\"Id\" AS \"value\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ? ORDER BY \"orders\".\"Id\" ASC NULLS LAST LIMIT ?",
+        "postgresql": "SELECT \"orders\".\"Id\" AS \"value\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $1 ORDER BY \"orders\".\"Id\" ASC NULLS LAST LIMIT $2"
+      },
+      "fragments": {
+        "sqlite": [
+          "SELECT \"orders\".\"Id\" AS \"value\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = ? ",
+          "ORDER BY \"orders\".\"Id\" ASC NULLS LAST ",
+          "LIMIT ?"
+        ],
+        "postgresql": [
+          "SELECT \"orders\".\"Id\" AS \"value\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = $1 ",
+          "ORDER BY \"orders\".\"Id\" ASC NULLS LAST ",
+          "LIMIT $2"
+        ]
+      },
+      "parameters": [
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 32
+        }
+      ],
+      "columns": [
+        {
+          "name": "value",
+          "type": "int64",
+          "nullable": false
+        }
+      ],
+      "materialization": "scalar-int64",
+      "expected": {
+        "rows": 32,
+        "digest": "7556371084242497349",
+        "digest_hex": "68dd9f773b4eaf45"
+      },
+      "status": "contract; each provider and route require actual correctness validation"
+    },
+    {
+      "id": "R02",
+      "name": "text",
+      "entry": "fluent",
+      "semantically_distinct": true,
+      "sql": {
+        "sqlite": "SELECT \"orders\".\"Id\" AS \"Id\", \"orders\".\"Note\" AS \"Note\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ? ORDER BY \"orders\".\"Id\" ASC NULLS LAST LIMIT ?",
+        "postgresql": "SELECT \"orders\".\"Id\" AS \"Id\", \"orders\".\"Note\" AS \"Note\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $1 ORDER BY \"orders\".\"Id\" ASC NULLS LAST LIMIT $2"
+      },
+      "fragments": {
+        "sqlite": [
+          "SELECT \"orders\".\"Id\" AS \"Id\", \"orders\".\"Note\" AS \"Note\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = ? ",
+          "ORDER BY \"orders\".\"Id\" ASC NULLS LAST ",
+          "LIMIT ?"
+        ],
+        "postgresql": [
+          "SELECT \"orders\".\"Id\" AS \"Id\", \"orders\".\"Note\" AS \"Note\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = $1 ",
+          "ORDER BY \"orders\".\"Id\" ASC NULLS LAST ",
+          "LIMIT $2"
+        ]
+      },
+      "parameters": [
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 32
+        }
+      ],
+      "columns": [
+        {
+          "name": "Id",
+          "type": "int64",
+          "nullable": false
+        },
+        {
+          "name": "Note",
+          "type": "string",
+          "nullable": true
+        }
+      ],
+      "materialization": "text",
+      "expected": {
+        "rows": 32,
+        "digest": "12487621479036523840",
+        "digest_hex": "ad4cf192ab829540"
+      },
+      "status": "contract; each provider and route require actual correctness validation"
+    },
+    {
+      "id": "R03",
+      "name": "money",
+      "entry": "fluent",
+      "semantically_distinct": true,
+      "sql": {
+        "sqlite": "SELECT \"orders\".\"Id\" AS \"Id\", \"orders\".\"Total\" AS \"Total\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ? ORDER BY \"orders\".\"Id\" ASC NULLS LAST LIMIT ?",
+        "postgresql": "SELECT \"orders\".\"Id\" AS \"Id\", \"orders\".\"Total\" AS \"Total\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $1 ORDER BY \"orders\".\"Id\" ASC NULLS LAST LIMIT $2"
+      },
+      "fragments": {
+        "sqlite": [
+          "SELECT \"orders\".\"Id\" AS \"Id\", \"orders\".\"Total\" AS \"Total\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = ? ",
+          "ORDER BY \"orders\".\"Id\" ASC NULLS LAST ",
+          "LIMIT ?"
+        ],
+        "postgresql": [
+          "SELECT \"orders\".\"Id\" AS \"Id\", \"orders\".\"Total\" AS \"Total\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = $1 ",
+          "ORDER BY \"orders\".\"Id\" ASC NULLS LAST ",
+          "LIMIT $2"
+        ]
+      },
+      "parameters": [
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 32
+        }
+      ],
+      "columns": [
+        {
+          "name": "Id",
+          "type": "int64",
+          "nullable": false
+        },
+        {
+          "name": "Total",
+          "type": "money",
+          "nullable": false
+        }
+      ],
+      "materialization": "money",
+      "expected": {
+        "rows": 32,
+        "digest": "652630223626968177",
+        "digest_hex": "090e9bbb08f81c71"
+      },
+      "status": "contract; each provider and route require actual correctness validation"
+    },
+    {
+      "id": "R04",
+      "name": "json",
+      "entry": "fluent",
+      "semantically_distinct": true,
+      "sql": {
+        "sqlite": "SELECT \"orders\".\"Id\" AS \"Id\", \"orders\".\"Settings\" AS \"Settings\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ? ORDER BY \"orders\".\"Id\" ASC NULLS LAST LIMIT ?",
+        "postgresql": "SELECT \"orders\".\"Id\" AS \"Id\", \"orders\".\"Settings\" AS \"Settings\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $1 ORDER BY \"orders\".\"Id\" ASC NULLS LAST LIMIT $2"
+      },
+      "fragments": {
+        "sqlite": [
+          "SELECT \"orders\".\"Id\" AS \"Id\", \"orders\".\"Settings\" AS \"Settings\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = ? ",
+          "ORDER BY \"orders\".\"Id\" ASC NULLS LAST ",
+          "LIMIT ?"
+        ],
+        "postgresql": [
+          "SELECT \"orders\".\"Id\" AS \"Id\", \"orders\".\"Settings\" AS \"Settings\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = $1 ",
+          "ORDER BY \"orders\".\"Id\" ASC NULLS LAST ",
+          "LIMIT $2"
+        ]
+      },
+      "parameters": [
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 32
+        }
+      ],
+      "columns": [
+        {
+          "name": "Id",
+          "type": "int64",
+          "nullable": false
+        },
+        {
+          "name": "Settings",
+          "type": "settings",
+          "nullable": false
+        }
+      ],
+      "materialization": "json",
+      "expected": {
+        "rows": 32,
+        "digest": "6739049677655155469",
+        "digest_hex": "5d85e9fa1058a30d"
+      },
+      "status": "contract; each provider and route require actual correctness validation"
+    },
+    {
+      "id": "R05",
+      "name": "wide",
+      "entry": "fluent",
+      "semantically_distinct": true,
+      "sql": {
+        "sqlite": "SELECT \"orders\".\"TenantId\" AS \"TenantId\", \"orders\".\"Id\" AS \"Id\", \"orders\".\"CreatedAt\" AS \"CreatedAt\", \"orders\".\"CustomerId\" AS \"CustomerId\", \"orders\".\"Total\" AS \"Total\", \"orders\".\"Note\" AS \"Note\", \"orders\".\"Version\" AS \"Version\", \"orders\".\"Settings\" AS \"Settings\", \"orders\".\"InternalMemo\" AS \"InternalMemo\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ? ORDER BY \"orders\".\"Id\" ASC NULLS LAST LIMIT ?",
+        "postgresql": "SELECT \"orders\".\"TenantId\" AS \"TenantId\", \"orders\".\"Id\" AS \"Id\", \"orders\".\"CreatedAt\" AS \"CreatedAt\", \"orders\".\"CustomerId\" AS \"CustomerId\", \"orders\".\"Total\" AS \"Total\", \"orders\".\"Note\" AS \"Note\", \"orders\".\"Version\" AS \"Version\", \"orders\".\"Settings\" AS \"Settings\", \"orders\".\"InternalMemo\" AS \"InternalMemo\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $1 ORDER BY \"orders\".\"Id\" ASC NULLS LAST LIMIT $2"
+      },
+      "fragments": {
+        "sqlite": [
+          "SELECT \"orders\".\"TenantId\" AS \"TenantId\", \"orders\".\"Id\" AS \"Id\", \"orders\".\"CreatedAt\" AS \"CreatedAt\", \"orders\".\"CustomerId\" AS \"CustomerId\", \"orders\".\"Total\" AS \"Total\", \"orders\".\"Note\" AS \"Note\", \"orders\".\"Version\" AS \"Version\", \"orders\".\"Settings\" AS \"Settings\", \"orders\".\"InternalMemo\" AS \"InternalMemo\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = ? ",
+          "ORDER BY \"orders\".\"Id\" ASC NULLS LAST ",
+          "LIMIT ?"
+        ],
+        "postgresql": [
+          "SELECT \"orders\".\"TenantId\" AS \"TenantId\", \"orders\".\"Id\" AS \"Id\", \"orders\".\"CreatedAt\" AS \"CreatedAt\", \"orders\".\"CustomerId\" AS \"CustomerId\", \"orders\".\"Total\" AS \"Total\", \"orders\".\"Note\" AS \"Note\", \"orders\".\"Version\" AS \"Version\", \"orders\".\"Settings\" AS \"Settings\", \"orders\".\"InternalMemo\" AS \"InternalMemo\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = $1 ",
+          "ORDER BY \"orders\".\"Id\" ASC NULLS LAST ",
+          "LIMIT $2"
+        ]
+      },
+      "parameters": [
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 32
+        }
+      ],
+      "columns": [
+        {
+          "name": "TenantId",
+          "type": "int64",
+          "nullable": false
+        },
+        {
+          "name": "Id",
+          "type": "int64",
+          "nullable": false
+        },
+        {
+          "name": "CreatedAt",
+          "type": "int64",
+          "nullable": false
+        },
+        {
+          "name": "CustomerId",
+          "type": "nullable-int64",
+          "nullable": true
+        },
+        {
+          "name": "Total",
+          "type": "money",
+          "nullable": false
+        },
+        {
+          "name": "Note",
+          "type": "string",
+          "nullable": true
+        },
+        {
+          "name": "Version",
+          "type": "int64",
+          "nullable": false
+        },
+        {
+          "name": "Settings",
+          "type": "settings",
+          "nullable": false
+        },
+        {
+          "name": "InternalMemo",
+          "type": "string",
+          "nullable": false
+        }
+      ],
+      "materialization": "wide",
+      "expected": {
+        "rows": 32,
+        "digest": "13935510392633324490",
+        "digest_hex": "c164e0de5cac73ca"
+      },
+      "status": "contract; each provider and route require actual correctness validation"
+    },
+    {
+      "id": "R06",
+      "name": "optional-filter",
+      "entry": "fluent",
+      "semantically_distinct": true,
+      "sql": {
+        "sqlite": "SELECT \"orders\".\"Id\" AS \"value\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ? AND \"orders\".\"CustomerId\" = ? ORDER BY \"orders\".\"Id\" ASC NULLS LAST LIMIT ?",
+        "postgresql": "SELECT \"orders\".\"Id\" AS \"value\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $1 AND \"orders\".\"CustomerId\" = $2 ORDER BY \"orders\".\"Id\" ASC NULLS LAST LIMIT $3"
+      },
+      "fragments": {
+        "sqlite": [
+          "SELECT \"orders\".\"Id\" AS \"value\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = ? AND \"orders\".\"CustomerId\" = ? ",
+          "ORDER BY \"orders\".\"Id\" ASC NULLS LAST ",
+          "LIMIT ?"
+        ],
+        "postgresql": [
+          "SELECT \"orders\".\"Id\" AS \"value\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = $1 AND \"orders\".\"CustomerId\" = $2 ",
+          "ORDER BY \"orders\".\"Id\" ASC NULLS LAST ",
+          "LIMIT $3"
+        ]
+      },
+      "parameters": [
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 2
+        },
+        {
+          "type": "int64",
+          "value": 32
+        }
+      ],
+      "columns": [
+        {
+          "name": "value",
+          "type": "int64",
+          "nullable": false
+        }
+      ],
+      "materialization": "scalar-int64",
+      "expected": {
+        "rows": 32,
+        "digest": "10644917697341886270",
+        "digest_hex": "93ba583f1d550f3e"
+      },
+      "status": "contract; each provider and route require actual correctness validation"
+    },
+    {
+      "id": "R07",
+      "name": "range",
+      "entry": "fluent",
+      "semantically_distinct": true,
+      "sql": {
+        "sqlite": "SELECT \"orders\".\"Id\" AS \"value\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ? AND (\"orders\".\"CreatedAt\" >= ? AND \"orders\".\"CreatedAt\" < ?) ORDER BY \"orders\".\"Id\" ASC NULLS LAST LIMIT ?",
+        "postgresql": "SELECT \"orders\".\"Id\" AS \"value\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $1 AND (\"orders\".\"CreatedAt\" >= $2 AND \"orders\".\"CreatedAt\" < $3) ORDER BY \"orders\".\"Id\" ASC NULLS LAST LIMIT $4"
+      },
+      "fragments": {
+        "sqlite": [
+          "SELECT \"orders\".\"Id\" AS \"value\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = ? AND (\"orders\".\"CreatedAt\" >= ? AND \"orders\".\"CreatedAt\" < ?) ",
+          "ORDER BY \"orders\".\"Id\" ASC NULLS LAST ",
+          "LIMIT ?"
+        ],
+        "postgresql": [
+          "SELECT \"orders\".\"Id\" AS \"value\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = $1 AND (\"orders\".\"CreatedAt\" >= $2 AND \"orders\".\"CreatedAt\" < $3) ",
+          "ORDER BY \"orders\".\"Id\" ASC NULLS LAST ",
+          "LIMIT $4"
+        ]
+      },
+      "parameters": [
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 1700000100
+        },
+        {
+          "type": "int64",
+          "value": 1700000200
+        },
+        {
+          "type": "int64",
+          "value": 32
+        }
+      ],
+      "columns": [
+        {
+          "name": "value",
+          "type": "int64",
+          "nullable": false
+        }
+      ],
+      "materialization": "scalar-int64",
+      "expected": {
+        "rows": 32,
+        "digest": "2191139202621513541",
+        "digest_hex": "1e687d7ee1b01f45"
+      },
+      "status": "contract; each provider and route require actual correctness validation"
+    },
+    {
+      "id": "R08",
+      "name": "left-join",
+      "entry": "fluent",
+      "semantically_distinct": true,
+      "sql": {
+        "sqlite": "SELECT \"orders\".\"Id\" AS \"Id\", \"customer\".\"Name\" AS \"Name\" FROM \"orders\" LEFT JOIN (SELECT \"Email\", \"Name\", \"Id\", 1 AS \"_nw_match\" FROM \"customers\") AS \"customer\" ON \"orders\".\"CustomerId\" = \"customer\".\"Id\" WHERE \"orders\".\"TenantId\" = ? ORDER BY \"orders\".\"Id\" ASC NULLS LAST LIMIT ?",
+        "postgresql": "SELECT \"orders\".\"Id\" AS \"Id\", \"customer\".\"Name\" AS \"Name\" FROM \"orders\" LEFT JOIN (SELECT \"Email\", \"Name\", \"Id\", 1 AS \"_nw_match\" FROM \"customers\") AS \"customer\" ON \"orders\".\"CustomerId\" = \"customer\".\"Id\" WHERE \"orders\".\"TenantId\" = $1 ORDER BY \"orders\".\"Id\" ASC NULLS LAST LIMIT $2"
+      },
+      "fragments": {
+        "sqlite": [
+          "SELECT \"orders\".\"Id\" AS \"Id\", \"customer\".\"Name\" AS \"Name\" ",
+          "FROM \"orders\" ",
+          "LEFT JOIN (",
+          "SELECT \"Email\", \"Name\", \"Id\", 1 AS \"_nw_match\" ",
+          "FROM \"customers\") AS \"customer\" ON \"orders\".\"CustomerId\" = \"customer\".\"Id\" ",
+          "WHERE \"orders\".\"TenantId\" = ? ",
+          "ORDER BY \"orders\".\"Id\" ASC NULLS LAST ",
+          "LIMIT ?"
+        ],
+        "postgresql": [
+          "SELECT \"orders\".\"Id\" AS \"Id\", \"customer\".\"Name\" AS \"Name\" ",
+          "FROM \"orders\" ",
+          "LEFT JOIN (",
+          "SELECT \"Email\", \"Name\", \"Id\", 1 AS \"_nw_match\" ",
+          "FROM \"customers\") AS \"customer\" ON \"orders\".\"CustomerId\" = \"customer\".\"Id\" ",
+          "WHERE \"orders\".\"TenantId\" = $1 ",
+          "ORDER BY \"orders\".\"Id\" ASC NULLS LAST ",
+          "LIMIT $2"
+        ]
+      },
+      "parameters": [
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 32
+        }
+      ],
+      "columns": [
+        {
+          "name": "Id",
+          "type": "int64",
+          "nullable": false
+        },
+        {
+          "name": "Name",
+          "type": "string",
+          "nullable": true
+        }
+      ],
+      "materialization": "join",
+      "expected": {
+        "rows": 32,
+        "digest": "9266386367133127423",
+        "digest_hex": "8098d14e347e12ff"
+      },
+      "status": "contract; each provider and route require actual correctness validation"
+    },
+    {
+      "id": "R09",
+      "name": "inner-join",
+      "entry": "fluent",
+      "semantically_distinct": true,
+      "sql": {
+        "sqlite": "SELECT \"orders\".\"Id\" AS \"Id\", \"customer\".\"Name\" AS \"Name\" FROM \"orders\" INNER JOIN \"customers\" AS \"customer\" ON \"orders\".\"CustomerId\" = \"customer\".\"Id\" WHERE \"orders\".\"TenantId\" = ? ORDER BY \"orders\".\"Id\" ASC NULLS LAST LIMIT ?",
+        "postgresql": "SELECT \"orders\".\"Id\" AS \"Id\", \"customer\".\"Name\" AS \"Name\" FROM \"orders\" INNER JOIN \"customers\" AS \"customer\" ON \"orders\".\"CustomerId\" = \"customer\".\"Id\" WHERE \"orders\".\"TenantId\" = $1 ORDER BY \"orders\".\"Id\" ASC NULLS LAST LIMIT $2"
+      },
+      "fragments": {
+        "sqlite": [
+          "SELECT \"orders\".\"Id\" AS \"Id\", \"customer\".\"Name\" AS \"Name\" ",
+          "FROM \"orders\" ",
+          "INNER JOIN \"customers\" AS \"customer\" ON \"orders\".\"CustomerId\" = \"customer\".\"Id\" ",
+          "WHERE \"orders\".\"TenantId\" = ? ",
+          "ORDER BY \"orders\".\"Id\" ASC NULLS LAST ",
+          "LIMIT ?"
+        ],
+        "postgresql": [
+          "SELECT \"orders\".\"Id\" AS \"Id\", \"customer\".\"Name\" AS \"Name\" ",
+          "FROM \"orders\" ",
+          "INNER JOIN \"customers\" AS \"customer\" ON \"orders\".\"CustomerId\" = \"customer\".\"Id\" ",
+          "WHERE \"orders\".\"TenantId\" = $1 ",
+          "ORDER BY \"orders\".\"Id\" ASC NULLS LAST ",
+          "LIMIT $2"
+        ]
+      },
+      "parameters": [
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 32
+        }
+      ],
+      "columns": [
+        {
+          "name": "Id",
+          "type": "int64",
+          "nullable": false
+        },
+        {
+          "name": "Name",
+          "type": "string",
+          "nullable": true
+        }
+      ],
+      "materialization": "join",
+      "expected": {
+        "rows": 32,
+        "digest": "13048328658466860163",
+        "digest_hex": "b514f9c828776c83"
+      },
+      "status": "contract; each provider and route require actual correctness validation"
+    },
+    {
+      "id": "R10",
+      "name": "null-notes",
+      "entry": "fluent",
+      "semantically_distinct": true,
+      "sql": {
+        "sqlite": "SELECT \"orders\".\"Id\" AS \"value\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ? AND \"orders\".\"Note\" IS NULL ORDER BY \"orders\".\"Id\" ASC NULLS LAST LIMIT ?",
+        "postgresql": "SELECT \"orders\".\"Id\" AS \"value\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $1 AND \"orders\".\"Note\" IS NULL ORDER BY \"orders\".\"Id\" ASC NULLS LAST LIMIT $2"
+      },
+      "fragments": {
+        "sqlite": [
+          "SELECT \"orders\".\"Id\" AS \"value\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = ? AND \"orders\".\"Note\" IS NULL ",
+          "ORDER BY \"orders\".\"Id\" ASC NULLS LAST ",
+          "LIMIT ?"
+        ],
+        "postgresql": [
+          "SELECT \"orders\".\"Id\" AS \"value\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = $1 AND \"orders\".\"Note\" IS NULL ",
+          "ORDER BY \"orders\".\"Id\" ASC NULLS LAST ",
+          "LIMIT $2"
+        ]
+      },
+      "parameters": [
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 32
+        }
+      ],
+      "columns": [
+        {
+          "name": "value",
+          "type": "int64",
+          "nullable": false
+        }
+      ],
+      "materialization": "scalar-int64",
+      "expected": {
+        "rows": 32,
+        "digest": "323920280211960453",
+        "digest_hex": "047ecbc755943285"
+      },
+      "status": "contract; each provider and route require actual correctness validation"
+    },
+    {
+      "id": "R11",
+      "name": "literal-note",
+      "entry": "fluent",
+      "semantically_distinct": true,
+      "sql": {
+        "sqlite": "SELECT \"orders\".\"Id\" AS \"value\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ? AND \"orders\".\"Note\" LIKE ? ESCAPE '\\' ORDER BY \"orders\".\"Id\" ASC NULLS LAST LIMIT ?",
+        "postgresql": "SELECT \"orders\".\"Id\" AS \"value\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $1 AND \"orders\".\"Note\" LIKE $2 ESCAPE E'\\\\' ORDER BY \"orders\".\"Id\" ASC NULLS LAST LIMIT $3"
+      },
+      "fragments": {
+        "sqlite": [
+          "SELECT \"orders\".\"Id\" AS \"value\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = ? AND \"orders\".\"Note\" LIKE ? ESCAPE '\\' ",
+          "ORDER BY \"orders\".\"Id\" ASC NULLS LAST ",
+          "LIMIT ?"
+        ],
+        "postgresql": [
+          "SELECT \"orders\".\"Id\" AS \"value\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = $1 AND \"orders\".\"Note\" LIKE $2 ESCAPE E'\\\\' ",
+          "ORDER BY \"orders\".\"Id\" ASC NULLS LAST ",
+          "LIMIT $3"
+        ]
+      },
+      "parameters": [
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "text",
+          "value": "%note-1%"
+        },
+        {
+          "type": "int64",
+          "value": 32
+        }
+      ],
+      "columns": [
+        {
+          "name": "value",
+          "type": "int64",
+          "nullable": false
+        }
+      ],
+      "materialization": "scalar-int64",
+      "expected": {
+        "rows": 32,
+        "digest": "10809787755827687310",
+        "digest_hex": "960414b0f379ef8e"
+      },
+      "status": "contract; each provider and route require actual correctness validation"
+    },
+    {
+      "id": "R12",
+      "name": "customer-totals",
+      "entry": "fluent",
+      "semantically_distinct": true,
+      "sql": {
+        "sqlite": "SELECT \"orders\".\"CustomerId\" AS \"CustomerId\", COUNT(*) AS \"Count\", SUM(\"orders\".\"Total\") AS \"Total\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ? GROUP BY \"orders\".\"CustomerId\" HAVING COUNT(*) > ? ORDER BY \"orders\".\"CustomerId\" ASC NULLS LAST",
+        "postgresql": "SELECT \"orders\".\"CustomerId\" AS \"CustomerId\", COUNT(*) AS \"Count\", SUM(\"orders\".\"Total\") AS \"Total\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $1 GROUP BY \"orders\".\"CustomerId\" HAVING COUNT(*) > $2 ORDER BY \"orders\".\"CustomerId\" ASC NULLS LAST"
+      },
+      "fragments": {
+        "sqlite": [
+          "SELECT \"orders\".\"CustomerId\" AS \"CustomerId\", COUNT(*) AS \"Count\", SUM(\"orders\".\"Total\") AS \"Total\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = ? ",
+          "GROUP BY \"orders\".\"CustomerId\" ",
+          "HAVING COUNT(*) > ? ",
+          "ORDER BY \"orders\".\"CustomerId\" ASC NULLS LAST"
+        ],
+        "postgresql": [
+          "SELECT \"orders\".\"CustomerId\" AS \"CustomerId\", COUNT(*) AS \"Count\", SUM(\"orders\".\"Total\") AS \"Total\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = $1 ",
+          "GROUP BY \"orders\".\"CustomerId\" ",
+          "HAVING COUNT(*) > $2 ",
+          "ORDER BY \"orders\".\"CustomerId\" ASC NULLS LAST"
+        ]
+      },
+      "parameters": [
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 3
+        }
+      ],
+      "columns": [
+        {
+          "name": "CustomerId",
+          "type": "nullable-int64",
+          "nullable": true
+        },
+        {
+          "name": "Count",
+          "type": "int64",
+          "nullable": false
+        },
+        {
+          "name": "Total",
+          "type": "nullable-money",
+          "nullable": true
+        }
+      ],
+      "materialization": "customer-total",
+      "expected": {
+        "rows": 257,
+        "digest": "2458428288288105469",
+        "digest_hex": "221e1780bd2f23fd"
+      },
+      "status": "contract; each provider and route require actual correctness validation"
+    },
+    {
+      "id": "R13",
+      "name": "product-totals",
+      "entry": "fluent",
+      "semantically_distinct": true,
+      "sql": {
+        "sqlite": "SELECT \"order_lines\".\"Product\" AS \"Product\", SUM(\"order_lines\".\"Quantity\") AS \"Quantity\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = ? GROUP BY \"order_lines\".\"Product\" HAVING SUM(\"order_lines\".\"Quantity\") > ? ORDER BY \"order_lines\".\"Product\" ASC NULLS LAST",
+        "postgresql": "SELECT \"order_lines\".\"Product\" AS \"Product\", CAST(SUM(\"order_lines\".\"Quantity\") AS bigint) AS \"Quantity\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = $1 GROUP BY \"order_lines\".\"Product\" HAVING CAST(SUM(\"order_lines\".\"Quantity\") AS bigint) > $2 ORDER BY \"order_lines\".\"Product\" ASC NULLS LAST"
+      },
+      "fragments": {
+        "sqlite": [
+          "SELECT \"order_lines\".\"Product\" AS \"Product\", SUM(\"order_lines\".\"Quantity\") AS \"Quantity\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = ? ",
+          "GROUP BY \"order_lines\".\"Product\" ",
+          "HAVING SUM(\"order_lines\".\"Quantity\") > ? ",
+          "ORDER BY \"order_lines\".\"Product\" ASC NULLS LAST"
+        ],
+        "postgresql": [
+          "SELECT \"order_lines\".\"Product\" AS \"Product\", CAST(SUM(\"order_lines\".\"Quantity\") AS bigint) AS \"Quantity\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = $1 ",
+          "GROUP BY \"order_lines\".\"Product\" ",
+          "HAVING CAST(SUM(\"order_lines\".\"Quantity\") AS bigint) > $2 ",
+          "ORDER BY \"order_lines\".\"Product\" ASC NULLS LAST"
+        ]
+      },
+      "parameters": [
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 10
+        }
+      ],
+      "columns": [
+        {
+          "name": "Product",
+          "type": "string",
+          "nullable": false
+        },
+        {
+          "name": "Quantity",
+          "type": "nullable-int64",
+          "nullable": true
+        }
+      ],
+      "materialization": "product-total",
+      "expected": {
+        "rows": 32,
+        "digest": "3746244857655655046",
+        "digest_hex": "33fd55d97e32fa86"
+      },
+      "status": "contract; each provider and route require actual correctness validation"
+    },
+    {
+      "id": "R14",
+      "name": "empty-sum",
+      "entry": "fluent",
+      "semantically_distinct": true,
+      "sql": {
+        "sqlite": "SELECT SUM(\"orders\".\"Total\") AS \"value\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ?",
+        "postgresql": "SELECT SUM(\"orders\".\"Total\") AS \"value\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $1"
+      },
+      "fragments": {
+        "sqlite": [
+          "SELECT SUM(\"orders\".\"Total\") AS \"value\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = ?"
+        ],
+        "postgresql": [
+          "SELECT SUM(\"orders\".\"Total\") AS \"value\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = $1"
+        ]
+      },
+      "parameters": [
+        {
+          "type": "int64",
+          "value": -1
+        }
+      ],
+      "columns": [
+        {
+          "name": "value",
+          "type": "nullable-money",
+          "nullable": true
+        }
+      ],
+      "materialization": "nullable-money",
+      "expected": {
+        "rows": 1,
+        "digest": "12638153115695167455",
+        "digest_hex": "af63bd4c8601b7df"
+      },
+      "status": "contract; each provider and route require actual correctness validation"
+    },
+    {
+      "id": "R15",
+      "name": "cursor",
+      "entry": "fluent",
+      "semantically_distinct": true,
+      "sql": {
+        "sqlite": "SELECT \"orders\".\"Id\" AS \"value\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ? AND (\"orders\".\"CreatedAt\" > ? OR (\"orders\".\"CreatedAt\" = ? AND (\"orders\".\"TenantId\" > ? OR (\"orders\".\"TenantId\" = ? AND \"orders\".\"Id\" > ?)))) ORDER BY \"orders\".\"CreatedAt\" ASC NULLS LAST, \"orders\".\"TenantId\" ASC NULLS LAST, \"orders\".\"Id\" ASC NULLS LAST LIMIT ?",
+        "postgresql": "SELECT \"orders\".\"Id\" AS \"value\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $1 AND (\"orders\".\"CreatedAt\" > $2 OR (\"orders\".\"CreatedAt\" = $3 AND (\"orders\".\"TenantId\" > $4 OR (\"orders\".\"TenantId\" = $5 AND \"orders\".\"Id\" > $6)))) ORDER BY \"orders\".\"CreatedAt\" ASC NULLS LAST, \"orders\".\"TenantId\" ASC NULLS LAST, \"orders\".\"Id\" ASC NULLS LAST LIMIT $7"
+      },
+      "fragments": {
+        "sqlite": [
+          "SELECT \"orders\".\"Id\" AS \"value\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = ? AND (\"orders\".\"CreatedAt\" > ? OR (\"orders\".\"CreatedAt\" = ? AND (\"orders\".\"TenantId\" > ? OR (\"orders\".\"TenantId\" = ? AND \"orders\".\"Id\" > ?)))) ",
+          "ORDER BY \"orders\".\"CreatedAt\" ASC NULLS LAST, \"orders\".\"TenantId\" ASC NULLS LAST, \"orders\".\"Id\" ASC NULLS LAST ",
+          "LIMIT ?"
+        ],
+        "postgresql": [
+          "SELECT \"orders\".\"Id\" AS \"value\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = $1 AND (\"orders\".\"CreatedAt\" > $2 OR (\"orders\".\"CreatedAt\" = $3 AND (\"orders\".\"TenantId\" > $4 OR (\"orders\".\"TenantId\" = $5 AND \"orders\".\"Id\" > $6)))) ",
+          "ORDER BY \"orders\".\"CreatedAt\" ASC NULLS LAST, \"orders\".\"TenantId\" ASC NULLS LAST, \"orders\".\"Id\" ASC NULLS LAST ",
+          "LIMIT $7"
+        ]
+      },
+      "parameters": [
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 1700001024
+        },
+        {
+          "type": "int64",
+          "value": 1700001024
+        },
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 4096
+        },
+        {
+          "type": "int64",
+          "value": 32
+        }
+      ],
+      "columns": [
+        {
+          "name": "value",
+          "type": "int64",
+          "nullable": false
+        }
+      ],
+      "materialization": "scalar-int64",
+      "expected": {
+        "rows": 32,
+        "digest": "17647997184412405317",
+        "digest_hex": "f4ea47efa5fece45"
+      },
+      "status": "contract; each provider and route require actual correctness validation"
+    },
+    {
+      "id": "R16",
+      "name": "offset",
+      "entry": "fluent",
+      "semantically_distinct": true,
+      "sql": {
+        "sqlite": "SELECT \"orders\".\"Id\" AS \"value\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ? ORDER BY \"orders\".\"CreatedAt\" ASC NULLS LAST, \"orders\".\"TenantId\" ASC NULLS LAST, \"orders\".\"Id\" ASC NULLS LAST LIMIT ? OFFSET ?",
+        "postgresql": "SELECT \"orders\".\"Id\" AS \"value\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $1 ORDER BY \"orders\".\"CreatedAt\" ASC NULLS LAST, \"orders\".\"TenantId\" ASC NULLS LAST, \"orders\".\"Id\" ASC NULLS LAST LIMIT $2 OFFSET $3"
+      },
+      "fragments": {
+        "sqlite": [
+          "SELECT \"orders\".\"Id\" AS \"value\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = ? ",
+          "ORDER BY \"orders\".\"CreatedAt\" ASC NULLS LAST, \"orders\".\"TenantId\" ASC NULLS LAST, \"orders\".\"Id\" ASC NULLS LAST ",
+          "LIMIT ? ",
+          "OFFSET ?"
+        ],
+        "postgresql": [
+          "SELECT \"orders\".\"Id\" AS \"value\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = $1 ",
+          "ORDER BY \"orders\".\"CreatedAt\" ASC NULLS LAST, \"orders\".\"TenantId\" ASC NULLS LAST, \"orders\".\"Id\" ASC NULLS LAST ",
+          "LIMIT $2 ",
+          "OFFSET $3"
+        ]
+      },
+      "parameters": [
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 32
+        },
+        {
+          "type": "int64",
+          "value": 6144
+        }
+      ],
+      "columns": [
+        {
+          "name": "value",
+          "type": "int64",
+          "nullable": false
+        }
+      ],
+      "materialization": "scalar-int64",
+      "expected": {
+        "rows": 32,
+        "digest": "9426918074560964869",
+        "digest_hex": "82d3240af8ea6905"
+      },
+      "status": "contract; each provider and route require actual correctness validation"
+    },
+    {
+      "id": "R17",
+      "name": "exists",
+      "entry": "fluent",
+      "semantically_distinct": true,
+      "sql": {
+        "sqlite": "SELECT \"customers\".\"Id\" AS \"value\" FROM \"customers\" WHERE EXISTS(SELECT \"orders\".\"Id\" AS \"value\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ? AND \"orders\".\"Id\" >= ?) ORDER BY \"customers\".\"Id\" ASC NULLS LAST LIMIT ?",
+        "postgresql": "SELECT \"customers\".\"Id\" AS \"value\" FROM \"customers\" WHERE EXISTS(SELECT \"orders\".\"Id\" AS \"value\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $1 AND \"orders\".\"Id\" >= $2) ORDER BY \"customers\".\"Id\" ASC NULLS LAST LIMIT $3"
+      },
+      "fragments": {
+        "sqlite": [
+          "SELECT \"customers\".\"Id\" AS \"value\" ",
+          "FROM \"customers\" ",
+          "WHERE EXISTS(",
+          "SELECT \"orders\".\"Id\" AS \"value\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = ? AND \"orders\".\"Id\" >= ?) ",
+          "ORDER BY \"customers\".\"Id\" ASC NULLS LAST ",
+          "LIMIT ?"
+        ],
+        "postgresql": [
+          "SELECT \"customers\".\"Id\" AS \"value\" ",
+          "FROM \"customers\" ",
+          "WHERE EXISTS(",
+          "SELECT \"orders\".\"Id\" AS \"value\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = $1 AND \"orders\".\"Id\" >= $2) ",
+          "ORDER BY \"customers\".\"Id\" ASC NULLS LAST ",
+          "LIMIT $3"
+        ]
+      },
+      "parameters": [
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 32
+        },
+        {
+          "type": "int64",
+          "value": 1
+        }
+      ],
+      "columns": [
+        {
+          "name": "value",
+          "type": "int64",
+          "nullable": false
+        }
+      ],
+      "materialization": "scalar-int64",
+      "expected": {
+        "rows": 1,
+        "digest": "9929646806074584996",
+        "digest_hex": "89cd31291d2aefa4"
+      },
+      "status": "contract; each provider and route require actual correctness validation"
+    },
+    {
+      "id": "R18",
+      "name": "in-subquery",
+      "entry": "fluent",
+      "semantically_distinct": true,
+      "sql": {
+        "sqlite": "SELECT \"customers\".\"Id\" AS \"value\" FROM \"customers\" WHERE \"customers\".\"Id\" IN (SELECT \"orders\".\"CustomerId\" AS \"value\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ? AND \"orders\".\"Id\" > ?) ORDER BY \"customers\".\"Id\" ASC NULLS LAST LIMIT ?",
+        "postgresql": "SELECT \"customers\".\"Id\" AS \"value\" FROM \"customers\" WHERE \"customers\".\"Id\" IN (SELECT \"orders\".\"CustomerId\" AS \"value\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $1 AND \"orders\".\"Id\" > $2) ORDER BY \"customers\".\"Id\" ASC NULLS LAST LIMIT $3"
+      },
+      "fragments": {
+        "sqlite": [
+          "SELECT \"customers\".\"Id\" AS \"value\" ",
+          "FROM \"customers\" ",
+          "WHERE \"customers\".\"Id\" IN (",
+          "SELECT \"orders\".\"CustomerId\" AS \"value\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = ? AND \"orders\".\"Id\" > ?) ",
+          "ORDER BY \"customers\".\"Id\" ASC NULLS LAST ",
+          "LIMIT ?"
+        ],
+        "postgresql": [
+          "SELECT \"customers\".\"Id\" AS \"value\" ",
+          "FROM \"customers\" ",
+          "WHERE \"customers\".\"Id\" IN (",
+          "SELECT \"orders\".\"CustomerId\" AS \"value\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = $1 AND \"orders\".\"Id\" > $2) ",
+          "ORDER BY \"customers\".\"Id\" ASC NULLS LAST ",
+          "LIMIT $3"
+        ]
+      },
+      "parameters": [
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 128
+        },
+        {
+          "type": "int64",
+          "value": 32
+        }
+      ],
+      "columns": [
+        {
+          "name": "value",
+          "type": "int64",
+          "nullable": false
+        }
+      ],
+      "materialization": "scalar-int64",
+      "expected": {
+        "rows": 32,
+        "digest": "7556371084242497349",
+        "digest_hex": "68dd9f773b4eaf45"
+      },
+      "status": "contract; each provider and route require actual correctness validation"
+    },
+    {
+      "id": "R19",
+      "name": "cte",
+      "entry": "fluent",
+      "semantically_distinct": true,
+      "sql": {
+        "sqlite": "WITH \"selected_order_ids\" (\"Id\") AS (SELECT \"orders\".\"Id\" AS \"Id\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ? AND \"orders\".\"Id\" > ?) SELECT \"selected_order_ids\".\"Id\" AS \"value\" FROM \"selected_order_ids\" ORDER BY \"selected_order_ids\".\"Id\" ASC NULLS LAST LIMIT ?",
+        "postgresql": "WITH \"selected_order_ids\" (\"Id\") AS (SELECT \"orders\".\"Id\" AS \"Id\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $1 AND \"orders\".\"Id\" > $2) SELECT \"selected_order_ids\".\"Id\" AS \"value\" FROM \"selected_order_ids\" ORDER BY \"selected_order_ids\".\"Id\" ASC NULLS LAST LIMIT $3"
+      },
+      "fragments": {
+        "sqlite": [
+          "WITH \"selected_order_ids\" (\"Id\") AS (",
+          "SELECT \"orders\".\"Id\" AS \"Id\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = ? AND \"orders\".\"Id\" > ?) ",
+          "SELECT \"selected_order_ids\".\"Id\" AS \"value\" ",
+          "FROM \"selected_order_ids\" ",
+          "ORDER BY \"selected_order_ids\".\"Id\" ASC NULLS LAST ",
+          "LIMIT ?"
+        ],
+        "postgresql": [
+          "WITH \"selected_order_ids\" (\"Id\") AS (",
+          "SELECT \"orders\".\"Id\" AS \"Id\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = $1 AND \"orders\".\"Id\" > $2) ",
+          "SELECT \"selected_order_ids\".\"Id\" AS \"value\" ",
+          "FROM \"selected_order_ids\" ",
+          "ORDER BY \"selected_order_ids\".\"Id\" ASC NULLS LAST ",
+          "LIMIT $3"
+        ]
+      },
+      "parameters": [
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 16
+        },
+        {
+          "type": "int64",
+          "value": 32
+        }
+      ],
+      "columns": [
+        {
+          "name": "value",
+          "type": "int64",
+          "nullable": false
+        }
+      ],
+      "materialization": "scalar-int64",
+      "expected": {
+        "rows": 32,
+        "digest": "16187401633596837957",
+        "digest_hex": "e0a534056f1e1045"
+      },
+      "status": "contract; each provider and route require actual correctness validation"
+    },
+    {
+      "id": "R20",
+      "name": "window",
+      "entry": "fluent",
+      "semantically_distinct": true,
+      "sql": {
+        "sqlite": "SELECT \"orders\".\"Id\" AS \"Id\", (ROW_NUMBER() OVER ( PARTITION BY \"orders\".\"CustomerId\" ORDER BY \"orders\".\"CreatedAt\" ASC NULLS LAST, \"orders\".\"Id\" ASC NULLS LAST )) AS \"Rank\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ? ORDER BY \"orders\".\"Id\" ASC NULLS LAST LIMIT ?",
+        "postgresql": "SELECT \"orders\".\"Id\" AS \"Id\", (ROW_NUMBER() OVER ( PARTITION BY \"orders\".\"CustomerId\" ORDER BY \"orders\".\"CreatedAt\" ASC NULLS LAST, \"orders\".\"Id\" ASC NULLS LAST )) AS \"Rank\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $1 ORDER BY \"orders\".\"Id\" ASC NULLS LAST LIMIT $2"
+      },
+      "fragments": {
+        "sqlite": [
+          "SELECT \"orders\".\"Id\" AS \"Id\", (ROW_NUMBER() OVER ( PARTITION BY \"orders\".\"CustomerId\" ",
+          "ORDER BY \"orders\".\"CreatedAt\" ASC NULLS LAST, \"orders\".\"Id\" ASC NULLS LAST )) AS \"Rank\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = ? ",
+          "ORDER BY \"orders\".\"Id\" ASC NULLS LAST ",
+          "LIMIT ?"
+        ],
+        "postgresql": [
+          "SELECT \"orders\".\"Id\" AS \"Id\", (ROW_NUMBER() OVER ( PARTITION BY \"orders\".\"CustomerId\" ",
+          "ORDER BY \"orders\".\"CreatedAt\" ASC NULLS LAST, \"orders\".\"Id\" ASC NULLS LAST )) AS \"Rank\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = $1 ",
+          "ORDER BY \"orders\".\"Id\" ASC NULLS LAST ",
+          "LIMIT $2"
+        ]
+      },
+      "parameters": [
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 32
+        }
+      ],
+      "columns": [
+        {
+          "name": "Id",
+          "type": "int64",
+          "nullable": false
+        },
+        {
+          "name": "Rank",
+          "type": "int64",
+          "nullable": false
+        }
+      ],
+      "materialization": "rank",
+      "expected": {
+        "rows": 32,
+        "digest": "7571623529377379523",
+        "digest_hex": "6913cf7bd98734c3"
+      },
+      "status": "contract; each provider and route require actual correctness validation"
+    },
+    {
+      "id": "R21",
+      "name": "union-all",
+      "entry": "fluent",
+      "semantically_distinct": true,
+      "sql": {
+        "sqlite": "WITH \"selected_order_ids\" (\"Id\") AS (SELECT \"orders\".\"Id\" AS \"Id\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ? AND \"orders\".\"Id\" <= ? UNION ALL SELECT \"orders\".\"Id\" AS \"Id\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ? AND (\"orders\".\"Id\" >= ? AND \"orders\".\"Id\" <= ?)) SELECT \"selected_order_ids\".\"Id\" AS \"value\" FROM \"selected_order_ids\" ORDER BY \"selected_order_ids\".\"Id\" ASC NULLS LAST",
+        "postgresql": "WITH \"selected_order_ids\" (\"Id\") AS (SELECT \"orders\".\"Id\" AS \"Id\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $1 AND \"orders\".\"Id\" <= $2 UNION ALL (SELECT \"orders\".\"Id\" AS \"Id\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $3 AND (\"orders\".\"Id\" >= $4 AND \"orders\".\"Id\" <= $5))) SELECT \"selected_order_ids\".\"Id\" AS \"value\" FROM \"selected_order_ids\" ORDER BY \"selected_order_ids\".\"Id\" ASC NULLS LAST"
+      },
+      "fragments": {
+        "sqlite": [
+          "WITH \"selected_order_ids\" (\"Id\") AS (",
+          "SELECT \"orders\".\"Id\" AS \"Id\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = ? AND \"orders\".\"Id\" <= ? ",
+          "UNION ALL ",
+          "SELECT \"orders\".\"Id\" AS \"Id\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = ? AND (\"orders\".\"Id\" >= ? AND \"orders\".\"Id\" <= ?)) ",
+          "SELECT \"selected_order_ids\".\"Id\" AS \"value\" ",
+          "FROM \"selected_order_ids\" ",
+          "ORDER BY \"selected_order_ids\".\"Id\" ASC NULLS LAST"
+        ],
+        "postgresql": [
+          "WITH \"selected_order_ids\" (\"Id\") AS (",
+          "SELECT \"orders\".\"Id\" AS \"Id\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = $1 AND \"orders\".\"Id\" <= $2 ",
+          "UNION ALL (",
+          "SELECT \"orders\".\"Id\" AS \"Id\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = $3 AND (\"orders\".\"Id\" >= $4 AND \"orders\".\"Id\" <= $5))) ",
+          "SELECT \"selected_order_ids\".\"Id\" AS \"value\" ",
+          "FROM \"selected_order_ids\" ",
+          "ORDER BY \"selected_order_ids\".\"Id\" ASC NULLS LAST"
+        ]
+      },
+      "parameters": [
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 16
+        },
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 9
+        },
+        {
+          "type": "int64",
+          "value": 24
+        }
+      ],
+      "columns": [
+        {
+          "name": "value",
+          "type": "int64",
+          "nullable": false
+        }
+      ],
+      "materialization": "scalar-int64",
+      "expected": {
+        "rows": 32,
+        "digest": "3979956600861533861",
+        "digest_hex": "373ba57117d2a6a5"
+      },
+      "status": "contract; each provider and route require actual correctness validation"
+    },
+    {
+      "id": "R22",
+      "name": "union",
+      "entry": "fluent",
+      "semantically_distinct": true,
+      "sql": {
+        "sqlite": "WITH \"selected_order_ids\" (\"Id\") AS (SELECT \"orders\".\"Id\" AS \"Id\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ? AND \"orders\".\"Id\" <= ? UNION SELECT \"orders\".\"Id\" AS \"Id\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ? AND (\"orders\".\"Id\" >= ? AND \"orders\".\"Id\" <= ?)) SELECT \"selected_order_ids\".\"Id\" AS \"value\" FROM \"selected_order_ids\" ORDER BY \"selected_order_ids\".\"Id\" ASC NULLS LAST",
+        "postgresql": "WITH \"selected_order_ids\" (\"Id\") AS (SELECT \"orders\".\"Id\" AS \"Id\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $1 AND \"orders\".\"Id\" <= $2 UNION (SELECT \"orders\".\"Id\" AS \"Id\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $3 AND (\"orders\".\"Id\" >= $4 AND \"orders\".\"Id\" <= $5))) SELECT \"selected_order_ids\".\"Id\" AS \"value\" FROM \"selected_order_ids\" ORDER BY \"selected_order_ids\".\"Id\" ASC NULLS LAST"
+      },
+      "fragments": {
+        "sqlite": [
+          "WITH \"selected_order_ids\" (\"Id\") AS (",
+          "SELECT \"orders\".\"Id\" AS \"Id\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = ? AND \"orders\".\"Id\" <= ? ",
+          "UNION ",
+          "SELECT \"orders\".\"Id\" AS \"Id\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = ? AND (\"orders\".\"Id\" >= ? AND \"orders\".\"Id\" <= ?)) ",
+          "SELECT \"selected_order_ids\".\"Id\" AS \"value\" ",
+          "FROM \"selected_order_ids\" ",
+          "ORDER BY \"selected_order_ids\".\"Id\" ASC NULLS LAST"
+        ],
+        "postgresql": [
+          "WITH \"selected_order_ids\" (\"Id\") AS (",
+          "SELECT \"orders\".\"Id\" AS \"Id\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = $1 AND \"orders\".\"Id\" <= $2 ",
+          "UNION (",
+          "SELECT \"orders\".\"Id\" AS \"Id\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = $3 AND (\"orders\".\"Id\" >= $4 AND \"orders\".\"Id\" <= $5))) ",
+          "SELECT \"selected_order_ids\".\"Id\" AS \"value\" ",
+          "FROM \"selected_order_ids\" ",
+          "ORDER BY \"selected_order_ids\".\"Id\" ASC NULLS LAST"
+        ]
+      },
+      "parameters": [
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 16
+        },
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 9
+        },
+        {
+          "type": "int64",
+          "value": 24
+        }
+      ],
+      "columns": [
+        {
+          "name": "value",
+          "type": "int64",
+          "nullable": false
+        }
+      ],
+      "materialization": "scalar-int64",
+      "expected": {
+        "rows": 24,
+        "digest": "15383642514717402685",
+        "digest_hex": "d57dad5c7153e63d"
+      },
+      "status": "contract; each provider and route require actual correctness validation"
+    },
+    {
+      "id": "R23",
+      "name": "intersect",
+      "entry": "fluent",
+      "semantically_distinct": true,
+      "sql": {
+        "sqlite": "WITH \"selected_order_ids\" (\"Id\") AS (SELECT \"orders\".\"Id\" AS \"Id\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ? AND \"orders\".\"Id\" <= ? INTERSECT SELECT \"orders\".\"Id\" AS \"Id\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ? AND (\"orders\".\"Id\" >= ? AND \"orders\".\"Id\" <= ?)) SELECT \"selected_order_ids\".\"Id\" AS \"value\" FROM \"selected_order_ids\" ORDER BY \"selected_order_ids\".\"Id\" ASC NULLS LAST",
+        "postgresql": "WITH \"selected_order_ids\" (\"Id\") AS (SELECT \"orders\".\"Id\" AS \"Id\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $1 AND \"orders\".\"Id\" <= $2 INTERSECT (SELECT \"orders\".\"Id\" AS \"Id\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $3 AND (\"orders\".\"Id\" >= $4 AND \"orders\".\"Id\" <= $5))) SELECT \"selected_order_ids\".\"Id\" AS \"value\" FROM \"selected_order_ids\" ORDER BY \"selected_order_ids\".\"Id\" ASC NULLS LAST"
+      },
+      "fragments": {
+        "sqlite": [
+          "WITH \"selected_order_ids\" (\"Id\") AS (",
+          "SELECT \"orders\".\"Id\" AS \"Id\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = ? AND \"orders\".\"Id\" <= ? ",
+          "INTERSECT ",
+          "SELECT \"orders\".\"Id\" AS \"Id\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = ? AND (\"orders\".\"Id\" >= ? AND \"orders\".\"Id\" <= ?)) ",
+          "SELECT \"selected_order_ids\".\"Id\" AS \"value\" ",
+          "FROM \"selected_order_ids\" ",
+          "ORDER BY \"selected_order_ids\".\"Id\" ASC NULLS LAST"
+        ],
+        "postgresql": [
+          "WITH \"selected_order_ids\" (\"Id\") AS (",
+          "SELECT \"orders\".\"Id\" AS \"Id\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = $1 AND \"orders\".\"Id\" <= $2 ",
+          "INTERSECT (",
+          "SELECT \"orders\".\"Id\" AS \"Id\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = $3 AND (\"orders\".\"Id\" >= $4 AND \"orders\".\"Id\" <= $5))) ",
+          "SELECT \"selected_order_ids\".\"Id\" AS \"value\" ",
+          "FROM \"selected_order_ids\" ",
+          "ORDER BY \"selected_order_ids\".\"Id\" ASC NULLS LAST"
+        ]
+      },
+      "parameters": [
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 16
+        },
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 9
+        },
+        {
+          "type": "int64",
+          "value": 24
+        }
+      ],
+      "columns": [
+        {
+          "name": "value",
+          "type": "int64",
+          "nullable": false
+        }
+      ],
+      "materialization": "scalar-int64",
+      "expected": {
+        "rows": 8,
+        "digest": "2099101490783815229",
+        "digest_hex": "1d2181af31a9863d"
+      },
+      "status": "contract; each provider and route require actual correctness validation"
+    },
+    {
+      "id": "R24",
+      "name": "except",
+      "entry": "fluent",
+      "semantically_distinct": true,
+      "sql": {
+        "sqlite": "WITH \"selected_order_ids\" (\"Id\") AS (SELECT \"orders\".\"Id\" AS \"Id\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ? AND \"orders\".\"Id\" <= ? EXCEPT SELECT \"orders\".\"Id\" AS \"Id\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ? AND (\"orders\".\"Id\" >= ? AND \"orders\".\"Id\" <= ?)) SELECT \"selected_order_ids\".\"Id\" AS \"value\" FROM \"selected_order_ids\" ORDER BY \"selected_order_ids\".\"Id\" ASC NULLS LAST",
+        "postgresql": "WITH \"selected_order_ids\" (\"Id\") AS (SELECT \"orders\".\"Id\" AS \"Id\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $1 AND \"orders\".\"Id\" <= $2 EXCEPT (SELECT \"orders\".\"Id\" AS \"Id\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $3 AND (\"orders\".\"Id\" >= $4 AND \"orders\".\"Id\" <= $5))) SELECT \"selected_order_ids\".\"Id\" AS \"value\" FROM \"selected_order_ids\" ORDER BY \"selected_order_ids\".\"Id\" ASC NULLS LAST"
+      },
+      "fragments": {
+        "sqlite": [
+          "WITH \"selected_order_ids\" (\"Id\") AS (",
+          "SELECT \"orders\".\"Id\" AS \"Id\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = ? AND \"orders\".\"Id\" <= ? ",
+          "EXCEPT ",
+          "SELECT \"orders\".\"Id\" AS \"Id\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = ? AND (\"orders\".\"Id\" >= ? AND \"orders\".\"Id\" <= ?)) ",
+          "SELECT \"selected_order_ids\".\"Id\" AS \"value\" ",
+          "FROM \"selected_order_ids\" ",
+          "ORDER BY \"selected_order_ids\".\"Id\" ASC NULLS LAST"
+        ],
+        "postgresql": [
+          "WITH \"selected_order_ids\" (\"Id\") AS (",
+          "SELECT \"orders\".\"Id\" AS \"Id\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = $1 AND \"orders\".\"Id\" <= $2 ",
+          "EXCEPT (",
+          "SELECT \"orders\".\"Id\" AS \"Id\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = $3 AND (\"orders\".\"Id\" >= $4 AND \"orders\".\"Id\" <= $5))) ",
+          "SELECT \"selected_order_ids\".\"Id\" AS \"value\" ",
+          "FROM \"selected_order_ids\" ",
+          "ORDER BY \"selected_order_ids\".\"Id\" ASC NULLS LAST"
+        ]
+      },
+      "parameters": [
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 16
+        },
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 9
+        },
+        {
+          "type": "int64",
+          "value": 24
+        }
+      ],
+      "columns": [
+        {
+          "name": "value",
+          "type": "int64",
+          "nullable": false
+        }
+      ],
+      "materialization": "scalar-int64",
+      "expected": {
+        "rows": 8,
+        "digest": "14143654040709472301",
+        "digest_hex": "c4485a69ea81a02d"
+      },
+      "status": "contract; each provider and route require actual correctness validation"
+    },
+    {
+      "id": "R25",
+      "name": "running-total",
+      "entry": "fluent",
+      "semantically_distinct": true,
+      "sql": {
+        "sqlite": "SELECT \"order_lines\".\"Id\" AS \"Id\", (SUM(\"order_lines\".\"Quantity\") OVER (  ORDER BY \"order_lines\".\"Id\" ASC NULLS LAST ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW )) AS \"Quantity\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = ? ORDER BY \"order_lines\".\"Id\" ASC NULLS LAST LIMIT ?",
+        "postgresql": "SELECT \"order_lines\".\"Id\" AS \"Id\", CAST(((SUM(\"order_lines\".\"Quantity\") OVER (  ORDER BY \"order_lines\".\"Id\" ASC NULLS LAST ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW ))) AS bigint) AS \"Quantity\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = $1 ORDER BY \"order_lines\".\"Id\" ASC NULLS LAST LIMIT $2"
+      },
+      "fragments": {
+        "sqlite": [
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", (SUM(\"order_lines\".\"Quantity\") OVER (  ",
+          "ORDER BY \"order_lines\".\"Id\" ASC NULLS LAST ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW )) AS \"Quantity\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = ? ",
+          "ORDER BY \"order_lines\".\"Id\" ASC NULLS LAST ",
+          "LIMIT ?"
+        ],
+        "postgresql": [
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", CAST(((SUM(\"order_lines\".\"Quantity\") OVER (  ",
+          "ORDER BY \"order_lines\".\"Id\" ASC NULLS LAST ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW ))) AS bigint) AS \"Quantity\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = $1 ",
+          "ORDER BY \"order_lines\".\"Id\" ASC NULLS LAST ",
+          "LIMIT $2"
+        ]
+      },
+      "parameters": [
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 32
+        }
+      ],
+      "columns": [
+        {
+          "name": "Id",
+          "type": "int64",
+          "nullable": false
+        },
+        {
+          "name": "Quantity",
+          "type": "nullable-int64",
+          "nullable": true
+        }
+      ],
+      "materialization": "running",
+      "expected": {
+        "rows": 32,
+        "digest": "14177137721575681849",
+        "digest_hex": "c4bf4fa4e24f2f39"
+      },
+      "status": "contract; each provider and route require actual correctness validation"
+    },
+    {
+      "id": "R26",
+      "name": "three-join",
+      "entry": "fluent",
+      "semantically_distinct": true,
+      "sql": {
+        "sqlite": "SELECT \"orders\".\"Id\" AS \"OrderId\", \"customer\".\"Name\" AS \"Name\", \"line\".\"Product\" AS \"Product\", \"line\".\"Quantity\" AS \"Quantity\" FROM \"orders\" INNER JOIN \"customers\" AS \"customer\" ON \"orders\".\"CustomerId\" = \"customer\".\"Id\" INNER JOIN \"order_lines\" AS \"line\" ON \"orders\".\"TenantId\" = \"line\".\"TenantId\" AND \"orders\".\"Id\" = \"line\".\"OrderId\" WHERE \"orders\".\"TenantId\" = ? ORDER BY \"orders\".\"Id\" ASC NULLS LAST, \"line\".\"Id\" ASC NULLS LAST LIMIT ?",
+        "postgresql": "SELECT \"orders\".\"Id\" AS \"OrderId\", \"customer\".\"Name\" AS \"Name\", \"line\".\"Product\" AS \"Product\", \"line\".\"Quantity\" AS \"Quantity\" FROM \"orders\" INNER JOIN \"customers\" AS \"customer\" ON \"orders\".\"CustomerId\" = \"customer\".\"Id\" INNER JOIN \"order_lines\" AS \"line\" ON \"orders\".\"TenantId\" = \"line\".\"TenantId\" AND \"orders\".\"Id\" = \"line\".\"OrderId\" WHERE \"orders\".\"TenantId\" = $1 ORDER BY \"orders\".\"Id\" ASC NULLS LAST, \"line\".\"Id\" ASC NULLS LAST LIMIT $2"
+      },
+      "fragments": {
+        "sqlite": [
+          "SELECT \"orders\".\"Id\" AS \"OrderId\", \"customer\".\"Name\" AS \"Name\", \"line\".\"Product\" AS \"Product\", \"line\".\"Quantity\" AS \"Quantity\" ",
+          "FROM \"orders\" ",
+          "INNER JOIN \"customers\" AS \"customer\" ON \"orders\".\"CustomerId\" = \"customer\".\"Id\" ",
+          "INNER JOIN \"order_lines\" AS \"line\" ON \"orders\".\"TenantId\" = \"line\".\"TenantId\" AND \"orders\".\"Id\" = \"line\".\"OrderId\" ",
+          "WHERE \"orders\".\"TenantId\" = ? ",
+          "ORDER BY \"orders\".\"Id\" ASC NULLS LAST, \"line\".\"Id\" ASC NULLS LAST ",
+          "LIMIT ?"
+        ],
+        "postgresql": [
+          "SELECT \"orders\".\"Id\" AS \"OrderId\", \"customer\".\"Name\" AS \"Name\", \"line\".\"Product\" AS \"Product\", \"line\".\"Quantity\" AS \"Quantity\" ",
+          "FROM \"orders\" ",
+          "INNER JOIN \"customers\" AS \"customer\" ON \"orders\".\"CustomerId\" = \"customer\".\"Id\" ",
+          "INNER JOIN \"order_lines\" AS \"line\" ON \"orders\".\"TenantId\" = \"line\".\"TenantId\" AND \"orders\".\"Id\" = \"line\".\"OrderId\" ",
+          "WHERE \"orders\".\"TenantId\" = $1 ",
+          "ORDER BY \"orders\".\"Id\" ASC NULLS LAST, \"line\".\"Id\" ASC NULLS LAST ",
+          "LIMIT $2"
+        ]
+      },
+      "parameters": [
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 32
+        }
+      ],
+      "columns": [
+        {
+          "name": "OrderId",
+          "type": "int64",
+          "nullable": false
+        },
+        {
+          "name": "Name",
+          "type": "string",
+          "nullable": false
+        },
+        {
+          "name": "Product",
+          "type": "string",
+          "nullable": false
+        },
+        {
+          "name": "Quantity",
+          "type": "int64",
+          "nullable": false
+        }
+      ],
+      "materialization": "detail",
+      "expected": {
+        "rows": 32,
+        "digest": "15613057832896362880",
+        "digest_hex": "d8acb960a36af980"
+      },
+      "status": "contract; each provider and route require actual correctness validation"
+    },
+    {
+      "id": "R27",
+      "name": "anti-association",
+      "entry": "fluent",
+      "semantically_distinct": true,
+      "sql": {
+        "sqlite": "SELECT \"orders\".\"Id\" AS \"value\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ? AND (NOT \"orders\".\"Id\" IN (SELECT \"order_lines\".\"OrderId\" AS \"value\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"Quantity\" >= ?)) ORDER BY \"orders\".\"Id\" ASC NULLS LAST LIMIT ?",
+        "postgresql": "SELECT \"orders\".\"Id\" AS \"value\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $1 AND (NOT \"orders\".\"Id\" IN (SELECT \"order_lines\".\"OrderId\" AS \"value\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = $2 AND \"order_lines\".\"Quantity\" >= $3)) ORDER BY \"orders\".\"Id\" ASC NULLS LAST LIMIT $4"
+      },
+      "fragments": {
+        "sqlite": [
+          "SELECT \"orders\".\"Id\" AS \"value\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = ? AND (NOT \"orders\".\"Id\" IN (",
+          "SELECT \"order_lines\".\"OrderId\" AS \"value\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"Quantity\" >= ?)) ",
+          "ORDER BY \"orders\".\"Id\" ASC NULLS LAST ",
+          "LIMIT ?"
+        ],
+        "postgresql": [
+          "SELECT \"orders\".\"Id\" AS \"value\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = $1 AND (NOT \"orders\".\"Id\" IN (",
+          "SELECT \"order_lines\".\"OrderId\" AS \"value\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = $2 AND \"order_lines\".\"Quantity\" >= $3)) ",
+          "ORDER BY \"orders\".\"Id\" ASC NULLS LAST ",
+          "LIMIT $4"
+        ]
+      },
+      "parameters": [
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 5
+        },
+        {
+          "type": "int64",
+          "value": 32
+        }
+      ],
+      "columns": [
+        {
+          "name": "value",
+          "type": "int64",
+          "nullable": false
+        }
+      ],
+      "materialization": "scalar-int64",
+      "expected": {
+        "rows": 32,
+        "digest": "93920171850129164",
+        "digest_hex": "014dabe6105edf0c"
+      },
+      "status": "contract; each provider and route require actual correctness validation"
+    },
+    {
+      "id": "R28",
+      "name": "nullable-order",
+      "entry": "fluent",
+      "semantically_distinct": true,
+      "sql": {
+        "sqlite": "SELECT \"orders\".\"Id\" AS \"value\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ? ORDER BY \"orders\".\"CustomerId\" ASC NULLS FIRST, \"orders\".\"Id\" ASC NULLS LAST LIMIT ?",
+        "postgresql": "SELECT \"orders\".\"Id\" AS \"value\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $1 ORDER BY \"orders\".\"CustomerId\" ASC NULLS FIRST, \"orders\".\"Id\" ASC NULLS LAST LIMIT $2"
+      },
+      "fragments": {
+        "sqlite": [
+          "SELECT \"orders\".\"Id\" AS \"value\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = ? ",
+          "ORDER BY \"orders\".\"CustomerId\" ASC NULLS FIRST, \"orders\".\"Id\" ASC NULLS LAST ",
+          "LIMIT ?"
+        ],
+        "postgresql": [
+          "SELECT \"orders\".\"Id\" AS \"value\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = $1 ",
+          "ORDER BY \"orders\".\"CustomerId\" ASC NULLS FIRST, \"orders\".\"Id\" ASC NULLS LAST ",
+          "LIMIT $2"
+        ]
+      },
+      "parameters": [
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 32
+        }
+      ],
+      "columns": [
+        {
+          "name": "value",
+          "type": "int64",
+          "nullable": false
+        }
+      ],
+      "materialization": "scalar-int64",
+      "expected": {
+        "rows": 32,
+        "digest": "1504557597552940709",
+        "digest_hex": "14e14329da4216a5"
+      },
+      "status": "contract; each provider and route require actual correctness validation"
+    },
+    {
+      "id": "R29",
+      "name": "raw-sql",
+      "entry": "sql",
+      "semantically_distinct": false,
+      "sql": {
+        "sqlite": "SELECT \"Id\",\"Note\" FROM orders WHERE \"TenantId\"=? ORDER BY \"Id\" LIMIT ?",
+        "postgresql": "SELECT \"Id\",\"Note\" FROM orders WHERE \"TenantId\"=$1 ORDER BY \"Id\" LIMIT $2"
+      },
+      "fragments": {
+        "sqlite": [
+          "SELECT \"Id\",\"Note\" ",
+          "FROM orders ",
+          "WHERE \"TenantId\"=? ",
+          "ORDER BY \"Id\" ",
+          "LIMIT ?"
+        ],
+        "postgresql": [
+          "SELECT \"Id\",\"Note\" ",
+          "FROM orders ",
+          "WHERE \"TenantId\"=$1 ",
+          "ORDER BY \"Id\" ",
+          "LIMIT $2"
+        ]
+      },
+      "parameters": [
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 32
+        }
+      ],
+      "columns": [
+        {
+          "name": "Id",
+          "type": "int64",
+          "nullable": false
+        },
+        {
+          "name": "Note",
+          "type": "string",
+          "nullable": true
+        }
+      ],
+      "materialization": "text",
+      "expected": {
+        "rows": 32,
+        "digest": "12487621479036523840",
+        "digest_hex": "ad4cf192ab829540"
+      },
+      "status": "contract; each provider and route require actual correctness validation"
+    },
+    {
+      "id": "R30",
+      "name": "related",
+      "entry": "relationship-api",
+      "semantically_distinct": true,
+      "sql": {
+        "sqlite": "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? UNION ALL SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? UNION ALL SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? UNION ALL SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? UNION ALL SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? UNION ALL SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? UNION ALL SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? UNION ALL SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? UNION ALL SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? UNION ALL SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? UNION ALL SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? UNION ALL SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? UNION ALL SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? UNION ALL SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? UNION ALL SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? UNION ALL SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? UNION ALL SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? UNION ALL SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? UNION ALL SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? UNION ALL SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? UNION ALL SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? UNION ALL SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? UNION ALL SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? UNION ALL SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? UNION ALL SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? UNION ALL SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? UNION ALL SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? UNION ALL SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? UNION ALL SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? UNION ALL SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? UNION ALL SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? UNION ALL SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ?",
+        "postgresql": "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $1 AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = $2 AND \"order_lines\".\"OrderId\" = $3 UNION ALL (SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $4 AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = $5 AND \"order_lines\".\"OrderId\" = $6) UNION ALL (SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $7 AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = $8 AND \"order_lines\".\"OrderId\" = $9) UNION ALL (SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $10 AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = $11 AND \"order_lines\".\"OrderId\" = $12) UNION ALL (SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $13 AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = $14 AND \"order_lines\".\"OrderId\" = $15) UNION ALL (SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $16 AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = $17 AND \"order_lines\".\"OrderId\" = $18) UNION ALL (SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $19 AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = $20 AND \"order_lines\".\"OrderId\" = $21) UNION ALL (SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $22 AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = $23 AND \"order_lines\".\"OrderId\" = $24) UNION ALL (SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $25 AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = $26 AND \"order_lines\".\"OrderId\" = $27) UNION ALL (SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $28 AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = $29 AND \"order_lines\".\"OrderId\" = $30) UNION ALL (SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $31 AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = $32 AND \"order_lines\".\"OrderId\" = $33) UNION ALL (SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $34 AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = $35 AND \"order_lines\".\"OrderId\" = $36) UNION ALL (SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $37 AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = $38 AND \"order_lines\".\"OrderId\" = $39) UNION ALL (SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $40 AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = $41 AND \"order_lines\".\"OrderId\" = $42) UNION ALL (SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $43 AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = $44 AND \"order_lines\".\"OrderId\" = $45) UNION ALL (SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $46 AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = $47 AND \"order_lines\".\"OrderId\" = $48) UNION ALL (SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $49 AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = $50 AND \"order_lines\".\"OrderId\" = $51) UNION ALL (SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $52 AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = $53 AND \"order_lines\".\"OrderId\" = $54) UNION ALL (SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $55 AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = $56 AND \"order_lines\".\"OrderId\" = $57) UNION ALL (SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $58 AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = $59 AND \"order_lines\".\"OrderId\" = $60) UNION ALL (SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $61 AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = $62 AND \"order_lines\".\"OrderId\" = $63) UNION ALL (SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $64 AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = $65 AND \"order_lines\".\"OrderId\" = $66) UNION ALL (SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $67 AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = $68 AND \"order_lines\".\"OrderId\" = $69) UNION ALL (SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $70 AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = $71 AND \"order_lines\".\"OrderId\" = $72) UNION ALL (SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $73 AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = $74 AND \"order_lines\".\"OrderId\" = $75) UNION ALL (SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $76 AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = $77 AND \"order_lines\".\"OrderId\" = $78) UNION ALL (SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $79 AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = $80 AND \"order_lines\".\"OrderId\" = $81) UNION ALL (SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $82 AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = $83 AND \"order_lines\".\"OrderId\" = $84) UNION ALL (SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $85 AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = $86 AND \"order_lines\".\"OrderId\" = $87) UNION ALL (SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $88 AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = $89 AND \"order_lines\".\"OrderId\" = $90) UNION ALL (SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $91 AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = $92 AND \"order_lines\".\"OrderId\" = $93) UNION ALL (SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $94 AS \"__korda_parent_index\" FROM \"order_lines\" WHERE \"order_lines\".\"TenantId\" = $95 AND \"order_lines\".\"OrderId\" = $96)"
+      },
+      "fragments": {
+        "sqlite": [
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? ",
+          "UNION ALL ",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? ",
+          "UNION ALL ",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? ",
+          "UNION ALL ",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? ",
+          "UNION ALL ",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? ",
+          "UNION ALL ",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? ",
+          "UNION ALL ",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? ",
+          "UNION ALL ",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? ",
+          "UNION ALL ",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? ",
+          "UNION ALL ",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? ",
+          "UNION ALL ",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? ",
+          "UNION ALL ",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? ",
+          "UNION ALL ",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? ",
+          "UNION ALL ",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? ",
+          "UNION ALL ",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? ",
+          "UNION ALL ",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? ",
+          "UNION ALL ",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? ",
+          "UNION ALL ",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? ",
+          "UNION ALL ",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? ",
+          "UNION ALL ",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? ",
+          "UNION ALL ",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? ",
+          "UNION ALL ",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? ",
+          "UNION ALL ",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? ",
+          "UNION ALL ",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? ",
+          "UNION ALL ",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? ",
+          "UNION ALL ",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? ",
+          "UNION ALL ",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? ",
+          "UNION ALL ",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? ",
+          "UNION ALL ",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? ",
+          "UNION ALL ",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? ",
+          "UNION ALL ",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ? ",
+          "UNION ALL ",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", ? AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = ? AND \"order_lines\".\"OrderId\" = ?"
+        ],
+        "postgresql": [
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $1 AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = $2 AND \"order_lines\".\"OrderId\" = $3 ",
+          "UNION ALL (",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $4 AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = $5 AND \"order_lines\".\"OrderId\" = $6) ",
+          "UNION ALL (",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $7 AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = $8 AND \"order_lines\".\"OrderId\" = $9) ",
+          "UNION ALL (",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $10 AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = $11 AND \"order_lines\".\"OrderId\" = $12) ",
+          "UNION ALL (",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $13 AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = $14 AND \"order_lines\".\"OrderId\" = $15) ",
+          "UNION ALL (",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $16 AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = $17 AND \"order_lines\".\"OrderId\" = $18) ",
+          "UNION ALL (",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $19 AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = $20 AND \"order_lines\".\"OrderId\" = $21) ",
+          "UNION ALL (",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $22 AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = $23 AND \"order_lines\".\"OrderId\" = $24) ",
+          "UNION ALL (",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $25 AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = $26 AND \"order_lines\".\"OrderId\" = $27) ",
+          "UNION ALL (",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $28 AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = $29 AND \"order_lines\".\"OrderId\" = $30) ",
+          "UNION ALL (",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $31 AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = $32 AND \"order_lines\".\"OrderId\" = $33) ",
+          "UNION ALL (",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $34 AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = $35 AND \"order_lines\".\"OrderId\" = $36) ",
+          "UNION ALL (",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $37 AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = $38 AND \"order_lines\".\"OrderId\" = $39) ",
+          "UNION ALL (",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $40 AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = $41 AND \"order_lines\".\"OrderId\" = $42) ",
+          "UNION ALL (",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $43 AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = $44 AND \"order_lines\".\"OrderId\" = $45) ",
+          "UNION ALL (",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $46 AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = $47 AND \"order_lines\".\"OrderId\" = $48) ",
+          "UNION ALL (",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $49 AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = $50 AND \"order_lines\".\"OrderId\" = $51) ",
+          "UNION ALL (",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $52 AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = $53 AND \"order_lines\".\"OrderId\" = $54) ",
+          "UNION ALL (",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $55 AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = $56 AND \"order_lines\".\"OrderId\" = $57) ",
+          "UNION ALL (",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $58 AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = $59 AND \"order_lines\".\"OrderId\" = $60) ",
+          "UNION ALL (",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $61 AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = $62 AND \"order_lines\".\"OrderId\" = $63) ",
+          "UNION ALL (",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $64 AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = $65 AND \"order_lines\".\"OrderId\" = $66) ",
+          "UNION ALL (",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $67 AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = $68 AND \"order_lines\".\"OrderId\" = $69) ",
+          "UNION ALL (",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $70 AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = $71 AND \"order_lines\".\"OrderId\" = $72) ",
+          "UNION ALL (",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $73 AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = $74 AND \"order_lines\".\"OrderId\" = $75) ",
+          "UNION ALL (",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $76 AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = $77 AND \"order_lines\".\"OrderId\" = $78) ",
+          "UNION ALL (",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $79 AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = $80 AND \"order_lines\".\"OrderId\" = $81) ",
+          "UNION ALL (",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $82 AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = $83 AND \"order_lines\".\"OrderId\" = $84) ",
+          "UNION ALL (",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $85 AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = $86 AND \"order_lines\".\"OrderId\" = $87) ",
+          "UNION ALL (",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $88 AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = $89 AND \"order_lines\".\"OrderId\" = $90) ",
+          "UNION ALL (",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $91 AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = $92 AND \"order_lines\".\"OrderId\" = $93) ",
+          "UNION ALL (",
+          "SELECT \"order_lines\".\"Id\" AS \"Id\", \"order_lines\".\"TenantId\" AS \"TenantId\", \"order_lines\".\"OrderId\" AS \"OrderId\", \"order_lines\".\"Product\" AS \"Product\", \"order_lines\".\"Quantity\" AS \"Quantity\", $94 AS \"__korda_parent_index\" ",
+          "FROM \"order_lines\" ",
+          "WHERE \"order_lines\".\"TenantId\" = $95 AND \"order_lines\".\"OrderId\" = $96)"
+        ]
+      },
+      "parameters": [
+        {
+          "type": "int32",
+          "value": 0
+        },
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int32",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 2
+        },
+        {
+          "type": "int32",
+          "value": 2
+        },
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 3
+        },
+        {
+          "type": "int32",
+          "value": 3
+        },
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 4
+        },
+        {
+          "type": "int32",
+          "value": 4
+        },
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 5
+        },
+        {
+          "type": "int32",
+          "value": 5
+        },
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 6
+        },
+        {
+          "type": "int32",
+          "value": 6
+        },
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 7
+        },
+        {
+          "type": "int32",
+          "value": 7
+        },
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 8
+        },
+        {
+          "type": "int32",
+          "value": 8
+        },
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 9
+        },
+        {
+          "type": "int32",
+          "value": 9
+        },
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 10
+        },
+        {
+          "type": "int32",
+          "value": 10
+        },
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 11
+        },
+        {
+          "type": "int32",
+          "value": 11
+        },
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 12
+        },
+        {
+          "type": "int32",
+          "value": 12
+        },
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 13
+        },
+        {
+          "type": "int32",
+          "value": 13
+        },
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 14
+        },
+        {
+          "type": "int32",
+          "value": 14
+        },
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 15
+        },
+        {
+          "type": "int32",
+          "value": 15
+        },
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 16
+        },
+        {
+          "type": "int32",
+          "value": 16
+        },
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 17
+        },
+        {
+          "type": "int32",
+          "value": 17
+        },
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 18
+        },
+        {
+          "type": "int32",
+          "value": 18
+        },
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 19
+        },
+        {
+          "type": "int32",
+          "value": 19
+        },
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 20
+        },
+        {
+          "type": "int32",
+          "value": 20
+        },
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 21
+        },
+        {
+          "type": "int32",
+          "value": 21
+        },
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 22
+        },
+        {
+          "type": "int32",
+          "value": 22
+        },
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 23
+        },
+        {
+          "type": "int32",
+          "value": 23
+        },
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 24
+        },
+        {
+          "type": "int32",
+          "value": 24
+        },
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 25
+        },
+        {
+          "type": "int32",
+          "value": 25
+        },
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 26
+        },
+        {
+          "type": "int32",
+          "value": 26
+        },
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 27
+        },
+        {
+          "type": "int32",
+          "value": 27
+        },
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 28
+        },
+        {
+          "type": "int32",
+          "value": 28
+        },
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 29
+        },
+        {
+          "type": "int32",
+          "value": 29
+        },
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 30
+        },
+        {
+          "type": "int32",
+          "value": 30
+        },
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 31
+        },
+        {
+          "type": "int32",
+          "value": 31
+        },
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 32
+        }
+      ],
+      "columns": [
+        {
+          "name": "Id",
+          "type": "int64",
+          "nullable": false
+        },
+        {
+          "name": "TenantId",
+          "type": "int64",
+          "nullable": false
+        },
+        {
+          "name": "OrderId",
+          "type": "int64",
+          "nullable": false
+        },
+        {
+          "name": "Product",
+          "type": "string",
+          "nullable": false
+        },
+        {
+          "name": "Quantity",
+          "type": "int64",
+          "nullable": false
+        },
+        {
+          "name": "__korda_parent_index",
+          "type": "int32",
+          "nullable": false
+        }
+      ],
+      "materialization": "related",
+      "expected": {
+        "rows": 53,
+        "digest": "2847736615530494015",
+        "digest_hex": "2785315d2691783f"
+      },
+      "status": "contract; each provider and route require actual correctness validation",
+      "group_count": 32,
+      "parent_ids": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32
+      ],
+      "prepared_kind": "unsupported public prepared plan; only relation/key metadata reuse",
+      "sql_equivalence": "public Fluent reconstruction of exact SelectParent procedure; complete PostgreSQL text matched actual server statement log; see read-sql.actual.json"
+    },
+    {
+      "id": "R31",
+      "name": "stream-large",
+      "entry": "fluent",
+      "semantically_distinct": false,
+      "sql": {
+        "sqlite": "SELECT \"orders\".\"Id\" AS \"value\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ? ORDER BY \"orders\".\"Id\" ASC NULLS LAST LIMIT ?",
+        "postgresql": "SELECT \"orders\".\"Id\" AS \"value\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $1 ORDER BY \"orders\".\"Id\" ASC NULLS LAST LIMIT $2"
+      },
+      "fragments": {
+        "sqlite": [
+          "SELECT \"orders\".\"Id\" AS \"value\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = ? ",
+          "ORDER BY \"orders\".\"Id\" ASC NULLS LAST ",
+          "LIMIT ?"
+        ],
+        "postgresql": [
+          "SELECT \"orders\".\"Id\" AS \"value\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = $1 ",
+          "ORDER BY \"orders\".\"Id\" ASC NULLS LAST ",
+          "LIMIT $2"
+        ]
+      },
+      "parameters": [
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 8192
+        }
+      ],
+      "columns": [
+        {
+          "name": "value",
+          "type": "int64",
+          "nullable": false
+        }
+      ],
+      "materialization": "scalar-int64",
+      "expected": {
+        "rows": 8192,
+        "digest": "9304270033764464581",
+        "digest_hex": "811f684cb0d7b7c5"
+      },
+      "status": "contract; each provider and route require actual correctness validation"
+    },
+    {
+      "id": "R32",
+      "name": "optional-filter-absent",
+      "entry": "fluent",
+      "semantically_distinct": false,
+      "sql": {
+        "sqlite": "SELECT \"orders\".\"Id\" AS \"value\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = ? ORDER BY \"orders\".\"Id\" ASC NULLS LAST LIMIT ?",
+        "postgresql": "SELECT \"orders\".\"Id\" AS \"value\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = $1 ORDER BY \"orders\".\"Id\" ASC NULLS LAST LIMIT $2"
+      },
+      "fragments": {
+        "sqlite": [
+          "SELECT \"orders\".\"Id\" AS \"value\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = ? ",
+          "ORDER BY \"orders\".\"Id\" ASC NULLS LAST ",
+          "LIMIT ?"
+        ],
+        "postgresql": [
+          "SELECT \"orders\".\"Id\" AS \"value\" ",
+          "FROM \"orders\" ",
+          "WHERE \"orders\".\"TenantId\" = $1 ",
+          "ORDER BY \"orders\".\"Id\" ASC NULLS LAST ",
+          "LIMIT $2"
+        ]
+      },
+      "parameters": [
+        {
+          "type": "int64",
+          "value": 1
+        },
+        {
+          "type": "int64",
+          "value": 32
+        }
+      ],
+      "columns": [
+        {
+          "name": "value",
+          "type": "int64",
+          "nullable": false
+        }
+      ],
+      "materialization": "scalar-int64",
+      "expected": {
+        "rows": 32,
+        "digest": "7556371084242497349",
+        "digest_hex": "68dd9f773b4eaf45"
+      },
+      "status": "contract; each provider and route require actual correctness validation"
+    },
+    {
+      "id": "W33",
+      "name": "tx-commit",
+      "entry": "fluent-mutation-and-transaction-api",
+      "semantically_distinct": true,
+      "sql": {
+        "sqlite": "/* multi-step business operation; execute steps in order */",
+        "postgresql": "/* multi-step business operation; execute steps in order */"
+      },
+      "fragments": {
+        "sqlite": [
+          "/* multi-step business operation; execute steps in order */"
+        ],
+        "postgresql": [
+          "/* multi-step business operation; execute steps in order */"
+        ]
+      },
+      "parameters": [],
+      "columns": [
+        {
+          "name": "Id",
+          "type": "int64",
+          "nullable": false
+        },
+        {
+          "name": "Counter",
+          "type": "int64",
+          "nullable": false
+        },
+        {
+          "name": "Version",
+          "type": "int64",
+          "nullable": false
+        },
+        {
+          "name": "Note",
+          "type": "string",
+          "nullable": true
+        }
+      ],
+      "materialization": "state",
+      "steps": [
+        {
+          "kind": "begin",
+          "sql": {
+            "sqlite": "BEGIN",
+            "postgresql": "BEGIN"
+          },
+          "fragments": {
+            "sqlite": [
+              "BEGIN"
+            ],
+            "postgresql": [
+              "BEGIN"
+            ]
+          },
+          "parameters": []
+        },
+        {
+          "kind": "execute",
+          "sql": {
+            "sqlite": "UPDATE \"perf_state\" SET \"Counter\" = ?, \"Version\" = ?, \"Note\" = ? WHERE \"Id\" = ?",
+            "postgresql": "UPDATE \"perf_state\" SET \"Counter\" = $1, \"Version\" = $2, \"Note\" = $3 WHERE \"Id\" = $4"
+          },
+          "fragments": {
+            "sqlite": [
+              "UPDATE \"perf_state\" SET \"Counter\" = ?, \"Version\" = ?, \"Note\" = ? ",
+              "WHERE \"Id\" = ?"
+            ],
+            "postgresql": [
+              "UPDATE \"perf_state\" SET \"Counter\" = $1, \"Version\" = $2, \"Note\" = $3 ",
+              "WHERE \"Id\" = $4"
+            ]
+          },
+          "parameters": [
+            {
+              "type": "int64",
+              "value": 17
+            },
+            {
+              "type": "int64",
+              "value": 2
+            },
+            {
+              "type": "text",
+              "value": "committed"
+            },
+            {
+              "type": "int64",
+              "value": 0,
+              "runtime": "worker_id_plus_one"
+            }
+          ],
+          "expected_affected": 1
+        },
+        {
+          "kind": "select",
+          "sql": {
+            "sqlite": "SELECT \"Id\", \"Counter\", \"Version\", \"Note\" FROM \"perf_state\" WHERE \"Id\" = ?",
+            "postgresql": "SELECT \"Id\", \"Counter\", \"Version\", \"Note\" FROM \"perf_state\" WHERE \"Id\" = $1"
+          },
+          "fragments": {
+            "sqlite": [
+              "SELECT \"Id\", \"Counter\", \"Version\", \"Note\" ",
+              "FROM \"perf_state\" ",
+              "WHERE \"Id\" = ?"
+            ],
+            "postgresql": [
+              "SELECT \"Id\", \"Counter\", \"Version\", \"Note\" ",
+              "FROM \"perf_state\" ",
+              "WHERE \"Id\" = $1"
+            ]
+          },
+          "parameters": [
+            {
+              "type": "int64",
+              "value": 0,
+              "runtime": "worker_id_plus_one"
+            }
+          ],
+          "expected_state": {
+            "counter": 17,
+            "version": 2,
+            "note": "committed"
+          }
+        },
+        {
+          "kind": "commit",
+          "sql": {
+            "sqlite": "COMMIT",
+            "postgresql": "COMMIT"
+          },
+          "fragments": {
+            "sqlite": [
+              "COMMIT"
+            ],
+            "postgresql": [
+              "COMMIT"
+            ]
+          },
+          "parameters": []
+        },
+        {
+          "kind": "select",
+          "sql": {
+            "sqlite": "SELECT \"Id\", \"Counter\", \"Version\", \"Note\" FROM \"perf_state\" WHERE \"Id\" = ?",
+            "postgresql": "SELECT \"Id\", \"Counter\", \"Version\", \"Note\" FROM \"perf_state\" WHERE \"Id\" = $1"
+          },
+          "fragments": {
+            "sqlite": [
+              "SELECT \"Id\", \"Counter\", \"Version\", \"Note\" ",
+              "FROM \"perf_state\" ",
+              "WHERE \"Id\" = ?"
+            ],
+            "postgresql": [
+              "SELECT \"Id\", \"Counter\", \"Version\", \"Note\" ",
+              "FROM \"perf_state\" ",
+              "WHERE \"Id\" = $1"
+            ]
+          },
+          "parameters": [
+            {
+              "type": "int64",
+              "value": 0,
+              "runtime": "worker_id_plus_one"
+            }
+          ],
+          "expected_state": {
+            "counter": 17,
+            "version": 2,
+            "note": "committed"
+          }
+        }
+      ],
+      "expected": {
+        "rows": 2,
+        "digest": "11645580623103408097",
+        "digest_hex": "a19d69e0334037e1",
+        "outcome": "success"
+      },
+      "digest_policy": "Each select validates Id == logical worker id + 1, then hashes Counter, Version, Note in order.",
+      "preparation_policy": "Reuse supported read/SQL plans only; no claim of a public prepared Korda mutation API.",
+      "status": "contract; each provider and route require actual correctness validation"
+    },
+    {
+      "id": "W34",
+      "name": "tx-rollback",
+      "entry": "fluent-mutation-and-transaction-api",
+      "semantically_distinct": true,
+      "sql": {
+        "sqlite": "/* multi-step business operation; execute steps in order */",
+        "postgresql": "/* multi-step business operation; execute steps in order */"
+      },
+      "fragments": {
+        "sqlite": [
+          "/* multi-step business operation; execute steps in order */"
+        ],
+        "postgresql": [
+          "/* multi-step business operation; execute steps in order */"
+        ]
+      },
+      "parameters": [],
+      "columns": [
+        {
+          "name": "Id",
+          "type": "int64",
+          "nullable": false
+        },
+        {
+          "name": "Counter",
+          "type": "int64",
+          "nullable": false
+        },
+        {
+          "name": "Version",
+          "type": "int64",
+          "nullable": false
+        },
+        {
+          "name": "Note",
+          "type": "string",
+          "nullable": true
+        }
+      ],
+      "materialization": "state",
+      "steps": [
+        {
+          "kind": "execute",
+          "sql": {
+            "sqlite": "UPDATE \"perf_state\" SET \"Counter\" = ?, \"Version\" = ?, \"Note\" = ? WHERE \"Id\" = ?",
+            "postgresql": "UPDATE \"perf_state\" SET \"Counter\" = $1, \"Version\" = $2, \"Note\" = $3 WHERE \"Id\" = $4"
+          },
+          "fragments": {
+            "sqlite": [
+              "UPDATE \"perf_state\" SET \"Counter\" = ?, \"Version\" = ?, \"Note\" = ? ",
+              "WHERE \"Id\" = ?"
+            ],
+            "postgresql": [
+              "UPDATE \"perf_state\" SET \"Counter\" = $1, \"Version\" = $2, \"Note\" = $3 ",
+              "WHERE \"Id\" = $4"
+            ]
+          },
+          "parameters": [
+            {
+              "type": "int64",
+              "value": 0
+            },
+            {
+              "type": "int64",
+              "value": 1
+            },
+            {
+              "type": "text",
+              "value": null
+            },
+            {
+              "type": "int64",
+              "value": 0,
+              "runtime": "worker_id_plus_one"
+            }
+          ],
+          "expected_affected": 1
+        },
+        {
+          "kind": "begin",
+          "sql": {
+            "sqlite": "BEGIN",
+            "postgresql": "BEGIN"
+          },
+          "fragments": {
+            "sqlite": [
+              "BEGIN"
+            ],
+            "postgresql": [
+              "BEGIN"
+            ]
+          },
+          "parameters": []
+        },
+        {
+          "kind": "execute",
+          "sql": {
+            "sqlite": "UPDATE \"perf_state\" SET \"Counter\" = ?, \"Version\" = ?, \"Note\" = ? WHERE \"Id\" = ?",
+            "postgresql": "UPDATE \"perf_state\" SET \"Counter\" = $1, \"Version\" = $2, \"Note\" = $3 WHERE \"Id\" = $4"
+          },
+          "fragments": {
+            "sqlite": [
+              "UPDATE \"perf_state\" SET \"Counter\" = ?, \"Version\" = ?, \"Note\" = ? ",
+              "WHERE \"Id\" = ?"
+            ],
+            "postgresql": [
+              "UPDATE \"perf_state\" SET \"Counter\" = $1, \"Version\" = $2, \"Note\" = $3 ",
+              "WHERE \"Id\" = $4"
+            ]
+          },
+          "parameters": [
+            {
+              "type": "int64",
+              "value": 99
+            },
+            {
+              "type": "int64",
+              "value": 2
+            },
+            {
+              "type": "text",
+              "value": "transient"
+            },
+            {
+              "type": "int64",
+              "value": 0,
+              "runtime": "worker_id_plus_one"
+            }
+          ],
+          "expected_affected": 1
+        },
+        {
+          "kind": "select",
+          "sql": {
+            "sqlite": "SELECT \"Id\", \"Counter\", \"Version\", \"Note\" FROM \"perf_state\" WHERE \"Id\" = ?",
+            "postgresql": "SELECT \"Id\", \"Counter\", \"Version\", \"Note\" FROM \"perf_state\" WHERE \"Id\" = $1"
+          },
+          "fragments": {
+            "sqlite": [
+              "SELECT \"Id\", \"Counter\", \"Version\", \"Note\" ",
+              "FROM \"perf_state\" ",
+              "WHERE \"Id\" = ?"
+            ],
+            "postgresql": [
+              "SELECT \"Id\", \"Counter\", \"Version\", \"Note\" ",
+              "FROM \"perf_state\" ",
+              "WHERE \"Id\" = $1"
+            ]
+          },
+          "parameters": [
+            {
+              "type": "int64",
+              "value": 0,
+              "runtime": "worker_id_plus_one"
+            }
+          ],
+          "expected_state": {
+            "counter": 99,
+            "version": 2,
+            "note": "transient"
+          }
+        },
+        {
+          "kind": "rollback",
+          "sql": {
+            "sqlite": "ROLLBACK",
+            "postgresql": "ROLLBACK"
+          },
+          "fragments": {
+            "sqlite": [
+              "ROLLBACK"
+            ],
+            "postgresql": [
+              "ROLLBACK"
+            ]
+          },
+          "parameters": []
+        },
+        {
+          "kind": "select",
+          "sql": {
+            "sqlite": "SELECT \"Id\", \"Counter\", \"Version\", \"Note\" FROM \"perf_state\" WHERE \"Id\" = ?",
+            "postgresql": "SELECT \"Id\", \"Counter\", \"Version\", \"Note\" FROM \"perf_state\" WHERE \"Id\" = $1"
+          },
+          "fragments": {
+            "sqlite": [
+              "SELECT \"Id\", \"Counter\", \"Version\", \"Note\" ",
+              "FROM \"perf_state\" ",
+              "WHERE \"Id\" = ?"
+            ],
+            "postgresql": [
+              "SELECT \"Id\", \"Counter\", \"Version\", \"Note\" ",
+              "FROM \"perf_state\" ",
+              "WHERE \"Id\" = $1"
+            ]
+          },
+          "parameters": [
+            {
+              "type": "int64",
+              "value": 0,
+              "runtime": "worker_id_plus_one"
+            }
+          ],
+          "expected_state": {
+            "counter": 0,
+            "version": 1,
+            "note": null
+          }
+        }
+      ],
+      "expected": {
+        "rows": 2,
+        "digest": "5948357535940210748",
+        "digest_hex": "528ccfa9c6bbf03c",
+        "outcome": "success"
+      },
+      "digest_policy": "Each select validates Id == logical worker id + 1, then hashes Counter, Version, Note in order.",
+      "preparation_policy": "Reuse supported read/SQL plans only; no claim of a public prepared Korda mutation API.",
+      "status": "contract; each provider and route require actual correctness validation"
+    },
+    {
+      "id": "W35",
+      "name": "partial-update",
+      "entry": "fluent-mutation-and-transaction-api",
+      "semantically_distinct": true,
+      "sql": {
+        "sqlite": "/* multi-step business operation; execute steps in order */",
+        "postgresql": "/* multi-step business operation; execute steps in order */"
+      },
+      "fragments": {
+        "sqlite": [
+          "/* multi-step business operation; execute steps in order */"
+        ],
+        "postgresql": [
+          "/* multi-step business operation; execute steps in order */"
+        ]
+      },
+      "parameters": [],
+      "columns": [
+        {
+          "name": "Id",
+          "type": "int64",
+          "nullable": false
+        },
+        {
+          "name": "Counter",
+          "type": "int64",
+          "nullable": false
+        },
+        {
+          "name": "Version",
+          "type": "int64",
+          "nullable": false
+        },
+        {
+          "name": "Note",
+          "type": "string",
+          "nullable": true
+        }
+      ],
+      "materialization": "state",
+      "steps": [
+        {
+          "kind": "execute",
+          "sql": {
+            "sqlite": "UPDATE \"perf_state\" SET \"Counter\" = ?, \"Version\" = ?, \"Note\" = ? WHERE \"Id\" = ?",
+            "postgresql": "UPDATE \"perf_state\" SET \"Counter\" = $1, \"Version\" = $2, \"Note\" = $3 WHERE \"Id\" = $4"
+          },
+          "fragments": {
+            "sqlite": [
+              "UPDATE \"perf_state\" SET \"Counter\" = ?, \"Version\" = ?, \"Note\" = ? ",
+              "WHERE \"Id\" = ?"
+            ],
+            "postgresql": [
+              "UPDATE \"perf_state\" SET \"Counter\" = $1, \"Version\" = $2, \"Note\" = $3 ",
+              "WHERE \"Id\" = $4"
+            ]
+          },
+          "parameters": [
+            {
+              "type": "int64",
+              "value": 23
+            },
+            {
+              "type": "int64",
+              "value": 7
+            },
+            {
+              "type": "text",
+              "value": "base"
+            },
+            {
+              "type": "int64",
+              "value": 0,
+              "runtime": "worker_id_plus_one"
+            }
+          ],
+          "expected_affected": 1
+        },
+        {
+          "kind": "execute",
+          "sql": {
+            "sqlite": "UPDATE \"perf_state\" SET \"Note\" = ? WHERE \"Id\" = ?",
+            "postgresql": "UPDATE \"perf_state\" SET \"Note\" = $1 WHERE \"Id\" = $2"
+          },
+          "fragments": {
+            "sqlite": [
+              "UPDATE \"perf_state\" SET \"Note\" = ? ",
+              "WHERE \"Id\" = ?"
+            ],
+            "postgresql": [
+              "UPDATE \"perf_state\" SET \"Note\" = $1 ",
+              "WHERE \"Id\" = $2"
+            ]
+          },
+          "parameters": [
+            {
+              "type": "text",
+              "value": null
+            },
+            {
+              "type": "int64",
+              "value": 0,
+              "runtime": "worker_id_plus_one"
+            }
+          ],
+          "expected_affected": 1
+        },
+        {
+          "kind": "select",
+          "sql": {
+            "sqlite": "SELECT \"Id\", \"Counter\", \"Version\", \"Note\" FROM \"perf_state\" WHERE \"Id\" = ?",
+            "postgresql": "SELECT \"Id\", \"Counter\", \"Version\", \"Note\" FROM \"perf_state\" WHERE \"Id\" = $1"
+          },
+          "fragments": {
+            "sqlite": [
+              "SELECT \"Id\", \"Counter\", \"Version\", \"Note\" ",
+              "FROM \"perf_state\" ",
+              "WHERE \"Id\" = ?"
+            ],
+            "postgresql": [
+              "SELECT \"Id\", \"Counter\", \"Version\", \"Note\" ",
+              "FROM \"perf_state\" ",
+              "WHERE \"Id\" = $1"
+            ]
+          },
+          "parameters": [
+            {
+              "type": "int64",
+              "value": 0,
+              "runtime": "worker_id_plus_one"
+            }
+          ],
+          "expected_state": {
+            "counter": 23,
+            "version": 7,
+            "note": null
+          }
+        }
+      ],
+      "expected": {
+        "rows": 1,
+        "digest": "8261434468386109229",
+        "digest_hex": "72a682e0c752772d",
+        "outcome": "success"
+      },
+      "digest_policy": "Each select validates Id == logical worker id + 1, then hashes Counter, Version, Note in order.",
+      "preparation_policy": "Reuse supported read/SQL plans only; no claim of a public prepared Korda mutation API.",
+      "status": "contract; each provider and route require actual correctness validation"
+    },
+    {
+      "id": "W36",
+      "name": "stale-version",
+      "entry": "fluent-mutation-and-transaction-api",
+      "semantically_distinct": true,
+      "sql": {
+        "sqlite": "/* multi-step business operation; execute steps in order */",
+        "postgresql": "/* multi-step business operation; execute steps in order */"
+      },
+      "fragments": {
+        "sqlite": [
+          "/* multi-step business operation; execute steps in order */"
+        ],
+        "postgresql": [
+          "/* multi-step business operation; execute steps in order */"
+        ]
+      },
+      "parameters": [],
+      "columns": [
+        {
+          "name": "Id",
+          "type": "int64",
+          "nullable": false
+        },
+        {
+          "name": "Counter",
+          "type": "int64",
+          "nullable": false
+        },
+        {
+          "name": "Version",
+          "type": "int64",
+          "nullable": false
+        },
+        {
+          "name": "Note",
+          "type": "string",
+          "nullable": true
+        }
+      ],
+      "materialization": "state",
+      "steps": [
+        {
+          "kind": "execute",
+          "sql": {
+            "sqlite": "UPDATE \"perf_state\" SET \"Counter\" = ?, \"Version\" = ?, \"Note\" = ? WHERE \"Id\" = ?",
+            "postgresql": "UPDATE \"perf_state\" SET \"Counter\" = $1, \"Version\" = $2, \"Note\" = $3 WHERE \"Id\" = $4"
+          },
+          "fragments": {
+            "sqlite": [
+              "UPDATE \"perf_state\" SET \"Counter\" = ?, \"Version\" = ?, \"Note\" = ? ",
+              "WHERE \"Id\" = ?"
+            ],
+            "postgresql": [
+              "UPDATE \"perf_state\" SET \"Counter\" = $1, \"Version\" = $2, \"Note\" = $3 ",
+              "WHERE \"Id\" = $4"
+            ]
+          },
+          "parameters": [
+            {
+              "type": "int64",
+              "value": 23
+            },
+            {
+              "type": "int64",
+              "value": 2
+            },
+            {
+              "type": "text",
+              "value": "base"
+            },
+            {
+              "type": "int64",
+              "value": 0,
+              "runtime": "worker_id_plus_one"
+            }
+          ],
+          "expected_affected": 1
+        },
+        {
+          "kind": "execute",
+          "sql": {
+            "sqlite": "UPDATE \"perf_state\" SET \"Counter\" = ? WHERE \"Id\" = ? AND \"Version\" = ?",
+            "postgresql": "UPDATE \"perf_state\" SET \"Counter\" = $1 WHERE \"Id\" = $2 AND \"Version\" = $3"
+          },
+          "fragments": {
+            "sqlite": [
+              "UPDATE \"perf_state\" SET \"Counter\" = ? ",
+              "WHERE \"Id\" = ? AND \"Version\" = ?"
+            ],
+            "postgresql": [
+              "UPDATE \"perf_state\" SET \"Counter\" = $1 ",
+              "WHERE \"Id\" = $2 AND \"Version\" = $3"
+            ]
+          },
+          "parameters": [
+            {
+              "type": "int64",
+              "value": 99
+            },
+            {
+              "type": "int64",
+              "value": 0,
+              "runtime": "worker_id_plus_one"
+            },
+            {
+              "type": "int64",
+              "value": 1
+            }
+          ],
+          "expected_affected": 0
+        },
+        {
+          "kind": "select",
+          "sql": {
+            "sqlite": "SELECT \"Id\", \"Counter\", \"Version\", \"Note\" FROM \"perf_state\" WHERE \"Id\" = ?",
+            "postgresql": "SELECT \"Id\", \"Counter\", \"Version\", \"Note\" FROM \"perf_state\" WHERE \"Id\" = $1"
+          },
+          "fragments": {
+            "sqlite": [
+              "SELECT \"Id\", \"Counter\", \"Version\", \"Note\" ",
+              "FROM \"perf_state\" ",
+              "WHERE \"Id\" = ?"
+            ],
+            "postgresql": [
+              "SELECT \"Id\", \"Counter\", \"Version\", \"Note\" ",
+              "FROM \"perf_state\" ",
+              "WHERE \"Id\" = $1"
+            ]
+          },
+          "parameters": [
+            {
+              "type": "int64",
+              "value": 0,
+              "runtime": "worker_id_plus_one"
+            }
+          ],
+          "expected_state": {
+            "counter": 23,
+            "version": 2,
+            "note": "base"
+          }
+        }
+      ],
+      "expected": {
+        "rows": 1,
+        "digest": "11276845491423021697",
+        "digest_hex": "9c7f673a273c0a81",
+        "outcome": "conflict"
+      },
+      "digest_policy": "Each select validates Id == logical worker id + 1, then hashes Counter, Version, Note in order.",
+      "preparation_policy": "Reuse supported read/SQL plans only; no claim of a public prepared Korda mutation API.",
+      "status": "contract; each provider and route require actual correctness validation"
+    }
+  ],
+  "transaction_cases_status": "four deterministic multi-step business contracts; concurrency conflict race is a separate correctness scenario",
+  "performance_acceptance_claimed": false
+}

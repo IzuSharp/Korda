@@ -194,6 +194,7 @@ run('managed-aot-restore', [DOTNET, 'restore', managed, '-r', 'linux-x64', '-p:P
 run('managed-aot-publish', [DOTNET, 'publish', managed, '-c', 'Release', '-r', 'linux-x64', '-p:PublishAot=true', '--self-contained', 'true', '--no-restore', '--disable-build-servers', '-o', OUT / 'aot-tests'])
 run('managed-aot-run', [OUT / 'aot-tests/Korda.Data.Tests', OUT / 'managed-aot', '--require-aot'])
 run('managed-allocation-regression', [OUT / 'aot-tests/Korda.Data.Tests', OUT / 'scalar-allocation', '--require-aot', '--allocation-probe', '--allocation-regression'])
+run('managed-configured-scalar-regression', [OUT / 'aot-tests/Korda.Data.Tests', OUT / 'configured-scalar-allocation', '--require-aot', '--configured-scalar-probe', '--allocation-regression'])
 native_results = json.loads(run('native-aot-goldens', [native_binary, OUT / 'managed-aot']))
 tracked = subprocess.check_output(['git', 'ls-files', '--cached', '--others', '--exclude-standard',
     'src/Data.Abstractions', 'tests/Data.Abstractions', 'native/database/interfaces',

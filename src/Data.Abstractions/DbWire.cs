@@ -55,15 +55,20 @@ internal sealed class DbWire
         return result;
     }
     internal static DbWire Parse(ReadOnlySpan<byte> bytes, WireExpectation expected)
-        => ParseCore(bytes, expected, null);
-    // Only the internal host's independently allocated, immutable managed batch
-    // may transfer this storage. The caller must never clear or pool the array.
+    {
+        var rows = Validate(bytes, expected);
+        return new(bytes.ToArray(), expected, rows);
+    }
+    // The caller transfers an exclusively owned managed array and must not
+    // mutate or expose any alias afterwards. Borrowed/public inputs still use
+    // Parse's defensive copy. Validation is identical on both entry points.
     internal static DbWire ParseOwned(byte[] bytes, WireExpectation expected)
     {
         ArgumentNullException.ThrowIfNull(bytes);
-        return ParseCore(bytes, expected, bytes);
+        var rows = Validate(bytes, expected);
+        return new(bytes, expected, rows);
     }
-    private static DbWire ParseCore(ReadOnlySpan<byte> bytes, WireExpectation expected, byte[]? owned)
+    private static uint Validate(ReadOnlySpan<byte> bytes, WireExpectation expected)
     {
         try
         {
@@ -84,7 +89,12 @@ internal sealed class DbWire
                 if (R32(bytes, o) != d.Id || R16(bytes, o + 4) != d.Codec.Id || R16(bytes, o + 6) != (d.Codec.Nullable ? 1 : 0) || R32(bytes, o + 8) != d.BoundCodecId || R32(bytes, o + 12) != 0)
                     Bad("Descriptor count, order, ID, codec, nullability or reserved bits differ.");
             }
-            var ranges = new List<(int Start, int End)>();
+            // The normal encoder appends nonempty cells in row-major order.
+            // Establish non-overlap in one pass in that case. The wire format
+            // also permits disordered ranges, so retain its general validation
+            // instead of rejecting them or assuming a trusted producer.
+            var orderedRanges = true;
+            var previousEnd = payloadOffset;
             for (var i = 0; i < count; i++)
             {
                 var d = expected.Descriptors[i % expected.Descriptors.Length]; var o = cellsOffset + i * WireSchema.CellBytes;
@@ -93,12 +103,26 @@ internal sealed class DbWire
                 if (flags == 1)
                 { if (!d.Codec.Nullable || dataOffset != 0 || length != 0) Bad("Invalid SQL NULL cell."); continue; }
                 if (dataOffset < (ulong)payloadOffset || dataOffset > (ulong)bytes.Length || length > (ulong)bytes.Length - dataOffset || (length == 0 && dataOffset != (ulong)payloadOffset)) Bad("Invalid cell range.");
-                if (length > 0) ranges.Add(((int)dataOffset, (int)(dataOffset + length)));
+                if (length > 0)
+                {
+                    if (dataOffset < (ulong)previousEnd) orderedRanges = false;
+                    previousEnd = (int)(dataOffset + length);
+                }
                 ValidateScalar(d.Codec, bytes.Slice((int)dataOffset, (int)length));
             }
-            ranges.Sort((x, y) => x.Start.CompareTo(y.Start));
-            for (var i = 1; i < ranges.Count; i++) if (ranges[i].Start < ranges[i - 1].End) Bad("Nonempty cell ranges overlap.");
-            return new(owned ?? bytes.ToArray(), expected, rows);
+            if (!orderedRanges)
+            {
+                var ranges = new List<(int Start, int End)>();
+                for (var i = 0; i < count; i++)
+                {
+                    var o = cellsOffset + i * WireSchema.CellBytes;
+                    var start = (int)R64(bytes, o + 8); var length = (int)R64(bytes, o + 16);
+                    if (length > 0) ranges.Add((start, start + length));
+                }
+                ranges.Sort((x, y) => x.Start.CompareTo(y.Start));
+                for (var i = 1; i < ranges.Count; i++) if (ranges[i].Start < ranges[i - 1].End) Bad("Nonempty cell ranges overlap.");
+            }
+            return rows;
         }
         catch (Exception e) when (e is OverflowException or ArgumentOutOfRangeException or JsonException)
         { throw new ArgumentException("Malformed bounded db-wire payload.", nameof(bytes), e); }
@@ -136,7 +160,7 @@ internal sealed class DbWire
     }
     internal static void ValidateScalar(CodecDescriptor codec, ReadOnlySpan<byte> bytes)
     {
-        CodecRegistry.Validate(codec);
+        CodecRegistry.Validate(codec, out var precision, out var scale);
         switch (codec.Id)
         {
             case 1: if (bytes.Length != 2) Bad("Int16 width."); break;
@@ -152,12 +176,18 @@ internal sealed class DbWire
             case 11: if (bytes.Length != 8 || !double.IsFinite(BinaryPrimitives.ReadDoubleLittleEndian(bytes))) Bad("Double value."); break;
             case 12: if (bytes.Length != 4 || !float.IsFinite(BinaryPrimitives.ReadSingleLittleEndian(bytes))) Bad("Single value."); break;
             case 13:
-                var v = DecimalBytes.Decode(bytes); using (var config = JsonDocument.Parse(codec.Configuration!)) DecimalBytes.CheckFit(v, config.RootElement.GetProperty("precision").GetByte(), config.RootElement.GetProperty("scale").GetByte()); break;
+                DecimalBytes.CheckFit(DecimalBytes.Decode(bytes), precision, scale); break;
             case 14: _ = DecimalBytes.Decode(bytes); break;
             case 16:
                 _ = Validation.Utf8.GetCharCount(bytes);
-                if (bytes.StartsWith(new byte[] { 0xef, 0xbb, 0xbf })) Bad("JSON BOM.");
-                using (JsonDocument.Parse(bytes.ToArray(), new JsonDocumentOptions { MaxDepth = 64 })) { }
+                if (bytes.Length >= 3 && bytes[0] == 0xef && bytes[1] == 0xbb && bytes[2] == 0xbf) Bad("JSON BOM.");
+                // Validate the same complete single value without materializing
+                // a document or copying an already owned cell. At depth <= 64
+                // the reader keeps its nesting state inline; no pooled buffer
+                // or retained cache replaces the removed allocations.
+                var reader = new Utf8JsonReader(bytes, new JsonReaderOptions { MaxDepth = 64 });
+                if (!reader.Read()) throw new JsonException("JSON requires one value.");
+                while (reader.Read()) { }
                 break;
         }
     }
@@ -173,20 +203,56 @@ internal sealed class DbWire
 
 internal static class CodecRegistry
 {
-    internal static void Validate(CodecDescriptor codec)
+    internal static void Validate(CodecDescriptor codec) => Validate(codec, out _, out _);
+
+    internal static void Validate(CodecDescriptor codec, out byte precision, out byte scale)
     {
+        precision = 0; scale = 0;
         if (codec.Id is < 1 or > 17) throw new ArgumentException("Unknown required logical codec.");
         if (codec.Id is 13 or 15)
         {
             if (codec.Configuration is null) throw new ArgumentException("Configured codec requires configuration.");
+            if (TryReadConfiguration(codec.Id, codec.Configuration, out precision, out scale)) return;
+            // Keep the original parser/factory path for malformed, unsupported
+            // or noncanonical input, including its exception type and order.
             using var json = JsonDocument.Parse(codec.Configuration); var value = json.RootElement;
             string canonical;
             if (codec.Id == 13)
-            { var p = value.GetProperty("precision").GetByte(); var s = value.GetProperty("scale").GetByte(); canonical = Codecs.Decimal(p, s).Descriptor.Configuration!; }
-            else { var s = value.GetProperty("scale").GetByte(); canonical = Codecs.FixedScaleMoney(s).Descriptor.Configuration!; }
+            { precision = value.GetProperty("precision").GetByte(); scale = value.GetProperty("scale").GetByte(); canonical = Codecs.Decimal(precision, scale).Descriptor.Configuration!; }
+            else { scale = value.GetProperty("scale").GetByte(); canonical = Codecs.FixedScaleMoney(scale).Descriptor.Configuration!; }
             if (canonical != codec.Configuration) throw new ArgumentException("Unknown, duplicate or noncanonical codec configuration.");
         }
         else if (codec.Configuration is not null) throw new ArgumentException("This codec has no configuration.");
+    }
+
+    private static bool TryReadConfiguration(uint id, string configuration, out byte precision, out byte scale)
+    {
+        precision = 0; scale = 0;
+        var text = configuration.AsSpan();
+        ReadOnlySpan<char> prefix = id == 13 ? "{\"precision\":" : "{\"scale\":";
+        if (!text.StartsWith(prefix)) return false;
+        text = text[prefix.Length..];
+        if (id == 13)
+        {
+            ReadOnlySpan<char> separator = ",\"scale\":";
+            if (!TryReadNumber(ref text, out precision) || !text.StartsWith(separator)) return false;
+            text = text[separator.Length..];
+        }
+        if (!TryReadNumber(ref text, out scale) || text.Length != 1 || text[0] != '}') return false;
+        return id == 13 ? precision is >= 1 and <= 29 && scale <= Math.Min((byte)28, precision) : scale <= 18;
+    }
+
+    private static bool TryReadNumber(ref ReadOnlySpan<char> text, out byte value)
+    {
+        value = 0;
+        if (text.IsEmpty || text[0] is < '0' or > '9') return false;
+        value = (byte)(text[0] - '0'); text = text[1..];
+        if (!text.IsEmpty && text[0] is >= '0' and <= '9')
+        {
+            if (value == 0) return false;
+            value = (byte)(value * 10 + text[0] - '0'); text = text[1..];
+        }
+        return true;
     }
 }
 
