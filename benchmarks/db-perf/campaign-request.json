@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "task": "DB-Perf-01",
   "enabled": true,
-  "harnessCommit": "4ee348d8b9834a14327dcf68a105e34f52f81795",
+  "harnessCommit": "da153c22ef1093fccc3233ec76bfda96e6cc59df",
   "before": {
     "sourceCommit": "771bc77cbd68d3f932b99ed2497c0697bbba5f02",
     "runId": 45356659607,
@@ -222,7 +222,7 @@
       ]
     }
   },
-  "activationNote": "The prior run and its measurement-only retry rejected different prepare/measure ImageVersion values (.133.1 versus .376.1). Both jobs now require the actually observed ubuntu24 image 20261116.376.1 before work; the existing bundle image-equality gate remains. Frozen harness, original/final packages, business workload, resource thresholds, SLO and all eight 1800-second durations are unchanged.",
+  "activationNote": "Run 45452087158 retained 69 PostgreSQL preflight cells and stopped before all long segments because no scheduled C4 rate for original Korda passed the unchanged SLO. The reviewed controller can now spend its existing maximum of three five-second refinement windows halving the lowest failed rate until a successful/failing bracket exists, then use bounded midpoints. All failed observations remain; the before/native/independent columns alone freeze the common rate. Actual packages, compiled consumers, workload, concurrency, queue size, SLO, environment gates and all eight 1800-second durations are unchanged.",
   "nativeBaseline": {
     "physicalPrepare": "reuse",
     "protocolConfirmation": "drain-only"
