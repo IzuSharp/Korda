@@ -1,6 +1,6 @@
 {
   "db-perf-benchmarks": {
-    "tests": ["benchmarks/db-perf/", ".github/workflows/db-perf-campaign.yml", ".github/workflows/db-perf-environment.yml", ".github/workflows/db-perf-profile.yml"],
+    "tests": ["benchmarks/db-perf/", ".github/workflows/db-perf-campaign.yml", ".github/workflows/db-perf-environment.yml", ".github/workflows/db-perf-profile.yml", ".github/workflows/db-perf-report.yml"],
     "run": ["python3", "benchmarks/db-perf/check.py"],
     "resources": ["dotnet", "native"]
   }
