@@ -118,7 +118,13 @@ public readonly struct QuerySelection<T>
     {
         var owner = Owner; var projection = Projection;
         return owner.Run(() =>
-        { owner.Selection(projection); var id = owner.Source.RegisterProjection(projection); var bound = projection.Fields.Select(f => owner.Source.BindCodec(f.Descriptor)).ToArray(); var parameters = owner.Parameters.Values.OrderBy(p => p.Id).ToArray(); return new PreparedQuery<T>(owner.Source, owner.Seal(8), projection, id, bound, parameters); });
+        {
+            owner.Selection(projection); var id = owner.Source.RegisterProjection(projection);
+            var bound = projection.Fields.Select(f => owner.Source.BindCodec(f.Descriptor)).ToArray();
+            // Finish managed layout construction before acquiring the native plan.
+            var parameters = new PreparedParameterLayout(owner.Source, owner.Parameters.Values);
+            return new PreparedQuery<T>(owner.Source, owner.Seal(8), projection, id, bound, parameters);
+        });
     }
     /// <summary>Renders a bounded native clone with placeholders and no parameter values; does not execute or seal.</summary>
     /// <inheritdoc cref="QuerySelection{T}"/>
@@ -140,15 +146,17 @@ public sealed class PreparedQuery<T> : IDisposable
     private readonly Projection<T> _projection;
     private readonly uint _projectionId;
     private readonly uint[] _codecs;
-    private readonly ParameterDefinition[] _parameters;
+    private PreparedParameterLayout? _parameters;
     private int _disposed;
-    internal PreparedQuery(DataSource source, DatabaseOwner plan, Projection<T> projection, uint projectionId, uint[] codecs, ParameterDefinition[] parameters)
+    internal PreparedQuery(DataSource source, DatabaseOwner plan, Projection<T> projection, uint projectionId, uint[] codecs, PreparedParameterLayout parameters)
     { _source = source; _plan = plan; _projection = projection; _projectionId = projectionId; _codecs = codecs; _parameters = parameters; }
     private TypedStream<T> Stream(DataSession session, QueryParameters? parameters, CancellationToken token)
     {
         ArgumentNullException.ThrowIfNull(session); ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this); session.CheckOpen();
         if (!ReferenceEquals(_source, session.Source)) throw new ArgumentException("A prepared plan requires a session from its exact source.", nameof(session));
-        var values = ParameterDefinition.Encode(_source, _parameters, parameters);
+        var layout = Volatile.Read(ref _parameters);
+        ObjectDisposedException.ThrowIf(layout is null, this);
+        var values = layout.Encode(_source, parameters);
         return new(async (rows, cancellation) =>
         {
             ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
@@ -187,7 +195,14 @@ public sealed class PreparedQuery<T> : IDisposable
     public IAsyncEnumerable<T> AsAsyncEnumerable(DataSession session, QueryParameters? parameters = null, CancellationToken cancellationToken = default) => Stream(session, parameters, cancellationToken);
     /// <summary>Prevents new execution and releases this plan reference without cancelling accepted operations.</summary>
     /// <inheritdoc cref="PreparedQuery{T}"/>
-    public void Dispose() { if (Interlocked.Exchange(ref _disposed, 1) == 0) _plan.Dispose(); }
+    public void Dispose()
+    {
+        if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+        // In-flight construction holds its own immutable layout reference. New
+        // dispatch is already closed, and the disposed wrapper retains no cache.
+        Interlocked.Exchange(ref _parameters, null);
+        _plan.Dispose();
+    }
 }
 /// <summary>A frozen native CTE with an explicit declared row shape and source identity.</summary>
 /// <typeparam name="T">The declared CTE row class.</typeparam>

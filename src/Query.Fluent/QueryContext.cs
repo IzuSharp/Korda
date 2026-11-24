@@ -207,3 +207,49 @@ internal sealed record ParameterDefinition(DataSource Source, uint Id, string Na
     }
 }
 internal sealed record ParameterSnapshot(ParameterDefinition Parameter, byte[]? Bytes);
+
+// One immutable layout belongs to one prepared plan. Execution still snapshots
+// values and validates their exact source/identity; only shape metadata is reused.
+internal sealed class PreparedParameterLayout
+{
+    private readonly ParameterDefinition[] _definitions;
+    private readonly WireExpectation _expectation;
+    private readonly byte[]? _parameterlessPayload;
+
+    internal PreparedParameterLayout(DataSource source, IEnumerable<ParameterDefinition> definitions)
+    {
+        _definitions = definitions.OrderBy(parameter => parameter.Id).ToArray();
+        var descriptors = new WireDescriptor[_definitions.Length];
+        var json = new StringBuilder("{\"version\":1,\"parameters\":[");
+        for (var i = 0; i < _definitions.Length; i++)
+        {
+            var parameter = _definitions[i];
+            if (!ReferenceEquals(source, parameter.Source)) throw new ArgumentException("Parameter source differs from the prepared shape.", nameof(definitions));
+            descriptors[i] = new(parameter.Id, parameter.Codec, parameter.BoundCodec);
+            if (i != 0) json.Append(',');
+            json.Append("{\"id\":").Append(parameter.Id).Append(",\"name\":").Append(Canonical.Quote(parameter.Name)).Append(",\"codec\":").Append(parameter.Codec.Id)
+                .Append(",\"codec_config\":").Append(parameter.Codec.Configuration ?? "null").Append(",\"nullable\":").Append(parameter.Codec.Nullable ? "true" : "false").Append('}');
+        }
+        json.Append("]}");
+        _expectation = new(PayloadKind.Parameters, source.Binding.SemanticProfile, SHA256.HashData(Encoding.UTF8.GetBytes(json.ToString())), 0, 0, descriptors) { ExactRows = 1 };
+        // The ABI accepts a read-only input view and owns its rendered parameter
+        // bytes before returning from execute_create. No caller can mutate this
+        // array, so independent lazy executions can safely share the empty frame.
+        if (_definitions.Length == 0) _parameterlessPayload = DbWire.Encode(_expectation, 1, []);
+    }
+
+    internal byte[] Encode(DataSource source, QueryParameters? supplied)
+    {
+        var values = supplied?.Snapshot() ?? [];
+        if (values.Length != _definitions.Length) throw new ArgumentException("Execution requires every declared parameter exactly once and no extra parameters.", nameof(supplied));
+        if (_parameterlessPayload is { } empty) return empty;
+        var cells = new ReadOnlyMemory<byte>?[_definitions.Length];
+        for (var i = 0; i < _definitions.Length; i++)
+        {
+            var parameter = _definitions[i]; var value = values[i];
+            if (!ReferenceEquals(source, parameter.Source) || value.Parameter != parameter) throw new ArgumentException("Parameter source, identity or codec differs from the sealed shape.", nameof(supplied));
+            cells[i] = value.Bytes is null ? (ReadOnlyMemory<byte>?)null : new ReadOnlyMemory<byte>(value.Bytes);
+        }
+        return DbWire.Encode(_expectation, 1, cells);
+    }
+}

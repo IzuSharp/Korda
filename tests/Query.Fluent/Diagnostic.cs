@@ -13,6 +13,7 @@ internal sealed class Diagnostic : IDisposable
     {
         var result = new ulong[6]; for (uint i = 0; i < result.Length; i++) result[i] = ((delegate* unmanaged[Cdecl]<uint, ulong>)_count)(i); return result;
     }
+    internal unsafe ulong Count(uint index) => ((delegate* unmanaged[Cdecl]<uint, ulong>)_count)(index);
     internal async Task WaitCursorZero()
     {
         for (var i = 0; i < 100; i++)

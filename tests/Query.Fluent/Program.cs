@@ -17,6 +17,7 @@ internal static class Suite
     private static int _assertions, _retirements;
     private static readonly List<string> Completed = [];
     private static readonly List<CompositionCost> Costs = [];
+    private static readonly List<PreparedConstructionCost> PreparedCosts = [];
     internal static void Check(bool value, string message) { _assertions++; if (!value) throw new InvalidOperationException(message); }
     internal static T Throws<T>(Action action) where T : Exception
     { try { action(); } catch (T error) { _assertions++; return error; } throw new InvalidOperationException("Expected " + typeof(T).Name); }
@@ -45,7 +46,7 @@ internal static class Suite
         }
         File.Delete(sqliteFile);
         Check(hashes.SequenceEqual(nativeFiles.Select(f => Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(f))))), "New C# DTOs and ordinary expressions reuse unchanged native assets");
-        Directory.CreateDirectory(args[0]); File.WriteAllText(Path.Combine(args[0], "result.json"), JsonSerializer.Serialize(new Receipt(!RuntimeFeature.IsDynamicCodeSupported, _assertions, _retirements, Completed, hashes, Costs), ReceiptJson.Default.Receipt));
+        Directory.CreateDirectory(args[0]); File.WriteAllText(Path.Combine(args[0], "result.json"), JsonSerializer.Serialize(new Receipt(!RuntimeFeature.IsDynamicCodeSupported, _assertions, _retirements, Completed, hashes, Costs, PreparedCosts), ReceiptJson.Default.Receipt));
         Console.WriteLine($"PASS B13 actual two-provider Fluent: {_assertions} assertions; AOT={!RuntimeFeature.IsDynamicCodeSupported}");
     }
     private static async Task Provider(DataSession session, Diagnostic diagnostic)
@@ -188,7 +189,58 @@ internal static class Suite
                 Check(parallel[0].Count == 3 && parallel[1].Single().Id == 2, "Concurrent immutable plan executions use independent sessions and values");
             }
             Throws<ArgumentException>(() => prepared.ToListAsync(session));
-            using var second = Q(); var extra = second.Parameter("extra", Codecs.Int64); Throws<ArgumentException>(() => prepared.ToListAsync(session, values.Set(extra, 0L)));
+            using var second = Q(); var extra = second.Parameter("extra", Codecs.Int64);
+            Throws<ArgumentException>(() => prepared.AsAsyncEnumerable(session, new QueryParameters().Set(extra, 0L)));
+            Throws<ArgumentException>(() => prepared.ToListAsync(session, values.Set(extra, 0L)));
+            var foreignFile = Path.Combine(Path.GetTempPath(), "nw-b13-foreign-" + Guid.NewGuid().ToString("N") + ".db");
+            try
+            {
+                await using var foreignSource = SqliteDataSource.Create(foreignFile);
+                await using var foreignSession = await foreignSource.OpenSessionAsync();
+                using var foreignQuery = foreignSession.From(Models.People);
+                var foreign = foreignQuery.Parameter("minimum", Codecs.Int64);
+                Throws<ArgumentException>(() => prepared.AsAsyncEnumerable(session, new QueryParameters().Set(foreign, 1L)));
+                Throws<ArgumentException>(() => prepared.AsAsyncEnumerable(foreignSession, new QueryParameters().Set(minimum, 1L)));
+            }
+            finally { File.Delete(foreignFile); }
+        }
+        using (var query = Q())
+        {
+            var nullable = query.Parameter("nullable", Codecs.Nullable(Codecs.Int64));
+            using var prepared = query.OrderBy(Models.Id).Take(1).Select(query.ParameterValue(nullable)).Prepare();
+            var values = new QueryParameters().Set(nullable, (long?)null);
+            var captured = prepared.AsAsyncEnumerable(session, values); values.Set(nullable, 7L);
+            var rows = new List<long?>(); await foreach (var row in captured) rows.Add(row);
+            Check(rows.Count == 1 && rows[0] is null && (await prepared.ToListAsync(session, values)).Single() == 7L,
+                "Prepared nullable values snapshot before enumeration and preserve SQL NULL");
+        }
+        using (var query = Q())
+        {
+            using var prepared = query.OrderBy(Models.Id).Select(query.Column(Models.Id)).Prepare();
+            query.Dispose();
+            await using (var a = await session.Source.OpenSessionAsync())
+            await using (var b = await session.Source.OpenSessionAsync())
+            {
+                var parallel = await Task.WhenAll(prepared.ToListAsync(a), prepared.ToListAsync(b, new QueryParameters()));
+                Check(parallel.All(rows => rows.SequenceEqual([0L, 1L, 2L])), "Concurrent parameterless executions retain independent cursors");
+            }
+            using var parameterQuery = Q(); var extra = parameterQuery.Parameter("extra", Codecs.Int64);
+            var supplied = new QueryParameters(); var emptySnapshot = prepared.AsAsyncEnumerable(session, supplied);
+            supplied.Set(extra, 1L);
+            Throws<ArgumentException>(() => prepared.AsAsyncEnumerable(session, supplied));
+            var emptyRows = new List<long>(); await foreach (var row in emptySnapshot) emptyRows.Add(row);
+            Check(emptyRows.SequenceEqual([0L, 1L, 2L]), "Later extra parameters do not mutate an already captured empty execution");
+            var unstarted = prepared.AsAsyncEnumerable(session);
+            await using (var accepted = prepared.AsAsyncEnumerable(session).GetAsyncEnumerator())
+            {
+                Check(await accepted.MoveNextAsync() && accepted.Current == 0L, "Prepared execution admitted before plan disposal");
+                prepared.Dispose();
+                var remaining = new List<long>(); while (await accepted.MoveNextAsync()) remaining.Add(accepted.Current);
+                Check(remaining.SequenceEqual([1L, 2L]), "Disposing a prepared plan preserves its accepted cursor");
+            }
+            Throws<ObjectDisposedException>(() => prepared.AsAsyncEnumerable(session));
+            await ThrowsAsync<ObjectDisposedException>(async () =>
+            { await using var reader = unstarted.GetAsyncEnumerator(); await reader.MoveNextAsync(); });
         }
         using (var q = Q())
         using (var other = Q())
@@ -198,6 +250,8 @@ internal static class Suite
             Throws<ArgumentException>(() => q.Select(q.ParameterValue(one)).Combine(right));
         }
         await Done("prepared-isolation");
+        MeasurePreparedConstruction(session, diagnostic);
+        await Done("prepared-construction-allocation-regression");
         using (var q = Q())
         using (var other = Q())
         {
@@ -284,6 +338,36 @@ internal static class Suite
         Check(encoded > sizeof(long) && allocated > 0, "Direct boundary allocations and encoded copies are explicit");
         Costs.Add(new(session.Source.Provider.ToString(), iterations, allocated, elapsed, Stopwatch.Frequency, encoded, 15));
     }
+    private static void MeasurePreparedConstruction(DataSession session, Diagnostic diagnostic)
+    {
+        using var zeroQuery = session.From(Models.People);
+        using var zero = zeroQuery.Select(zeroQuery.Column(Models.Id)).Prepare();
+        using var oneQuery = session.From(Models.People);
+        var parameter = oneQuery.Parameter("minimum", Codecs.Int64);
+        using var one = oneQuery.Where(oneQuery.Column(Models.Id).GreaterThanOrEqual(oneQuery.ParameterValue(parameter)))
+            .Select(oneQuery.Column(Models.Id)).Prepare();
+        var values = new QueryParameters().Set(parameter, 1L);
+        for (var i = 0; i < 1000; i++) { GC.KeepAlive(zero.AsAsyncEnumerable(session)); GC.KeepAlive(one.AsAsyncEnumerable(session, values)); }
+        const int iterations = 10000;
+        for (var window = 0; window < 3; window++)
+        for (var lane = 0; lane < 2; lane++)
+        {
+            var sql = diagnostic.Count(6); var owners = diagnostic.Counts();
+            var before0 = GC.CollectionCount(0); var before1 = GC.CollectionCount(1); var before2 = GC.CollectionCount(2);
+            var before = GC.GetTotalAllocatedBytes(precise: true);
+            if (lane == 0) for (var i = 0; i < iterations; i++) GC.KeepAlive(zero.AsAsyncEnumerable(session));
+            else for (var i = 0; i < iterations; i++) GC.KeepAlive(one.AsAsyncEnumerable(session, values));
+            var after = GC.GetTotalAllocatedBytes(precise: true);
+            var gen0 = GC.CollectionCount(0) - before0; var gen1 = GC.CollectionCount(1) - before1; var gen2 = GC.CollectionCount(2) - before2;
+            // These are bounded construction regressions, not a zero-allocation
+            // claim. The old metadata rebuild exceeds both ceilings by a wide margin.
+            var maximum = lane == 0 ? 9_000_000L : 17_000_000L;
+            PreparedCosts.Add(new(session.Source.Provider.ToString(), lane == 0 ? "parameterless" : "one-int64-snapshot",
+                window, iterations, before, after, after - before, gen0, gen1, gen2, maximum));
+            Check(after - before <= maximum, "Prepared public construction allocation ceiling");
+            Check(diagnostic.Count(6) == sql && diagnostic.Counts().SequenceEqual(owners), "Lazy construction performs no SQL or native ownership change");
+        }
+    }
     private sealed class MappingFailure : Exception;
     private sealed record Joined(long Id, long? Child, bool Matched);
     private sealed record Aggregates(long Count, long? Sum, double? Average, long? Min, long? Max);
@@ -313,6 +397,9 @@ internal static class Models
     }
 }
 internal sealed record CompositionCost(string Provider, int Iterations, long ManagedAllocatedBytes, long StopwatchTicks, long StopwatchFrequency, int OneInt64WireBytes, int InspectedDirectAbiCallsPerIteration);
-internal sealed record Receipt(bool NativeAot, int Assertions, int ManagedRetirements, List<string> Cases, string[] NativeSha256, List<CompositionCost> CompositionCosts);
+internal sealed record PreparedConstructionCost(string Provider, string Lane, int Window, int Iterations, long AllocatedBefore,
+    long AllocatedAfter, long AllocatedBytes, int Gen0, int Gen1, int Gen2, long MaximumBytes);
+internal sealed record Receipt(bool NativeAot, int Assertions, int ManagedRetirements, List<string> Cases, string[] NativeSha256,
+    List<CompositionCost> CompositionCosts, List<PreparedConstructionCost> PreparedConstructionCosts);
 [JsonSerializable(typeof(Receipt))]
 internal partial class ReceiptJson : JsonSerializerContext { }
