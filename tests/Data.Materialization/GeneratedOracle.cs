@@ -2,11 +2,11 @@ using Korda.Data;
 
 // Both static implementations consume the independent ShapeOracle from the
 // handwritten suite; generated metadata never supplies the expected fields.
-[WeaveTable("b12_generated", DescriptorName = "GeneratedRows")]
+[DbTable("b12_generated", DescriptorName = "GeneratedRows")]
 internal sealed partial class GeneratedRow
 {
-    [WeaveColumn("id"), WeaveKey] public long Id { get; }
-    [WeaveColumn("optional")] public string? Optional { get; }
+    [DbColumn("id"), DbKey] public long Id { get; }
+    [DbColumn("optional")] public string? Optional { get; }
     internal static int Calls;
     internal static MappingFailure? Failure;
     public GeneratedRow(long id, string? optional)

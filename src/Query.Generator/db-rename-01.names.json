@@ -1,0 +1,16 @@
+{
+  "task": "DB-Rename-01",
+  "namespace": "Korda.Data",
+  "attributes": {
+    "WeaveTableAttribute": "DbTableAttribute",
+    "WeaveColumnAttribute": "DbColumnAttribute",
+    "WeaveKeyAttribute": "DbKeyAttribute",
+    "WeaveVersionAttribute": "DbVersionAttribute",
+    "WeaveIgnoreAttribute": "DbIgnoreAttribute",
+    "WeaveProjectionAttribute": "DbProjectionAttribute",
+    "WeaveConstructorAttribute": "DbConstructorAttribute",
+    "WeaveParameterAttribute": "DbParameterAttribute",
+    "WeaveCodecAttribute": "DbCodecAttribute",
+    "WeaveUseCodecAttribute": "DbUseCodecAttribute"
+  }
+}

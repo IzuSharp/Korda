@@ -30,10 +30,10 @@ try
 }
 finally { File.Delete(file); }
 
-[WeaveTable("students", DescriptorName = "Students")]
-internal sealed partial record Student([property: WeaveKey, WeaveColumn("id")] long Id, string Name, [property: WeaveColumn("email")] string? Email, [property: WeaveVersion, WeaveColumn("version")] long Version);
-[WeaveTable("labels", DescriptorName = "Labels")]
-internal sealed partial record Label([property: WeaveKey] long Id, string Text);
+[DbTable("students", DescriptorName = "Students")]
+internal sealed partial record Student([property: DbKey, DbColumn("id")] long Id, string Name, [property: DbColumn("email")] string? Email, [property: DbVersion, DbColumn("version")] long Version);
+[DbTable("labels", DescriptorName = "Labels")]
+internal sealed partial record Label([property: DbKey] long Id, string Text);
 #if MANUAL_MAPPING
 internal static class Students
 {

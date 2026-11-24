@@ -16,9 +16,9 @@ Those operations retain their existing contracts.
 | Business need | Existing operation or focused addition |
 | --- | --- |
 | Ordinary entities with exact names and nullable members | Existing table generator; optional `Id` convention added |
-| Immutable DTO shared by Fluent and SQL | New `[WeaveProjection]` emits `Bind` and `Row` |
-| Constructor names differ from property names | New `[WeaveConstructor]` and `[WeaveParameter]` |
-| Repeated ID/money/JSON policy | New assembly `[WeaveCodec]`, property `[WeaveUseCodec]`, `Codecs.Convert` |
+| Immutable DTO shared by Fluent and SQL | New `[DbProjection]` emits `Bind` and `Row` |
+| Constructor names differ from property names | New `[DbConstructor]` and `[DbParameter]` |
+| Repeated ID/money/JSON policy | New assembly `[DbCodec]`, property `[DbUseCodec]`, `Codecs.Convert` |
 | Optional filter, join, aggregate | Existing `WhereIf`, `LeftJoin`, `GroupBy`, `Having` and typed expressions |
 | Continue after a complete order tuple | New `QueryCursor<T>` and `SeekAfter` |
 | Fetch all details for a page | New bounded list overload of `LoadRelatedAsync` |

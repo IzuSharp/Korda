@@ -182,6 +182,61 @@
       "implicit_member": false
     },
     {
+      "id": "M:Korda.Data.DbCodecAttribute.#ctor(System.Type,System.Type,System.String)",
+      "signature": "public Korda.Data.DbCodecAttribute.DbCodecAttribute(System.Type valueType, System.Type providerType, string memberName)",
+      "implicit_member": false
+    },
+    {
+      "id": "M:Korda.Data.DbColumnAttribute.#ctor(System.String)",
+      "signature": "public Korda.Data.DbColumnAttribute.DbColumnAttribute(string name)",
+      "implicit_member": false
+    },
+    {
+      "id": "M:Korda.Data.DbConstructorAttribute.#ctor",
+      "signature": "public Korda.Data.DbConstructorAttribute.DbConstructorAttribute()",
+      "implicit_member": true
+    },
+    {
+      "id": "M:Korda.Data.DbIgnoreAttribute.#ctor",
+      "signature": "public Korda.Data.DbIgnoreAttribute.DbIgnoreAttribute()",
+      "implicit_member": true
+    },
+    {
+      "id": "M:Korda.Data.DbKeyAttribute.#ctor",
+      "signature": "public Korda.Data.DbKeyAttribute.DbKeyAttribute()",
+      "implicit_member": true
+    },
+    {
+      "id": "M:Korda.Data.DbParameterAttribute.#ctor(System.String)",
+      "signature": "public Korda.Data.DbParameterAttribute.DbParameterAttribute(string propertyName)",
+      "implicit_member": false
+    },
+    {
+      "id": "M:Korda.Data.DbProjectionAttribute.#ctor",
+      "signature": "public Korda.Data.DbProjectionAttribute.DbProjectionAttribute()",
+      "implicit_member": true
+    },
+    {
+      "id": "M:Korda.Data.DbTableAttribute.#ctor",
+      "signature": "public Korda.Data.DbTableAttribute.DbTableAttribute()",
+      "implicit_member": false
+    },
+    {
+      "id": "M:Korda.Data.DbTableAttribute.#ctor(System.String)",
+      "signature": "public Korda.Data.DbTableAttribute.DbTableAttribute(string name)",
+      "implicit_member": false
+    },
+    {
+      "id": "M:Korda.Data.DbUseCodecAttribute.#ctor(System.Type,System.String)",
+      "signature": "public Korda.Data.DbUseCodecAttribute.DbUseCodecAttribute(System.Type providerType, string memberName)",
+      "implicit_member": false
+    },
+    {
+      "id": "M:Korda.Data.DbVersionAttribute.#ctor",
+      "signature": "public Korda.Data.DbVersionAttribute.DbVersionAttribute()",
+      "implicit_member": true
+    },
+    {
       "id": "M:Korda.Data.EntityKey\u00601.And\u0060\u00601(Korda.Data.Column{\u00600,\u0060\u00600},\u0060\u00600)",
       "signature": "public Korda.Data.EntityKey\u003CTEntity\u003E Korda.Data.EntityKey\u003CTEntity\u003E.And\u003CT\u003E(Korda.Data.Column\u003CTEntity, T\u003E column, T value)",
       "implicit_member": false
@@ -357,61 +412,6 @@
       "implicit_member": false
     },
     {
-      "id": "M:Korda.Data.WeaveCodecAttribute.#ctor(System.Type,System.Type,System.String)",
-      "signature": "public Korda.Data.WeaveCodecAttribute.WeaveCodecAttribute(System.Type valueType, System.Type providerType, string memberName)",
-      "implicit_member": false
-    },
-    {
-      "id": "M:Korda.Data.WeaveColumnAttribute.#ctor(System.String)",
-      "signature": "public Korda.Data.WeaveColumnAttribute.WeaveColumnAttribute(string name)",
-      "implicit_member": false
-    },
-    {
-      "id": "M:Korda.Data.WeaveConstructorAttribute.#ctor",
-      "signature": "public Korda.Data.WeaveConstructorAttribute.WeaveConstructorAttribute()",
-      "implicit_member": true
-    },
-    {
-      "id": "M:Korda.Data.WeaveIgnoreAttribute.#ctor",
-      "signature": "public Korda.Data.WeaveIgnoreAttribute.WeaveIgnoreAttribute()",
-      "implicit_member": true
-    },
-    {
-      "id": "M:Korda.Data.WeaveKeyAttribute.#ctor",
-      "signature": "public Korda.Data.WeaveKeyAttribute.WeaveKeyAttribute()",
-      "implicit_member": true
-    },
-    {
-      "id": "M:Korda.Data.WeaveParameterAttribute.#ctor(System.String)",
-      "signature": "public Korda.Data.WeaveParameterAttribute.WeaveParameterAttribute(string propertyName)",
-      "implicit_member": false
-    },
-    {
-      "id": "M:Korda.Data.WeaveProjectionAttribute.#ctor",
-      "signature": "public Korda.Data.WeaveProjectionAttribute.WeaveProjectionAttribute()",
-      "implicit_member": true
-    },
-    {
-      "id": "M:Korda.Data.WeaveTableAttribute.#ctor",
-      "signature": "public Korda.Data.WeaveTableAttribute.WeaveTableAttribute()",
-      "implicit_member": false
-    },
-    {
-      "id": "M:Korda.Data.WeaveTableAttribute.#ctor(System.String)",
-      "signature": "public Korda.Data.WeaveTableAttribute.WeaveTableAttribute(string name)",
-      "implicit_member": false
-    },
-    {
-      "id": "M:Korda.Data.WeaveUseCodecAttribute.#ctor(System.Type,System.String)",
-      "signature": "public Korda.Data.WeaveUseCodecAttribute.WeaveUseCodecAttribute(System.Type providerType, string memberName)",
-      "implicit_member": false
-    },
-    {
-      "id": "M:Korda.Data.WeaveVersionAttribute.#ctor",
-      "signature": "public Korda.Data.WeaveVersionAttribute.WeaveVersionAttribute()",
-      "implicit_member": true
-    },
-    {
       "id": "P:Korda.Data.Codecs.Boolean",
       "signature": "public static Korda.Data.ValueCodec\u003Cbool\u003E Korda.Data.Codecs.Boolean { get; }",
       "implicit_member": false
@@ -562,6 +562,31 @@
       "implicit_member": false
     },
     {
+      "id": "P:Korda.Data.DbColumnAttribute.Generated",
+      "signature": "public bool Korda.Data.DbColumnAttribute.Generated { get; init; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:Korda.Data.DbProjectionAttribute.DescriptorName",
+      "signature": "public string? Korda.Data.DbProjectionAttribute.DescriptorName { get; init; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:Korda.Data.DbTableAttribute.DescriptorName",
+      "signature": "public string? Korda.Data.DbTableAttribute.DescriptorName { get; init; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:Korda.Data.DbTableAttribute.InferPrimaryKey",
+      "signature": "public bool Korda.Data.DbTableAttribute.InferPrimaryKey { get; init; }",
+      "implicit_member": false
+    },
+    {
+      "id": "P:Korda.Data.DbTableAttribute.Schema",
+      "signature": "public string? Korda.Data.DbTableAttribute.Schema { get; init; }",
+      "implicit_member": false
+    },
+    {
       "id": "P:Korda.Data.Projection\u00601.ShapeHash",
       "signature": "public string Korda.Data.Projection\u003CT\u003E.ShapeHash { get; }",
       "implicit_member": false
@@ -622,31 +647,6 @@
       "implicit_member": false
     },
     {
-      "id": "P:Korda.Data.WeaveColumnAttribute.Generated",
-      "signature": "public bool Korda.Data.WeaveColumnAttribute.Generated { get; init; }",
-      "implicit_member": false
-    },
-    {
-      "id": "P:Korda.Data.WeaveProjectionAttribute.DescriptorName",
-      "signature": "public string? Korda.Data.WeaveProjectionAttribute.DescriptorName { get; init; }",
-      "implicit_member": false
-    },
-    {
-      "id": "P:Korda.Data.WeaveTableAttribute.DescriptorName",
-      "signature": "public string? Korda.Data.WeaveTableAttribute.DescriptorName { get; init; }",
-      "implicit_member": false
-    },
-    {
-      "id": "P:Korda.Data.WeaveTableAttribute.InferPrimaryKey",
-      "signature": "public bool Korda.Data.WeaveTableAttribute.InferPrimaryKey { get; init; }",
-      "implicit_member": false
-    },
-    {
-      "id": "P:Korda.Data.WeaveTableAttribute.Schema",
-      "signature": "public string? Korda.Data.WeaveTableAttribute.Schema { get; init; }",
-      "implicit_member": false
-    },
-    {
       "id": "T:Korda.Data.Changes\u00601",
       "signature": "public sealed class Korda.Data.Changes\u003CTEntity\u003E where TEntity : class",
       "implicit_member": false
@@ -689,6 +689,56 @@
     {
       "id": "T:Korda.Data.DatabaseException",
       "signature": "public class Korda.Data.DatabaseException : System.Exception",
+      "implicit_member": false
+    },
+    {
+      "id": "T:Korda.Data.DbCodecAttribute",
+      "signature": "[System.AttributeUsageAttribute(System.AttributeTargets.Assembly, AllowMultiple = true)]\npublic sealed class Korda.Data.DbCodecAttribute : System.Attribute",
+      "implicit_member": false
+    },
+    {
+      "id": "T:Korda.Data.DbColumnAttribute",
+      "signature": "[System.AttributeUsageAttribute(System.AttributeTargets.Property, Inherited = false)]\npublic sealed class Korda.Data.DbColumnAttribute : System.Attribute",
+      "implicit_member": false
+    },
+    {
+      "id": "T:Korda.Data.DbConstructorAttribute",
+      "signature": "[System.AttributeUsageAttribute(System.AttributeTargets.Constructor, Inherited = false)]\npublic sealed class Korda.Data.DbConstructorAttribute : System.Attribute",
+      "implicit_member": false
+    },
+    {
+      "id": "T:Korda.Data.DbIgnoreAttribute",
+      "signature": "[System.AttributeUsageAttribute(System.AttributeTargets.Property, Inherited = false)]\npublic sealed class Korda.Data.DbIgnoreAttribute : System.Attribute",
+      "implicit_member": false
+    },
+    {
+      "id": "T:Korda.Data.DbKeyAttribute",
+      "signature": "[System.AttributeUsageAttribute(System.AttributeTargets.Property, Inherited = false)]\npublic sealed class Korda.Data.DbKeyAttribute : System.Attribute",
+      "implicit_member": false
+    },
+    {
+      "id": "T:Korda.Data.DbParameterAttribute",
+      "signature": "[System.AttributeUsageAttribute(System.AttributeTargets.Parameter, Inherited = false)]\npublic sealed class Korda.Data.DbParameterAttribute : System.Attribute",
+      "implicit_member": false
+    },
+    {
+      "id": "T:Korda.Data.DbProjectionAttribute",
+      "signature": "[System.AttributeUsageAttribute(System.AttributeTargets.Class, Inherited = false)]\npublic sealed class Korda.Data.DbProjectionAttribute : System.Attribute",
+      "implicit_member": false
+    },
+    {
+      "id": "T:Korda.Data.DbTableAttribute",
+      "signature": "[System.AttributeUsageAttribute(System.AttributeTargets.Class, Inherited = false)]\npublic sealed class Korda.Data.DbTableAttribute : System.Attribute",
+      "implicit_member": false
+    },
+    {
+      "id": "T:Korda.Data.DbUseCodecAttribute",
+      "signature": "[System.AttributeUsageAttribute(System.AttributeTargets.Property, Inherited = false)]\npublic sealed class Korda.Data.DbUseCodecAttribute : System.Attribute",
+      "implicit_member": false
+    },
+    {
+      "id": "T:Korda.Data.DbVersionAttribute",
+      "signature": "[System.AttributeUsageAttribute(System.AttributeTargets.Property, Inherited = false)]\npublic sealed class Korda.Data.DbVersionAttribute : System.Attribute",
       "implicit_member": false
     },
     {
@@ -764,56 +814,6 @@
     {
       "id": "T:Korda.Data.ValueCodec\u00601",
       "signature": "public sealed class Korda.Data.ValueCodec\u003CT\u003E",
-      "implicit_member": false
-    },
-    {
-      "id": "T:Korda.Data.WeaveCodecAttribute",
-      "signature": "[System.AttributeUsageAttribute(System.AttributeTargets.Assembly, AllowMultiple = true)]\npublic sealed class Korda.Data.WeaveCodecAttribute : System.Attribute",
-      "implicit_member": false
-    },
-    {
-      "id": "T:Korda.Data.WeaveColumnAttribute",
-      "signature": "[System.AttributeUsageAttribute(System.AttributeTargets.Property, Inherited = false)]\npublic sealed class Korda.Data.WeaveColumnAttribute : System.Attribute",
-      "implicit_member": false
-    },
-    {
-      "id": "T:Korda.Data.WeaveConstructorAttribute",
-      "signature": "[System.AttributeUsageAttribute(System.AttributeTargets.Constructor, Inherited = false)]\npublic sealed class Korda.Data.WeaveConstructorAttribute : System.Attribute",
-      "implicit_member": false
-    },
-    {
-      "id": "T:Korda.Data.WeaveIgnoreAttribute",
-      "signature": "[System.AttributeUsageAttribute(System.AttributeTargets.Property, Inherited = false)]\npublic sealed class Korda.Data.WeaveIgnoreAttribute : System.Attribute",
-      "implicit_member": false
-    },
-    {
-      "id": "T:Korda.Data.WeaveKeyAttribute",
-      "signature": "[System.AttributeUsageAttribute(System.AttributeTargets.Property, Inherited = false)]\npublic sealed class Korda.Data.WeaveKeyAttribute : System.Attribute",
-      "implicit_member": false
-    },
-    {
-      "id": "T:Korda.Data.WeaveParameterAttribute",
-      "signature": "[System.AttributeUsageAttribute(System.AttributeTargets.Parameter, Inherited = false)]\npublic sealed class Korda.Data.WeaveParameterAttribute : System.Attribute",
-      "implicit_member": false
-    },
-    {
-      "id": "T:Korda.Data.WeaveProjectionAttribute",
-      "signature": "[System.AttributeUsageAttribute(System.AttributeTargets.Class, Inherited = false)]\npublic sealed class Korda.Data.WeaveProjectionAttribute : System.Attribute",
-      "implicit_member": false
-    },
-    {
-      "id": "T:Korda.Data.WeaveTableAttribute",
-      "signature": "[System.AttributeUsageAttribute(System.AttributeTargets.Class, Inherited = false)]\npublic sealed class Korda.Data.WeaveTableAttribute : System.Attribute",
-      "implicit_member": false
-    },
-    {
-      "id": "T:Korda.Data.WeaveUseCodecAttribute",
-      "signature": "[System.AttributeUsageAttribute(System.AttributeTargets.Property, Inherited = false)]\npublic sealed class Korda.Data.WeaveUseCodecAttribute : System.Attribute",
-      "implicit_member": false
-    },
-    {
-      "id": "T:Korda.Data.WeaveVersionAttribute",
-      "signature": "[System.AttributeUsageAttribute(System.AttributeTargets.Property, Inherited = false)]\npublic sealed class Korda.Data.WeaveVersionAttribute : System.Attribute",
       "implicit_member": false
     }
   ]

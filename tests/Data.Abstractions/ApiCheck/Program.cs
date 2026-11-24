@@ -3,6 +3,7 @@
 using System.Collections.Immutable;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -203,7 +204,12 @@ string Declaration(ISymbol symbol)
 
 using var baseline = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "src/Data.Abstractions/public-api.expected.json")));
 var expected = baseline.RootElement.GetProperty("symbols").EnumerateArray().ToDictionary(x => x.GetProperty("id").GetString()!, x => x.Clone(), StringComparer.Ordinal);
-using var currentContract = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "src/Data.NativeHost/db-api-01.api.json")));
+using var renameJson = JsonDocument.Parse(File.ReadAllText(Path.Combine(root, "src/Query.Generator/db-rename-01.names.json")));
+string additions = File.ReadAllText(Path.Combine(root, "src/Data.NativeHost/db-api-01.api.json"));
+// Preserve DB-API-01 as a frozen input and apply the reviewed Attribute names.
+foreach (var pair in renameJson.RootElement.GetProperty("attributes").EnumerateObject())
+    additions = Regex.Replace(additions, @"\b" + Regex.Escape(pair.Name) + @"\b", pair.Value.GetString()!);
+using var currentContract = JsonDocument.Parse(additions);
 foreach (var entry in currentContract.RootElement.GetProperty("assemblies").GetProperty("Korda.Data").EnumerateArray())
 {
     var id = entry.GetProperty("id").GetString()!;
@@ -233,7 +239,7 @@ foreach (var key in expected.Keys.Intersect(actual.Keys))
 }
 var xml = XDocument.Load(Path.ChangeExtension(assemblyPath, ".xml"));
 var docs = xml.Descendants("member").ToDictionary(e => e.Attribute("name")!.Value, StringComparer.Ordinal);
-var output = new StringBuilder("# Korda.Data API reference\n\nGenerated from the compiled product assembly and its XML comments by `tests/Data.Abstractions/ApiCheck`. Covers data descriptors and transport, static model annotations, and shared ORM errors. Database provider execution remains in the database assemblies. Exact declarations retain the pinned Design identity in `public-api.expected.json`.\n\n");
+var output = new StringBuilder("# Korda.Data API reference\n\nGenerated from the compiled product assembly and its XML comments by `tests/Data.Abstractions/ApiCheck`. Covers data descriptors and transport, static model annotations, and shared ORM errors. Database provider execution remains in the database assemblies. Exact declarations retain the pinned Design identity in `public-api.expected.json`, with the explicit DB-Rename-01 Attribute name migration recorded in `src/Query.Generator/db-rename-01.names.json`.\n\n");
 foreach (var entry in expected.OrderBy(e => e.Key, StringComparer.Ordinal))
 {
     if (!actual.TryGetValue(entry.Key, out var symbol)) continue;

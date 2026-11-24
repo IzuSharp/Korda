@@ -2,7 +2,7 @@
 
 Generated from the compiled product assembly and XML by `src/Build.Integration/ApiReference`.
 
-Compiled product declarations compared to Design commit c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9. B14 owns explicit relation loading, native CRUD, optimistic concurrency and bounded bulk; docs/guides/orm-relations.md explains ownership, limits and cost.
+Compiled product declarations compared to Design commit c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9, the DB-API-01 additions and the explicit DB-Rename-01 Attribute name mapping. B14 owns explicit relation loading, native CRUD, optimistic concurrency and bounded bulk; docs/guides/orm-relations.md explains ownership, limits and cost.
 
 ## `F:Korda.Database.BulkAtomicity.All`
 

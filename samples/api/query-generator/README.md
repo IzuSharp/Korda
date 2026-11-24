@@ -6,10 +6,13 @@ are no direct analyzer references, project references, native source inputs or
 runtime reflection configuration in this application.
 
 ```sh
-dotnet run --project QueryGenerator.Sample.csproj
 dotnet publish QueryGenerator.Sample.csproj -c Release -r linux-x64 -p:PublishAot=true
 ./bin/Release/net11.0/linux-x64/publish/QueryGenerator.Sample --require-aot
 ```
+
+The generated path uses `[DbTable]`, `[DbKey]`, `[DbColumn]` and `[DbVersion]`
+from `Korda.Data`. See the [annotation upgrade guide](../../../docs/guides/db-attribute-upgrade.md)
+for existing models.
 
 Both attributed models query the actual SQLite Host through the same Fluent and
 static materialization path. The program checks the returned DTOs and prints the
@@ -21,12 +24,12 @@ The advanced manual path explicitly excludes generation and supplies equivalent
 `TableBuilder` descriptors, static readers and writers:
 
 ```sh
-dotnet run --project QueryGenerator.Sample.csproj -p:ManualMappings=true
 dotnet publish QueryGenerator.Sample.csproj -c Release -r linux-x64 -p:PublishAot=true -p:ManualMappings=true
+./bin/Release/net11.0/linux-x64/publish/QueryGenerator.Sample --require-aot
 ```
 
 Both paths preserve CLR spelling by default and the exact `id`, `email`, and
-`version` overrides. The Linux verifier runs generated/manual JIT and NativeAOT
+`version` overrides. The Linux verifier runs generated/manual Native AOT
 consumers from one immutable local package feed, adds a mapped `Rank` property to
 the second entity, and repeats those rows without changing the native SHA-256.
 The generator's compiler diagnostics and deterministic incremental output are

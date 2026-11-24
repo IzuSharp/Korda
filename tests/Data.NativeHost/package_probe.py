@@ -119,8 +119,8 @@ consumer = out / 'consumer'; consumer.mkdir()
 shutil.copy2(ROOT / 'global.json', consumer)
 shutil.copy2(ROOT / 'samples/api/data-nativehost/Program.cs', consumer / 'Program.cs')
 (consumer / 'Generated.cs').write_text('''using Korda.Data;
-[WeaveTable("generated_host")]
-public sealed class GeneratedHostRow { [WeaveKey] public long Id { get; set; } public string Name { get; set; } = ""; }
+[DbTable("generated_host")]
+public sealed class GeneratedHostRow { [DbKey] public long Id { get; set; } public string Name { get; set; } = ""; }
 internal static class GeneratedProbe { internal static void Assert() { if (GeneratedHostRowMapping.Table.MetadataHash.Length != 64 || GeneratedHostRowMapping.Row is null) throw new System.InvalidOperationException("Transitive generator mapping failed."); } }
 ''')
 program = (consumer / 'Program.cs').read_text().replace('var builder =', 'GeneratedProbe.Assert();\nvar builder =')
