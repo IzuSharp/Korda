@@ -46,6 +46,7 @@ def postgres(ctx, required):
                 "-A",
                 "trust",
                 "--no-locale",
+                "--encoding=UTF8",
             ]
         )
         with socket.socket() as listener:
