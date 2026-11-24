@@ -46,6 +46,8 @@ def main():
     subprocess.run(["python3", str(HERE / "cpu_profile.py"), "self-test"], check=True, cwd=ROOT, timeout=30)
     subprocess.run(["python3", str(HERE / "cpu_report.py"), "validate"], check=True, cwd=ROOT, timeout=30)
     subprocess.run(["python3", str(HERE / "cpu_report.py"), "self-test"], check=True, cwd=ROOT, timeout=30)
+    subprocess.run(["python3", str(HERE / "runtime_spin.py"), "validate"], check=True, cwd=ROOT, timeout=30)
+    subprocess.run(["python3", str(HERE / "runtime_spin.py"), "self-test"], check=True, cwd=ROOT, timeout=30)
     subprocess.run(["python3", str(HERE / "test_evidence_archive.py")], check=True, cwd=ROOT, timeout=30)
     subprocess.run(["python3", str(HERE / "test_controller.py")], check=True, cwd=ROOT, timeout=60)
     subprocess.run(["python3", str(HERE / "test_plan_diagnostics.py")], check=True, cwd=ROOT, timeout=60)

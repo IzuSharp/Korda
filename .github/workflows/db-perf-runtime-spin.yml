@@ -1,0 +1,76 @@
+name: DB-Perf-01 runtime spin sensitivity
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [task/DB-Perf-01-linux]
+    paths: [benchmarks/db-perf/runtime-spin-request.json]
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: db-perf-01-linux-runtime-spin
+  cancel-in-progress: false
+
+jobs:
+  runtime-spin:
+    if: github.repository == 'IzuSharp/Korda' && github.ref == 'refs/heads/task/DB-Perf-01-linux'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      CI: "true"
+      PYTHONDONTWRITEBYTECODE: "1"
+      DB_PERF_REQUIRED_IMAGE_VERSION: "20261116.376.1"
+    steps:
+      - name: Record this separate diagnostic VM and check its image
+        run: |
+          python3 - <<'PY'
+          import json, os, platform
+          from pathlib import Path
+          Path(os.environ['RUNNER_TEMP'], 'db-perf-runtime-spin-bootstrap.json').write_text(json.dumps({
+              'runId': os.environ['GITHUB_RUN_ID'], 'runAttempt': os.environ['GITHUB_RUN_ATTEMPT'],
+              'job': os.environ['GITHUB_JOB'], 'ImageOS': os.environ.get('ImageOS'),
+              'ImageVersion': os.environ.get('ImageVersion'),
+              'requiredImageVersion': os.environ['DB_PERF_REQUIRED_IMAGE_VERSION'],
+              'uname': list(platform.uname()), 'acceptedLongSegments': 0,
+              'separateDiagnosticVm': True, 'performanceAcceptance': False,
+              'maximumJobMinutes': 20, 'buildsOrPerfSampling': False,
+          }, indent=2) + '\n')
+          PY
+          test "$ImageOS" = ubuntu24
+          test "$ImageVersion" = "$DB_PERF_REQUIRED_IMAGE_VERSION"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Validate the frozen request and finite launch controls
+        id: request
+        run: |
+          python3 benchmarks/db-perf/runtime_spin.py validate --github-output "$GITHUB_OUTPUT"
+          python3 benchmarks/db-perf/runtime_spin.py self-test
+      - name: Run the single-factor diagnostic on the original runtime
+        if: steps.request.outputs.enabled == 'true'
+        timeout-minutes: 19
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python3 benchmarks/db-perf/runtime_spin.py run
+          --output "$RUNNER_TEMP/db-perf-runtime-spin"
+      - name: Preserve every raw diagnostic result and failure
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: db-perf-runtime-spin-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/db-perf-runtime-spin-bootstrap.json
+            ${{ runner.temp }}/db-perf-runtime-spin/*.json
+            ${{ runner.temp }}/db-perf-runtime-spin/cells/**
+            ${{ runner.temp }}/db-perf-runtime-spin/download/*.json
+            ${{ runner.temp }}/db-perf-runtime-spin/download/artifact-metadata.*
+            ${{ runner.temp }}/db-perf-runtime-spin/download/runtime-zip.command.json
+            ${{ runner.temp }}/db-perf-runtime-spin/download/runtime-zip.stderr.log
+            !${{ runner.temp }}/db-perf-runtime-spin/cells/seeds/**/pgdata/**
+            !${{ runner.temp }}/db-perf-runtime-spin/cells/seeds/**/database.sqlite*
+          retention-days: 30
+          if-no-files-found: warn

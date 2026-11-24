@@ -1,0 +1,377 @@
+{
+  "schemaVersion": 1,
+  "task": "DB-Perf-01",
+  "kind": "runtime-spin-single-factor-diagnostic",
+  "enabled": true,
+  "runtime": {
+    "repository": "IzuSharp/Korda",
+    "runId": 45461269267,
+    "artifactId": 14953201071,
+    "zipSha256": "aecbd4e949e333399704ba141f7d52e9225323e658f6180262355831b5aec7e8",
+    "tarSha256": "735b47e883859edb9efaa615d00d93aca843c06522c757aa94c870ecd3c7f85c",
+    "manifestSha256": "5a2eba0796a009bfa316dfc07c66919c8b3e14f600faa808e96cd32da617885c",
+    "requestSha256": "189fc14ab799b152256c2d92c497c507a6ded2431cad8bdbd362bdc7538adfab",
+    "harnessCommit": "da153c22ef1093fccc3233ec76bfda96e6cc59df"
+  },
+  "applications": {
+    "postgresql/korda_before": {
+      "path": "apps/postgresql/korda_before/out/DbPerf.Korda",
+      "sha256": "d4fc9c4f4f0d861a78f56a9417c09c37c0827e6fe7a0ee37a67c455aa7d0dec3"
+    },
+    "postgresql/korda_after": {
+      "path": "apps/postgresql/korda_after/out/DbPerf.Korda",
+      "sha256": "6d011e3feaad72bfe12b44be3a0f309623adafdd586b4b625ea013d4c8576319"
+    },
+    "postgresql/independent_csharp_orm": {
+      "path": "apps/postgresql/independent_csharp_orm/out/DbPerf.Dapper",
+      "sha256": "e0f6ab1774d5e5da10d069c274daa8d22d0dfe348a4eefb595dbde81ce2e749b"
+    },
+    "sqlite/korda_before": {
+      "path": "apps/sqlite/korda_before/out/DbPerf.Korda",
+      "sha256": "3e6e4209717e756f916313d6e0b7f10f02c917fe9dab0a390ad0020d0974f9b1"
+    },
+    "sqlite/korda_after": {
+      "path": "apps/sqlite/korda_after/out/DbPerf.Korda",
+      "sha256": "9b38c6a1bb210027694baa04bf27ab749ff2923f8d8ce6f1c5a1d8993e0e8032"
+    },
+    "sqlite/independent_csharp_orm": {
+      "path": "apps/sqlite/independent_csharp_orm/out/DbPerf.Dapper",
+      "sha256": "40cff37667149ee85f35d0ee72e7a503be313d8e09c82c58cd1ef7b544d36170"
+    },
+    "postgresql/direct_cpp": {
+      "path": "native/db-perf-native",
+      "sha256": "ed8f8f3fc069e51ab185d7e626b4fbc9945b5048fa8f29472dd516335d18d45c"
+    },
+    "sqlite/direct_cpp": {
+      "path": "native/db-perf-native",
+      "sha256": "ed8f8f3fc069e51ab185d7e626b4fbc9945b5048fa8f29472dd516335d18d45c"
+    }
+  },
+  "referenceRequest": {
+    "path": "benchmarks/db-perf/cpu-profile-request.json",
+    "bytes": 3613,
+    "sha256": "f5096e9f07058549652d6c66b4a6b1c0defbd6194d253be2ab57f7faf83f720c"
+  },
+  "acquireHelper": {
+    "path": "benchmarks/db-perf/cpu_profile.py",
+    "bytes": 51852,
+    "sha256": "77398b0a0c0781f336e47ee0c0cff4edcdc69808e43195ce8feb13b0c585126c",
+    "repository": "IzuSharp/Korda",
+    "commit": "7cf6c7db4957fdb27ea408b56d52ce1b28235a5b",
+    "tree": "4415bcec0595390513b52e945194097becd670d8"
+  },
+  "frozenHarnessFiles": {
+    "campaign.py": "68f1abc5676bb0a23b3e648029d034f47519c3a9f0b5e6faf34db3a5bc5eb05e",
+    "run.py": "296e6b802d8bc1bcf964d7faa71d4adaa37226a867c17a9a3b5f00284f769b86",
+    "campaign_build.py": "10f8717f07cc7edf2b233ac24e3c02a3ec457c6d19abcc795599ee41a8d2529c",
+    "plan_diagnostics.py": "a65a5bb9b91070a7e15cc161ca6c932ca0f333d20ddcb94fd233deb1457595f2"
+  },
+  "profile": {
+    "providers": [
+      "postgresql",
+      "sqlite"
+    ],
+    "routes": [
+      "korda_before",
+      "korda_after",
+      "independent_csharp_orm"
+    ],
+    "conditions": [
+      "default",
+      "spin0"
+    ],
+    "independentProcessesPerCondition": 3,
+    "concurrency": 4,
+    "constructionMode": "prepared",
+    "effectiveSecondsPerCell": 15,
+    "warmupOperationsPerWorker": 64,
+    "idleSecondsPerCell": 5,
+    "sampleSeconds": 0.5,
+    "queuePerWorker": 4,
+    "fixedRates": {
+      "postgresql": 180.627,
+      "sqlite": 193.814
+    },
+    "maximumSeconds": 1200,
+    "activeSeconds": 1080,
+    "cleanupReserveSeconds": 60,
+    "artifactReserveSeconds": 60,
+    "maximumAttemptsPerCell": 1
+  },
+  "environment": {
+    "imageOS": "ubuntu24",
+    "imageVersion": "20261116.376.1",
+    "workflowConcurrencyGroup": "db-perf-01-linux-runtime-spin",
+    "separateJobVm": true,
+    "conditionVariable": "DOTNET_ThreadPool_UnfairSemaphoreSpinLimit",
+    "legacyVariable": "COMPlus_ThreadPool_UnfairSemaphoreSpinLimit",
+    "default": "both overrides absent in child exec environment; no assertion of private effective runtime field",
+    "spin0": "DOTNET override text 0; COMPlus override absent; all other inherited settings unchanged"
+  },
+  "cells": [
+    {
+      "id": "spin-01-korda_before-default-r1",
+      "provider": "postgresql",
+      "route": "korda_before",
+      "condition": "default",
+      "repeat": 1
+    },
+    {
+      "id": "spin-02-korda_before-spin0-r1",
+      "provider": "postgresql",
+      "route": "korda_before",
+      "condition": "spin0",
+      "repeat": 1
+    },
+    {
+      "id": "spin-03-korda_after-spin0-r1",
+      "provider": "postgresql",
+      "route": "korda_after",
+      "condition": "spin0",
+      "repeat": 1
+    },
+    {
+      "id": "spin-04-korda_after-default-r1",
+      "provider": "postgresql",
+      "route": "korda_after",
+      "condition": "default",
+      "repeat": 1
+    },
+    {
+      "id": "spin-05-independent_csharp_orm-default-r1",
+      "provider": "postgresql",
+      "route": "independent_csharp_orm",
+      "condition": "default",
+      "repeat": 1
+    },
+    {
+      "id": "spin-06-independent_csharp_orm-spin0-r1",
+      "provider": "postgresql",
+      "route": "independent_csharp_orm",
+      "condition": "spin0",
+      "repeat": 1
+    },
+    {
+      "id": "spin-07-korda_before-spin0-r1",
+      "provider": "sqlite",
+      "route": "korda_before",
+      "condition": "spin0",
+      "repeat": 1
+    },
+    {
+      "id": "spin-08-korda_before-default-r1",
+      "provider": "sqlite",
+      "route": "korda_before",
+      "condition": "default",
+      "repeat": 1
+    },
+    {
+      "id": "spin-09-korda_after-default-r1",
+      "provider": "sqlite",
+      "route": "korda_after",
+      "condition": "default",
+      "repeat": 1
+    },
+    {
+      "id": "spin-10-korda_after-spin0-r1",
+      "provider": "sqlite",
+      "route": "korda_after",
+      "condition": "spin0",
+      "repeat": 1
+    },
+    {
+      "id": "spin-11-independent_csharp_orm-spin0-r1",
+      "provider": "sqlite",
+      "route": "independent_csharp_orm",
+      "condition": "spin0",
+      "repeat": 1
+    },
+    {
+      "id": "spin-12-independent_csharp_orm-default-r1",
+      "provider": "sqlite",
+      "route": "independent_csharp_orm",
+      "condition": "default",
+      "repeat": 1
+    },
+    {
+      "id": "spin-13-korda_after-spin0-r2",
+      "provider": "sqlite",
+      "route": "korda_after",
+      "condition": "spin0",
+      "repeat": 2
+    },
+    {
+      "id": "spin-14-korda_after-default-r2",
+      "provider": "sqlite",
+      "route": "korda_after",
+      "condition": "default",
+      "repeat": 2
+    },
+    {
+      "id": "spin-15-independent_csharp_orm-default-r2",
+      "provider": "sqlite",
+      "route": "independent_csharp_orm",
+      "condition": "default",
+      "repeat": 2
+    },
+    {
+      "id": "spin-16-independent_csharp_orm-spin0-r2",
+      "provider": "sqlite",
+      "route": "independent_csharp_orm",
+      "condition": "spin0",
+      "repeat": 2
+    },
+    {
+      "id": "spin-17-korda_before-spin0-r2",
+      "provider": "sqlite",
+      "route": "korda_before",
+      "condition": "spin0",
+      "repeat": 2
+    },
+    {
+      "id": "spin-18-korda_before-default-r2",
+      "provider": "sqlite",
+      "route": "korda_before",
+      "condition": "default",
+      "repeat": 2
+    },
+    {
+      "id": "spin-19-korda_after-default-r2",
+      "provider": "postgresql",
+      "route": "korda_after",
+      "condition": "default",
+      "repeat": 2
+    },
+    {
+      "id": "spin-20-korda_after-spin0-r2",
+      "provider": "postgresql",
+      "route": "korda_after",
+      "condition": "spin0",
+      "repeat": 2
+    },
+    {
+      "id": "spin-21-independent_csharp_orm-spin0-r2",
+      "provider": "postgresql",
+      "route": "independent_csharp_orm",
+      "condition": "spin0",
+      "repeat": 2
+    },
+    {
+      "id": "spin-22-independent_csharp_orm-default-r2",
+      "provider": "postgresql",
+      "route": "independent_csharp_orm",
+      "condition": "default",
+      "repeat": 2
+    },
+    {
+      "id": "spin-23-korda_before-default-r2",
+      "provider": "postgresql",
+      "route": "korda_before",
+      "condition": "default",
+      "repeat": 2
+    },
+    {
+      "id": "spin-24-korda_before-spin0-r2",
+      "provider": "postgresql",
+      "route": "korda_before",
+      "condition": "spin0",
+      "repeat": 2
+    },
+    {
+      "id": "spin-25-independent_csharp_orm-default-r3",
+      "provider": "postgresql",
+      "route": "independent_csharp_orm",
+      "condition": "default",
+      "repeat": 3
+    },
+    {
+      "id": "spin-26-independent_csharp_orm-spin0-r3",
+      "provider": "postgresql",
+      "route": "independent_csharp_orm",
+      "condition": "spin0",
+      "repeat": 3
+    },
+    {
+      "id": "spin-27-korda_before-spin0-r3",
+      "provider": "postgresql",
+      "route": "korda_before",
+      "condition": "spin0",
+      "repeat": 3
+    },
+    {
+      "id": "spin-28-korda_before-default-r3",
+      "provider": "postgresql",
+      "route": "korda_before",
+      "condition": "default",
+      "repeat": 3
+    },
+    {
+      "id": "spin-29-korda_after-default-r3",
+      "provider": "postgresql",
+      "route": "korda_after",
+      "condition": "default",
+      "repeat": 3
+    },
+    {
+      "id": "spin-30-korda_after-spin0-r3",
+      "provider": "postgresql",
+      "route": "korda_after",
+      "condition": "spin0",
+      "repeat": 3
+    },
+    {
+      "id": "spin-31-independent_csharp_orm-spin0-r3",
+      "provider": "sqlite",
+      "route": "independent_csharp_orm",
+      "condition": "spin0",
+      "repeat": 3
+    },
+    {
+      "id": "spin-32-independent_csharp_orm-default-r3",
+      "provider": "sqlite",
+      "route": "independent_csharp_orm",
+      "condition": "default",
+      "repeat": 3
+    },
+    {
+      "id": "spin-33-korda_before-default-r3",
+      "provider": "sqlite",
+      "route": "korda_before",
+      "condition": "default",
+      "repeat": 3
+    },
+    {
+      "id": "spin-34-korda_before-spin0-r3",
+      "provider": "sqlite",
+      "route": "korda_before",
+      "condition": "spin0",
+      "repeat": 3
+    },
+    {
+      "id": "spin-35-korda_after-spin0-r3",
+      "provider": "sqlite",
+      "route": "korda_after",
+      "condition": "spin0",
+      "repeat": 3
+    },
+    {
+      "id": "spin-36-korda_after-default-r3",
+      "provider": "sqlite",
+      "route": "korda_after",
+      "condition": "default",
+      "repeat": 3
+    }
+  ],
+  "hypothesis": "At the same original prepared C4 scheduled workload, spin0 reduces managed client user CPU per successful operation; retain system/total CPU, p99, failures/rejections, allocations/GC, RSS/PSS, idle CPU and owner effects even when they contradict the hypothesis.",
+  "scope": "Runtime-policy sensitivity on original unrebuilt ELF only. No perf sampling, normal runtime-default modification, source/package optimization claim, new formal four-route result or long-segment credit. Missing or failed cells remain explicit; no automatic retry.",
+  "sourceReview": {
+    "reviewSha256": "9c2829cfeaca1e99a9c4fbf779de0221eaf0ea2cfd6f06b253b5c048647cd564",
+    "referencesSha256": "a623dfcbfab27ccfd0eda3dcf17e617b842b5fd38fd16b1b80b3347b9fdbf259",
+    "binaryInspectionSha256": "da39b7799763d29a302ac6030def38ef45bd09239c875d54565d84c3184642e5",
+    "runtimeCommit": "deae2e32bf0e018e09d64597b7c59b62b73bb3ce"
+  },
+  "wholeBatchAcceptance": false,
+  "acceptedLongSegments": 0,
+  "perfSampling": false,
+  "aotBuilds": false
+}
