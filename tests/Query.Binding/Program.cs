@@ -64,6 +64,14 @@ internal static unsafe class Program
     }
     public static int Main(string[] args)
     {
+        if (args.Length == 2 && args[0] is "--projection-encoding" or "--projection-allocation")
+        {
+            Directory.CreateDirectory(args[1]);
+            if (RuntimeFeature.IsDynamicCodeSupported) throw new InvalidOperationException("Actual Native AOT execution required.");
+            if (args[0] == "--projection-allocation") ProjectionEncodingTests.RunAllocation(args[1]);
+            else ProjectionEncodingTests.Run(args[1]);
+            return 0;
+        }
         var parentBuilder = new TableBuilder<Parent>("Parents"); var id = parentBuilder.Column("Id", Codecs.Int64, new() { IsPrimaryKey = true }); var name = parentBuilder.Column("Name", Codecs.String);
         var parent = parentBuilder.Build(r => new(r.Get(id), r.Get(name)), (r, p) => { r.Set(id, p.Id); r.Set(name, p.Name); });
         var childBuilder = new TableBuilder<Child>("Children"); var childId = childBuilder.Column("Id", Codecs.Int64, new() { IsPrimaryKey = true }); var parentId = childBuilder.Column("ParentId", Codecs.Nullable(Codecs.Int64));
@@ -79,6 +87,7 @@ internal static unsafe class Program
         }
         var output = args[1]; Directory.CreateDirectory(output);
         if (args.Contains("--require-aot", StringComparer.Ordinal)) Check(!RuntimeFeature.IsDynamicCodeSupported, "Actual AOT execution required.");
+        Test("projection_encoding_goldens_binding_errors_limits_and_ownership", () => ProjectionEncodingTests.Run(output));
         var library = NativeLibrary.Load(Path.GetFullPath(args[0]));
         try
         {
