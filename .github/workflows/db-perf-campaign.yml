@@ -29,7 +29,12 @@ jobs:
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
       NUGET_PACKAGES: ${{ github.workspace }}/artifacts/nuget-packages
       CMAKE_BUILD_PARALLEL_LEVEL: "4"
+      DB_PERF_REQUIRED_IMAGE_VERSION: "20261116.376.1"
     steps:
+      - name: Require the observed measurement image before preparing binaries
+        run: |
+          test "$ImageOS" = ubuntu24
+          test "$ImageVersion" = "$DB_PERF_REQUIRED_IMAGE_VERSION"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.sha }}
@@ -105,7 +110,12 @@ jobs:
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
       DOTNET_EnableDiagnostics: "1"
       PYTHONDONTWRITEBYTECODE: "1"
+      DB_PERF_REQUIRED_IMAGE_VERSION: "20261116.376.1"
     steps:
+      - name: Require the same frozen runner image for measurement
+        run: |
+          test "$ImageOS" = ubuntu24
+          test "$ImageVersion" = "$DB_PERF_REQUIRED_IMAGE_VERSION"
       - name: Download the complete frozen runtime bundle
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:

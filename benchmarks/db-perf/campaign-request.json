@@ -222,7 +222,7 @@
       ]
     }
   },
-  "activationNote": "Resume after two preserved startup failures: immutable imports remain bytecode-free; the reviewed collector now observes restricted PID 1 namespace links through fixed read-only hosted sudo and retains pre-admission quota snapshots. Packages, workload, CPU partition, SLO, resource thresholds, 1800-second segments and eight-segment order are unchanged.",
+  "activationNote": "The prior run and its measurement-only retry rejected different prepare/measure ImageVersion values (.133.1 versus .376.1). Both jobs now require the actually observed ubuntu24 image 20261116.376.1 before work; the existing bundle image-equality gate remains. Frozen harness, original/final packages, business workload, resource thresholds, SLO and all eight 1800-second durations are unchanged.",
   "nativeBaseline": {
     "physicalPrepare": "reuse",
     "protocolConfirmation": "drain-only"
