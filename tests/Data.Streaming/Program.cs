@@ -17,13 +17,26 @@ if (args.Contains("--allocation-probe-races", StringComparer.Ordinal))
     await AllocationProbeRaces.RunAsync();
     return;
 }
+if (args.Contains("--owned-batch-probe-only", StringComparer.Ordinal))
+{
+    OwnedBatchProbe.Run(args[0]);
+    return;
+}
 if (args.Contains("--stable-batch-only", StringComparer.Ordinal))
 {
     StableBatchTests.Run();
     return;
 }
-await AllocationProbeGate.RunAsync(args[0]);
-if (args.Contains("--allocation-gate-only", StringComparer.Ordinal)) return;
+if (args.Contains("--allocation-gate-only", StringComparer.Ordinal))
+{
+    await AllocationProbeGate.RunAsync(args[0]);
+    return;
+}
+if (!args.Contains("--correctness-only", StringComparer.Ordinal))
+{
+    await AllocationProbeGate.RunAsync(args[0]);
+    OwnedBatchProbe.Run(args[0]);
+}
 await AllocationProbeRaces.RunAsync();
 StableBatchTests.Run();
 var cases = new List<Observation>();

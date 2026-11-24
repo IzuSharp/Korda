@@ -145,6 +145,11 @@ def main() -> int:
                             "-p:PublishAot=true", "-p:RestoreLockedMode=true", *local_restore, *common, "-o", str(publish)])
         executable = publish / "Korda.Data.Streaming.Tests"
         native_env = dict(env, LD_LIBRARY_PATH=str(fixture_dir) + (":" + env["LD_LIBRARY_PATH"] if env.get("LD_LIBRARY_PATH") else ""))
+        # Allocation boundaries use fresh processes. The high-allocation copy
+        # stress fixture must not silently become part of the zero-row gate's
+        # process history; both keep their original strict raw counters.
+        run("aot-allocation-gate", [str(executable), str(output / "allocation-results"), "--require-aot", "--allocation-gate-only"], native_env)
+        run("aot-owned-batch-gate", [str(executable), str(output / "owned-batch-results"), "--require-aot", "--owned-batch-probe-only"], native_env)
         if args.postgres_bin:
             pg = args.postgres_bin.resolve()
             data = output / "postgres-data"
@@ -170,7 +175,7 @@ def main() -> int:
             native_env["KORDA_TEST_POSTGRES_URL"] = f"postgresql://korda@127.0.0.1:{port}/postgres"
         elif not native_env.get("KORDA_TEST_POSTGRES_URL"):
             raise RuntimeError("PostgreSQL binaries or explicit KORDA_TEST_POSTGRES_URL are required.")
-        run("aot-providers", [str(executable), str(output / "aot-results"), "--require-aot"], native_env)
+        run("aot-providers", [str(executable), str(output / "aot-results"), "--require-aot", "--correctness-only"], native_env)
         sample_dir = output / "sample-aot"
         run("sample-aot-publish", ["dotnet", "publish", sample, "-c", "Release", "-r", "linux-x64",
                                   "-p:PublishAot=true", "-p:RestoreLockedMode=true", "-o", str(sample_dir), *local_restore, *common])

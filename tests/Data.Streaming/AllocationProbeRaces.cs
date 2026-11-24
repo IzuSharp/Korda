@@ -205,17 +205,24 @@ internal static class AllocationProbeRaces
             else _retirement.TrySetException(failure);
         }
     }
-    private sealed class OwnedBatch(byte[] bytes) : IStreamBatch
+    private sealed class OwnedBatch(byte[] bytes) : IOwnedStreamBatch
     {
+        private byte[]? _bytes = bytes;
         private int _active;
         internal int Disposals;
         internal bool Active => Volatile.Read(ref _active) != 0;
         internal void Acquire() => Volatile.Write(ref _active, 1);
-        public ReadOnlyMemory<byte> Bytes => Active ? bytes : throw new ObjectDisposedException(nameof(OwnedBatch));
+        public ReadOnlyMemory<byte> Bytes => Active && _bytes is { } value ? value : throw new ObjectDisposedException(nameof(OwnedBatch));
+        public byte[] TakeBytes()
+        {
+            if (!Active) throw new ObjectDisposedException(nameof(OwnedBatch));
+            return Interlocked.Exchange(ref _bytes, null) ?? throw new ObjectDisposedException(nameof(OwnedBatch));
+        }
         public bool End => false;
         public void Dispose()
         {
             if (Interlocked.Exchange(ref _active, 0) == 0) throw new InvalidOperationException("Race fixture batch was released twice.");
+            Interlocked.Exchange(ref _bytes, null);
             Interlocked.Increment(ref Disposals);
         }
     }

@@ -59,13 +59,14 @@ internal static class StableBatchTests
         Console.WriteLine("PASS stable managed batch storage, defensive fallback, disposal and malformed-batch compensation");
     }
 
-    private sealed class StableBatch(byte[] bytes) : IStableManagedBatch
+    private sealed class StableBatch(byte[] bytes) : IOwnedStreamBatch
     {
+        private byte[]? _bytes = bytes;
         internal int Disposals;
-        public byte[] OwnedBytes => Disposals == 0 ? bytes : throw new ObjectDisposedException(nameof(StableBatch));
-        public ReadOnlyMemory<byte> Bytes => OwnedBytes;
+        public byte[] TakeBytes() => Interlocked.Exchange(ref _bytes, null) ?? throw new InvalidOperationException("The batch storage was already transferred.");
+        public ReadOnlyMemory<byte> Bytes => _bytes ?? throw new ObjectDisposedException(nameof(StableBatch));
         public bool End => false;
-        public void Dispose() => Disposals++;
+        public void Dispose() { _bytes = null; Disposals++; }
     }
     private sealed class OrdinaryBatch(byte[] bytes) : IStreamBatch
     {

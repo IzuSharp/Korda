@@ -1,5 +1,13 @@
 # DB-Perf-01 Linux campaign controller
 
+This is the batch's sole active campaign after integrating the parallel
+`benchmarks/Database/campaign` implementation. That implementation, its exact old
+workflow and failed observations remain available for historical reproduction;
+its 36-descriptor results cannot be relabeled as this 35-case contract. The
+historical workflow lives outside `.github/workflows`, so a PR title edit cannot
+launch a competing long run. Both implementations now await transaction
+retirement before issuing post-commit fixture DDL.
+
 This directory contains an executable campaign path, not a completed performance
 claim. The checked-in request is disabled. The batch ledger and accepted evidence
 live in `IzuSharp/Plan`, `ledger/evidence/batches/DB-Perf-01/handoff-linux.md`.

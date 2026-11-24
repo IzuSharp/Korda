@@ -80,6 +80,9 @@ internal static class Dataset
         }
         await Execute(session, "INSERT INTO db_perf_metadata VALUES (1," + options.Tenants.ToString(CultureInfo.InvariantCulture) + "," + options.OrdersPerTenant.ToString(CultureInfo.InvariantCulture) + ")");
         await tx.CommitAsync();
+        // Commit reports the transaction outcome before native retirement may
+        // release the session command gate. Finish retirement before the DDL.
+        await tx.DisposeAsync();
         await Execute(session, "CREATE INDEX orders_created ON orders(\"TenantId\",\"CreatedAt\",\"Id\")");
         await Execute(session, "CREATE INDEX orders_customer ON orders(\"TenantId\",\"CustomerId\",\"Id\")");
         await Execute(session, "CREATE INDEX order_lines_parent ON order_lines(\"TenantId\",\"OrderId\")");

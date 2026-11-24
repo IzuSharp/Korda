@@ -3,7 +3,7 @@ using Korda.Data;
 namespace Korda.Database.Internal;
 
 /// <summary>Internal host seam for one independently owned native batch and its bounded managed copy.</summary>
-/// <remarks>Bytes are managed-owned, immutable, and valid until disposal. The creating transport retains
+/// <remarks>Bytes are managed-owned, immutable, and valid until disposal or an explicit owned handoff. The creating transport retains
 /// the native owner and its byte permit until Dispose; a raw pointer or native borrow never crosses await.</remarks>
 internal interface IStreamBatch : IDisposable
 {
@@ -11,13 +11,14 @@ internal interface IStreamBatch : IDisposable
     bool End { get; }
 }
 
-/// <summary>A batch whose single managed copy can be retained without another snapshot.</summary>
-/// <remarks>The array is independently allocated, immutable, and never cleared or returned to a pool,
-/// including during disposal. Bytes must expose that whole array. Native ownership and byte permits
-/// still belong to the batch and are released normally; no native pointer escapes.</remarks>
-internal interface IStableManagedBatch : IStreamBatch
+/// <summary>Optional internal handoff for a host batch's exclusive managed copy.</summary>
+/// <remarks>TakeBytes transfers exactly once and invalidates Bytes. No writable
+/// aliases may remain. End and Dispose stay usable; the native owner and byte
+/// permit remain held until Dispose, including when parsing the array fails.
+/// Other IStreamBatch implementations keep the defensive-copy path.</remarks>
+internal interface IOwnedStreamBatch : IStreamBatch
 {
-    byte[] OwnedBytes { get; }
+    byte[] TakeBytes();
 }
 
 /// <summary>Provider-confirmed native retirement, distinct from physical protocol reuse and managed disposal.</summary>
@@ -60,10 +61,16 @@ internal sealed class RowBatchLease : IRowLease, IDisposable
         _fields = fields;
         try
         {
-            if (owner.Bytes.Length > limits.MaxBatchBytes) throw new DatabaseException("Native batch exceeds its admitted byte limit.", DatabaseErrorKind.ResourceLimit);
-            var wire = owner is IStableManagedBatch stable
-                ? DbWire.ParseOwned(stable.OwnedBytes, expected)
-                : DbWire.Parse(owner.Bytes.Span, expected);
+            byte[]? ownedBytes = null;
+            ReadOnlyMemory<byte> bytes;
+            if (owner is IOwnedStreamBatch owned)
+            {
+                ownedBytes = owned.TakeBytes();
+                bytes = ownedBytes;
+            }
+            else bytes = owner.Bytes;
+            if (bytes.Length > limits.MaxBatchBytes) throw new DatabaseException("Native batch exceeds its admitted byte limit.", DatabaseErrorKind.ResourceLimit);
+            var wire = ownedBytes is null ? DbWire.Parse(bytes.Span, expected) : DbWire.ParseOwned(ownedBytes, expected);
             _wire = wire;
             if (wire.Rows > limits.MaxBatchRows || wire.Rows == 0 && !owner.End)
                 throw new DatabaseException("Native batch row count or end marker is invalid.", DatabaseErrorKind.ShapeMismatch);
