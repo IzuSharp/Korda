@@ -1,0 +1,56 @@
+name: DB-Perf-01 Linux environment observation
+on:
+  push:
+    branches: [task/DB-Perf-01-linux]
+    paths: [.github/workflows/db-perf-environment.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  observe:
+    if: github.repository == 'IzuSharp/Korda' && github.ref == 'refs/heads/task/DB-Perf-01-linux'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      PYTHONDONTWRITEBYTECODE: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Observe current quota ancestry and namespace read permissions
+        run: |
+          python3 - <<'PYTHON'
+          import json,os,subprocess,sys
+          from pathlib import Path
+          sys.path.insert(0,str(Path('benchmarks/db-perf').resolve()))
+          import run,campaign
+          before=os.readlink('/proc/self/ns/cgroup')
+          snapshot=run.cgroup_snapshot()
+          command=['sudo','-n','/usr/bin/readlink','--',f'/proc/{os.getpid()}/ns/cgroup','/proc/1/ns/cgroup']
+          probe=subprocess.run(command,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=10)
+          try:
+              assessment=campaign.quota_assessment(snapshot)
+              failure=None
+          except ValueError as error:
+              assessment=None
+              failure={'type':type(error).__name__,'message':str(error)}
+          record={'schemaVersion':1,'task':'DB-Perf-01','kind':'read_only_environment_diagnostic',
+              'observedUtc':run.utc(),'commit':os.environ['GITHUB_SHA'],'identity':campaign.environment_identity(),
+              'uid':os.getuid(),'pid':os.getpid(),'availableCpus':sorted(os.sched_getaffinity(0)),
+              'originalSnapshot':snapshot,'originalQuotaAssessment':assessment,'originalQuotaFailure':failure,
+              'namespaceBefore':before,'namespaceAfter':os.readlink('/proc/self/ns/cgroup'),
+              'privilegedReadOnlyProbe':{'argv':command,'exitCode':probe.returncode,'stdout':probe.stdout,'stderr':probe.stderr},
+              'qualified':False,'longSegmentsCredited':0,
+              'scope':'Read-only observation on a new job VM; no quota, namespace, affinity, permission or admission rule is modified; no database or timing workload executes.'}
+          root=Path(os.environ['RUNNER_TEMP'])/'db-perf-environment'; root.mkdir()
+          run.write_json(root/'observation.json',record)
+          print(json.dumps(record,indent=2))
+          PYTHON
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: db-perf-environment-${{ github.run_id }}
+          path: ${{ runner.temp }}/db-perf-environment/observation.json
+          retention-days: 30
+          if-no-files-found: error
