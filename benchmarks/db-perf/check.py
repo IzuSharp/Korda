@@ -51,6 +51,7 @@ def main():
     subprocess.run(["python3", str(HERE / "test_plan_diagnostics.py")], check=True, cwd=ROOT, timeout=60)
     subprocess.run(["python3", str(HERE / "resources/test_validation.py")], check=True, cwd=ROOT, timeout=60)
     subprocess.run(["python3", str(HERE / "business-results/test_analysis.py")], check=True, cwd=ROOT, timeout=60)
+    subprocess.run(["python3", str(HERE / "analysis/test_units.py")], check=True, cwd=ROOT, timeout=30)
     project = HERE / "managed/SchedulerTests/DbPerf.Scheduler.Tests.csproj"
     output = ROOT / "artifacts/db-perf/scheduler-tests"
     subprocess.run(["dotnet", "publish", str(project), "-c", "Release", "-r", "linux-x64",
