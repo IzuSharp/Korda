@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "task": "DB-Perf-01",
+  "purpose": "Exact independently executed read-only verification script for the preserved iteration-13 raw counters and identities. It performs no new benchmark or database execution.",
+  "originEvidenceIndex": "ledger/evidence/batches/DB-Perf-01/checkpoints/iteration-13-v1/files.json",
+  "inputs": [
+    {
+      "sourcePath": "measurements/transaction-default-independent-v3/verify.py",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/0aeb47b5de7a2d518697b57a0cfbe3332779823050b82fb15786c69e509241b3/verify.py",
+      "sha256": "0aeb47b5de7a2d518697b57a0cfbe3332779823050b82fb15786c69e509241b3",
+      "bytes": 10914,
+      "bindingStatus": "pending_harness_commit"
+    }
+  ]
+}
