@@ -272,7 +272,26 @@ internal static class DecimalBytes
         return negative ? -scaled : scaled;
     }
     internal static void CheckFit(decimal value, byte precision, byte scale)
-    { if (BigInteger.Abs(Scaled(value, scale)) >= BigInteger.Pow(10, precision)) throw new OverflowException("Decimal exceeds configured precision."); }
+    {
+        if (precision is < 1 or > 29 || scale > 28 || scale > precision)
+        {
+            // Public configured codecs reject these bounds before this call.
+            // Retain the prior behavior for any other internal caller.
+            if (BigInteger.Abs(Scaled(value, scale)) >= BigInteger.Pow(10, precision)) throw new OverflowException("Decimal exceeds configured precision.");
+            return;
+        }
+        Span<int> bits = stackalloc int[4]; decimal.GetBits(value, bits);
+        var coefficient = (UInt128)(uint)bits[0] | (UInt128)(uint)bits[1] << 32 | (UInt128)(uint)bits[2] << 64;
+        if (coefficient == 0) return;
+        var valueScale = (bits[3] >> 16) & 255;
+        while (valueScale > 0 && coefficient % 10 == 0) { coefficient /= 10; valueScale--; }
+        if (valueScale > scale) throw new ArgumentException("Conversion would round the value.");
+        // coefficient * 10^(scale-valueScale) < 10^precision is equivalent
+        // to this bounded comparison; both powers fit in UInt128.
+        UInt128 limit = 1;
+        for (var i = 0; i < precision - (scale - valueScale); i++) limit *= 10;
+        if (coefficient >= limit) throw new OverflowException("Decimal exceeds configured precision.");
+    }
     internal static decimal Power10(byte scale) { decimal result = 1; for (var i = 0; i < scale; i++) result *= 10; return result; }
 }
 

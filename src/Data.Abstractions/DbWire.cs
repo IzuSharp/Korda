@@ -152,7 +152,12 @@ internal sealed class DbWire
             case 11: if (bytes.Length != 8 || !double.IsFinite(BinaryPrimitives.ReadDoubleLittleEndian(bytes))) Bad("Double value."); break;
             case 12: if (bytes.Length != 4 || !float.IsFinite(BinaryPrimitives.ReadSingleLittleEndian(bytes))) Bad("Single value."); break;
             case 13:
-                var v = DecimalBytes.Decode(bytes); using (var config = JsonDocument.Parse(codec.Configuration!)) DecimalBytes.CheckFit(v, config.RootElement.GetProperty("precision").GetByte(), config.RootElement.GetProperty("scale").GetByte()); break;
+                var v = DecimalBytes.Decode(bytes);
+                if (CodecRegistry.TryDecimalConfiguration(codec.Configuration, out var precision, out var scale))
+                    DecimalBytes.CheckFit(v, precision, scale);
+                else
+                    using (var config = JsonDocument.Parse(codec.Configuration!)) DecimalBytes.CheckFit(v, config.RootElement.GetProperty("precision").GetByte(), config.RootElement.GetProperty("scale").GetByte());
+                break;
             case 14: _ = DecimalBytes.Decode(bytes); break;
             case 16:
                 _ = Validation.Utf8.GetCharCount(bytes);
@@ -184,6 +189,9 @@ internal static class CodecRegistry
         if (codec.Id is 13 or 15)
         {
             if (codec.Configuration is null) throw new ArgumentException("Configured codec requires configuration.");
+            if (codec.Id == 13 ? TryDecimalConfiguration(codec.Configuration, out _, out _) : TryFixedScaleConfiguration(codec.Configuration, out _)) return;
+            // Keep the original parser and validation for every noncanonical
+            // input, including its exception type and validation order.
             using var json = JsonDocument.Parse(codec.Configuration); var value = json.RootElement;
             string canonical;
             if (codec.Id == 13)
@@ -192,6 +200,43 @@ internal static class CodecRegistry
             if (canonical != codec.Configuration) throw new ArgumentException("Unknown, duplicate or noncanonical codec configuration.");
         }
         else if (codec.Configuration is not null) throw new ArgumentException("This codec has no configuration.");
+    }
+
+    internal static bool TryDecimalConfiguration(string? configuration, out byte precision, out byte scale)
+    {
+        const string prefix = "{\"precision\":";
+        const string separator = ",\"scale\":";
+        precision = scale = 0;
+        var text = configuration.AsSpan();
+        if (!text.StartsWith(prefix, StringComparison.Ordinal)) return false;
+        text = text[prefix.Length..];
+        if (!TryCanonicalByte(ref text, out precision) || !text.StartsWith(separator, StringComparison.Ordinal)) return false;
+        text = text[separator.Length..];
+        return TryCanonicalByte(ref text, out scale) && text.Length == 1 && text[0] == '}'
+            && precision is >= 1 and <= 29 && scale <= 28 && scale <= precision;
+    }
+
+    private static bool TryFixedScaleConfiguration(string? configuration, out byte scale)
+    {
+        const string prefix = "{\"scale\":";
+        scale = 0;
+        var text = configuration.AsSpan();
+        if (!text.StartsWith(prefix, StringComparison.Ordinal)) return false;
+        text = text[prefix.Length..];
+        return TryCanonicalByte(ref text, out scale) && text.Length == 1 && text[0] == '}' && scale <= 18;
+    }
+
+    private static bool TryCanonicalByte(ref ReadOnlySpan<char> text, out byte value)
+    {
+        value = 0;
+        if (text.IsEmpty || text[0] is < '0' or > '9') return false;
+        value = (byte)(text[0] - '0'); text = text[1..];
+        if (!text.IsEmpty && text[0] is >= '0' and <= '9')
+        {
+            if (value == 0) return false;
+            value = (byte)(value * 10 + text[0] - '0'); text = text[1..];
+        }
+        return true;
     }
 }
 

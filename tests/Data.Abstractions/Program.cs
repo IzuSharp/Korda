@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -232,6 +233,143 @@ Test("json_validation_matches_document_parser", () =>
     }
     foreach (var input in new byte[][] { [0xef, 0xbb, 0xbf, (byte)'0'], [0x80], [0x22, 0xc0, 0x80, 0x22], [0x22, 0xed, 0xa0, 0x80, 0x22] }) Compare(input);
     File.WriteAllText(Path.Combine(output, "json-validation-differential-count.txt"), checkedInputs.ToString(System.Globalization.CultureInfo.InvariantCulture));
+});
+Test("configured_codec_validation_matches_original_parser", () =>
+{
+    var checkedInputs = 0;
+    // This is the pre-optimization implementation, including factory validation
+    // and canonical string comparison. Keep it independent of the fast parser.
+    static void Previous(CodecDescriptor codec)
+    {
+        if (codec.Id is < 1 or > 17) throw new ArgumentException("Unknown required logical codec.");
+        if (codec.Id is 13 or 15)
+        {
+            if (codec.Configuration is null) throw new ArgumentException("Configured codec requires configuration.");
+            using var json = JsonDocument.Parse(codec.Configuration); var value = json.RootElement;
+            string canonical;
+            if (codec.Id == 13)
+            { var p = value.GetProperty("precision").GetByte(); var s = value.GetProperty("scale").GetByte(); canonical = Codecs.Decimal(p, s).Descriptor.Configuration!; }
+            else { var s = value.GetProperty("scale").GetByte(); canonical = Codecs.FixedScaleMoney(s).Descriptor.Configuration!; }
+            if (canonical != codec.Configuration) throw new ArgumentException("Unknown, duplicate or noncanonical codec configuration.");
+        }
+        else if (codec.Configuration is not null) throw new ArgumentException("This codec has no configuration.");
+    }
+    static string Outcome(CodecDescriptor codec, bool previous)
+    {
+        try { if (previous) Previous(codec); else CodecRegistry.Validate(codec); return "accepted"; }
+        catch (Exception error) { return error.GetType().FullName + "|" + (error as ArgumentException)?.ParamName + "|" + error.Message; }
+    }
+    void Compare(CodecDescriptor codec)
+    {
+        Check(Outcome(codec, false) == Outcome(codec, true), "Configured codec acceptance or exception changed: " + codec);
+        checkedInputs++;
+    }
+    for (byte precision = 1; precision <= 29; precision++)
+        for (byte scale = 0; scale <= Math.Min(28, (int)precision); scale++)
+            foreach (var nullable in new[] { false, true })
+                Compare(Codecs.Decimal(precision, scale).Descriptor with { Nullable = nullable });
+    for (byte scale = 0; scale <= 18; scale++)
+        foreach (var nullable in new[] { false, true }) Compare(Codecs.FixedScaleMoney(scale).Descriptor with { Nullable = nullable });
+    string?[] configurations = [
+        null, "", " ", "null", "true", "0", "[]", "{}", "{", "{\"precision\":18}", "{\"scale\":2}",
+        "{\"precision\":18,\"scale\":2}", "{\"precision\":29,\"scale\":28}", "{\"precision\":1,\"scale\":0}",
+        "{\"precision\":0,\"scale\":0}", "{\"precision\":30,\"scale\":0}", "{\"precision\":18,\"scale\":19}",
+        "{\"precision\":29,\"scale\":29}", "{\"precision\":256,\"scale\":2}", "{\"precision\":18,\"scale\":256}",
+        "{\"precision\":-1,\"scale\":2}", "{\"precision\":18,\"scale\":-0}", "{\"precision\":018,\"scale\":2}",
+        "{\"precision\":18,\"scale\":02}", "{\"precision\":18.0,\"scale\":2}", "{\"precision\":18,\"scale\":2e0}",
+        "{\"precision\":1e400,\"scale\":2}", "{\"precision\":\"18\",\"scale\":2}", "{\"precision\":18,\"scale\":null}",
+        "{\"precision\":false,\"scale\":2}", "{\"precision\":18,\"scale\":[]}", "{\"scale\":2,\"precision\":18}",
+        "{\"precision\":18, \"scale\":2}", " {\"precision\":18,\"scale\":2}", "{\"precision\":18,\"scale\":2}\n",
+        "{\"precision\":18,\"scale\":2,\"scale\":2}", "{\"precision\":1,\"precision\":18,\"scale\":2}",
+        "{\"precision\":18,\"scale\":2,\"extra\":0}", "{\"precision\":18,\"scale\":2,}",
+        "{\"precision\":18,\"scale\":2}{}", "{\"precision\":18,\"scale\":2}/*comment*/",
+        "{\"\\u0070recision\":18,\"scale\":2}", "{\"precision\":18,\"\\u0073cale\":2}",
+        "{\"precision\":１８,\"scale\":2}", "{\"precision\":18,\"scale\":٢}",
+        "{\"scale\":0}", "{\"scale\":18}", "{\"scale\":19}", "{\"scale\":255}", "{\"scale\":256}",
+        "{\"scale\":-1}", "{\"scale\":-0}", "{\"scale\":00}", "{\"scale\":2.0}", "{\"scale\":2e0}",
+        "{\"scale\":\"2\"}", "{\"scale\":null}", "{\"scale\":true}", "{\"scale\":{}}",
+        "{ \"scale\":2}", "{\"scale\": 2}", "{\"scale\":2 }", "{\"scale\":2,\"scale\":2}",
+        "{\"scale\":2,\"extra\":0}", "{\"\\u0073cale\":2}", "{\"scale\":2}\0", "\ufeff{\"scale\":2}"
+    ];
+    foreach (var configuration in configurations)
+        foreach (var codecId in new uint[] { 13, 15 })
+            foreach (var nullable in new[] { false, true }) Compare(new(codecId, "configured", configuration, nullable));
+    foreach (var seed in new[] { "{\"precision\":18,\"scale\":2}", "{\"scale\":2}" })
+    {
+        for (var length = 0; length < seed.Length; length++)
+            foreach (var codecId in new uint[] { 13, 15 }) Compare(new(codecId, "configured", seed[..length], false));
+        for (var offset = 0; offset < seed.Length; offset++)
+            foreach (var replacement in new[] { '\0', ' ', '0', '1', '9', '-', '}', '\ud800' })
+            {
+                var changed = seed.ToCharArray(); changed[offset] = replacement;
+                foreach (var codecId in new uint[] { 13, 15 }) Compare(new(codecId, "configured", new string(changed), false));
+            }
+    }
+    foreach (var codecId in Enumerable.Range(0, 19).Select(value => (uint)value).Append(uint.MaxValue))
+        foreach (var configuration in new string?[] { null, "{}", "{\"scale\":2}" }) Compare(new(codecId, "any", configuration, false));
+    File.WriteAllText(Path.Combine(output, "configured-codec-differential-count.txt"), checkedInputs.ToString(System.Globalization.CultureInfo.InvariantCulture));
+});
+Test("configured_decimal_fit_matches_scaled_big_integer", () =>
+{
+    var checkedInputs = 0;
+    var random = new Random(0xDB08);
+    var maximumCoefficient = (BigInteger.One << 96) - 1;
+    static string Outcome(decimal value, byte precision, byte scale, bool previous)
+    {
+        try
+        {
+            if (previous)
+            {
+                // Scaled and its BigInteger Parts implementation are unchanged.
+                if (BigInteger.Abs(DecimalBytes.Scaled(value, scale)) >= BigInteger.Pow(10, precision))
+                    throw new OverflowException("Decimal exceeds configured precision.");
+            }
+            else DecimalBytes.CheckFit(value, precision, scale);
+            return "accepted";
+        }
+        catch (Exception error) { return error.GetType().FullName + "|" + error.Message; }
+    }
+    void Compare(decimal value, byte precision, byte scale)
+    {
+        Check(Outcome(value, precision, scale, false) == Outcome(value, precision, scale, true),
+            $"Decimal fit changed for {value} at precision {precision}, scale {scale}.");
+        checkedInputs++;
+    }
+    void CompareCoefficient(BigInteger coefficient, byte valueScale, byte precision, byte scale)
+    {
+        if (coefficient < 0 || coefficient > maximumCoefficient) return;
+        var low = unchecked((int)(uint)(coefficient & uint.MaxValue));
+        var middle = unchecked((int)(uint)((coefficient >> 32) & uint.MaxValue));
+        var high = unchecked((int)(uint)(coefficient >> 64));
+        Compare(new decimal(low, middle, high, false, valueScale), precision, scale);
+        Compare(new decimal(low, middle, high, true, valueScale), precision, scale);
+    }
+    decimal[] edges = [0m, new decimal(0, 0, 0, true, 28), 1.000m, -1.000m, 1.23m, -1.23m, 123.4500m, -123.4500m,
+        0.0000000000000000000000000001m, -0.0000000000000000000000000001m, decimal.MaxValue, decimal.MinValue,
+        792281625142643375935439503.35m, -792281625142643375935439503.35m];
+    for (byte precision = 1; precision <= 29; precision++)
+        for (byte scale = 0; scale <= Math.Min(28, (int)precision); scale++)
+        {
+            foreach (var value in edges) Compare(value, precision, scale);
+            // Check both sides of each representable precision boundary, at
+            // several stored scales. The oracle performs the original scaling.
+            foreach (var valueScale in new byte[] { 0, (byte)(scale / 2), scale }.Distinct())
+            {
+                var threshold = BigInteger.Pow(10, precision - (scale - valueScale));
+                foreach (var delta in new[] { -1, 0, 1 }) CompareCoefficient(threshold + delta, valueScale, precision, scale);
+            }
+            for (byte valueScale = 0; valueScale <= 28; valueScale++)
+            {
+                var bytes = new byte[12]; random.NextBytes(bytes);
+                CompareCoefficient(new BigInteger(bytes, isUnsigned: true, isBigEndian: false), valueScale, precision, scale);
+                CompareCoefficient(BigInteger.Pow(10, valueScale), valueScale, precision, scale);
+            }
+        }
+    // These bounds are not admitted by public configured codecs. They retain
+    // the previous internal helper behavior instead of acquiring new rejection.
+    foreach (var (precision, scale) in new (byte, byte)[] { (0, 0), (0, 28), (1, 2), (29, 29), (30, 0), (30, 29), (255, 255) })
+        foreach (var value in edges) Compare(value, precision, scale);
+    File.WriteAllText(Path.Combine(output, "decimal-fit-differential-count.txt"), checkedInputs.ToString(System.Globalization.CultureInfo.InvariantCulture));
 });
 Test("decimal_decode_preserves_canonical_96_bit_contract", () =>
 {

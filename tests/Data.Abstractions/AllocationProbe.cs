@@ -30,10 +30,10 @@ internal static class AllocationProbe
             ("decimal96-canonical-decode", () => _sink = DecimalBytes.Decode(number), true),
             ("decimal-zero-canonical-decode", () => _sink = DecimalBytes.Decode(zero), true),
             ("typed-json-validation", () => DbWire.ValidateScalar(descriptor, json), true),
-            ("configured-decimal18-validation", () => DbWire.ValidateScalar(decimal18.Descriptor, decimal18Bytes), false),
-            ("configured-decimal29-validation", () => DbWire.ValidateScalar(decimal29.Descriptor, number), false),
-            ("configured-money-validation", () => DbWire.ValidateScalar(money.Descriptor, moneyBytes), false),
-            ("configured-decimal29-decode", () => _sink = decimal29.Decode(number), false)
+            ("configured-decimal18-validation", () => DbWire.ValidateScalar(decimal18.Descriptor, decimal18Bytes), true),
+            ("configured-decimal29-validation", () => DbWire.ValidateScalar(decimal29.Descriptor, number), true),
+            ("configured-money-validation", () => DbWire.ValidateScalar(money.Descriptor, moneyBytes), true),
+            ("configured-decimal29-decode", () => _sink = decimal29.Decode(number), true)
         };
         var results = new ScalarAllocation[probes.Length * 3];
         // Exercise runtime and codec initialization outside each measured interval.
