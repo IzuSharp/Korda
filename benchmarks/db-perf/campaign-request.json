@@ -138,6 +138,12 @@
         "korda_after",
         "independent_csharp_orm"
       ]
+    },
+    "queryPlans": {
+      "warmupOperations": 350,
+      "operations": 35,
+      "maximumCommandSeconds": 30,
+      "constructionMode": "prepared"
     }
   },
   "admission": {
@@ -247,14 +253,15 @@
       "shortProjections": 340,
       "heavyStream": 340,
       "sameProcessRecovery": 136,
-      "nativeAllocationProfiles": 148
+      "nativeAllocationProfiles": 148,
+      "queryPlanCommandTimeouts": 240
     },
-    "maximumConfiguredPreflightSeconds": 4084,
+    "maximumConfiguredPreflightSeconds": 4324,
     "configuredLongAndIdleSeconds": 14450,
-    "configuredTotalSeconds": 18534,
-    "preflightOverheadAllowanceSeconds": 1016,
-    "controllerOverheadAllowanceSeconds": 1866,
+    "configuredTotalSeconds": 18774,
+    "preflightOverheadAllowanceSeconds": 776,
+    "controllerOverheadAllowanceSeconds": 1626,
     "jobBeyondControllerSeconds": 1200,
-    "scope": "one attempt per step, up to two distinct scheduled concurrencies and every bounded refinement executes; reviewed retries consume the remaining finite budget and may prevent completion; includes configured measurement and idle only; excludes initialization, warmup, startup, drain, hashing and artifact transfer, whose actual clocks remain recorded"
+    "scope": "one attempt per step, up to two distinct scheduled concurrencies and every bounded refinement executes; reviewed retries consume the remaining finite budget and may prevent completion; timing lanes include configured measurement and idle; separate query-plan diagnostics include their complete consumer-command caps, including consumer warmup; other initialization, warmup, startup, drain, hashing and artifact transfer remain additional observed time"
   }
 }

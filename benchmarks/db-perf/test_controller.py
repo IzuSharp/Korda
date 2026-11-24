@@ -529,11 +529,11 @@ class ControllerTests(unittest.TestCase):
     def test_duration_budget_keeps_all_eight_full_long_segments(self):
         request = json.loads((HERE / "campaign-request.json").read_text())
         budget = campaign.duration_budget(request)
-        self.assertEqual(budget["maximumConfiguredPreflightSeconds"], 4084)
+        self.assertEqual(budget["maximumConfiguredPreflightSeconds"], 4324)
         self.assertEqual(budget["configuredLongAndIdleSeconds"], 14450)
-        self.assertEqual(budget["configuredTotalSeconds"], 18534)
-        self.assertEqual(budget["preflightOverheadAllowanceSeconds"], 1016)
-        self.assertEqual(budget["controllerOverheadAllowanceSeconds"], 1866)
+        self.assertEqual(budget["configuredTotalSeconds"], 18774)
+        self.assertEqual(budget["preflightOverheadAllowanceSeconds"], 776)
+        self.assertEqual(budget["controllerOverheadAllowanceSeconds"], 1626)
 
     def test_recovery_cannot_hide_overload_business_failures_or_rebuild_pool(self):
         normal = self.offered()

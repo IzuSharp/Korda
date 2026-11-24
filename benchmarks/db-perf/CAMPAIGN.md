@@ -46,6 +46,7 @@ preparation or a measurement:
 ```bash
 python3 benchmarks/db-perf/campaign.py validate-request benchmarks/db-perf/campaign-request.json --allow-disabled
 python3 benchmarks/db-perf/test_controller.py
+python3 benchmarks/db-perf/test_plan_diagnostics.py
 python3 benchmarks/db-perf/campaign.py prepare \
   --request benchmarks/db-perf/campaign-request.json \
   --repo "$GITHUB_WORKSPACE" --output "$RUNNER_TEMP/db-perf-prepared"
@@ -74,7 +75,7 @@ The maximum configured schedule assumes one attempt per step, both distinct
 scheduled concurrencies and all three midpoint refinements execute. Reviewed
 retries consume the remaining finite budget and may prevent completion:
 
-| Layer, across both databases | Configured measurement + idle seconds |
+| Layer, across both databases | Configured seconds |
 | --- | ---: |
 | Idle admission | 10 |
 | Interleaved noise processes | 390 |
@@ -87,15 +88,40 @@ retries consume the remaining finite budget and may prevent completion:
 | Fully consumed 8,192-row heavy streams | 340 |
 | Same-process recovery | 136 |
 | Separate allocation profiles | 148 |
-| **Preflight configured total** | **4,084 (68.07 minutes)** |
+| Separate query-plan consumer command caps | 240 |
+| **Preflight configured total** | **4,324 (72.07 minutes)** |
 | Eight unchanged 1,800-second long segments + idle | **14,450** |
-| **Configured overall total** | **18,534 (308.9 minutes)** |
+| **Configured overall total** | **18,774 (312.9 minutes)** |
 
-Initialization, warmup, process/database startup, drain, hashing and artifact
-transfer are additional observed time, not long-load credit. The preflight step
-has 1,016 seconds of allowance beyond configured intervals; the controller has
-1,866 seconds overall. The actual budget checks retain failed/interrupted work
+The query-plan command caps include those consumers' warmup. Other initialization,
+warmup, process/database startup, drain, hashing and artifact transfer are
+additional observed time, not long-load credit. The preflight step has 776
+seconds of allowance beyond configured intervals; the controller has 1,626
+seconds overall. The actual budget checks retain failed/interrupted work
 instead of shortening a long segment or claiming its missing duration.
+
+Every new campaign PostgreSQL cluster explicitly uses UTF-8. The recorded server
+and client encodings and locale are common to all four routes. Earlier allocation
+probes that used SQL_ASCII retain their original environment and identities.
+
+Before timing cells, each database runs four separate, single-worker query-plan
+diagnostics. Each consumer warms 350 operations, then completes all 35 cases once
+with prepared-query reuse. PostgreSQL uses a separately built, source-locked
+`auto_explain` module with JSON plans and full ordered parameter values, plus
+server statement logs. Coverage sums the occurrence requirements of identical
+SQL/parameter legs across cases; one lookup cannot satisfy several required
+executions. The actual server plans are retained, including independent ORM SQL
+differences and extra provider health/transaction commands. Parameter type OIDs
+and generic/custom plan counters are not emitted by these logs and are explicitly
+unproven.
+
+SQLite records the same successful consumer case/row counters, then replays each
+manifest SQL leg as read-only `EXPLAIN QUERY PLAN` with the exact bundled SQLite
+library and typed parameters. This is a separate replay, not observation of the
+provider's dispatch or hidden statement cache. Database/WAL hashes and zero
+changes verify that the replay preserved data. Neither diagnostic receives timing,
+allocation-comparison, or long-segment credit. Timing PostgreSQL servers do not
+load `auto_explain` or enable its logging collector.
 
 The controller admits Linux x64 on a GitHub-hosted VM only after recording its
 boot ID, image version, CPU model, visible CPU set, quotas, throttling counters,

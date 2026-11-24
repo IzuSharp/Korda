@@ -412,7 +412,7 @@ def validate_plan(plan, output):
     if plan.get("provider") not in ("sqlite", "postgresql") or not plan.get("commands"):
         raise ValueError("A provider and nonempty command plan are required")
     names, outputs = set(), set()
-    reserved = {output / name for name in ("plan.json", "runner.json", "postgres-owner.json", "postgres.log", "postgres-init.log", "postgres-settings.txt")}
+    reserved = {output / name for name in ("plan.json", "runner.json", "postgres-owner.json", "postgres.log", "postgres-init.log", "postgres-settings.txt", "postgres-query-plans.log", "postgres-query-plans.json", "query-plan-evidence.json")}
     for item in plan["commands"]:
         if not isinstance(item.get("name"), str):
             raise ValueError("Every command needs a string filename component")
@@ -453,7 +453,7 @@ def database(plan, output):
         raise ValueError("PostgreSQL must reserve eight connections beyond client concurrency")
     if not (data / "PG_VERSION").exists():
         with (output / "postgres-init.log").open("w") as log:
-            subprocess.run([binary / "initdb", "-D", data, "-U", "korda", "-A", "trust", "--no-locale"],
+            subprocess.run([binary / "initdb", "-D", data, "-U", "korda", "-A", "trust", "--no-locale", "--encoding=UTF8"],
                            stdout=log, stderr=subprocess.STDOUT, timeout=60, check=True)
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))
@@ -462,6 +462,22 @@ def database(plan, output):
                "-c", "unix_socket_directories=", "-c", f"max_connections={max_connections}", "-c", "fsync=on",
                "-c", "synchronous_commit=on", "-c", "full_page_writes=on", "-c", "timezone=UTC",
                "-c", "shared_buffers=128MB", "-c", "default_transaction_isolation=read committed"]
+    query_plans = settings.get("queryPlans")
+    if query_plans is not None:
+        library = Path(query_plans["library"]).resolve()
+        if set(query_plans) != {"library", "sha256"} or sha(library) != query_plans["sha256"]:
+            raise ValueError("The diagnostic auto_explain library differs from its frozen input")
+        if any(value in str(library) for value in ('"', ',', '\n')):
+            raise ValueError("The diagnostic library path cannot be represented as a preload entry")
+        command += ["-c", "session_preload_libraries=" + str(library),
+                    "-c", "logging_collector=on", "-c", "log_destination=jsonlog",
+                    "-c", "log_directory=" + str(output.resolve()), "-c", "log_filename=postgres-query-plans.log",
+                    "-c", "log_rotation_age=0", "-c", "log_rotation_size=0",
+                    "-c", "log_statement=all", "-c", "log_parameter_max_length=-1",
+                    "-c", "auto_explain.log_min_duration=0", "-c", "auto_explain.log_parameter_max_length=-1",
+                    "-c", "auto_explain.log_format=json", "-c", "auto_explain.log_analyze=off",
+                    "-c", "auto_explain.log_timing=off", "-c", "auto_explain.log_settings=on",
+                    "-c", "auto_explain.log_nested_statements=on", "-c", "auto_explain.sample_rate=1"]
     if settings.get("cpus"):
         command = ["taskset", "-c", settings["cpus"], *command]
     receipt = {"argv": command, "startedUtc": utc(), "startedMonotonicNs": time.monotonic_ns(),
@@ -496,9 +512,16 @@ def database(plan, output):
             if exists == "0":
                 subprocess.run([*base, "-c", "CREATE DATABASE db_perf_01"], stdout=subprocess.DEVNULL, timeout=15, check=True)
             connection = f"postgresql://korda@127.0.0.1:{port}/db_perf_01"
-            settings_sql = ("SELECT version(); SHOW fsync; SHOW synchronous_commit; SHOW full_page_writes; "
-                            "SHOW shared_buffers; SHOW default_transaction_isolation; SHOW max_connections;")
-            (output / "postgres-settings.txt").write_text(subprocess.check_output([*base, "-c", settings_sql], text=True, timeout=10))
+            settings_sql = ("SELECT current_database(); SELECT version(); SHOW fsync; SHOW synchronous_commit; SHOW full_page_writes; "
+                            "SHOW shared_buffers; SHOW default_transaction_isolation; SHOW max_connections; "
+                            "SHOW server_encoding; SHOW client_encoding; "
+                            "SELECT datcollate, datctype FROM pg_database WHERE datname=current_database();")
+            if query_plans is not None:
+                settings_sql += (" SHOW session_preload_libraries; SHOW log_statement; SHOW log_parameter_max_length; "
+                                 "SHOW auto_explain.log_min_duration; SHOW auto_explain.log_analyze; "
+                                 "SHOW auto_explain.log_parameter_max_length; SHOW auto_explain.sample_rate;")
+            (output / "postgres-settings.txt").write_text(subprocess.check_output(
+                [binary / "psql", "--dbname", connection, "-At", "-c", settings_sql], text=True, timeout=10))
             yield connection, server.pid
         except BaseException as error:
             body_error = error

@@ -26,7 +26,7 @@ def require(condition, message):
 
 
 def duration_budget(request):
-    """Configured durations/idle for one attempt per step; retries use the remaining hard budget."""
+    """Timing intervals plus plan-command caps; retries use the remaining hard budget."""
     settings = request["measurement"]
     idle = settings["idleSeconds"]
     databases = len(PROVIDERS)
@@ -54,6 +54,8 @@ def duration_budget(request):
     if "nativeAllocation" in diagnostics:
         value = diagnostics["nativeAllocation"]
         parts["nativeAllocationProfiles"] = cells(len(value["concurrency"]), value["seconds"], value["routes"])
+    if "queryPlans" in diagnostics:
+        parts["queryPlanCommandTimeouts"] = databases * len(ROUTES) * diagnostics["queryPlans"]["maximumCommandSeconds"]
     preflight = sum(parts.values())
     long = cells(1, settings["secondsPerSegment"])
     budget = request["timeBudget"]
@@ -62,7 +64,7 @@ def duration_budget(request):
         "preflightOverheadAllowanceSeconds": budget["preflightStepMinutes"] * 60 - preflight,
         "controllerOverheadAllowanceSeconds": budget["controllerMinutes"] * 60 - preflight - long,
         "jobBeyondControllerSeconds": (budget["jobMinutes"] - budget["controllerMinutes"]) * 60,
-        "scope": "one attempt per step, up to two distinct scheduled concurrencies and every bounded refinement executes; reviewed retries consume the remaining finite budget and may prevent completion; includes configured measurement and idle only; excludes initialization, warmup, startup, drain, hashing and artifact transfer, whose actual clocks remain recorded"}
+        "scope": "one attempt per step, up to two distinct scheduled concurrencies and every bounded refinement executes; reviewed retries consume the remaining finite budget and may prevent completion; timing lanes include configured measurement and idle; separate query-plan diagnostics include their complete consumer-command caps, including consumer warmup; other initialization, warmup, startup, drain, hashing and artifact transfer remain additional observed time"}
 
 
 def identity(value, length):
@@ -108,7 +110,11 @@ def request_record(path, *, enabled=True):
         require("--native-library" not in request.get("extraArguments", {}).get("independent_csharp_orm", []),
                 "SQLite native-library argument cannot be sent to PostgreSQL")
         diagnostics = request.get("diagnostics", {})
-        require(set(diagnostics) <= {"sameProcessRecovery", "nativeAllocation"}, "Unknown pre-timing diagnostic")
+        require(set(diagnostics) <= {"sameProcessRecovery", "nativeAllocation", "queryPlans"}, "Unknown pre-timing diagnostic")
+        require(diagnostics.get("queryPlans") == {"warmupOperations": 350, "operations": 35,
+                "maximumCommandSeconds": 30, "constructionMode": "prepared"},
+                "Freeze the bounded four-route plan diagnostic and complete workload cycles")
+        require(len(request["workload"]["cases"]) == 35, "The plan diagnostic requires exactly the frozen 35 semantic cases")
         if "sameProcessRecovery" in diagnostics:
             recovery = diagnostics["sameProcessRecovery"]
             require(type(recovery["seconds"]) is int and 5 <= recovery["seconds"] <= 15
@@ -311,15 +317,21 @@ def prepare(request_path, output, repo):
     native = output / "build/native"
     logged([sys.executable, repo / "benchmarks/db-perf/native/build.py", "--sqlite-source", dependencies["sqlite"]["source"],
             "--json-source", dependencies["nlohmann-json"]["source"], "--postgres-prefix", pg_bin.parent,
-            "--manifest", repo / request["workload"]["path"], "--output", native], repo, output / "build-native.log")
+            "--output", native], repo, output / "build-native.log")
     shutil.copytree(native, bundle / "native")
     shutil.copytree(pg_bin.parent, bundle / "postgres", symlinks=True)
+    if "queryPlans" in request.get("diagnostics", {}):
+        extension = output / "build/auto-explain"
+        logged([sys.executable, repo / "benchmarks/db-perf/postgres_auto_explain.py", "--postgres-prefix", pg_bin.parent,
+                "--archive", pg_bin.parent.parent / "postgresql-18.0.tar.bz2", "--output", extension],
+               repo, output / "build-auto-explain.log")
+        shutil.copytree(extension, bundle / "auto-explain")
     shutil.copytree(artifact_root, bundle / "packages")
     for provider in PROVIDERS:
         apps[provider + "/direct_cpp"] = "native/db-perf-native"
     harness = bundle / "harness"
     harness.mkdir()
-    for name in ("run.py", "campaign.py", "campaign_build.py"):
+    for name in ("run.py", "campaign.py", "campaign_build.py", "plan_diagnostics.py"):
         shutil.copy2(repo / "benchmarks/db-perf" / name, harness / name)
     shutil.copy2(repo / request["workload"]["path"], bundle / "workload.json")
     if request.get("heavyWorkload") is not None:

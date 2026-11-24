@@ -23,6 +23,7 @@ import time
 
 from campaign_build import PROVIDERS, ROUTES, duration_budget, prepare, require, request_record, validate_heavy_workload
 from run import cgroup_snapshot, database, execute, host_cpu, process, sample, server_cpu_group_delta, sha, utc, write_json
+from plan_diagnostics import collect_postgres, replay_sqlite
 
 
 def get(value, *keys, default=None):
@@ -801,13 +802,28 @@ class Campaign:
             item["argv"] = ["env", "LD_PRELOAD=" + str(library), "DB_PERF_ALLOC_PROFILE_LIBRARY=" + str(library),
                             "DB_PERF_ALLOC_CAPACITY=" + str(settings["tableCapacity"]),
                             *item["argv"], "--allocation-profile"]
+        elif diagnostic == "query-plan":
+            settings = self.request["diagnostics"]["queryPlans"]
+            require(provider in PROVIDERS and route in ROUTES and concurrency == 1 and rate is None
+                    and workload == "primary" and construction_mode == settings["constructionMode"]
+                    and context["cases"] == self.cases and seconds == 0,
+                    "Query plans require the complete frozen C1 workload outside timing lanes")
+            item["timeoutSeconds"] = settings["maximumCommandSeconds"]
+            item["argv"] += ["--warmup", str(settings["warmupOperations"]), "--operations", str(settings["operations"]),
+                             "--idle-seconds", "0"]
+            if route == "direct_cpp":
+                item["argv"] += ["--explain"]
+            if provider == "postgresql":
+                library = self.bundle / "auto-explain/auto_explain.so"
+                require(library.is_file(), "Frozen auto_explain diagnostic library is absent")
+                plan["postgres"]["queryPlans"] = {"library": str(library), "sha256": sha(library)}
         else:
             require(diagnostic is None, "Unknown diagnostic lane")
         plan["commands"] = [item]
         write_json(attempt / "plan.json", plan)
         write_json(attempt / "runner.json", {"requestSha256": sha(self.bundle / "request.json"),
             "bundleManifestSha256": sha(self.bundle / "bundle.json"), "environmentIdentity": self.identity,
-            "controllerSources": {name: sha(self.bundle / "harness" / name) for name in ("run.py", "campaign.py", "campaign_build.py")}})
+            "controllerSources": {name: sha(self.bundle / "harness" / name) for name in ("run.py", "campaign.py", "campaign_build.py", "plan_diagnostics.py")}})
         with database(plan, attempt) as (connection, server):
             command = execute(item, connection, server, attempt, self.settings["sampleSeconds"], check=False,
                               server_cpu_group=plan["postgres"].get("activeCpuGroup"))
@@ -849,13 +865,24 @@ class Campaign:
             slo = recovery_meets_slo(measurement, self.settings)
         else:
             measurement = normalized_result(raw, context["cases"], seconds, rate, require_coverage=require_coverage)
-            resources = summarize_resources(attempt / "client.resources.jsonl", measurement)
+            resources = ({"scope": "Instrumented bounded query-plan diagnostic; raw process samples are retained without timing/CPU/memory comparison credit"}
+                         if diagnostic == "query-plan" else summarize_resources(attempt / "client.resources.jsonl", measurement))
             slo = meets_slo(measurement, self.settings)
         if diagnostic == "native-allocation":
             profile = get(raw, "nativeAllocationProfile")
             validate_native_profile(profile, sha(self.bundle / "native/libdb-perf-alloc.so"), self.request["diagnostics"]["nativeAllocation"]["tableCapacity"])
             measurement["nativeAllocationProfile"] = profile
             slo = measurement["counts"]["failed"] == 0
+        elif diagnostic == "query-plan":
+            require(measurement["counts"]["succeeded"] == self.request["diagnostics"]["queryPlans"]["operations"]
+                    and measurement["counts"]["failed"] == 0, "Query-plan diagnostic did not execute exactly one complete successful business cycle")
+            evidence = (collect_postgres(attempt / "postgres-query-plans.json", context["manifest"], route, raw)
+                        if provider == "postgresql" else replay_sqlite(self.bundle / self.bundle_manifest["sqliteLibrary"],
+                            attempt / "database.sqlite", context["manifest"], route, raw))
+            write_json(attempt / "query-plan-evidence.json", evidence)
+            measurement["queryPlanEvidence"] = {"path": str((attempt / "query-plan-evidence.json").relative_to(self.output)),
+                                              "sha256": sha(attempt / "query-plan-evidence.json"), "passed": evidence["passed"]}
+            slo = evidence["passed"]
         elif diagnostic is None:
             validate_uninstrumented_timing(raw)
         if workload != "primary" and measurement["counts"]["failed"] == 0:
@@ -926,6 +953,15 @@ class Campaign:
             self.persist()
         for provider in PROVIDERS:
             self.initialize(provider)
+            if "queryPlans" in self.request.get("diagnostics", {}):
+                for route in ROUTES:
+                    observed = self.run_cell(provider, route, "query-plans-" + route, 0, 1,
+                        require_coverage=True, diagnostic="query-plan",
+                        construction_mode=self.request["diagnostics"]["queryPlans"]["constructionMode"])
+                    require(observed["sloPassed"], "Query-plan SQL/parameter/leg evidence remains incomplete; diagnostic results cannot earn timing credit")
+                self.state.setdefault("queryPlans", {})[provider] = {"routes": list(ROUTES),
+                    "scope": "PostgreSQL actual executor plans and logged parameters; SQLite source-bound exact-engine EXPLAIN QUERY PLAN replay; no instrumented performance credit"}
+                self.persist()
             if self.request.get("shortQueries") is not None:
                 short = self.request["shortQueries"]
                 for mode in short["constructionModes"]:
