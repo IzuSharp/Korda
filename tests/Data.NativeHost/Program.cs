@@ -12,6 +12,7 @@ using System.Buffers.Binary;
 
 if (await SnapshotProbe.RunIfRequested(args)) return;
 if (await FetchProbe.RunIfRequested(args)) return;
+if (await TransactionDefaultProbe.RunIfRequested(args)) return;
 Console.WriteLine("snapshot parser oracle inputs=" + SnapshotProbe.Verify());
 SnapshotProbe.VerifyAllocationBudget();
 try { await Suite.Run(); } catch (DatabaseException failure) { Console.Error.WriteLine($"kind={failure.Kind} provider={failure.ProviderCode} correlation={failure.CorrelationId}"); throw; }
