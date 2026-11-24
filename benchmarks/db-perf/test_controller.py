@@ -396,6 +396,81 @@ class ControllerTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "quota ancestry"):
             campaign.quota_assessment(snapshot)
 
+    def test_direct_namespace_read_does_not_launch_privileged_helper(self):
+        with patch.object(run.os, "readlink", side_effect=["cgroup:[7]"] * 3), \
+                patch.object(run.subprocess, "run") as helper:
+            result = run.cgroup_namespace_observation()
+        self.assertIs(result["sameAsInit"], True)
+        self.assertEqual(result["method"], "direct_readlink")
+        helper.assert_not_called()
+
+    def test_restricted_namespace_read_requires_real_stable_hosted_identity(self):
+        child = subprocess.CompletedProcess([], 0, "cgroup:[7]\ncgroup:[7]\n", "")
+        denied = PermissionError(13, "PID 1 namespace read restricted")
+        with patch.dict(os.environ, {"GITHUB_ACTIONS": "true", "RUNNER_ENVIRONMENT": "github-hosted"}), \
+                patch.object(run.os, "readlink", side_effect=["cgroup:[7]", denied, "cgroup:[7]", "cgroup:[7]"]), \
+                patch.object(run.subprocess, "run", return_value=child) as helper:
+            result = run.cgroup_namespace_observation()
+        self.assertIs(result["sameAsInit"], True)
+        self.assertEqual(result["directError"]["errno"], 13)
+        self.assertTrue(result["privilegedProbe"]["validIdentityRead"])
+        self.assertGreaterEqual(result["privilegedProbe"]["elapsedNs"], 0)
+        self.assertEqual(helper.call_args.args[0], ["/usr/bin/sudo", "-n", "/usr/bin/readlink", "--",
+                         f"/proc/{os.getpid()}/ns/cgroup", "/proc/1/ns/cgroup"])
+        self.assertEqual(helper.call_args.kwargs["timeout"], 5)
+        self.assertNotIn("shell", helper.call_args.kwargs)
+
+    def test_privileged_namespace_probe_fails_closed_for_changed_or_invalid_reads(self):
+        cases = [(0, "cgroup:[7]\ncgroup:[8]\n", "", "cgroup:[7]"),
+                 (0, "cgroup:[7]\ncgroup:[7]\n", "", "cgroup:[8]"),
+                 (1, "cgroup:[7]\ncgroup:[7]\n", "", "cgroup:[7]"),
+                 (0, "cgroup:[7]\ncgroup:[7]\nextra\n", "", "cgroup:[7]"),
+                 (0, "cgroup:[7]\ninvalid\n", "", "cgroup:[7]"),
+                 (0, "cgroup:[7]\ncgroup:[7]\n", "unexpected stderr", "cgroup:[7]")]
+        for code, stdout, stderr, after in cases:
+            with self.subTest(code=code, stdout=stdout, stderr=stderr, after=after), \
+                    patch.dict(os.environ, {"GITHUB_ACTIONS": "true", "RUNNER_ENVIRONMENT": "github-hosted"}), \
+                    patch.object(run.os, "readlink", side_effect=["cgroup:[7]", PermissionError(13, "restricted"), "cgroup:[7]", after]), \
+                    patch.object(run.subprocess, "run", return_value=subprocess.CompletedProcess([], code, stdout, stderr)):
+                result = run.cgroup_namespace_observation()
+                self.assertIsNot(result["sameAsInit"], True)
+                self.assertEqual(result["privilegedProbe"]["stdout"], stdout)
+
+    def test_namespace_probe_retains_timeout_and_does_not_escalate_other_errors(self):
+        for environment, error in [({"GITHUB_ACTIONS": "false", "RUNNER_ENVIRONMENT": "github-hosted"}, PermissionError(13, "restricted")),
+                                   ({"GITHUB_ACTIONS": "true", "RUNNER_ENVIRONMENT": "self-hosted"}, PermissionError(13, "restricted")),
+                                   ({"GITHUB_ACTIONS": "true", "RUNNER_ENVIRONMENT": "github-hosted"}, OSError(5, "IO error"))]:
+            with patch.dict(os.environ, environment), patch.object(run.os, "readlink", side_effect=error), \
+                    patch.object(run.subprocess, "run") as helper:
+                result = run.cgroup_namespace_observation()
+            self.assertIsNot(result["sameAsInit"], True)
+            helper.assert_not_called()
+        with patch.dict(os.environ, {"GITHUB_ACTIONS": "true", "RUNNER_ENVIRONMENT": "github-hosted"}), \
+                patch.object(run.os, "readlink", side_effect=["cgroup:[7]", PermissionError(1, "restricted"), "cgroup:[7]"]), \
+                patch.object(run.subprocess, "run", side_effect=subprocess.TimeoutExpired("readlink", 5)):
+            result = run.cgroup_namespace_observation()
+        self.assertIsNone(result["sameAsInit"])
+        self.assertEqual(result["privilegedProbe"]["error"]["type"], "TimeoutExpired")
+        self.assertEqual(result["directError"]["errno"], 1)
+
+    def test_failed_quota_admission_preserves_unqualified_snapshot(self):
+        settings = {"clientCpus": [0, 1], "serverCpus": [2], "observerCpus": [3], "minimumFreeDiskBytes": 1}
+        snapshot = {"available": False, "namespaceError": 13, "ancestors": []}
+        with tempfile.TemporaryDirectory() as tmp, \
+                patch.dict(os.environ, {"GITHUB_ACTIONS": "true", "RUNNER_ENVIRONMENT": "github-hosted"}), \
+                patch.object(campaign.os, "sched_getaffinity", return_value={0, 1, 2, 3}), \
+                patch.object(campaign.platform, "system", return_value="Linux"), \
+                patch.object(campaign.platform, "machine", return_value="x86_64"), \
+                patch.object(campaign, "cgroup_snapshot", return_value=snapshot), \
+                patch.object(campaign, "environment_identity", return_value={"bootId": "test"}):
+            with self.assertRaisesRegex(ValueError, "quota ancestry"):
+                campaign.admission({"admission": settings}, Path(tmp))
+            record = json.loads((Path(tmp) / "quota-observation.json").read_text())
+            self.assertEqual(record["limits"], snapshot)
+            self.assertIs(record["qualified"], False)
+            self.assertEqual(record["longSegmentsCredited"], 0)
+            self.assertFalse((Path(tmp) / "environment.json").exists())
+
     def test_resume_verifies_bound_raw_evidence(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

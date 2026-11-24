@@ -2,7 +2,10 @@ name: DB-Perf-01 Linux environment observation
 on:
   push:
     branches: [task/DB-Perf-01-linux]
-    paths: [.github/workflows/db-perf-environment.yml]
+    paths:
+      - .github/workflows/db-perf-environment.yml
+      - benchmarks/db-perf/run.py
+      - benchmarks/db-perf/campaign.py
   workflow_dispatch:
 permissions:
   contents: read

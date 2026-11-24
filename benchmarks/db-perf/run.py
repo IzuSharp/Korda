@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 from contextlib import contextmanager
 from datetime import datetime, timezone
+import errno
 import hashlib
 import json
 import math
@@ -102,6 +103,53 @@ def host_cpu():
     return dict(zip(("user", "nice", "system", "idle", "iowait", "irq", "softirq", "steal", "guest", "guestNice"), map(int, fields[1:])))
 
 
+def cgroup_namespace_observation():
+    """Observe both namespace links, retaining restricted PID 1 read evidence.
+
+    /proc/PID/ns links apply PTRACE_MODE_READ_FSCREDS. The admitted hosted
+    runner permits a fixed, noninteractive sudo readlink when PID 1 is owned by
+    root. This does not change namespaces, permissions, quotas or affinity.
+    """
+    result = {"method": "direct_readlink", "sameAsInit": None}
+    try:
+        before = os.readlink("/proc/self/ns/cgroup")
+        result["directSelfBefore"] = before
+        init = os.readlink("/proc/1/ns/cgroup")
+        after = os.readlink("/proc/self/ns/cgroup")
+        result.update(selfBefore=before, init=init, selfAfter=after,
+                      sameAsInit=before == after == init)
+        return result
+    except OSError as error:
+        result["directError"] = {"errno": error.errno, "message": str(error)}
+        if error.errno not in (errno.EACCES, errno.EPERM) or os.environ.get("GITHUB_ACTIONS") != "true" \
+                or os.environ.get("RUNNER_ENVIRONMENT") != "github-hosted":
+            return result
+    command = ["/usr/bin/sudo", "-n", "/usr/bin/readlink", "--",
+               f"/proc/{os.getpid()}/ns/cgroup", "/proc/1/ns/cgroup"]
+    probe = {"argv": command}
+    result.update(method="hosted_readonly_sudo_readlink", privilegedProbe=probe)
+    started = time.monotonic_ns()
+    try:
+        before = os.readlink("/proc/self/ns/cgroup")
+        child = subprocess.run(command, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=5)
+        probe.update(exitCode=child.returncode, stdout=child.stdout, stderr=child.stderr)
+        after = os.readlink("/proc/self/ns/cgroup")
+        result.update(selfBefore=before, selfAfter=after)
+        lines = child.stdout.splitlines()
+        valid = child.returncode == 0 and not child.stderr and len(lines) == 2 \
+            and all(re.fullmatch(r"cgroup:\[[0-9]+\]", line) for line in lines) \
+            and result.get("directSelfBefore") == before == after == lines[0]
+        probe["validIdentityRead"] = valid
+        if valid:
+            result.update(init=lines[1], sameAsInit=lines[0] == lines[1])
+    except (OSError, subprocess.TimeoutExpired) as error:
+        probe["error"] = {"type": type(error).__name__, "errno": getattr(error, "errno", None),
+                          "message": str(error)}
+    finally:
+        probe["elapsedNs"] = time.monotonic_ns() - started
+    return result
+
+
 def cgroup_snapshot():
     """Read the current v2 group and every visible ancestor, not just mount root.
 
@@ -139,10 +187,10 @@ def cgroup_snapshot():
     current = mount / Path(groups[0]).relative_to(mount_root)
     result.update(membership=groups[0], mountRoot=str(mount_root), mountPoint=str(mount),
                   hostInit=read("/proc/1/comm"))
-    try:
-        result["sameCgroupNamespaceAsInit"] = os.readlink("/proc/self/ns/cgroup") == os.readlink("/proc/1/ns/cgroup")
-    except OSError as error:
-        result["namespaceError"] = error.errno
+    namespace = cgroup_namespace_observation()
+    result.update(namespaceObservation=namespace, sameCgroupNamespaceAsInit=namespace["sameAsInit"])
+    if "directError" in namespace:
+        result["namespaceError"] = namespace["directError"]["errno"]
     if not current.resolve().is_relative_to(mount.resolve()):
         result["reason"] = "Cgroup path escaped its mount"
         return result

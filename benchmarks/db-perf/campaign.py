@@ -150,6 +150,9 @@ def admission(request, output):
     require(platform.system() == "Linux" and platform.machine() == "x86_64", "Campaign needs Linux x64")
     require(shutil.disk_usage(output).free >= settings["minimumFreeDiskBytes"], "Insufficient measured disk reserve")
     limits = cgroup_snapshot()
+    write_json(output / "quota-observation.json", {"schemaVersion": 1, "task": "DB-Perf-01",
+        "kind": "pre_admission_quota_observation", "observedUtc": utc(), "identity": environment_identity(),
+        "availableCpus": available, "limits": limits, "qualified": False, "longSegmentsCredited": 0})
     quota = quota_assessment(limits)
     require(quota["maximumCpuCapacity"] is None or quota["maximumCpuCapacity"] >= len(available), "Guest CPU quota is smaller than the frozen visible resource set")
     identity = environment_identity()
