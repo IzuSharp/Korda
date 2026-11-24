@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "task": "DB-Perf-01",
-  "enabled": false,
-  "harnessCommit": null,
+  "enabled": true,
+  "harnessCommit": "f91f3d24579d7c65199df1c4cdd60a577cdcd8f9",
   "before": {
     "sourceCommit": "771bc77cbd68d3f932b99ed2497c0697bbba5f02",
     "runId": 45356659607,
@@ -24,28 +24,28 @@
     }
   },
   "after": {
-    "sourceCommit": null,
-    "runId": null,
+    "sourceCommit": "3d5ba3f9884308caa691718f73a74aa42be19d94",
+    "runId": 45438460386,
     "providers": {
       "postgresql": {
-        "version": null,
-        "artifactId": null,
-        "artifactZipSha256": null,
-        "nupkgSha256": null,
-        "nativeSha256": null
+        "version": "0.1.0-ci.1",
+        "artifactId": 14943151333,
+        "artifactZipSha256": "6bb86cde0f2e86b53d5dc74cf4e52cd8761d77be0c7323ecb6183c30ef46ab75",
+        "nupkgSha256": "c9a35d9d1bc2a3bc47a771120481f857ecdc381d99efb95387d1d1890020d94c",
+        "nativeSha256": "73f725104fb1bee5fc86a9bc371e556ea8358ac3a2d774c4823185e6da8984c6"
       },
       "sqlite": {
-        "version": null,
-        "artifactId": null,
-        "artifactZipSha256": null,
-        "nupkgSha256": null,
-        "nativeSha256": null
+        "version": "0.1.0-ci.1",
+        "artifactId": 14942282883,
+        "artifactZipSha256": "52e970d42635320ee8a25349cb002fa017ce2a0460473b9e123394fa8b4ad01f",
+        "nupkgSha256": "7bd4b5458226b02ce5fed07651fdd3f2816650e404266d3f525d61d9eb3735ed",
+        "nativeSha256": "970a8868290cec37c353bbd8e48bb7bf4ef18cfa1da9e495fc06d7eb08d71d40"
       }
     }
   },
   "workload": {
     "path": "benchmarks/db-perf/workload/queries-v3.json",
-    "sha256": null,
+    "sha256": "76443b1c88bf011f57b3c9819dc85a8bedb5376121d3ef2670304f96b6d2aae2",
     "cases": [
       "numeric",
       "text",
@@ -222,7 +222,7 @@
       ]
     }
   },
-  "activationNote": "Disabled until normal candidate CI, common mixed read/write cases, exact source/artifact hashes and independent review are complete. No active push trigger is installed.",
+  "activationNote": "Enabled after independent harness and allocation-boundary review and successful normal candidate CI 45438460386. The package producer is the actual clean PR merge commit 3d5ba3f9884308caa691718f73a74aa42be19d94, with the same 74a76bc5 tree as reviewed product head cf7c080. The task-branch push trigger is limited to this request. Admission, calibration and eight actual continuous 1800-second segments remain required; activation grants no measurement credit.",
   "nativeBaseline": {
     "physicalPrepare": "reuse",
     "protocolConfirmation": "drain-only"

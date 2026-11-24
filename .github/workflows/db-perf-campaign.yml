@@ -1,8 +1,9 @@
 name: DB-Perf-01 isolated Linux campaign
-# Intentionally manual-only while the request and harness are being reviewed.
-# A task-branch push trigger limited to campaign-request.json may be added only
-# with the final enabled, source/artifact-bound request. Ordinary PR CI stays short.
+# The reviewed task request starts its own dedicated campaign. Ordinary PR CI stays short.
 on:
+  push:
+    branches: [task/DB-Perf-01-linux]
+    paths: [benchmarks/db-perf/campaign-request.json]
   workflow_dispatch:
     inputs:
       short_only:
