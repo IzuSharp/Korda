@@ -1,0 +1,12 @@
+diff --git a/tests/Data.NativeHost/Program.cs b/tests/Data.NativeHost/Program.cs
+index d3b96dd..cd5bd40 100644
+--- a/tests/Data.NativeHost/Program.cs
++++ b/tests/Data.NativeHost/Program.cs
+@@ -11,6 +11,7 @@
+ using System.Buffers.Binary;
+ 
+ if (await SnapshotProbe.RunIfRequested(args)) return;
++if (await FetchProbe.RunIfRequested(args)) return;
+ Console.WriteLine("snapshot parser oracle inputs=" + SnapshotProbe.Verify());
+ SnapshotProbe.VerifyAllocationBudget();
+ try { await Suite.Run(); } catch (DatabaseException failure) { Console.Error.WriteLine($"kind={failure.Kind} provider={failure.ProviderCode} correlation={failure.CorrelationId}"); throw; }

@@ -1,0 +1,41 @@
+diff --git a/src/Data.NativeHost/HostStreamTransport.cs b/src/Data.NativeHost/HostStreamTransport.cs
+index 1b67084..8a598bd 100644
+--- a/src/Data.NativeHost/HostStreamTransport.cs
++++ b/src/Data.NativeHost/HostStreamTransport.cs
+@@ -11,14 +11,21 @@ internal sealed class HostStreamTransport : IStreamTransport
+     private readonly int _rows;
+     private readonly CancellationToken _token;
+     private readonly CloseController _close;
++    private readonly Func<nint> _createFetch;
++    private readonly Func<nint, IStreamBatch> _takeBatch;
+     internal HostStreamTransport(DataSource source, DatabaseOwner cursor, int rows, CancellationToken token)
+-    { _source = source; _cursor = cursor; _rows = rows; _token = token; _close = new(source, cursor, cursor.Dispose); }
+-    public Task<IStreamBatch> FetchAsync() => _source.Start(() => NativeHost.Fetch(_cursor, _rows, _source.Limits.MaxBatchBytes), operation =>
++    {
++        _source = source; _cursor = cursor; _rows = rows; _token = token; _close = new(source, cursor, cursor.Dispose);
++        _createFetch = CreateFetch; _takeBatch = TakeBatch;
++    }
++    public Task<IStreamBatch> FetchAsync() => _source.Start(_createFetch, _takeBatch, _token);
++    private nint CreateFetch() => NativeHost.Fetch(_cursor, _rows, _source.Limits.MaxBatchBytes);
++    private IStreamBatch TakeBatch(nint operation)
+     {
+         var owner = NativeHost.TakeBuffer(_source.Binding, operation);
+         try { return (IStreamBatch)new HostStreamBatch(owner, checked((int)_source.Limits.MaxBatchBytes)); }
+         catch { owner.Dispose(); throw; }
+-    }, _token);
++    }
+     public void RequestStop() => _close.Request();
+     public async Task<StreamRetirement> JoinAsync()
+     { _close.Request(); await _close.JoinAsync().ConfigureAwait(false); var snapshot = _close.Snapshot; return new(snapshot.LocalResourcesReleased, snapshot.ConnectionDisposition == ConnectionDisposition.Usable, 0); }
+diff --git a/tests/Data.NativeHost/Program.cs b/tests/Data.NativeHost/Program.cs
+index d3b96dd..cd5bd40 100644
+--- a/tests/Data.NativeHost/Program.cs
++++ b/tests/Data.NativeHost/Program.cs
+@@ -11,6 +11,7 @@
+ using System.Buffers.Binary;
+ 
+ if (await SnapshotProbe.RunIfRequested(args)) return;
++if (await FetchProbe.RunIfRequested(args)) return;
+ Console.WriteLine("snapshot parser oracle inputs=" + SnapshotProbe.Verify());
+ SnapshotProbe.VerifyAllocationBudget();
+ try { await Suite.Run(); } catch (DatabaseException failure) { Console.Error.WriteLine($"kind={failure.Kind} provider={failure.ProviderCode} correlation={failure.CorrelationId}"); throw; }

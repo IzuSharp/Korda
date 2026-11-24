@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "task": "DB-Perf-01",
+  "purpose": "Exact historical iteration-12 diagnostic scripts and dirty patches; excluded from active product/consumer builds.",
+  "originEvidenceIndex": "ledger/evidence/batches/DB-Perf-01/checkpoints/iteration-12-and-provenance-v1/files.json",
+  "inputs": [
+    {
+      "sha256": "77a74ccb23bbd0a2abdca8765d3a7e0bda2ab8f3e466e882cc13cbef8d235021",
+      "bytes": 2597,
+      "sourcePath": "measurements/fetch-delegates-v1/after-build/source.patch",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/77a74ccb23bbd0a2abdca8765d3a7e0bda2ab8f3e466e882cc13cbef8d235021/source.patch",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "f260c73a98b278cc514efb1fb01cb03af17009bd84a71c242f4cef3ed2ed7955",
+      "bytes": 656,
+      "sourcePath": "measurements/fetch-delegates-v1/before-build/source.patch",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/f260c73a98b278cc514efb1fb01cb03af17009bd84a71c242f4cef3ed2ed7955/source.patch",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "8bcd81b1b6e33d945c59133dfccd77bddc1a48161efc13f5e4e22c1fc40e8903",
+      "bytes": 3567,
+      "sourcePath": "measurements/fetch-delegates-v1/build.py",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/8bcd81b1b6e33d945c59133dfccd77bddc1a48161efc13f5e4e22c1fc40e8903/build.py",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "b3687221aab5e2c34c8c093c046a18f5b525afd724b0df89961706185592d1fc",
+      "bytes": 1749,
+      "sourcePath": "measurements/fetch-delegates-v1/candidate.patch",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/b3687221aab5e2c34c8c093c046a18f5b525afd724b0df89961706185592d1fc/candidate.patch",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "9a62d6ba480475ad1a5ea54917eca1027830d4e01c4ac02c37f7cea34d767f16",
+      "bytes": 2403,
+      "sourcePath": "measurements/fetch-delegates-v1/run_correctness.py",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/9a62d6ba480475ad1a5ea54917eca1027830d4e01c4ac02c37f7cea34d767f16/run_correctness.py",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "e681cd724beb651aa769d936966fea32a5a8b79e46ab420dc2211327e5e13992",
+      "bytes": 3054,
+      "sourcePath": "measurements/fetch-delegates-v1/run_probe.py",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/e681cd724beb651aa769d936966fea32a5a8b79e46ab420dc2211327e5e13992/run_probe.py",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "82853c668bc4ed4f3f12be28adda40daee97c777679f5bfa82cca87aa546c3d1",
+      "bytes": 16848,
+      "sourcePath": "measurements/final-allocation-provenance-v2/recovered-source/82853c668bc4ed4f3f12be28adda40daee97c777679f5bfa82cca87aa546c3d1.py",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/82853c668bc4ed4f3f12be28adda40daee97c777679f5bfa82cca87aa546c3d1/82853c668bc4ed4f3f12be28adda40daee97c777679f5bfa82cca87aa546c3d1.py",
+      "bindingStatus": "pending_harness_commit"
+    }
+  ]
+}
