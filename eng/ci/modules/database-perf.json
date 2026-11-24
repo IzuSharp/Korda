@@ -1,0 +1,6 @@
+{
+  "database-perf-probes": {
+    "tests": ["benchmarks/Database/"],
+    "run": ["python3", "benchmarks/Database/check.py"]
+  }
+}
