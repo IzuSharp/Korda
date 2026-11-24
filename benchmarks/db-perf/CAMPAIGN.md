@@ -9,7 +9,7 @@ launch a competing long run. Both implementations now await transaction
 retirement before issuing post-commit fixture DDL.
 
 This directory contains an executable campaign path, not a completed performance
-claim. The checked-in request is disabled. The batch ledger and accepted evidence
+claim. The checked-in request explicitly enables this task campaign. The batch ledger and accepted evidence
 live in `IzuSharp/Plan`, `ledger/evidence/batches/DB-Perf-01/handoff-linux.md`.
 Only observations actually recorded on the admitted VM can receive long-segment
 credit. Eight observed segments do not establish whole-framework zero allocation,
@@ -58,9 +58,9 @@ outside all timing boundaries. No credential is written to the bundle.
 
 ## Dedicated measurement environment
 
-`.github/workflows/db-perf-campaign.yml` currently has only a manual dispatch
-trigger. The final reviewed opt-in may add a task-branch push trigger restricted
-to `campaign-request.json`; ordinary pull-request CI must remain short. The
+`.github/workflows/db-perf-campaign.yml` has a manual dispatch trigger and a
+task-branch push trigger restricted to `campaign-request.json`; ordinary
+pull-request CI remains short. The
 measurement job has a 360-minute timeout. All eight sequential long steps run in
 that single job and therefore on the same hosted VM. Every step uploads a distinct
 checkpoint artifact, so a later failure cannot delete an earlier checkpoint.
@@ -72,7 +72,7 @@ settings. Each ordinary cell uses `measurement seconds + idle windows × 5 secon
 native currently has two idle windows, managed
 routes one; same-process recovery has one final idle window for every route.
 The maximum configured schedule assumes one attempt per step, both distinct
-scheduled concurrencies and all three midpoint refinements execute. Reviewed
+scheduled concurrencies and all three bounded rate refinements execute. Reviewed
 retries consume the remaining finite budget and may prevent completion:
 
 | Layer, across both databases | Configured seconds |
@@ -82,7 +82,7 @@ retries consume the remaining finite budget and may prevent completion:
 | Native attribution layers | 120 |
 | Closed-loop concurrency ramp | 850 |
 | Scheduled-rate coarse grid | 1,040 |
-| Up to three midpoint refinements per route/concurrency | 540 |
+| Up to three halving/midpoint refinements per route/concurrency | 540 |
 | Frozen-rate validation | 170 |
 | Dynamic/prepared short projections | 340 |
 | Fully consumed 8,192-row heavy streams | 340 |
@@ -211,9 +211,12 @@ The calibration has distinct purposes:
 3. A scheduled-rate grid runs at the frozen long concurrency and the best
    concurrency observed in the closed-loop ramp. It reports the highest observed
    success throughput satisfying the same error/rejection and scheduled-p99
-   thresholds. If a tested successful rate has a higher tested failing rate, up
-   to three five-second midpoint windows narrow that observed bracket while its
-   relative gap exceeds 5%. Selection inputs, prior failures, each new result and
+   thresholds. If every grid rate fails, the next refinement tests half the
+   lowest observed rate. Once a tested successful rate has a higher tested
+   failing rate, midpoint windows narrow that observed bracket while its relative
+   gap exceeds 5%. Halving and midpoint observations share the same limit of
+   three five-second windows per route/concurrency; no extra timing budget is
+   added. If none passes, calibration still fails. Selection inputs, prior failures, each new result and
    the final bracket are retained. There is no retry to select a preferred sample
    and no unlimited expansion when an upper failure is absent. Five-second
    refinements are explicitly short observations; the best tested rate and its

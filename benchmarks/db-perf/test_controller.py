@@ -607,6 +607,54 @@ class ControllerTests(unittest.TestCase):
         self.assertFalse(unbounded["execute"])
         self.assertEqual(unbounded["status"], "upper_failure_unobserved")
 
+    def test_capacity_search_can_find_a_lower_scheduled_rate_without_retrying_failures(self):
+        def point(name, rate, passed, concurrency=4):
+            return {"name": name, "concurrency": concurrency, "rate": rate, "sloPassed": passed,
+                    "rawPath": name + ".json", "rawSha256": "a" * 64}
+        # The observed PostgreSQL before grid had no passing C4 point. A C8
+        # success must not satisfy the frozen C4 comparison or prevent backoff.
+        points = [point("grid-low", 427.032, False), point("grid-high", 640.548, False),
+                  point("other-concurrency", 1065.88, True, 8)]
+        original = copy.deepcopy(points)
+        selection = campaign.capacity_refinement(points, 4, 0.05)
+        self.assertEqual(selection["status"], "next_bounded_halving")
+        self.assertTrue(selection["execute"])
+        self.assertEqual(selection["proposedRate"], 213.516)
+        self.assertIsNone(selection["lower"])
+        self.assertEqual(selection["upper"]["name"], "grid-low")
+        self.assertEqual(len(selection["selectionInputs"]), 2)
+        self.assertEqual(points, original)
+        points.append(point("backoff-0", selection["proposedRate"], False))
+        selection = campaign.capacity_refinement(points, 4, 0.05)
+        self.assertEqual(selection["proposedRate"], 106.758)
+        points.append(point("backoff-1", selection["proposedRate"], True))
+        selection = campaign.capacity_refinement(points, 4, 0.05)
+        self.assertEqual(selection["status"], "next_bounded_midpoint")
+        self.assertEqual(selection["proposedRate"], 160.137)
+        self.assertEqual(selection["lower"]["name"], "backoff-1")
+        self.assertEqual(selection["upper"]["name"], "backoff-0")
+        self.assertEqual(len(selection["selectionInputs"]), 4)
+
+    def test_capacity_backoff_stops_at_the_same_finite_iteration_and_rate_limits(self):
+        def failed(rate):
+            return {"name": str(rate), "concurrency": 4, "rate": rate, "sloPassed": False,
+                    "rawPath": str(rate) + ".json", "rawSha256": "b" * 64}
+        request = json.loads((HERE / "campaign-request.json").read_text())
+        self.assertEqual(request["measurement"]["capacityRefinementSteps"], 3)
+        points = [failed(427.032)]
+        rates = []
+        for _ in range(request["measurement"]["capacityRefinementSteps"]):
+            selection = campaign.capacity_refinement(points, 4, 0.05)
+            self.assertTrue(selection["execute"])
+            rates.append(selection["proposedRate"])
+            points.append(failed(selection["proposedRate"]))
+        self.assertEqual(rates, [213.516, 106.758, 53.379])
+        self.assertFalse(any(point["sloPassed"] for point in points))
+        self.assertEqual(campaign.capacity_refinement([], 4, 0.05)["status"], "no_observed_rate")
+        minimum = campaign.capacity_refinement([failed(0.001)], 4, 0.05)
+        self.assertFalse(minimum["execute"])
+        self.assertEqual(minimum["status"], "rate_resolution_or_existing_observation_limit")
+
     def test_resource_noise_cannot_become_a_capacity_failure_bracket(self):
         admission = {"maximumStealFraction": 0.005, "maximumIntervalStealFraction": 0.05}
         resources = {"quotaStableAndAvailable": True, "guestThrottleEvents": 0,

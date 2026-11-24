@@ -567,7 +567,19 @@ def capacity_refinement(points, concurrency, maximum_relative_gap):
     result = {"concurrency": concurrency, "selectionInputs": inputs, "execute": False,
               "assumption": "local observed success/failure bracket; monotonic capacity and global maximum are not proven"}
     if not passing:
-        return dict(result, status="no_qualified_rate", lower=None, upper=None, relativeGap=None)
+        if not selected:
+            return dict(result, status="no_observed_rate", lower=None, upper=None, relativeGap=None)
+        # A closed-loop estimate can exceed the scheduled-latency capacity even
+        # at the grid's lowest fraction. Spend the existing finite refinement
+        # budget on lower rates before a passing/failing bracket is available.
+        # Every failed point remains an input; this never retries or accepts it.
+        upper = selected[0]
+        rate = math.floor(upper["rate"] / 2 * 1000) / 1000
+        result.update(lower=None, upper={key: upper[key] for key in ("name", "rate", "rawSha256")},
+                      relativeGap=None, proposedRate=rate)
+        if rate <= 0 or rate >= upper["rate"] or any(point["rate"] == rate for point in selected):
+            return dict(result, status="rate_resolution_or_existing_observation_limit")
+        return dict(result, status="next_bounded_halving", execute=True)
     lower = max(passing, key=lambda point: point["rate"])
     failed = [point for point in selected if not point["sloPassed"] and point["rate"] > lower["rate"]]
     result.update(lower={key: lower[key] for key in ("name", "rate", "rawSha256")},
@@ -1080,7 +1092,7 @@ class Campaign:
                     "maximumQualifiedOfferedRateAtFrozenConcurrency": max(p["rate"] for p in at_frozen_concurrency),
                     "refinementSelections": refinements, "observedBrackets": brackets,
                     "refinementWindowSeconds": self.settings["capacityRefinementSeconds"],
-                    "status": "best tested scheduled-rate result with retained finite grid and bounded midpoint observations; short windows and observed brackets do not prove a global maximum"}
+                    "status": "best tested scheduled-rate result with retained finite grid and bounded halving/midpoint observations; short windows and observed brackets do not prove a global maximum"}
             # Freeze the common offered rate without using the optimized route to
             # lower its comparison load after seeing a regression.
             rate = math.floor(min(scheduled[route]["maximumQualifiedOfferedRateAtFrozenConcurrency"]
