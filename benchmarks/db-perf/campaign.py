@@ -22,7 +22,7 @@ import subprocess
 import time
 
 from campaign_build import PROVIDERS, ROUTES, duration_budget, prepare, require, request_record, validate_heavy_workload
-from run import cgroup_snapshot, database, execute, host_cpu, process, sample, sha, utc, write_json
+from run import cgroup_snapshot, database, execute, host_cpu, process, sample, server_cpu_group_delta, sha, utc, write_json
 
 
 def get(value, *keys, default=None):
@@ -453,6 +453,20 @@ def summarize_resources(path, measurement):
             "sampledPeakRssBytes": max((s["sampledRssBytes"] for s in memory), default=None),
             "steadyMedianPssBytes": statistics.median(pss) if pss else None, "sampledPeakPssBytes": max(pss, default=None),
             "rssCompleteSamples": len(memory), "pssCompleteSamples": len(pss), "processTreeSnapshotsAreNonAtomic": True}
+        if side == "server":
+            result[side].update(procTreeUserCpuSeconds=user, procTreeSystemCpuSeconds=system,
+                                procTreeCounterMonotonic=user >= 0 and system >= 0)
+            groups = [item.get("serverCpuGroup") for item in steady]
+            if all(isinstance(group, dict) for group in groups):
+                try:
+                    for first, last in zip(groups, groups[1:]):
+                        server_cpu_group_delta(first, last)
+                    result[side].update(server_cpu_group_delta(groups[0], groups[-1]))
+                    result[side]["cpuScope"] = "Task-owned cgroup cumulative user/system includes exited PostgreSQL children; complete acquisition intervals inside client steady+drain; unsampled edges are not extrapolated"
+                except (ValueError, KeyError, TypeError) as error:
+                    result[side].update(cpuAccounting="invalid_task_group", counterMonotonic=False, cpuAccountingError=str(error))
+            else:
+                result[side].update(cpuAccounting="unavailable_task_group", counterMonotonic=False)
     return result
 
 
@@ -474,7 +488,40 @@ def resource_quality(resources, provider, admission_settings):
     for side in ("client", "server") if provider == "postgresql" else ("client",):
         if resources.get(side, {}).get("counterMonotonic") is not True:
             reasons.append(side + " CPU counters were uncertain")
+    if provider == "postgresql":
+        server = resources.get("server", {})
+        if server.get("cpuAccounting") != "task_owned_cgroup_v2" or server.get("taskGroupThrottleEvents") != 0:
+            reasons.append("PostgreSQL task-group cumulative CPU was unavailable or throttled")
     return {"passed": not reasons, "reasons": reasons}
+
+
+def server_owner_accounting(record):
+    """A retired, independently owned group is required for formal PG cells."""
+    require(record.get("exitCode") == 0 and not any(record.get(key) for key in
+            ("shutdownError", "cpuGroupError", "finalSampleError")), "PostgreSQL owner/accounting did not retire cleanly")
+    group = record.get("serverCpuGroup", {})
+    require(all(group.get(key) is True for key in ("required", "created", "removed", "parentControlsUnchanged")),
+            "PostgreSQL task-group creation/cleanup/parent constraints are unverified")
+    descriptor = group["descriptor"]
+    require(descriptor["serverIdentity"] == {key: record["identity"][key] for key in ("pid", "startTicks")},
+            "PostgreSQL task-group owner identity differs")
+    final = group["emptyAfterOwnerJoin"]
+    for snapshot in (group["beforeClients"], final):
+        require(all(snapshot[key] == descriptor[key] for key in ("path", "deviceInode", "controls", "serverIdentity")),
+                "PostgreSQL raw cumulative snapshot differs from its owned group")
+    require(final.get("members") == [] and final.get("exitedDuringMemberAcquisition") == [],
+            "PostgreSQL task-group still has observable owners")
+    measured = server_cpu_group_delta(group["beforeClients"], final)
+    require(measured == group["clientsThroughShutdownCpu"], "PostgreSQL owner CPU differs from raw cumulative counters")
+    cross = group.get("wait4CrossCheck", {})
+    require(all(type(record.get(key)) in (int, float) and math.isfinite(record[key]) and record[key] >= 0 for key in
+            ("processLifetimeUserCpuSeconds", "processLifetimeSystemCpuSeconds")), "PostgreSQL OS lifetime CPU is unavailable")
+    require(cross.get("groupLifetimeUserSeconds") == final["cpu"]["user_usec"] / 1e6
+            and cross.get("groupLifetimeSystemSeconds") == final["cpu"]["system_usec"] / 1e6
+            and cross.get("wait4ProcessLifetimeUserSeconds") == record.get("processLifetimeUserCpuSeconds")
+            and cross.get("wait4ProcessLifetimeSystemSeconds") == record.get("processLifetimeSystemCpuSeconds"),
+            "PostgreSQL OS lifetime cross-check is missing or differs from raw counters")
+    return {"groupControls": descriptor["controls"], "parentControls": group["parentControlsBefore"]}
 
 
 def capacity_refinement(points, concurrency, maximum_relative_gap):
@@ -525,6 +572,8 @@ class Campaign:
         for key, expected in self.bundle_manifest["preparationImage"].items():
             require(expected and os.environ.get(key) == expected, "Prepare/measurement runner images differ: " + key)
         self.request = request_record(self.bundle / "request.json")
+        require(self.request["admission"].get("postgresCpuAccounting") == "task-owned-cgroup-v2",
+                "Formal PostgreSQL measurement requires task-owned cumulative cgroup CPU")
         self.workload = json.loads((self.bundle / "workload.json").read_text())
         self.cases = self.request["workload"]["cases"]
         require(self.cases and len(self.cases) == len(set(self.cases)), "Freeze a nonempty unique case sequence")
@@ -588,7 +637,7 @@ class Campaign:
                 owner_path = directory / "postgres-owner.json"
                 require(owner_path.exists(), "Interrupted PostgreSQL owner has no retirement receipt")
                 owner = json.loads(owner_path.read_text())
-                require(owner.get("exitCode") == 0 and not owner.get("shutdownError"), "PostgreSQL owner did not retire cleanly")
+                server_owner_accounting(owner)
             prior = dict(prior, evidenceFiles={str(path.relative_to(self.output)): sha(path) for path in directory.iterdir()
                 if path.is_file() and not path.name.startswith("database.sqlite")})
         retries = self.state.setdefault("reviewedRetries", [])
@@ -609,8 +658,20 @@ class Campaign:
         return {"provider": provider, "connection": str(directory / "database.sqlite"), "commands": [],
                 "postgres": {"bin": str(self.bundle / self.bundle_manifest["postgresBin"]), "data": str(directory / "pgdata"),
                     "cpus": ",".join(map(str, self.request["admission"]["serverCpus"])),
+                    "cpuAccounting": self.request["admission"]["postgresCpuAccounting"],
                     "maxConnections": max(32, max(self.settings["capacityConcurrency"]) + 8),
                     "maxClientConcurrency": max(self.settings["capacityConcurrency"])}}
+
+    def verify_server_accounting(self, directory):
+        path = directory / "postgres-owner.json"
+        settings = server_owner_accounting(json.loads(path.read_text()))
+        if "postgresCpuAccountingSettings" in self.state:
+            require(settings == self.state["postgresCpuAccountingSettings"],
+                    "PostgreSQL task-group scheduling/ancestor constraints changed across comparison cells")
+        else:
+            self.state["postgresCpuAccountingSettings"] = settings
+            self.persist()
+        return sha(path)
 
     def seed_path(self, provider, workload="primary"):
         return self.output / "seeds" / provider if workload == "primary" else self.output / "seeds" / workload / provider
@@ -624,6 +685,9 @@ class Campaign:
             require(previous["workloadSha256"] == context["sha256"], "Cached seed belongs to a different workload")
             for name, digest in previous["files"].items():
                 require(sha(target / name) == digest, "Frozen seed was changed")
+            if provider == "postgresql":
+                require(self.verify_server_accounting(target) == previous.get("serverCpuOwnerSha256"),
+                        "Cached PostgreSQL seed owner/accounting evidence changed")
             return
         require(not target.exists(), "Interrupted seed initialization must be retained and investigated before retry")
         target.mkdir(parents=True)
@@ -634,11 +698,13 @@ class Campaign:
                 "argv": [str(self.executable(provider, "korda_before")), "--connection", "{connection}", "--initialize",
                          "--tenants", str(data["tenants"]), "--orders-per-tenant", str(data["ordersPerTenant"])]}
         with database(plan, target) as (connection, server):
-            execute(item, connection, server, target, 1)
+            execute(item, connection, server, target, 1, server_cpu_group=plan["postgres"].get("activeCpuGroup"))
+        cpu_owner = self.verify_server_accounting(target) if provider == "postgresql" else None
         files = {str(p.relative_to(target)): sha(p) for p in target.rglob("*") if p.is_file() and
                  (p.is_relative_to(target / "pgdata") or p.name.startswith("database.sqlite"))}
         require(bool(files), "Dataset initialization produced no snapshot")
-        write_json(receipt, {"task": "DB-Perf-01", "workloadId": workload, "workloadSha256": context["sha256"], "files": files})
+        write_json(receipt, {"task": "DB-Perf-01", "workloadId": workload, "workloadSha256": context["sha256"],
+                             "files": files, "serverCpuOwnerSha256": cpu_owner})
 
     def cell_context(self, workload, construction_mode=None, case_ids=None):
         context = self.workloads[workload]
@@ -692,6 +758,9 @@ class Campaign:
                     ("nativeContract", native_contract), ("workloadId", workload), ("workloadSha256", context["sha256"]),
                     ("workloadCaseIds", context["cases"]), ("diagnostic", diagnostic), ("constructionMode", construction_mode))), "Resumed cell arguments differ")
             require(not require_coverage or observed["measurement"]["fullCaseCoverage"], "Cached cell did not execute the complete workload")
+            if provider == "postgresql":
+                require(self.verify_server_accounting((self.output / observed["rawPath"]).parent) == observed.get("serverCpuOwnerSha256"),
+                        "Cached PostgreSQL owner/accounting evidence changed")
             if diagnostic is None:
                 quality = resource_quality(observed["resources"], provider, self.request["admission"])
                 require(observed["resourceQualityPassed"] == quality["passed"]
@@ -740,7 +809,9 @@ class Campaign:
             "bundleManifestSha256": sha(self.bundle / "bundle.json"), "environmentIdentity": self.identity,
             "controllerSources": {name: sha(self.bundle / "harness" / name) for name in ("run.py", "campaign.py", "campaign_build.py")}})
         with database(plan, attempt) as (connection, server):
-            command = execute(item, connection, server, attempt, self.settings["sampleSeconds"], check=False)
+            command = execute(item, connection, server, attempt, self.settings["sampleSeconds"], check=False,
+                              server_cpu_group=plan["postgres"].get("activeCpuGroup"))
+        cpu_owner = self.verify_server_accounting(attempt) if provider == "postgresql" else None
         require(result_path.exists() and command["exitCode"] in (0, 1) and not command["observerErrors"]
                 and not command["timedOut"], "Measured command failed; preserved attempt cannot earn credit")
         raw = json.loads(result_path.read_text())
@@ -819,6 +890,7 @@ class Campaign:
                     "resourceQualityPassed": quality["passed"] if quality is not None else None,
                     "resourceQualityReasons": quality["reasons"] if quality is not None else [],
                     "seedReceiptSha256": sha(seed / "seed.json"),
+                    "serverCpuOwnerSha256": cpu_owner,
                     "rate": rate, "nativeContract": native_contract, "measurement": measurement, "resources": resources, "rawPath": str(result_path.relative_to(self.output)),
                     "rawSha256": sha(result_path), "commandSha256": sha(attempt / "client.command.json"),
                     "sampleSha256": sha(attempt / "client.resources.jsonl"), "sloPassed": slo,

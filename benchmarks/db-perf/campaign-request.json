@@ -141,6 +141,7 @@
     }
   },
   "admission": {
+    "postgresCpuAccounting": "task-owned-cgroup-v2",
     "clientCpus": [
       0,
       1

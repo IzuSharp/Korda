@@ -18,6 +18,7 @@ import signal
 import socket
 import subprocess
 import time
+import uuid
 
 
 def utc():
@@ -166,15 +167,204 @@ def cgroup_snapshot():
     return result
 
 
-def sample(client_pid=None, server_pid=None):
+def cpu_group_controls(path):
+    """Observe scheduling/limit settings; this observer never changes them."""
+    values = {}
+    for name in ("cpu.max", "cpu.weight", "cpuset.cpus.effective", "memory.max", "cgroup.subtree_control"):
+        try:
+            values[name] = (Path(path) / name).read_text().strip()
+        except OSError as error:
+            values[name] = {"unavailableErrno": error.errno}
+    return values
+
+
+def cpu_group_parent_controls(snapshot):
+    if not snapshot.get("available") or not snapshot.get("ancestors"):
+        raise ValueError("PostgreSQL accounting needs the observable current cgroup-v2 ancestry")
+    return [{key: item[key] for key in ("path", "cpu.max", "memory.max", "cpuset.cpus.effective", "cgroup.subtree_control")}
+            for item in snapshot["ancestors"]]
+
+
+def parse_cpu_group_stat(text):
+    values = {}
+    for line in text.splitlines():
+        key, value = line.split()
+        if key in values or not value.isdigit():
+            raise ValueError("Invalid/duplicate task cgroup CPU counter")
+        values[key] = int(value)
+    if not {"usage_usec", "user_usec", "system_usec"} <= values.keys():
+        raise ValueError("Task cgroup lacks cumulative CPU usage/user/system counters")
+    return values
+
+
+def process_cpu_identity(pid):
+    try:
+        raw = Path(f"/proc/{pid}/stat").read_text()
+        fields = raw[raw.rfind(")") + 2:].split()
+        return {"pid": pid, "parentPid": int(fields[1]), "startTicks": int(fields[19])}
+    except (FileNotFoundError, ProcessLookupError):
+        return None
+
+
+def validate_server_group_members(root, members, lookup=process_cpu_identity):
+    """Reject foreign/PID-reused owners, retaining exits during acquisition."""
+    live, exited = [], []
+    for pid in members:
+        item = lookup(pid)
+        if item is None:
+            exited.append(pid)
+            continue
+        cursor, seen = item, set()
+        while cursor["pid"] != root["pid"]:
+            if cursor["pid"] in seen or cursor["parentPid"] <= 1:
+                raise ValueError("A foreign process entered the task-owned PostgreSQL cgroup")
+            seen.add(cursor["pid"])
+            cursor = lookup(cursor["parentPid"])
+            if cursor is None:
+                raise ValueError("PostgreSQL cgroup member ancestry became unobservable")
+        if cursor["startTicks"] != root["startTicks"]:
+            raise ValueError("PostgreSQL cgroup root PID was reused")
+        confirmed = lookup(pid)
+        if confirmed is None:
+            exited.append(pid)
+        elif confirmed["startTicks"] != item["startTicks"]:
+            raise ValueError("PostgreSQL cgroup member PID was reused")
+        else:
+            live.append(item)
+    return live, exited
+
+
+def server_cpu_group_snapshot(descriptor, *, empty=False):
+    path = Path(descriptor["path"])
+    identity = path.stat()
+    if (path.resolve() != path or path.parent != Path(descriptor["parentPath"])
+            or not re.fullmatch(r"db-perf-01-pg-[0-9a-f]{24}", path.name)
+            or [identity.st_dev, identity.st_ino] != descriptor["deviceInode"]):
+        raise ValueError("Task-owned PostgreSQL cgroup identity changed")
+    controls = cpu_group_controls(path)
+    if controls != descriptor["controls"] or any(child.is_dir() for child in path.iterdir()):
+        raise ValueError("Task-owned PostgreSQL cgroup controls or child groups changed")
+    members = sorted(int(value) for value in (path / "cgroup.procs").read_text().split())
+    if empty:
+        if members:
+            raise ValueError("Task-owned PostgreSQL cgroup remains populated after owner join")
+        live, exited = [], []
+    else:
+        root = descriptor["serverIdentity"]
+        if root["pid"] not in members:
+            raise ValueError("PostgreSQL root is outside its task-owned accounting group")
+        live, exited = validate_server_group_members(root, members)
+        if not any(item["pid"] == root["pid"] for item in live):
+            raise ValueError("PostgreSQL root exited during CPU-group acquisition")
+    return {"path": str(path), "deviceInode": descriptor["deviceInode"], "controls": controls,
+            "serverIdentity": descriptor.get("serverIdentity"), "members": live, "exitedDuringMemberAcquisition": exited,
+            "membersVerified": True, "cpu": parse_cpu_group_stat((path / "cpu.stat").read_text())}
+
+
+def server_cpu_group_delta(first, last):
+    for key in ("path", "deviceInode", "controls", "serverIdentity"):
+        if first.get(key) != last.get(key):
+            raise ValueError("PostgreSQL cumulative CPU accounting group changed within the interval")
+    if not first.get("membersVerified") or not last.get("membersVerified"):
+        raise ValueError("PostgreSQL CPU accounting membership was not verified")
+    deltas = {}
+    for key in ("usage_usec", "user_usec", "system_usec"):
+        left, right = first["cpu"].get(key), last["cpu"].get(key)
+        if type(left) is not int or type(right) is not int or not 0 <= left <= right:
+            raise ValueError("PostgreSQL cumulative CPU counters were missing or moved backwards")
+        deltas[key] = right - left
+    throttle = 0
+    if "nr_throttled" in first["cpu"] or "nr_throttled" in last["cpu"]:
+        left, right = first["cpu"].get("nr_throttled"), last["cpu"].get("nr_throttled")
+        if type(left) is not int or type(right) is not int or not 0 <= left <= right:
+            raise ValueError("PostgreSQL task-group bandwidth counters were missing or moved backwards")
+        throttle = right - left
+    elif isinstance(first["controls"].get("cpu.max"), str):
+        raise ValueError("Enabled PostgreSQL task-group bandwidth accounting is unavailable")
+    return {"userCpuSeconds": deltas["user_usec"] / 1e6, "systemCpuSeconds": deltas["system_usec"] / 1e6,
+            "usageCpuSeconds": deltas["usage_usec"] / 1e6, "rawStartMicroseconds": first["cpu"],
+            "rawEndMicroseconds": last["cpu"], "counterMonotonic": True,
+            "cpuAccounting": "task_owned_cgroup_v2", "taskGroupThrottleEvents": throttle,
+            "cpuGroupIdentity": {key: first[key] for key in ("path", "deviceInode", "serverIdentity")}}
+
+
+class PostgresCpuGroup:
+    """Own one fresh child of the observer's existing cgroup, with no limit edits.
+
+    cpu.stat usage/user/system exist even with the CPU controller disabled:
+    https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files
+    """
+    def __init__(self):
+        self.descriptor = None
+        self.created = False
+        self.record = {"required": True, "created": False, "removed": False, "commands": [],
+                       "scope": "Cumulative PostgreSQL task-group CPU includes exited children; launcher entry occurs before postgres exec/fork; sudo/tee finish outside the measured server work"}
+
+    def privileged(self, argv):
+        command = ["sudo", "-n", *map(str, argv)]
+        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=10)
+        self.record["commands"].append({"argv": command, "exitCode": result.returncode,
+                                        "stdout": result.stdout, "stderr": result.stderr})
+        if result.returncode:
+            raise RuntimeError("Task-owned PostgreSQL cgroup operation failed: " + result.stderr.strip())
+
+    def create(self):
+        before = cgroup_snapshot()
+        self.record["parentControlsBefore"] = cpu_group_parent_controls(before)
+        parent = Path(before["ancestors"][0]["path"]).resolve()
+        path = parent / ("db-perf-01-pg-" + uuid.uuid4().hex[:24])
+        self.record["requestedPath"] = str(path)
+        if path.exists():
+            raise ValueError("A task cgroup must be newly created, never reused")
+        self.privileged(["mkdir", "--", path])
+        self.created = self.record["created"] = True
+        identity = path.stat()
+        self.descriptor = {"path": str(path), "parentPath": str(parent), "deviceInode": [identity.st_dev, identity.st_ino],
+                           "controls": cpu_group_controls(path)}
+        self.record["descriptor"] = self.descriptor
+        self.record["emptyBeforeLaunch"] = server_cpu_group_snapshot(self.descriptor, empty=True)
+        self.check_parent()
+
+    def check_parent(self):
+        current = cpu_group_parent_controls(cgroup_snapshot())
+        if current != self.record["parentControlsBefore"]:
+            raise ValueError("Parent cgroup limits/controllers changed during task accounting")
+        self.record["parentControlsUnchanged"] = True
+
+    def launch_command(self, command):
+        if not self.created or self.descriptor is None:
+            raise ValueError("PostgreSQL cgroup must exist before constructing its launcher")
+        # The pipeline must succeed before exec. Arguments are separate from this
+        # constant script; postgres cannot fork any backend before group entry.
+        script = 'set -eu\nprintf "%s\\n" "$$" | sudo -n tee -- "$1/cgroup.procs" >/dev/null\nshift\nexec "$@"'
+        return ["/bin/sh", "-c", script, "db-perf-postgres-cgroup", self.descriptor["path"], *command]
+
+    def attach_identity(self, identity):
+        if identity is None:
+            raise ValueError("PostgreSQL launcher identity is unavailable")
+        self.descriptor["serverIdentity"] = {key: identity[key] for key in ("pid", "startTicks")}
+
+    def close(self):
+        if not self.created:
+            return
+        if self.descriptor is None:
+            raise RuntimeError("Created PostgreSQL cgroup has no verified identity; retain it for investigation")
+        self.record["emptyAfterOwnerJoin"] = server_cpu_group_snapshot(self.descriptor, empty=True)
+        self.check_parent()
+        self.privileged(["rmdir", "--", self.descriptor["path"]])
+        self.record["removed"] = True
+
+
+def sample(client_pid=None, server_pid=None, server_cpu_group=None):
     start = time.monotonic_ns()
     client, server = tree(client_pid) if client_pid else [], tree(server_pid) if server_pid else []
     quota = cgroup_snapshot()
     host = host_cpu()
+    group = server_cpu_group_snapshot(server_cpu_group) if server_cpu_group is not None else None
     acquired = time.monotonic_ns()
     return {"utc": utc(), "monotonicNs": start, "acquiredThroughMonotonicNs": acquired,
             "client": client, "server": server, "clientTotals": tree_totals(client),
-            "serverTotals": tree_totals(server), "hostCpuTicks": host, "guestQuota": quota}
+            "serverTotals": tree_totals(server), "serverCpuGroup": group, "hostCpuTicks": host, "guestQuota": quota}
 
 
 def reaped(child):
@@ -276,17 +466,31 @@ def database(plan, output):
         command = ["taskset", "-c", settings["cpus"], *command]
     receipt = {"argv": command, "startedUtc": utc(), "startedMonotonicNs": time.monotonic_ns(),
                "accounting": "parent plus live/reaped children; sampled tree snapshots are non-atomic"}
+    accounting = settings.get("cpuAccounting")
+    if accounting not in (None, "task-owned-cgroup-v2"):
+        raise ValueError("Unknown PostgreSQL CPU accounting contract")
+    cpu_group = PostgresCpuGroup() if accounting else None
     server, body_error = None, None
     with (output / "postgres.log").open("w") as log:
         try:
-            server = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+            launch = command
+            if cpu_group is not None:
+                cpu_group.create()
+                launch = cpu_group.launch_command(command)
+                receipt.update(launcherArgv=launch, accounting="task-owned cgroup-v2 cumulative CPU; proc tree and wait4 retained separately")
+            server = subprocess.Popen(launch, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
             receipt["identity"] = process(server.pid)
+            if cpu_group is not None:
+                cpu_group.attach_identity(receipt["identity"])
             deadline = time.monotonic() + 30
             while subprocess.run([binary / "pg_isready", "-h", "127.0.0.1", "-p", str(port), "-U", "korda"],
                                  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5).returncode:
                 if os.waitid(os.P_PID, server.pid, os.WEXITED | os.WNOHANG | os.WNOWAIT) or time.monotonic() > deadline:
                     raise RuntimeError("PostgreSQL failed to become ready; see postgres.log")
                 time.sleep(0.05)
+            if cpu_group is not None:
+                cpu_group.record["beforeClients"] = server_cpu_group_snapshot(cpu_group.descriptor)
+                settings["activeCpuGroup"] = cpu_group.descriptor
             base = [binary / "psql", "-h", "127.0.0.1", "-p", str(port), "-U", "korda", "-d", "postgres", "-At"]
             exists = subprocess.check_output([*base, "-c", "SELECT count(*) FROM pg_database WHERE datname='db_perf_01'"], text=True, timeout=10).strip()
             if exists == "0":
@@ -304,9 +508,11 @@ def database(plan, output):
             shutdown_error = None
             if server is not None:
                 try:
-                    receipt["finalBeforeShutdown"] = sample(server_pid=server.pid)
+                    receipt["finalBeforeShutdown"] = sample(server_pid=server.pid,
+                        server_cpu_group=cpu_group.descriptor if cpu_group is not None and "serverIdentity" in (cpu_group.descriptor or {}) else None)
                 except BaseException as error:
                     receipt["finalSampleError"] = {"type": type(error).__name__, "message": str(error)}
+                    shutdown_error = error
                 try:
                     receipt.update(usage_fields(stop_and_join(server, signal.SIGINT, grace_seconds=20)))
                     receipt["exitCode"] = server.returncode
@@ -315,13 +521,31 @@ def database(plan, output):
                 except BaseException as error:
                     receipt["shutdownError"] = {"type": type(error).__name__, "message": str(error)}
                     shutdown_error = error
+            if cpu_group is not None:
+                try:
+                    cpu_group.close()
+                    if "beforeClients" in cpu_group.record:
+                        cpu_group.record["clientsThroughShutdownCpu"] = server_cpu_group_delta(
+                            cpu_group.record["beforeClients"], cpu_group.record["emptyAfterOwnerJoin"])
+                    if receipt.get("processLifetimeUserCpuSeconds") is not None and cpu_group.descriptor is not None:
+                        total = cpu_group.record["emptyAfterOwnerJoin"]["cpu"]
+                        cpu_group.record["wait4CrossCheck"] = {
+                            "groupLifetimeUserSeconds": total["user_usec"] / 1e6,
+                            "groupLifetimeSystemSeconds": total["system_usec"] / 1e6,
+                            "wait4ProcessLifetimeUserSeconds": receipt["processLifetimeUserCpuSeconds"],
+                            "wait4ProcessLifetimeSystemSeconds": receipt["processLifetimeSystemCpuSeconds"],
+                            "scope": "Raw lifetime cross-check, not forced equality: group begins at launcher entry; wait4 includes earlier launcher work and reaped descendants"}
+                except BaseException as error:
+                    receipt["cpuGroupError"] = {"type": type(error).__name__, "message": str(error)}
+                    shutdown_error = error
+                receipt["serverCpuGroup"] = cpu_group.record
             receipt.update(finishedUtc=utc(), finishedMonotonicNs=time.monotonic_ns())
             write_json(output / "postgres-owner.json", receipt)
             if shutdown_error is not None and body_error is None:
                 raise RuntimeError("PostgreSQL owner did not retire cleanly; aborting subsequent measurements") from shutdown_error
 
 
-def execute(item, connection, server_pid, output, interval, *, check=True):
+def execute(item, connection, server_pid, output, interval, *, check=True, server_cpu_group=None):
     output = Path(output).resolve()
     validate_plan({"provider": "sqlite", "commands": [item]}, output)
     name = item["name"]
@@ -336,6 +560,8 @@ def execute(item, connection, server_pid, output, interval, *, check=True):
                "timeoutSeconds": item.get("timeoutSeconds", 300), "resourceSamples": paths[1].name,
                "measurementScope": "wait4 CPU/maxRSS are process-lifetime totals; steady measurements use consumer monotonic boundaries",
                "longRunAcceptance": False, "timedOut": False, "observerErrors": []}
+    if server_cpu_group is not None:
+        receipt["serverCpuGroupIdentity"] = server_cpu_group
     child, usage, interrupted = None, None, None
     try:
         with paths[0].open("x") as log, paths[1].open("x") as samples:
@@ -343,7 +569,7 @@ def execute(item, connection, server_pid, output, interval, *, check=True):
             receipt["clientIdentity"] = process(child.pid)
             deadline = time.monotonic() + receipt["timeoutSeconds"]
             while True:
-                record = sample(child.pid, server_pid)
+                record = sample(child.pid, server_pid, server_cpu_group)
                 receipt["lastSample"] = record
                 samples.write(json.dumps(record, separators=(",", ":")) + "\n")
                 samples.flush()
@@ -398,7 +624,8 @@ def main():
         "pss": "sampled smaps_rollup; unavailable memory is explicit; acquisition intervals and PID start ticks retained"})
     with database(plan, output) as (connection, server_pid):
         for item in plan["commands"]:
-            execute(item, connection, server_pid, output, args.sample_seconds)
+            execute(item, connection, server_pid, output, args.sample_seconds,
+                    server_cpu_group=plan.get("postgres", {}).get("activeCpuGroup"))
 
 
 if __name__ == "__main__":

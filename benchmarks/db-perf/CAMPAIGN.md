@@ -242,6 +242,36 @@ samples remain explicitly non-atomic. Missing RSS/PSS is unavailable, not zero.
 OS lifetime CPU/peak RSS, sampled steady peaks, application-reported CPU, native
 allocator observations and idle retention are distinct measurements.
 
+Formal PostgreSQL cells require task-owned cgroup-v2 cumulative CPU accounting.
+For each server owner the observer creates one fresh child of its current cgroup.
+It does not enable controllers, edit parent settings, change quotas or alter
+permissions. A fixed launcher writes only its own PID to that new group's
+`cgroup.procs`, waits for the write to succeed, then executes PostgreSQL. Every
+backend therefore inherits the group from its first fork. The launcher helper
+finishes before workload boundaries; its earlier setup CPU is not benchmark
+server work. A missing counter, failed entry, foreign member, reused PID, changed
+group identity or unjoined owner rejects the cell and preserves its receipts.
+
+The group's `cpu.stat` user/system/usage counters retain CPU from exited
+PostgreSQL backends. Raw cumulative start/end counters and the group device/inode
+are retained at every sample. Steady CPU uses complete sample acquisitions within
+the application's monotonic workload/drain boundary. The original process-tree
+own/reaped counters remain separately labeled non-atomic cross-checks, and final
+group totals are retained beside the OS `wait4` lifetime totals. Missing PSS/RSS
+remains explicit. A group must be empty after server join before this task may
+remove it; a failed or occupied group is retained for investigation.
+
+Creating a group also creates a scheduling-group identity. Its actual
+`cpu.weight`, `cpu.max`, effective cpuset and memory limit, together with unchanged
+ancestor constraints, are recorded and must match across all four PostgreSQL
+columns. No claim is made that group creation is invisible to scheduling.
+Task-group throttle events must be zero in ordinary timing cells. Kernel
+[CPU interface documentation](https://docs.kernel.org/admin-guide/cgroup-v2.html#cpu-interface-files)
+specifies that cumulative usage/user/system counters are readable even when the
+CPU controller is not enabled, so the observer does not enable it. Local negative
+and launcher tests are not evidence of actual VM cgroup admission; the dedicated
+preflight must create, observe and retire these owners successfully.
+
 Every ordinary timing cell must also pass the same guest-quota, zero-throttling,
 overall/interval steal and client/server CPU-counter quality checks before it
 can influence calibration, capacity refinement, fixed-load comparisons or long

@@ -168,6 +168,8 @@ def request_record(path, *, enabled=True):
         for field in ("maximumStealFraction", "maximumIdleBusyFraction", "maximumBeforeCv"):
             require(type(admission[field]) in (int, float) and math.isfinite(admission[field]) and 0 <= admission[field] < 1, "Invalid admission threshold " + field)
         require(5 <= admission["idleSeconds"] <= 30, "Idle admission duration must be finite and meaningful")
+        require(admission.get("postgresCpuAccounting") == "task-owned-cgroup-v2",
+                "Freeze task-owned cumulative PostgreSQL cgroup CPU accounting")
     return request
 
 
