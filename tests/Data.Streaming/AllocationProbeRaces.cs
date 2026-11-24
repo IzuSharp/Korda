@@ -23,6 +23,7 @@ internal static class AllocationProbeRaces
             await DisposeDuringMapping(failMapping: true, failCleanup: false);
             await DisposeDuringMapping(failMapping: true, failCleanup: true);
             await CancellationDuringFetch();
+            await DelayedMoveConsumption();
         }
         BorrowedBatchChecks.Run();
         Console.WriteLine($"PASS lazy stream join races: {s_checks} assertions; managed-owned and native-borrowed pending start/fetch, shared disposers, active mapper, primary/cleanup failures and cancellation");
@@ -163,6 +164,52 @@ internal static class AllocationProbeRaces
 
     private static TypedStream<long> Stream(Projection<long> projection, Func<int, CancellationToken, Task<IStreamTransport>> start,
         CancellationToken token = default) => new(start, projection, 2, 71, [3], new(2, 4096, 2, 4096), token);
+    private static async Task DelayedMoveConsumption()
+    {
+        var projection = Projection<long>.Create([ResultField.Create("id", Codecs.Int64)], static row => row.Read(0, Codecs.Int64));
+        var transports = Enumerable.Range(0, 3).Select(_ => new ControlledTransport(projection, pendingFetch: true)).ToArray();
+        var readers = transports.Select(transport => Stream(projection, transport.Start).GetAsyncEnumerator()).ToArray();
+        try
+        {
+            var first = readers[0].MoveNextAsync();
+            await transports[0].FetchEntered.Task.WaitAsync(Bound);
+            Check(!first.IsCompleted, "first move really suspends before delayed consumption");
+            transports[0].CompleteFetch();
+            var started = System.Diagnostics.Stopwatch.GetTimestamp();
+            while (!first.IsCompleted)
+            {
+                if (System.Diagnostics.Stopwatch.GetElapsedTime(started) > Bound) throw new TimeoutException("Delayed move did not complete.");
+                await Task.Delay(1);
+            }
+            // Completion alone does not consume the ValueTask. A second pending
+            // move of this closed generic type cannot take its state-machine box.
+            var second = readers[1].MoveNextAsync();
+            await transports[1].FetchEntered.Task.WaitAsync(Bound);
+            Check(!second.IsCompleted && first.IsCompletedSuccessfully, "another pending move cannot overwrite an unconsumed completed move");
+            Check(first.Result && readers[0].Current == 42, "the delayed single GetResult preserves its original result");
+            var retainedTask = second.AsTask();
+            transports[1].CompleteFetch();
+            Check(await retainedTask.WaitAsync(Bound) && readers[1].Current == 42, "a pending ValueTask converts once to an independently retained Task");
+            var third = readers[2].MoveNextAsync();
+            await transports[2].FetchEntered.Task.WaitAsync(Bound);
+            transports[2].CompleteFetch();
+            Check(await third && readers[2].Current == 42, "a later suspended move safely reuses available runtime state");
+            Check(await retainedTask && await retainedTask, "the Task returned by one AsTask conversion remains reusable after later moves");
+        }
+        finally
+        {
+            for (var i = 0; i < readers.Length; i++)
+            {
+                transports[i].CompleteFetch();
+                var close = readers[i].DisposeAsync().AsTask();
+                await transports[i].JoinEntered.Task.WaitAsync(Bound);
+                transports[i].ReleaseJoin();
+                await close.WaitAsync(Bound);
+            }
+        }
+        Check(transports.All(transport => transport.Batch.Disposals == 1 && transport.Joins == 1),
+            "delayed consumption and retained Tasks do not leak or duplicate batch retirement");
+    }
     private static void Check(bool condition, string message)
     {
         if (!condition) throw new InvalidOperationException(message);

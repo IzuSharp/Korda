@@ -127,6 +127,18 @@ allocations are outside this charged-data bound.
    an additional cleanup failure is retained separately on the exception under
    `Korda.Database.StreamCleanup.v1`.
 
+The private suspended move uses the runtime's pooling ValueTask builder. Each
+returned `ValueTask<bool>` is consumed once; callers needing a reusable Task can
+call `AsTask` once and retain that Task. A completed but unconsumed move keeps its
+own state until consumption, so a later move cannot overwrite its result.
+Concurrent disposal still joins the stream's independent cleanup notification.
+
+The runtime cache has one thread-local slot per participating live thread and
+one shared slot per processor for each closed state-machine type. First use and
+cache misses may allocate. This removes a repeated move-state allocation from
+the measured warm path; it does not establish zero allocation for query creation,
+batch fetch, cancellation, thread growth or the complete stream lifetime.
+
 The method and enumerator cancellation tokens are linked when necessary. An
 already canceled token does not start the factory. After admission, cancellation
 only calls nonblocking native stop control; it does not locally complete the

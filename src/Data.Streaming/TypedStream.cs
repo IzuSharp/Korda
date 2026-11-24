@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using Korda.Data;
 
 namespace Korda.Database.Internal;
@@ -177,9 +178,10 @@ internal sealed class TypedStream<T> : IAsyncEnumerable<T>
                 if (_moving) throw new DatabaseException("Another MoveNext is active.", DatabaseErrorKind.ConcurrentUse);
                 _moving = true;
             }
-            return new(MoveAsync());
+            return MoveAsync();
         }
-        private async Task<bool> MoveAsync()
+        [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
+        private async ValueTask<bool> MoveAsync()
         {
             try
             {
