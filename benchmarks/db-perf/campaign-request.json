@@ -222,7 +222,7 @@
       ]
     }
   },
-  "activationNote": "Enabled after independent harness and allocation-boundary review and successful normal candidate CI 45438460386. The package producer is the actual clean PR merge commit 3d5ba3f9884308caa691718f73a74aa42be19d94, with the same 74a76bc5 tree as reviewed product head cf7c080. The task-branch push trigger is limited to this request. Admission, calibration and eight actual continuous 1800-second segments remain required; activation grants no measurement credit.",
+  "activationNote": "Enabled after independent harness and allocation-boundary review and successful normal candidate CI 45438460386. The package producer is the actual clean PR merge commit 3d5ba3f9884308caa691718f73a74aa42be19d94, with the same 74a76bc5 tree as reviewed product head cf7c080. The task-branch push trigger is limited to this request. Admission, calibration and eight actual continuous 1800-second segments remain required; activation grants no measurement credit. The first prepared bundle was preserved after startup imports wrote three unlisted Python bytecode files before admission. The measurement job now disables bytecode writes; strict file inventory/hash/mode/link checks and every measurement parameter are unchanged.",
   "nativeBaseline": {
     "physicalPrepare": "reuse",
     "protocolConfirmation": "drain-only"
