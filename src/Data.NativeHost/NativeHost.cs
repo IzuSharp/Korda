@@ -46,6 +46,20 @@ internal sealed class NativeBuffer : SafeHandle
         }
         finally { if (retained) DangerousRelease(); }
     }
+    internal unsafe TransactionSnapshot ReadSnapshot(int maximum = DbWire.MaxEncodedBytes)
+    {
+        var retained = false;
+        try
+        {
+            DangerousAddRef(ref retained); var view = new NwBytesViewV1(); var error = BindingChecks.Error();
+            var status = _binding.Calls.nw_db_buffer_view_v1(DangerousGetHandle(), &view, &error); HostFailure.Check(_binding, status, error);
+            if (view.Length > (ulong)maximum || view.Length != 0 && view.Data is null) throw new DatabaseException("Native buffer exceeds the admitted range.", DatabaseErrorKind.ResourceLimit);
+            // Snapshot materializes owned values synchronously; no borrowed bytes
+            // can escape the SafeHandle reference protecting this native view.
+            return HostEncoding.Snapshot(new ReadOnlySpan<byte>(view.Data, checked((int)view.Length)));
+        }
+        finally { if (retained) DangerousRelease(); }
+    }
 }
 internal sealed unsafe class HostAsyncCalls(DataSource source) : AsyncNativeCalls
 {
@@ -122,7 +136,7 @@ internal static class NativeHost
     {
         using var lease = owner.Borrow(owner.Kind); nint result = 0; var error = BindingChecks.Error();
         HostFailure.Check(owner.Source, owner.Source.Calls.nw_db_snapshot_v1(lease.Pointer, default, &result, &error), error);
-        using var buffer = new NativeBuffer(owner.Source, result); return HostEncoding.Snapshot(buffer.Copy());
+        using var buffer = new NativeBuffer(owner.Source, result); return buffer.ReadSnapshot();
     }
     internal static unsafe nint Execute(DatabaseOwner session, DatabaseOwner plan, ReadOnlyMemory<byte> parameters)
     {

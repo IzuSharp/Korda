@@ -47,7 +47,7 @@ internal sealed class HostTransactionTransport : ITransactionTransport
         finally { lock (_gate) if (!_owner.IsClosed) _last = NativeHost.Snapshot(_owner); }
     }
     private TransactionSnapshot ReadSnapshot(nint operation)
-    { using var buffer = NativeHost.TakeBuffer(_source.Binding, operation); var value = HostEncoding.Snapshot(buffer.Copy()); lock (_gate) _last = value; return value; }
+    { using var buffer = NativeHost.TakeBuffer(_source.Binding, operation); var value = buffer.ReadSnapshot(); lock (_gate) _last = value; return value; }
     public async Task<SavepointId> CreateSavepointAsync(CancellationToken admissionToken)
     {
         Admit(admissionToken);
@@ -75,7 +75,7 @@ internal sealed class HostTransactionTransport : ITransactionTransport
     }
     private async Task DisposeSavepoint(SavepointId id, DatabaseOwner owner)
     {
-        try { await _source.Start(() => NativeHost.Close(owner), operation => { using var buffer = NativeHost.TakeBuffer(_source.Binding, operation); return HostEncoding.Snapshot(buffer.Copy()); }, control: true).ConfigureAwait(false); }
+        try { await _source.Start(() => NativeHost.Close(owner), operation => { using var buffer = NativeHost.TakeBuffer(_source.Binding, operation); return buffer.ReadSnapshot(); }, control: true).ConfigureAwait(false); }
         finally { lock (_gate) _savepoints.Remove(id); owner.Dispose(); }
     }
     public void RequestClose() { lock (_gate) _closed = true; _close.Request(); }

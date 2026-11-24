@@ -190,7 +190,7 @@ internal sealed class CloseController(DataSource source, DatabaseOwner owner, Ac
             var observed = NativeHost.Snapshot(owner).Cleanup;
             if (observed.LocalResourcesReleased) { _last = observed; _task = Task.FromResult(observed); release(); return; }
             _last = _last with { Status = CleanupStatus.Pending };
-            try { _task = Finish(source.Start(() => NativeHost.Close(owner), operation => { using var buffer = NativeHost.TakeBuffer(source.Binding, operation); return HostEncoding.Snapshot(buffer.Copy()).Cleanup; }, control: true)); }
+            try { _task = Finish(source.Start(() => NativeHost.Close(owner), operation => { using var buffer = NativeHost.TakeBuffer(source.Binding, operation); return buffer.ReadSnapshot().Cleanup; }, control: true)); }
             catch (Exception failure) { _task = Task.FromException<DatabaseCloseResult>(failure); _last = _last with { Status = CleanupStatus.Failed }; }
         }
     }
