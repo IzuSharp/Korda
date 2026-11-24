@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "task": "DB-Perf-01",
   "enabled": true,
-  "harnessCommit": "f91f3d24579d7c65199df1c4cdd60a577cdcd8f9",
+  "harnessCommit": "4ee348d8b9834a14327dcf68a105e34f52f81795",
   "before": {
     "sourceCommit": "771bc77cbd68d3f932b99ed2497c0697bbba5f02",
     "runId": 45356659607,
@@ -222,7 +222,7 @@
       ]
     }
   },
-  "activationNote": "Enabled after independent harness and allocation-boundary review and successful normal candidate CI 45438460386. The package producer is the actual clean PR merge commit 3d5ba3f9884308caa691718f73a74aa42be19d94, with the same 74a76bc5 tree as reviewed product head cf7c080. The task-branch push trigger is limited to this request. Admission, calibration and eight actual continuous 1800-second segments remain required; activation grants no measurement credit. The first prepared bundle was preserved after startup imports wrote three unlisted Python bytecode files before admission. The measurement job now disables bytecode writes; strict file inventory/hash/mode/link checks and every measurement parameter are unchanged.",
+  "activationNote": "Resume after two preserved startup failures: immutable imports remain bytecode-free; the reviewed collector now observes restricted PID 1 namespace links through fixed read-only hosted sudo and retains pre-admission quota snapshots. Packages, workload, CPU partition, SLO, resource thresholds, 1800-second segments and eight-segment order are unchanged.",
   "nativeBaseline": {
     "physicalPrepare": "reuse",
     "protocolConfirmation": "drain-only"
