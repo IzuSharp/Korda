@@ -17,9 +17,15 @@ if (args.Contains("--allocation-probe-races", StringComparer.Ordinal))
     await AllocationProbeRaces.RunAsync();
     return;
 }
+if (args.Contains("--stable-batch-only", StringComparer.Ordinal))
+{
+    StableBatchTests.Run();
+    return;
+}
 await AllocationProbeGate.RunAsync(args[0]);
 if (args.Contains("--allocation-gate-only", StringComparer.Ordinal)) return;
 await AllocationProbeRaces.RunAsync();
+StableBatchTests.Run();
 var cases = new List<Observation>();
 var allocatedBefore = GC.GetTotalAllocatedBytes(true);
 var workingSetBefore = Process.GetCurrentProcess().WorkingSet64;

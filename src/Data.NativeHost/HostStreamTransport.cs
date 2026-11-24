@@ -23,7 +23,7 @@ internal sealed class HostStreamTransport : IStreamTransport
     public async Task<StreamRetirement> JoinAsync()
     { _close.Request(); await _close.JoinAsync().ConfigureAwait(false); var snapshot = _close.Snapshot; return new(snapshot.LocalResourcesReleased, snapshot.ConnectionDisposition == ConnectionDisposition.Usable, 0); }
 }
-internal sealed class HostStreamBatch : IStreamBatch
+internal sealed class HostStreamBatch : IStableManagedBatch
 {
     private NativeBuffer? _owner;
     private byte[]? _bytes;
@@ -34,6 +34,7 @@ internal sealed class HostStreamBatch : IStreamBatch
         End = BinaryPrimitives.ReadUInt32LittleEndian(_bytes.AsSpan(56)) == 0;
     }
     public ReadOnlyMemory<byte> Bytes => _bytes ?? throw new ObjectDisposedException(nameof(HostStreamBatch));
+    public byte[] OwnedBytes => _bytes ?? throw new ObjectDisposedException(nameof(HostStreamBatch));
     public bool End { get; }
     public void Dispose() { _bytes = null; Interlocked.Exchange(ref _owner, null)?.Dispose(); }
 }

@@ -13,6 +13,11 @@ if (args.Contains("--allocation-probe", StringComparer.Ordinal))
     AllocationProbe.Run(output, args.Contains("--allocation-regression", StringComparer.Ordinal));
     return;
 }
+if (args.Contains("--batch-allocation-probe", StringComparer.Ordinal))
+{
+    BatchAllocationProbe.Run(output);
+    return;
+}
 Console.WriteLine("Dynamic code supported: " + RuntimeFeature.IsDynamicCodeSupported);
 var cases = new List<string>();
 void Check(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
@@ -223,7 +228,12 @@ var wire = DbWire.Encode(expectation, 1, cells);
 Test("db_wire_all_scalar_golden_and_malformed_inputs", () =>
 {
     var parsed = DbWire.Parse(wire, expectation); Check(parsed.Cell(0, 17) is null && parsed.Cell(0, 18) is { Length: 0 }, "Wire NULL/empty collapsed.");
-    void Mutation(Action<byte[]> mutate) { var copy = (byte[])wire.Clone(); mutate(copy); Reject<ArgumentException>(() => DbWire.Parse(copy, expectation)); }
+    void Mutation(Action<byte[]> mutate)
+    {
+        var copy = (byte[])wire.Clone(); mutate(copy);
+        Reject<ArgumentException>(() => DbWire.Parse(copy, expectation));
+        Reject<ArgumentException>(() => DbWire.ParseOwned(copy, expectation));
+    }
     Mutation(b => b[4] = 2); Mutation(b => b[12] = 1); Mutation(b => b[76] = 9); Mutation(b => b[68] = 1);
     Mutation(b => BinaryPrimitives.WriteUInt32LittleEndian(b.AsSpan(56), uint.MaxValue));
     Mutation(b => BinaryPrimitives.WriteUInt64LittleEndian(b.AsSpan(88), ulong.MaxValue));
@@ -237,6 +247,17 @@ Test("db_wire_all_scalar_golden_and_malformed_inputs", () =>
     Mutation(b => { var offset = (int)BinaryPrimitives.ReadUInt64LittleEndian(b.AsSpan(co + 4 * 24 + 8)); b[offset] = 255; });
     Reject<ArgumentException>(() => DbWire.Parse(wire, expectation with { MetadataHash = Enumerable.Repeat((byte)1, 32).ToArray() }));
     Reject<ArgumentException>(() => DbWire.Parse(wire.AsSpan(0, 95), expectation));
+});
+Test("wire_owned_storage_is_explicit_and_default_parse_still_snapshots", () =>
+{
+    var input = (byte[])wire.Clone();
+    var copied = DbWire.Parse(input, expectation);
+    var retained = DbWire.ParseOwned(input, expectation);
+    Check(!ReferenceEquals(copied.Bytes, input) && ReferenceEquals(retained.Bytes, input), "Wire storage ownership changed.");
+    var first = retained.Cell(0, 0)!.Value;
+    Check(first.Span.SequenceEqual(copied.Cell(0, 0)!.Value.Span), "Owned parse changed decoded bytes.");
+    Array.Clear(input);
+    Check(Codecs.Int16.Decode(copied.Cell(0, 0)) == -7, "The ordinary parser no longer snapshots mutable caller input.");
 });
 File.WriteAllBytes(Path.Combine(output, "parent.json"), parent.CanonicalBytes);
 File.WriteAllBytes(Path.Combine(output, "child.json"), child.CanonicalBytes);

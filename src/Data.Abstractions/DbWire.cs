@@ -55,6 +55,15 @@ internal sealed class DbWire
         return result;
     }
     internal static DbWire Parse(ReadOnlySpan<byte> bytes, WireExpectation expected)
+        => ParseCore(bytes, expected, null);
+    // Only the internal host's independently allocated, immutable managed batch
+    // may transfer this storage. The caller must never clear or pool the array.
+    internal static DbWire ParseOwned(byte[] bytes, WireExpectation expected)
+    {
+        ArgumentNullException.ThrowIfNull(bytes);
+        return ParseCore(bytes, expected, bytes);
+    }
+    private static DbWire ParseCore(ReadOnlySpan<byte> bytes, WireExpectation expected, byte[]? owned)
     {
         try
         {
@@ -89,7 +98,7 @@ internal sealed class DbWire
             }
             ranges.Sort((x, y) => x.Start.CompareTo(y.Start));
             for (var i = 1; i < ranges.Count; i++) if (ranges[i].Start < ranges[i - 1].End) Bad("Nonempty cell ranges overlap.");
-            return new(bytes.ToArray(), expected, rows);
+            return new(owned ?? bytes.ToArray(), expected, rows);
         }
         catch (Exception e) when (e is OverflowException or ArgumentOutOfRangeException or JsonException)
         { throw new ArgumentException("Malformed bounded db-wire payload.", nameof(bytes), e); }

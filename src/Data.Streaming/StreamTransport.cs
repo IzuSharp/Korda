@@ -11,6 +11,15 @@ internal interface IStreamBatch : IDisposable
     bool End { get; }
 }
 
+/// <summary>A batch whose single managed copy can be retained without another snapshot.</summary>
+/// <remarks>The array is independently allocated, immutable, and never cleared or returned to a pool,
+/// including during disposal. Bytes must expose that whole array. Native ownership and byte permits
+/// still belong to the batch and are released normally; no native pointer escapes.</remarks>
+internal interface IStableManagedBatch : IStreamBatch
+{
+    byte[] OwnedBytes { get; }
+}
+
 /// <summary>Provider-confirmed native retirement, distinct from physical protocol reuse and managed disposal.</summary>
 internal readonly record struct StreamRetirement(bool NativeRetired, bool ConnectionReusable, long ProviderRowsPeak);
 
@@ -52,7 +61,9 @@ internal sealed class RowBatchLease : IRowLease, IDisposable
         try
         {
             if (owner.Bytes.Length > limits.MaxBatchBytes) throw new DatabaseException("Native batch exceeds its admitted byte limit.", DatabaseErrorKind.ResourceLimit);
-            _wire = DbWire.Parse(owner.Bytes.Span, expected);
+            _wire = owner is IStableManagedBatch stable
+                ? DbWire.ParseOwned(stable.OwnedBytes, expected)
+                : DbWire.Parse(owner.Bytes.Span, expected);
             if (_wire.Rows > limits.MaxBatchRows || _wire.Rows == 0 && !owner.End)
                 throw new DatabaseException("Native batch row count or end marker is invalid.", DatabaseErrorKind.ShapeMismatch);
             _owner = owner;
