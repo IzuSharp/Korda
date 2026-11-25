@@ -255,8 +255,15 @@ internal sealed partial class QueryCommand
         else if (operation == 4) { if (codec.Nullable) throw new ArgumentException("NullableLift requires a nonnullable input."); codec = codec with { Nullable = true }; }
         else Unsupported();
         Span<byte> payload = stackalloc byte[4]; DbWire.U32(payload, 0, checked((uint)input));
-        return Emit(5, operation, payload, value with { Codec = codec, Bound = bound, Depth = value.Depth + 1, Nodes = value.Nodes + 1,
-            Windowable = operation == 4 && value.Windowable, Shape = operation == 4 ? value.Shape : 0 }, 0,
+        return Emit(5, operation, payload, value with
+        {
+            Codec = codec,
+            Bound = bound,
+            Depth = value.Depth + 1,
+            Nodes = value.Nodes + 1,
+            Windowable = operation == 4 && value.Windowable,
+            Shape = operation == 4 ? value.Shape : 0
+        }, 0,
             shape: operation == 4 ? default : Shape(new(5, operation, value.Shape)));
     }
 
