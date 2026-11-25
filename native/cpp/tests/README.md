@@ -111,7 +111,7 @@ sends a cancellation key merely to stop reading; a failed drain discards the con
 python3 tests/Data.Postgres/verify.py \
   --postgres-bin /absolute/path/to/postgresql-18.0/bin \
   --native-build artifacts/cmake/linux-x64-release \
-  --design-root ../NativeWeave-Design --output /absolute/fresh/evidence/b02
+  --design-root ../Korda-Design --output /absolute/fresh/evidence/b02
 ```
 
 B01's shared schema generator now writes C# and `include/nw/generated/schema.hpp`. The C#
@@ -143,7 +143,7 @@ remain in force.
 python3 tests/Verification.Compatibility/verify.py \
   --evidence artifacts/compatibility-acceptance \
   --native-build artifacts/cmake/linux-x64-release \
-  --design-root ../NativeWeave-Design
+  --design-root ../Korda-Design
 ```
 
 The compatibility runner retains every historical Design digest. It separately records the

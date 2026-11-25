@@ -25,4 +25,6 @@ AI agent frameworks and Qt/QML integration are potential areas for future work. 
 
 ## Development
 
+Design documents are maintained in [Korda-Design](https://github.com/IzuSharp/Korda-Design); execution plans and delivery records are maintained in [Plan](https://github.com/IzuSharp/Plan).
+
 See the [native build guide](docs/guides/cpp-native.md), [verification guide](docs/verification.md), [release workflow](docs/releasing.md), [contributing guide](CONTRIBUTING.md) and [security policy](SECURITY.md). Korda uses the [MIT license](LICENSE). The packages include [third-party notices](THIRD_PARTY_NOTICES.md).

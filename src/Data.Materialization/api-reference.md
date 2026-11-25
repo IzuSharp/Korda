@@ -1,6 +1,6 @@
 # Static materialization API reference contribution
 
-Design input: `NativeWeave-Design` commit
+Design input: `Korda-Design` commit
 `c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9`, `docs/api/database.md`
 sections 4 and 6, `docs/generators/query-generation.md` section 4, and the
 corresponding exact database symbol policies.

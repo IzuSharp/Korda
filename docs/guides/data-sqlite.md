@@ -14,8 +14,8 @@ configuration and metadata. SQLx owns prepared statements, the physical pool,
 transaction depth, and its dedicated SQLite worker. The adapter starts no global
 runtime and contains no managed database driver or unconditional `Task.Run` path.
 
-The unchanged declaration and component-oracle checks use NativeWeave-Design commit
-[`c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9`](https://github.com/IzuSharp/NativeWeave-Design/tree/c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9),
+The unchanged declaration and component-oracle checks use Korda-Design commit
+[`c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9`](https://github.com/IzuSharp/Korda-Design/tree/c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9),
 especially D14 `docs/database/drivers.md`, D15
 `docs/database/transactions-and-pooling.md`, and the exact public API inventory.
 `tests/Data.Sqlite/design-inputs.json` retains every task-owned API input hash.
@@ -241,7 +241,7 @@ For Linux x64 provider preflight and component evidence, run the dedicated verif
 from a clean committed checkout against the pinned Design snapshot:
 
 ```sh
-python3 tests/Data.Sqlite/verify.py --design /path/to/locked/NativeWeave-Design
+python3 tests/Data.Sqlite/verify.py --design /path/to/locked/Korda-Design
 ```
 
 The maintainer verifier separately builds the private native component and its

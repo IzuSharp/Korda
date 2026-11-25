@@ -194,7 +194,7 @@ claim without comparative measurements.
 Maintainer verification uses the fixed repository toolchains:
 
 ```sh
-python3 tests/Query.Binding/verify.py --design /path/to/pinned/NativeWeave-Design \
+python3 tests/Query.Binding/verify.py --design /path/to/pinned/Korda-Design \
   --nuget-config /path/to/NuGet.Offline.Config --output artifacts/B09/linux
 ```
 
