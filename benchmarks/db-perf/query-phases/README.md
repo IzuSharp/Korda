@@ -44,5 +44,11 @@ table, and validates all result fields on every operation. Repeat/interleave
 independent baseline and candidate processes on the same host. Store actual logs,
 package/executable/native hashes and raw receipts in the existing Plan batch.
 
+The session queries `version()` or `sqlite_version()` before any measured phase
+and records the returned database version. Summarize fresh receipts with
+`python3 benchmarks/db-perf/query-phases/summarize.py receipt.json --output summary.json`.
+The summary preserves raw counter totals and computes nearest-rank p50/p99 without
+trimming samples. It does not grant measurement or environment acceptance.
+
 This phase diagnostic does not replace the local mixed-load correctness runs or
 the final candidate/Dapper.AOT 1,800-second segments for each provider.

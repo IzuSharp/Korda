@@ -94,6 +94,7 @@ internal static unsafe class Program
         {
             _calls = new("query.binding.fixture", symbol => NativeLibrary.TryGetExport(library, symbol, out var pointer) ? pointer : 0);
             _live = (delegate* unmanaged[Cdecl]<uint, ulong>)NativeLibrary.GetExport(library, "nw_test_live_v1"); _session = (delegate* unmanaged[Cdecl]<nint, nint*, NwErrorInfoV1*, uint>)NativeLibrary.GetExport(library, "nw_test_session_v1");
+            Test("complete_command_without_direct_composition_exports", () => _assertions += CommandOnlyTests.Run(library, parent, id, name));
             using (var source = Source()) using (var session = Session(source)) using (var model = MetadataBindings.RegisterModel(source, parent)) using (var childModel = MetadataBindings.RegisterModel(source, child))
             {
                 Test("projection_scratch_poison_boundaries_and_native_borrow", () =>

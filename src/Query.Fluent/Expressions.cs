@@ -90,7 +90,7 @@ public enum LockWait
     SkipLocked,
 }
 /// <summary>An opaque same-query native SQL condition; default predicates reject.</summary>
-/// <remarks>Boolean composition uses SQL three-valued logic and performs one direct native operation.</remarks>
+/// <remarks>Boolean composition uses SQL three-valued logic and records one operation in the complete query command.</remarks>
 public readonly struct SqlPredicate
 {
     private readonly QueryContext? _owner;

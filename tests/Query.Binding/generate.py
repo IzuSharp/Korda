@@ -27,4 +27,10 @@ for name,value in outputs.items():
     path=ROOT/name
     if args.check: assert path.read_text()==value,'Generated signature drift: '+name
     else:path.write_text(value)
-print(f'PASS exact signatures={len(data["signatures"])}; outputs={len(outputs)}')
+extension=json.loads((ROOT/'native/database/binding/query-command-v1.json').read_text())
+assert extension['version']==1 and extension['capability']=='db.query.command.v1' and extension['capability_bit']==26
+declarations=re.findall(r'\bnw_status\s+NW_CDECL\s+nw_db_query_command_\w+_v1\([^;]+;', (ROOT/extension['header']).read_text())
+declarations=[re.sub(r'\s+', ' ', value) for value in declarations]
+assert declarations==extension['signatures'],'Additive query command signatures differ from the reviewed extension'
+assert len(declarations)==3 and not set(declarations).intersection(data['signatures'])
+print(f'PASS exact frozen signatures={len(data["signatures"])}; outputs={len(outputs)}; additive command signatures={len(declarations)}')

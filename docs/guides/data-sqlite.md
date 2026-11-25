@@ -59,11 +59,12 @@ asynchronously so their retained native work can retire.
 | Linux x64 asset | `libnw_database_sqlite.so` |
 | Generated output record | `Korda.database.sqlite.assets.json` |
 
-The bootstrap reports **23** capabilities: every name defined in
+The bootstrap reports **25** capabilities: every name defined in
 [`DatabaseEngineProfile`](../../src/Data.NativeHost/DatabaseOptions.cs) except
 `db.row-lock.v1` and `db.decimal.numeric.v1`. This includes `db.query.v1`,
 transactions/savepoints, streaming, migrations, schema reading, relations and
-`db.decimal.text.v1`. In the fixed Rust reference, this advertised mask is composed by the
+`db.decimal.text.v1`, schema drafts and the complete-query command extension.
+In the fixed Rust reference, the earlier advertised mask is composed by the
 [native query profile](https://github.com/IzuSharp/Korda/blob/465cd0f90e6af05ec50eb581156240377cf0825b/native/database/host/src/query.rs) and
 [Host bootstrap](https://github.com/IzuSharp/Korda/blob/465cd0f90e6af05ec50eb581156240377cf0825b/native/database/host/src/abi.rs). The private B03 component's
 `db.sqlite.profile.v1` bootstrap remains a component-test input; it is not the public

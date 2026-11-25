@@ -4,6 +4,7 @@
 // CMake derives this private C++ view from the byte-frozen C header, changing
 // only its `template` parameter name. Every definition is type-checked against
 // the normative declarations; applications still consume the original C ABI.
+#include "../../database/binding/korda_query_command_v1.h"
 #include "nw_database_declarations.hpp"
 
 #include <algorithm>
@@ -89,6 +90,14 @@ ByteView borrow(nw_bytes_view_v1 value)
         throw Error::invalid("null byte view");
     return {value.data, static_cast<std::size_t>(value.length)};
 }
+ByteView borrow_command(nw_bytes_view_v1 value, const QueryLimits& limits)
+{
+    if (value.length > limits.bytes + 128 * limits.nodes + 64)
+        throw Error::capacity();
+    if (value.length && !value.data)
+        throw Error::invalid("null query command byte view");
+    return {value.data, static_cast<std::size_t>(value.length)};
+}
 std::shared_ptr<Owner> owner(nw_db_ref raw)
 {
     return get<std::shared_ptr<Owner>>(raw);
@@ -106,6 +115,50 @@ template <class T> T typed(nw_db_ref raw)
     if (auto pointer = std::get_if<T>(&value->data))
         return *pointer;
     throw Error::state("database owner kind differs");
+}
+std::shared_ptr<Source> command_source(nw_db_ref raw)
+{
+    auto session = typed<std::shared_ptr<Session>>(raw);
+    session->source->admit();
+    if (session->closing.load())
+        throw Error::state("closed query command session");
+    return session->source;
+}
+std::vector<QueryCommandDependency> command_dependencies(const std::shared_ptr<Source>& source,
+                                                         const nw_db_query_dependency_v1* dependencies,
+                                                         std::uint32_t count)
+{
+    if (count > 2 * source->config.limits.nodes + 1)
+        throw Error::capacity();
+    if (count != 0 &&
+        (!dependencies || reinterpret_cast<std::uintptr_t>(dependencies) % alignof(nw_db_query_dependency_v1)))
+        throw Error::invalid("invalid query command dependency sidecar");
+    std::vector<QueryCommandDependency> result;
+    result.reserve(count);
+    for (std::uint32_t i = 0; i < count; ++i)
+    {
+        const auto& dependency = dependencies[i];
+        if (dependency.reserved != 0)
+            throw Error::invalid("query command dependency reserved field");
+        auto value = owner(dependency.owner);
+        if (value->source->identity != source->identity)
+            throw Error::state("mixed query command dependency source");
+        if (dependency.kind == 1 && std::holds_alternative<ModelBinding>(value->data))
+            result.emplace_back(std::get<ModelBinding>(value->data));
+        else if (dependency.kind == 2 && std::holds_alternative<std::shared_ptr<NativePlan>>(value->data))
+            result.emplace_back(std::get<std::shared_ptr<NativePlan>>(value->data));
+        else if (dependency.kind == 3 && std::holds_alternative<std::shared_ptr<NativeCte>>(value->data))
+            result.emplace_back(std::get<std::shared_ptr<NativeCte>>(value->data));
+        else
+            throw Error::state("query command dependency kind differs");
+    }
+    return result;
+}
+QueryCommandContext command_context(const std::shared_ptr<Source>& source)
+{
+    return {source->parameters, source->config.limits.binding(),
+            Capabilities::from_mask(capability_mask(), source->config.provider.profile),
+            source->config.limits.command_ns};
 }
 void output_owner(nw_db_ref* output, std::shared_ptr<Source> source, OwnerData data = {})
 {
@@ -603,6 +656,61 @@ NW_DATABASE_API nw_status NW_CDECL nw_db_cte_create_v1(nw_db_ref declared, std::
                     });
 }
 
+NW_DATABASE_API nw_status NW_CDECL nw_db_query_command_compile_v1(nw_db_ref raw, nw_bytes_view_v1 command,
+                                                                  const nw_db_query_dependency_v1* dependencies,
+                                                                  std::uint32_t dependency_count,
+                                                                  std::uint32_t terminal, nw_db_ref* output,
+                                                                  nw_error_info_v1* error)
+{
+    return boundary(error,
+                    [&]
+                    {
+                        clear(output);
+                        auto source = command_source(raw);
+                        auto context = command_context(source);
+                        auto resolved = command_dependencies(source, dependencies, dependency_count);
+                        auto plan =
+                            compile_query_command(borrow_command(command, context.limits), resolved, context, terminal);
+                        output_owner(output, source, std::move(plan));
+                    });
+}
+NW_DATABASE_API nw_status NW_CDECL nw_db_query_command_render_v1(nw_db_ref raw, nw_bytes_view_v1 command,
+                                                                 const nw_db_query_dependency_v1* dependencies,
+                                                                 std::uint32_t dependency_count, nw_db_buffer** output,
+                                                                 nw_error_info_v1* error)
+{
+    return boundary(error,
+                    [&]
+                    {
+                        clear(output);
+                        auto source = command_source(raw);
+                        auto context = command_context(source);
+                        auto resolved = command_dependencies(source, dependencies, dependency_count);
+                        auto sql = render_query_command(borrow_command(command, context.limits), resolved, context);
+                        output_buffer(output, source, std::move(sql));
+                    });
+}
+NW_DATABASE_API nw_status NW_CDECL nw_db_query_command_cte_v1(nw_db_ref raw, nw_bytes_view_v1 command,
+                                                              const nw_db_query_dependency_v1* dependencies,
+                                                              std::uint32_t dependency_count, nw_db_ref declared,
+                                                              std::uint32_t table, std::uint32_t recursive,
+                                                              nw_db_ref* output, nw_error_info_v1* error)
+{
+    return boundary(error,
+                    [&]
+                    {
+                        clear(output);
+                        auto source = command_source(raw);
+                        auto model = typed<ModelBinding>(declared);
+                        model.ensure_source(source->identity);
+                        auto context = command_context(source);
+                        auto resolved = command_dependencies(source, dependencies, dependency_count);
+                        auto cte = create_query_command_cte(borrow_command(command, context.limits), resolved, context,
+                                                            std::move(model), table, recursive);
+                        output_owner(output, source, std::move(cte));
+                    });
+}
+
 NW_DATABASE_API nw_status NW_CDECL nw_db_sql_create_v1(nw_db_ref raw, nw_bytes_view_v1 sql, nw_bytes_view_v1 parameters,
                                                        nw_bytes_view_v1 options, nw_db_ref* output,
                                                        nw_error_info_v1* error)
@@ -660,12 +768,8 @@ NW_DATABASE_API nw_status NW_CDECL nw_db_execute_create_v1(nw_db_ref raw, nw_db_
                                 if (!tx || !tx->active())
                                     throw Error::state("row locking requires an active explicit transaction");
                             }
-                            RenderedQuery rendered;
-                            {
-                                std::lock_guard lock(session->source->shape_mutex);
-                                rendered =
-                                    (*native)->render(session->source->identity, bytes, &session->source->shapes);
-                            }
+                            auto rendered =
+                                (*native)->render(session->source->identity, bytes, &session->source->shapes);
                             plan = SqlPlan::rendered(session->source, std::move(rendered));
                         }
                         else

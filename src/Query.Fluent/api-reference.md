@@ -1,6 +1,6 @@
 # Fluent query API reference
 
-Generated from the actual compiled public API and XML; compared against the exact pinned design declarations. The public namespace is composed into Korda.Database. All expression and SQL operations use B09/B11 native owners; B01/B12 own static row contracts.
+Generated from the actual compiled public API and XML; compared against the exact pinned design declarations. The public namespace is composed into Korda.Database. Expressions form a bounded B09 command; B11 owns native validation, SQL compilation and execution. B01/B12 own static row contracts.
 
 ## `F:Korda.Query.FrameBoundary.CurrentRow`
 
@@ -206,9 +206,9 @@ The native query validates each enum value before mutation. Direction is explici
 public Korda.Query.Query<TEntity> Korda.Database.DataSession.From<TEntity>(Korda.Data.Table<TEntity> table) where TEntity : class
 ```
 
-Creates one mutable native query arena bound to this session and exact static table.
+Creates one bounded query command bound to this session and exact static table.
 
-The returned query owns one native arena and borrows this session's admission. Composition copies values immediately; dispose the query after its terminal or stream has retired.
+Composition snapshots values immediately and records a complete command for the C++ compiler. The engine must advertise the command extension. Dispose the query after its terminal or stream has retired.
 
 - **TEntity**: The statically described entity class.
 - **table**: The immutable manual or generated table descriptor.
@@ -410,7 +410,7 @@ public Korda.Query.SqlPredicate Korda.Query.QueryRow<TEntity>.Equal<T>(Korda.Dat
 
 Snapshots a typed value and creates native SQL equality.
 
-This borrowed proxy retains its query association. Default, foreign, closed or sealed owners reject. Each operation forwards immediately to a finite native arena; no managed SQL tree or captured callback is retained.
+This borrowed proxy retains its query association. Default, foreign, closed or sealed owners reject. Each operation records a bounded command with immediate owner and type validation; the complete command is submitted to the native compiler without retaining the callback.
 
 - **column**: The strongly typed column from the declared table; foreign table identities reject.
 - **value**: The typed value to snapshot now, or the compatible same-query native expression.
@@ -427,9 +427,9 @@ This borrowed proxy retains its query association. Default, foreign, closed or s
 public Korda.Query.SqlExpression<T> Korda.Query.QueryRow<TEntity>.Get<T>(Korda.Data.Column<TEntity, T> column)
 ```
 
-Creates an immediate native expression for an exact root-table column.
+Creates a typed command expression for an exact root-table column.
 
-This borrowed proxy retains its query association. Default, foreign, closed or sealed owners reject. Each operation forwards immediately to a finite native arena; no managed SQL tree or captured callback is retained.
+This borrowed proxy retains its query association. Default, foreign, closed or sealed owners reject. Each operation records a bounded command with immediate owner and type validation; the complete command is submitted to the native compiler without retaining the callback.
 
 - **column**: The strongly typed column from the declared table; foreign table identities reject.
 - **T**: The statically known CLR value or owned result type with the exact declared codec/nullability.
@@ -447,7 +447,7 @@ public Korda.Query.SqlPredicate Korda.Query.QueryRow<TEntity>.GreaterThanOrEqual
 
 Snapshots a typed lower bound and creates a native comparison.
 
-This borrowed proxy retains its query association. Default, foreign, closed or sealed owners reject. Each operation forwards immediately to a finite native arena; no managed SQL tree or captured callback is retained.
+This borrowed proxy retains its query association. Default, foreign, closed or sealed owners reject. Each operation records a bounded command with immediate owner and type validation; the complete command is submitted to the native compiler without retaining the callback.
 
 - **column**: The strongly typed column from the declared table; foreign table identities reject.
 - **value**: The typed value to snapshot now, or the compatible same-query native expression.
@@ -466,7 +466,7 @@ public Korda.Query.SqlPredicate Korda.Query.QueryRow<TEntity>.IsNotNull<T>(Korda
 
 Tests the exact root column for SQL non-NULL.
 
-This borrowed proxy retains its query association. Default, foreign, closed or sealed owners reject. Each operation forwards immediately to a finite native arena; no managed SQL tree or captured callback is retained.
+This borrowed proxy retains its query association. Default, foreign, closed or sealed owners reject. Each operation records a bounded command with immediate owner and type validation; the complete command is submitted to the native compiler without retaining the callback.
 
 - **column**: The strongly typed column from the declared table; foreign table identities reject.
 - **T**: The statically known CLR value or owned result type with the exact declared codec/nullability.
@@ -484,7 +484,7 @@ public Korda.Query.SqlPredicate Korda.Query.QueryRow<TEntity>.IsNull<T>(Korda.Da
 
 Tests the exact root column for SQL NULL.
 
-This borrowed proxy retains its query association. Default, foreign, closed or sealed owners reject. Each operation forwards immediately to a finite native arena; no managed SQL tree or captured callback is retained.
+This borrowed proxy retains its query association. Default, foreign, closed or sealed owners reject. Each operation records a bounded command with immediate owner and type validation; the complete command is submitted to the native compiler without retaining the callback.
 
 - **column**: The strongly typed column from the declared table; foreign table identities reject.
 - **T**: The statically known CLR value or owned result type with the exact declared codec/nullability.
@@ -525,7 +525,7 @@ This borrowed view is valid only while its projection remains current in the liv
 
 - **other**: The compatible same-source selection or same-query expression required by this operation.
 - **operation**: The native SQL set operation with exact compatible row shapes.
-- **returns**: The borrowed current-selection view; its owning query retains the native arena.
+- **returns**: The borrowed current-selection view; its owning query retains the command and its dependencies.
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
@@ -718,7 +718,7 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 public Korda.Query.SqlExpression<T> Korda.Query.Query<TEntity>.Column<T>(Korda.Data.Column<TEntity, T> column)
 ```
 
-Creates an immediate root-column native scalar token.
+Creates a typed root-column scalar token in the bounded query command.
 
 Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
@@ -810,7 +810,7 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 public void Korda.Query.Query<TEntity>.Dispose()
 ```
 
-Closes query admission, requests any active cursor stop and releases the native arena reference.
+Closes query admission, requests any active cursor stop and releases command and native dependency references.
 
 Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
@@ -1143,7 +1143,7 @@ Selects only root-table columns in the static entity constructor order.
 
 Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
-- **returns**: The borrowed current-selection view; its owning query retains the native arena.
+- **returns**: The borrowed current-selection view; its owning query retains the command and its dependencies.
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
@@ -1161,7 +1161,7 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 
 - **projection**: The exact query-built projection or root table row descriptor to select.
 - **T**: The statically known CLR value or owned result type with the exact declared codec/nullability.
-- **returns**: The borrowed current-selection view; its owning query retains the native arena.
+- **returns**: The borrowed current-selection view; its owning query retains the command and its dependencies.
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
@@ -1179,7 +1179,7 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 
 - **expression**: The compatible native scalar owned by the same live query.
 - **T**: The statically known CLR value or owned result type with the exact declared codec/nullability.
-- **returns**: The borrowed current-selection view; its owning query retains the native arena.
+- **returns**: The borrowed current-selection view; its owning query retains the command and its dependencies.
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
@@ -1201,7 +1201,7 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 - **T1**: The statically known CLR value or owned result type with the exact declared codec/nullability.
 - **T2**: The statically known CLR value or owned result type with the exact declared codec/nullability.
 - **TOut**: The statically known CLR value or owned result type with the exact declared codec/nullability.
-- **returns**: The borrowed current-selection view; its owning query retains the native arena.
+- **returns**: The borrowed current-selection view; its owning query retains the command and its dependencies.
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
 - **T:System.InvalidOperationException**: The owner, projection or one-shot terminal is in an invalid state.
 - **T:System.ObjectDisposedException**: The required native owner or its parent has closed admission.
@@ -1327,7 +1327,7 @@ Composition is synchronous and fail-fast on concurrent writers. The first termin
 public Korda.Query.SqlExpression<T> Korda.Query.Query<TEntity>.Value<T>(T value, Korda.Data.ValueCodec<T> codec)
 ```
 
-Immediately snapshots a typed literal into the native arena.
+Immediately snapshots a typed literal into the bounded query command.
 
 Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
@@ -2812,7 +2812,7 @@ public Korda.Query.SqlPredicate Korda.Query.SqlPredicate.And(Korda.Query.SqlPred
 
 Combines same-query conditions with native AND.
 
-Boolean composition uses SQL three-valued logic and performs one direct native operation.
+Boolean composition uses SQL three-valued logic and records one operation in the complete query command.
 
 - **other**: The compatible same-source selection or same-query expression required by this operation.
 - **returns**: A same-query borrowed native predicate token with SQL three-valued semantics.
@@ -2829,7 +2829,7 @@ public Korda.Query.SqlPredicate Korda.Query.SqlPredicate.Not()
 
 Negates this condition using native SQL NOT.
 
-Boolean composition uses SQL three-valued logic and performs one direct native operation.
+Boolean composition uses SQL three-valued logic and records one operation in the complete query command.
 
 - **returns**: A same-query borrowed native predicate token with SQL three-valued semantics.
 - **T:System.ArgumentException**: An argument, owner association or codec/nullability is incompatible.
@@ -2845,7 +2845,7 @@ public Korda.Query.SqlPredicate Korda.Query.SqlPredicate.Or(Korda.Query.SqlPredi
 
 Combines same-query conditions with native OR.
 
-Boolean composition uses SQL three-valued logic and performs one direct native operation.
+Boolean composition uses SQL three-valued logic and records one operation in the complete query command.
 
 - **other**: The compatible same-source selection or same-query expression required by this operation.
 - **returns**: A same-query borrowed native predicate token with SQL three-valued semantics.
@@ -3028,7 +3028,7 @@ public Korda.Query.WindowDefinition Korda.Query.WindowDefinition.OrderBy<T>(Kord
 
 Appends native ordering with explicit direction and SQL NULL placement.
 
-The owning query bounds lifetime and concurrent access. Rank, RowNumber and Over snapshot native window state immediately; subsequent mutation cannot change existing expressions. Defaults and limits follow the provider capability contract.
+The owning query bounds lifetime and concurrent access. Rank, RowNumber and Over snapshot the current window specification immediately; subsequent mutation cannot change existing expressions. Defaults and limits follow the provider capability contract.
 
 - **expression**: The compatible native scalar owned by the same live query.
 - **direction**: Explicit ascending or descending SQL order.
@@ -3048,7 +3048,7 @@ public Korda.Query.WindowDefinition Korda.Query.WindowDefinition.PartitionBy<T>(
 
 Appends a same-query native partition expression.
 
-The owning query bounds lifetime and concurrent access. Rank, RowNumber and Over snapshot native window state immediately; subsequent mutation cannot change existing expressions. Defaults and limits follow the provider capability contract.
+The owning query bounds lifetime and concurrent access. Rank, RowNumber and Over snapshot the current window specification immediately; subsequent mutation cannot change existing expressions. Defaults and limits follow the provider capability contract.
 
 - **expression**: The compatible native scalar owned by the same live query.
 - **T**: The statically known CLR value or owned result type with the exact declared codec/nullability.
@@ -3066,7 +3066,7 @@ public Korda.Query.WindowDefinition Korda.Query.WindowDefinition.RowsBetween(Kor
 
 Sets one supported ROWS frame; invalid endpoints reject before publication.
 
-The owning query bounds lifetime and concurrent access. Rank, RowNumber and Over snapshot native window state immediately; subsequent mutation cannot change existing expressions. Defaults and limits follow the provider capability contract.
+The owning query bounds lifetime and concurrent access. Rank, RowNumber and Over snapshot the current window specification immediately; subsequent mutation cannot change existing expressions. Defaults and limits follow the provider capability contract.
 
 - **start**: The supported starting ROWS frame endpoint.
 - **end**: The supported ending ROWS frame endpoint.
@@ -3224,7 +3224,7 @@ Korda.Query.QueryRow<TEntity> where TEntity : class | kind=Struct;static=False;s
 
 A stack-independent typed root-table proxy that belongs to one live native query.
 
-This borrowed proxy retains its query association. Default, foreign, closed or sealed owners reject. Each operation forwards immediately to a finite native arena; no managed SQL tree or captured callback is retained.
+This borrowed proxy retains its query association. Default, foreign, closed or sealed owners reject. Each operation records a bounded command with immediate owner and type validation; the complete command is submitted to the native compiler without retaining the callback.
 
 - **TEntity**: The declared root entity class.
 
@@ -3246,7 +3246,7 @@ This borrowed view is valid only while its projection remains current in the liv
 Korda.Query.Query<TEntity> where TEntity : class | kind=Class;static=False;sealed=True;abstract=False;base=System.Object;interfaces=System.IDisposable
 ```
 
-One mutable, source-bound native query arena with a strongly typed application facade.
+One mutable, source-bound query command for the native compiler with a strongly typed application facade.
 
 Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query; use Clone before a second execution. Keep this owner alive across streaming and dispose after use.
 
@@ -3338,7 +3338,7 @@ Korda.Query.SqlPredicate | kind=Struct;static=False;sealed=True;abstract=False;b
 
 An opaque same-query native SQL condition; default predicates reject.
 
-Boolean composition uses SQL three-valued logic and performs one direct native operation.
+Boolean composition uses SQL three-valued logic and records one operation in the complete query command.
 
 
 ## `T:Korda.Query.SqlStringExtensions`
@@ -3358,7 +3358,7 @@ Literal-pattern methods snapshot and escape the supplied text before native SQL 
 Korda.Query.UpdateSetters<TEntity> where TEntity : class | kind=Class;static=False;sealed=True;abstract=False;base=System.Object;interfaces=
 ```
 
-A callback-scoped typed assignment collector; scalar expressions are built natively immediately.
+A callback-scoped typed assignment collector; scalar expressions are recorded for the native compiler.
 
 The owner is valid only during the synchronous update callback. Each scalar is snapshotted immediately; duplicate, generated and primary-key assignments reject. Assignment clauses attach after callback success; no tracked entity or managed SQL expression tree is created.
 
@@ -3372,6 +3372,6 @@ Korda.Query.WindowDefinition | kind=Class;static=False;sealed=True;abstract=Fals
 
 Finite mutable native window state; each Over/rank call snapshots its current definition.
 
-The owning query bounds lifetime and concurrent access. Rank, RowNumber and Over snapshot native window state immediately; subsequent mutation cannot change existing expressions. Defaults and limits follow the provider capability contract.
+The owning query bounds lifetime and concurrent access. Rank, RowNumber and Over snapshot the current window specification immediately; subsequent mutation cannot change existing expressions. Defaults and limits follow the provider capability contract.
 
 

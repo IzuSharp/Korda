@@ -2,8 +2,38 @@
 
 > **DB-CPP-01 implementation update.** The public C# examples, signatures and ownership contracts in this guide remain the compatibility inputs. The current maintained native implementation is C++20; its module mapping, direct libpq/sqlite3 execution, Clang/CMake commands and package production are documented in [C++ native implementation](cpp-native.md). Descriptions below of Rust, SQLx, SeaQuery or Tokio internals are retained as the fixed `465cd0f` behavioral reference, not current build dependencies. The named verification entry points now build the ported C++ fixtures and retain their original managed assertions.
 
+## Current Fluent complete-command boundary
+
+The public Fluent facade now selects `QueryBinding.CreateBuffered` explicitly.
+It records all existing scalar and clause operations in the versioned
+[NWQC command](../../native/database/binding/query-command-v1.md), including local
+aliases/windows, immutable imported query blocks and retained source-bound
+model/plan/CTE dependencies. C++ receives one complete command at preparation or
+submission, decodes into the existing `NativeQuery`, and publishes a compiled
+immutable plan only after validation succeeds. Cursor fetch/cancel/retirement
+remain independent operations. No command is rendered into SQL by C#.
+
+The `db.query.command.v1` capability and separate compile/render/CTE entries are
+additive; the 42-entry direct v1 inventory, layouts and fingerprint below remain
+unchanged. Missing command support is an explicit failure for Fluent, never a
+node-by-node fallback. `tests/Query.Binding/CommandOnlyTests.cs` removes all direct
+composition exports from its resolver and forwards counted complete commands to
+the real native decoder. The old direct tests continue to exercise that ABI.
+
+Managed validation preserves immediate type/owner/capability failures, JOIN
+reservation and invalidation, parameter-name union checks, finite budgets and
+recovery after rejected mutations. Native validation remains authoritative for
+the complete command before publication or provider I/O. `ToSql` renders a
+snapshot without sealing; `Clone` and imported selections copy composition state
+without native calls. Clone/shared literals carry command-local origin identities
+so native value ownership and literal-byte quota accounting remain stable.
+
+The remainder of this guide records the preserved direct ABI and its historical
+implementation contract; statements about immediate native mutation apply to
+that direct path.
+
 B09 supplies the internal C# calls and native validation metadata between the
-strongly typed application facade and the Rust query engine. It uses the exact
+strongly typed application facade and the C++ query engine. It uses the exact
 Design commit recorded in `native/database/binding/signatures-v1.json`. B01 remains
 the sole owner of Table, Column, Relation, Projection, codec identities and db-wire.
 B11 owns SeaQuery statements and rendering; B04 owns source/session scheduling and
@@ -26,7 +56,8 @@ metadata. A successful validator call authorizes one matching native builder
 operation; it does not execute SQL. B11 must apply that operation to its own
 SeaQuery candidate under the same query admission. A failed backend mutation must
 be rolled back completely, or the arena must be poisoned before another call.
-There is no optional batched command language in this implementation.
+That frozen direct protocol is separate from the complete-command extension used
+by the current Fluent facade.
 
 The call table receives exports from the already negotiated creating module. The
 A02 loader keeps that module resident; the table is never a global basename

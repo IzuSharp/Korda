@@ -3,11 +3,18 @@
 > **DB-CPP-01 implementation update.** The public C# examples, signatures and ownership contracts in this guide remain the compatibility inputs. The current maintained native implementation is C++20; its module mapping, direct libpq/sqlite3 execution, Clang/CMake commands and package production are documented in [C++ native implementation](cpp-native.md). Descriptions below of Rust, SQLx, SeaQuery or Tokio internals are retained as the fixed `465cd0f` behavioral reference, not current build dependencies. The named verification entry points now build the ported C++ fixtures and retain their original managed assertions.
 
 `Korda.Query` is the application query surface bundled into each standalone
-`Korda.Database.Sqlite` or `Korda.Database.PostgreSql` package. A C# call
-creates or changes a C++ native query owner immediately. C# retains typed columns, codecs and owner tokens;
-it does not collect a SQL AST, compile expression trees or execute a managed
-LINQ database engine. Ordinary entity and DTO changes use the same precompiled
-provider module.
+`Korda.Database.Sqlite` or `Korda.Database.PostgreSql` package. C# composes a bounded
+complete query command while retaining typed columns, codecs and local owner
+tokens. Preparation or a terminal submits that command once to C++, which
+validates it and compiles the existing native query representation. C# does not
+render SQL or execute a managed LINQ database engine. Ordinary entity and DTO
+changes use the same precompiled provider module.
+
+The provider must advertise `db.query.command.v1` and its three versioned command
+entries. A missing extension rejects query creation; it never selects a series
+of per-node native calls. The frozen direct ABI remains available to existing
+internal consumers. [The command protocol](../../native/database/binding/query-command-v1.md)
+defines its bounded records, dependency sidecar and native validation.
 
 ## Install, describe a model, execute
 
@@ -50,7 +57,7 @@ invoke that callback and binds none of its captured values.
 ```csharp
 long minimum = 1;
 query.Where(row => row.GreaterThanOrEqual(People.Id, minimum));
-minimum = 99; // The already-created native predicate still compares with 1.
+minimum = 99; // The recorded predicate still compares with the snapshotted 1.
 ```
 
 Use `IsNull`, `IsNotNull` and the nullable codecs for SQL NULL. Equality,
@@ -62,16 +69,21 @@ for injecting identifiers or SQL fragments.
 
 ## Ownership, selection and concurrency
 
-A `Query<TEntity>` is one disposable, session-bound mutable arena. Composition
+A `Query<TEntity>` is one disposable, session-bound mutable command. Composition
 is synchronous and fails immediately when another thread owns its admission.
 The first terminal or `Prepare` seals the owner before asynchronous work begins.
 Further composition or direct execution rejects; call `Clone` while still
-mutable if a second independent query is required. Cloning is explicit native
-work and old scalar/alias proxies remain associated with the original query.
+mutable if a second independent query is required. Cloning captures the bounded
+command and immutable dependency references; old scalar/alias proxies remain
+associated with the original query. Literal and parameter identities survive
+cloning and subquery import, preserving native value ownership and quota accounting.
 
 A `QuerySelection<T>` is a borrowed view of the current selection. Selecting
-another projection invalidates an old view. `ToSql` renders a bounded native
-clone with placeholders; it does not execute or seal the original query.
+another projection invalidates an old view. `ToSql` submits a complete diagnostic
+snapshot for native rendering with placeholders; it does not execute or seal the
+original query. Subquery imports are snapshots inside the enclosing command.
+`CommonTable<T>.Create` is an explicit complete-body native validation boundary;
+subsequent `With` imports retain that immutable CTE independently of its wrapper.
 `SelectAll` selects root columns only and never creates an implicit joined
 object graph. An explicit `ProjectionBuilder<T>` freezes unique ordered aliases,
 exact codecs/nullability, typed result tokens and a direct DTO constructor.
@@ -79,7 +91,7 @@ exact codecs/nullability, typed result tokens and a direct DTO constructor.
 `AsAsyncEnumerable` seals immediately and dispatches lazily on its first
 `MoveNextAsync`. It is one-shot. Keep the query alive until enumeration ends and
 dispose the enumerator on early exit. Query disposal prevents further admission,
-requests active cursor stop, and releases its arena/plan references. Native
+requests active cursor stop, and releases its command/dependency/plan references. Native
 children retain their own accepted-operation references. The publication path
 also releases a newly sealed plan when disposal wins the race before that plan
 is stored in the facade.
@@ -178,6 +190,13 @@ introduced here; B14 owns explicit relation/concurrency operations.
 
 ## Reusable immutable plans
 
+`Prepare()` submits the complete command and compiles its immutable native SQL
+and slot layout before returning. It performs no database operation. Repeated
+executions reuse that source-bound plan and change only their independent value
+snapshots. Connection-local provider statement preparation and result/buffering
+validation retain their execution-time boundaries; logical preparation does not
+claim a prepared statement on every physical connection.
+
 ```csharp
 using var query = session.From(People.Table);
 var minimum = query.Parameter("minimum", Codecs.Int64);
@@ -212,7 +231,8 @@ expires before dispatch, with the normal cleanup path.
 
 ## Boundary costs and verification
 
-These calls allocate, encode and cross the ABI. The component records actual
+Composition allocates validation metadata and encodes the bounded command; its
+explicit submission crosses the ABI. The component records actual
 managed allocation bytes and elapsed Stopwatch ticks for 64 warmed synchronous
 composition/render/dispose iterations per provider. It also records the exact
 wire size for one Int64 literal. Those observations describe the tested process,
@@ -220,26 +240,28 @@ not a comparative performance result or a whole-process memory bound. B23 owns
 comparative benchmarks.
 
 The measured source path is `From(...).WhereEqual(...).Take(1).SelectAll().ToSql()`
-with four selected root columns. Inspection yields the following direct C ABI
-call count after model/codec registration is warm; the count is structural,
+with four selected root columns. Inspection yields the following C ABI
+call counts after model/codec registration is warm; the counts are structural,
 not a sampled runtime counter:
 
-| Part | Direct C ABI calls |
-| --- | ---: |
-| Create the query owner | 1 |
-| Column, copied literal, comparison, WHERE | 4 |
-| LIMIT | 1 |
-| Four root scalar tokens and SELECT descriptor | 5 |
-| Render, view and release returned SQL buffer | 3 |
-| Release query owner | 1 |
-| Total per recorded iteration | 15 |
+| Part | Preserved direct ABI path | Current Fluent command path |
+| --- | ---: | ---: |
+| Create the query owner | 1 | 0 |
+| Column, copied literal, comparison, WHERE | 4 | 0 |
+| LIMIT | 1 | 0 |
+| Four root scalar tokens and SELECT descriptor | 5 | 0 |
+| Render, view and release returned SQL buffer | 3 | 3 |
+| Release query owner | 1 | 0 |
+| Total per recorded iteration | 15 | 3 |
 
 The Int64 codec writes an eight-byte managed value; the bounded wire encoder
 copies it into its recorded envelope. B09 retains the complete admitted wire
-snapshot, while B11 retains its owned scalar cell and SeaQuery token. Control
-records and native expression clones have additional bounded allocation costs.
-Rendering copies the SQL result to an owned CLR string. No batching or
-zero-overhead claim is made.
+snapshot, while B11 retains its owned scalar cell in the C++ query representation.
+Control records, validation facts and native expression clones have additional
+bounded allocation costs. Submission copies the tape into one complete command
+buffer; rendering copies the SQL result to an owned CLR string. The command-only
+fixture verifies composition with every old per-node export unavailable, then
+counts the explicit render, compile and CTE boundaries.
 
 The Linux evidence includes exact pinned public API/nullability/generic and XML
 reference checks; typed negative consumers; actual PostgreSQL18/SQLite SQL

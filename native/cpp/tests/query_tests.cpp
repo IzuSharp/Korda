@@ -11,9 +11,11 @@
 #include <filesystem>
 #include <fstream>
 #include <functional>
+#include <future>
 #include <iostream>
 #include <limits>
 #include <stdexcept>
+#include <thread>
 
 using namespace nw;
 namespace
@@ -85,7 +87,7 @@ Codec scalar(std::uint32_t id, bool nullable = false)
 }
 Capabilities all_caps(Profile profile)
 {
-    return Capabilities::from_mask((1ULL << 26) - 1, profile);
+    return Capabilities::from_mask((1ULL << 27) - 1, profile);
 }
 Bytes cells(Profile profile, Codec codec, const std::vector<std::optional<Bytes>>& values)
 {
@@ -105,7 +107,7 @@ struct Selection
     std::string name;
     Codec codec;
 };
-void select(NativeQuery& query, std::initializer_list<Selection> values)
+Bytes selection_record(std::initializer_list<Selection> values, bool embedded_tokens = false)
 {
     std::string canonical = "{\"version\":1,\"fields\":[";
     std::vector<Bytes> records;
@@ -118,8 +120,11 @@ void select(NativeQuery& query, std::initializer_list<Selection> values)
         canonical += "{\"ordinal\":" + std::to_string(i) + ",\"name\":" + json_quote(value.name) +
                      ",\"codec\":" + std::to_string(value.codec.id) +
                      ",\"codec_config\":null,\"nullable\":" + (value.codec.nullable ? "true" : "false") + '}';
-        records.push_back(encode_control(
-            22, {num(1, i), {2, 4, bytes(value.name)}, num(3, value.codec.id), num(4, value.codec.nullable)}));
+        std::vector<ControlField> fields{
+            num(1, i), {2, 4, bytes(value.name)}, num(3, value.codec.id), num(4, value.codec.nullable)};
+        if (embedded_tokens)
+            fields.push_back(token(5, value.expression));
+        records.push_back(encode_control(22, fields));
         auto encoded = u64(value.expression);
         tokens.insert(tokens.end(), encoded.begin(), encoded.end());
     }
@@ -133,7 +138,11 @@ void select(NativeQuery& query, std::initializer_list<Selection> values)
     }
     auto hash = sha256(bytes(canonical));
     auto projection = encode_control(13, {{1, 5, sequence}, {2, 5, {hash.begin(), hash.end()}}});
-    query.clause(6, record({{1, 8, tokens}, {2, 5, projection}}));
+    return record({{1, 8, tokens}, {2, 5, projection}});
+}
+void select(NativeQuery& query, std::initializer_list<Selection> values)
+{
+    query.clause(6, selection_record(values));
 }
 void where(NativeQuery& query, std::uint64_t expression)
 {
@@ -203,6 +212,517 @@ struct Context
         return {source, std::make_shared<Model>(Model::parse(bytes(json), source.profile)), codecs};
     }
 };
+
+Bytes pair32(std::uint32_t a, std::uint32_t b)
+{
+    auto result = u32(a);
+    const auto tail = u32(b);
+    result.insert(result.end(), tail.begin(), tail.end());
+    return result;
+}
+Bytes command_parameter(std::uint32_t id, std::string_view name, bool nullable = false)
+{
+    Bytes result(16);
+    put_u32(result, 0, id);
+    put_u32(result, 4, 3);
+    put_u32(result, 8, nullable);
+    put_u32(result, 12, static_cast<std::uint32_t>(name.size()));
+    result.insert(result.end(), name.begin(), name.end());
+    return result;
+}
+struct CommandBlock
+{
+    std::uint32_t owner;
+    std::uint32_t table;
+    std::uint32_t slots = 0;
+    std::vector<Bytes> records;
+    CommandBlock(std::uint32_t owner_index, std::uint32_t table_id) : owner(owner_index), table(table_id) {}
+    std::uint32_t add(std::uint16_t kind, std::uint16_t opcode, ByteView payload, bool result = true,
+                      std::uint32_t origin = 0)
+    {
+        Bytes value(16);
+        put_u32(value, 0, static_cast<std::uint32_t>(16 + payload.size()));
+        put_u16(value, 4, kind);
+        put_u16(value, 6, opcode);
+        const auto slot = result ? ++slots : 0;
+        put_u32(value, 8, slot);
+        put_u32(value, 12, origin);
+        value.insert(value.end(), payload.begin(), payload.end());
+        records.push_back(std::move(value));
+        return slot;
+    }
+    std::uint32_t clause(std::uint16_t opcode, ByteView payload, bool result = false, std::uint32_t origin = 0)
+    {
+        return add(8, opcode, payload, result, origin);
+    }
+    Bytes encode() const
+    {
+        Bytes value(24);
+        put_u32(value, 4, owner);
+        put_u32(value, 8, table);
+        put_u32(value, 12, static_cast<std::uint32_t>(records.size()));
+        put_u32(value, 16, slots);
+        for (const auto& record : records)
+            value.insert(value.end(), record.begin(), record.end());
+        put_u32(value, 0, static_cast<std::uint32_t>(value.size()));
+        return value;
+    }
+};
+Bytes query_command(std::initializer_list<CommandBlock> blocks,
+                    std::initializer_list<std::array<std::uint32_t, 3>> bindings = {})
+{
+    Bytes result(32);
+    put_u32(result, 0, 0x4351574e);
+    put_u32(result, 4, 1);
+    put_u32(result, 12, static_cast<std::uint32_t>(blocks.size()));
+    put_u32(result, 16, static_cast<std::uint32_t>(blocks.size() - 1));
+    put_u32(result, 24, static_cast<std::uint32_t>(bindings.size()));
+    for (const auto& binding : bindings)
+        for (auto value : binding)
+        {
+            const auto encoded = u32(value);
+            result.insert(result.end(), encoded.begin(), encoded.end());
+        }
+    std::uint32_t count = 0;
+    for (const auto& block : blocks)
+    {
+        auto encoded = block.encode();
+        result.insert(result.end(), encoded.begin(), encoded.end());
+        count += static_cast<std::uint32_t>(block.records.size());
+    }
+    put_u32(result, 8, static_cast<std::uint32_t>(result.size()));
+    put_u32(result, 20, count);
+    return result;
+}
+CommandBlock selected_command(const Context& c, std::int64_t threshold = 7, std::uint32_t origin = 1)
+{
+    CommandBlock block{0, c.root.model->table_id()};
+    const auto id = block.add(1, 0, pair32(0, column(c.root, "Id")));
+    const auto value = block.add(2, 0, cells(c.source.profile, scalar(3), {u64(threshold)}), true, origin);
+    const auto predicate = block.add(4, 4, pair32(id, value));
+    block.clause(1, record({token(1, predicate)}));
+    block.clause(6, selection_record({{id, "Id", scalar(3)}}, true));
+    return block;
+}
+void same_command(const std::shared_ptr<NativePlan>& actual, const std::shared_ptr<NativePlan>& expected,
+                  const std::vector<std::optional<Bytes>>& parameters = {})
+{
+    const auto a = execute(actual, parameters);
+    const auto b = execute(expected, parameters);
+    check(a.sql == b.sql, "complete command SQL differs: " + a.sql + " / " + b.sql);
+    check(a.parameter_bytes == b.parameter_bytes, "complete command ordered parameters differ");
+    check(actual->parameter_schema() == expected->parameter_schema(), "complete command parameter schema differs");
+    check(actual->nodes == expected->nodes && actual->depth == expected->depth,
+          "complete command native node/depth accounting differs");
+}
+std::vector<std::pair<std::string, RenderedQuery>> oracle_cases(const Context& c);
+void complete_query_commands()
+{
+    for (auto profile : {Profile::Sqlite, Profile::PostgreSql})
+    {
+        Context c(profile);
+        const QueryCommandContext context{c.registry, {}, all_caps(profile), 10'000'000'000};
+        const std::vector<QueryCommandDependency> dependencies{c.root, c.child};
+        auto compile = [&](const Bytes& bytes, std::uint32_t terminal = 8)
+        { return compile_query_command(bytes, dependencies, context, terminal); };
+        {
+            CommandBlock block{0, c.root.model->table_id()};
+            const auto id = block.add(1, 0, pair32(0, column(c.root, "Id")));
+            const auto parameter = block.add(3, 0, command_parameter(301, "minimum"), true, 1);
+            const auto predicate = block.add(4, 4, pair32(id, parameter));
+            block.clause(1, record({token(1, predicate)}));
+            block.clause(3, record({token(1, id), num(2, 0), num(3, 1), num(4, 1)}));
+            block.clause(5, record({token(1, 7), token(2, 2)}));
+            block.clause(22, record({{1, 3, u64(99'000'000)}}));
+            block.clause(6, selection_record({{id, "Id", scalar(3)}}, true));
+            auto encoded = query_command({block});
+            auto plan = compile(encoded);
+            auto direct = c.query();
+            const auto did = direct.column(0, column(c.root, "Id"));
+            const auto dp = direct.parameter({301, "minimum", scalar(3), 3});
+            where(direct, direct.binary(4, did, dp));
+            order(direct, did);
+            direct.clause(5, record({token(1, 7), token(2, 2)}));
+            direct.clause(22, record({{1, 3, u64(99'000'000)}}));
+            select(direct, {{did, "Id", scalar(3)}});
+            auto expected = direct.seal(8);
+            same_command(plan, expected, {u64(1)});
+            same_command(plan, expected, {u64(9)});
+            check(plan->timeout_ns == 99'000'000, "command timeout remains numeric");
+            const auto sql = render_query_command(encoded, dependencies, context);
+            check(std::string(sql.begin(), sql.end()) == plan->compiled_shape()->sql,
+                  "render and explicit compile agree");
+            auto ordinary = compile(encoded, 0);
+            (void)execute(ordinary, {u64(1)});
+            rejects(NW_INVALID_STATE, [&] { (void)execute(ordinary, {u64(2)}); });
+        }
+        {
+            auto encoded = query_command({selected_command(c)});
+            auto plan = compile(encoded);
+            std::fill(encoded.begin(), encoded.end(), 0);
+            auto direct = c.selected(4, 7);
+            same_command(plan, direct.seal(8));
+        }
+        {
+            auto snapshot = selected_command(c);
+            auto root = snapshot;
+            const auto imported = root.add(7, 4, u32(0));
+            root.clause(9, record({token(1, imported), num(2, 1)}));
+            auto direct = c.selected(4, 7);
+            const auto old = direct.import_plan(direct.clone_selected()->seal(8));
+            direct.clause(9, record({token(1, old), num(2, 1)}));
+            same_command(compile(query_command({snapshot, root})), direct.seal(8));
+            auto changed = selected_command(c, 8);
+            const auto changed_import = changed.add(7, 4, u32(0));
+            changed.clause(9, record({token(1, changed_import), num(2, 1)}));
+            rejects(NW_INVALID_ARGUMENT, [&] { (void)compile(query_command({snapshot, changed})); });
+            rejects(NW_INVALID_ARGUMENT, [&] { (void)compile(query_command({snapshot, snapshot})); });
+        }
+        for (std::uint32_t operation = 0; operation < 2; ++operation)
+        {
+            auto snapshot = selected_command(c);
+            CommandBlock root{0, c.root.model->table_id()};
+            auto id = root.add(1, 0, pair32(0, column(c.root, "Id")));
+            auto imported = root.add(7, 4, u32(0));
+            std::vector<ControlField> fields{token(1, imported), num(2, operation)};
+            if (operation)
+                fields.push_back(token(3, id));
+            auto predicate = root.clause(14, record(fields), true);
+            root.clause(1, record({token(1, predicate)}));
+            root.clause(6, selection_record({{id, "Id", scalar(3)}}, true));
+            auto body = c.selected(4, 7);
+            auto direct = c.query();
+            auto did = direct.column(0, column(c.root, "Id"));
+            auto dep = body.seal(8);
+            auto dimport = direct.import_plan(dep);
+            fields = {token(1, dimport), num(2, operation)};
+            if (operation)
+                fields.push_back(token(3, did));
+            where(direct, direct.clause(14, record(fields)));
+            select(direct, {{did, "Id", scalar(3)}});
+            auto expected = direct.seal(8);
+            same_command(compile(query_command({snapshot, root})), expected);
+            // The same complete root can import an existing immutable owner.
+            put_u16(root.records[1], 6, 2);
+            put_u32(root.records[1], 16, 2);
+            auto external = dependencies;
+            external.emplace_back(dep);
+            same_command(compile_query_command(query_command({root}), external, context, 8), expected);
+        }
+        {
+            CommandBlock root{0, c.root.model->table_id()};
+            auto id = root.add(1, 0, pair32(0, column(c.root, "Id")));
+            auto model = root.add(7, 1, u32(1));
+            auto alias = root.clause(
+                18, record({token(1, model), num(2, c.child.model->table_id()), {3, 4, bytes("c")}, num(4, 1)}), true);
+            auto child = root.add(1, 0, pair32(alias, column(c.child, "ParentId")));
+            auto lifted = root.add(5, 4, u32(id));
+            auto predicate = root.add(4, 1, pair32(lifted, child));
+            root.clause(7, record({token(1, alias), token(2, predicate)}));
+            auto child_id = root.add(1, 0, pair32(alias, column(c.child, "Id")));
+            auto matched = root.clause(20, record({token(1, alias)}), true);
+            root.clause(3, record({token(1, id), num(2, 0), num(3, 1), num(4, 1)}));
+            root.clause(
+                6, selection_record(
+                       {{id, "Id", scalar(3)}, {child_id, "child", scalar(3, true)}, {matched, "matched", scalar(4)}},
+                       true));
+            const auto result = execute(compile(query_command({root}), 0));
+            const auto oracle = oracle_cases(c);
+            const auto expected = std::find_if(oracle.begin(), oracle.end(),
+                                               [](const auto& value) { return value.first == "nullable-left-join"; });
+            check(result.sql == expected->second.sql && result.parameter_bytes == expected->second.parameter_bytes,
+                  "complete command JOIN reserve/commit/nullable projection");
+            // A provisional column captured before commit is invalid afterwards.
+            root.add(5, 1, u32(child));
+            rejects(NW_INVALID_ARGUMENT, [&] { (void)compile(query_command({root})); });
+        }
+        {
+            CommandBlock root{0, c.root.model->table_id()};
+            auto id = root.add(1, 0, pair32(0, column(c.root, "Id")));
+            auto window = root.clause(11, record({num(1, 0)}), true);
+            root.clause(11, record({num(1, 2), token(2, window), token(3, id), num(4, 0), num(5, 1)}));
+            auto rank = root.clause(13, record({num(1, 6), num(3, 0), num(5, 3)}), true);
+            rank = root.clause(21, record({token(1, rank), token(2, window)}), true);
+            root.clause(11, record({num(1, 1), token(2, window), token(3, id)}));
+            root.clause(3, record({token(1, id), num(2, 0), num(3, 1), num(4, 1)}));
+            root.clause(6, selection_record({{id, "Id", scalar(3)}, {rank, "rank", scalar(3)}}, true));
+            const auto result = execute(compile(query_command({root})));
+            const auto oracle = oracle_cases(c);
+            const auto expected = std::find_if(oracle.begin(), oracle.end(),
+                                               [](const auto& value) { return value.first == "window-snapshot"; });
+            check(result.sql == expected->second.sql, "complete command snapshots window at OVER");
+        }
+        for (std::uint16_t operation : {1, 2, 3})
+        {
+            CommandBlock root{0, c.root.model->table_id()};
+            auto id = root.add(1, 0, pair32(0, column(c.root, "Id")));
+            auto values = cells(profile, scalar(3), {u64(1), u64(2)});
+            auto input = u32(id);
+            input.insert(input.end(), values.begin(), values.end());
+            auto list = root.add(6, operation, input, true, 1);
+            root.clause(1, record({token(1, list)}));
+            root.clause(6, selection_record({{id, "Id", scalar(3)}}, true));
+            auto snapshot = root;
+            auto imported = root.add(7, 4, u32(0));
+            root.clause(9, record({token(1, imported), num(2, 1)}));
+            auto direct = c.query();
+            auto did = direct.column(0, column(c.root, "Id"));
+            where(direct, direct.list(operation, did, values));
+            select(direct, {{did, "Id", scalar(3)}});
+            auto dimport = direct.import_plan(direct.clone_selected()->seal(8));
+            direct.clause(9, record({token(1, dimport), num(2, 1)}));
+            same_command(compile(query_command({snapshot, root})), direct.seal(8));
+        }
+        for (std::uint32_t operation = 0; operation < 4; ++operation)
+        {
+            CommandBlock root{0, c.root.model->table_id()};
+            auto id = root.add(1, 0, pair32(0, column(c.root, "Id")));
+            auto name = root.add(1, 0, pair32(0, column(c.root, "Name")));
+            const auto literal = cells(profile, scalar(5), {bytes("a_%'")});
+            auto predicate =
+                root.clause(16, record({num(1, operation), token(2, name), {3, 6, literal}, num(4, 92)}), true, 1);
+            root.clause(1, record({token(1, predicate)}));
+            root.clause(6, selection_record({{id, "Id", scalar(3)}}, true));
+            const auto snapshot = root;
+            auto imported = root.add(7, 4, u32(0));
+            root.clause(9, record({token(1, imported), num(2, 1)}));
+            auto direct = c.query();
+            auto did = direct.column(0, column(c.root, "Id"));
+            auto dname = direct.column(0, column(c.root, "Name"));
+            where(direct, direct.clause(16, record({num(1, operation), token(2, dname), {3, 6, literal}, num(4, 92)})));
+            select(direct, {{did, "Id", scalar(3)}});
+            auto dimport = direct.import_plan(direct.clone_selected()->seal(8));
+            direct.clause(9, record({token(1, dimport), num(2, 1)}));
+            same_command(compile(query_command({snapshot, root})), direct.seal(8));
+        }
+        {
+            CommandBlock root{0, c.root.model->table_id()};
+            auto id = root.add(1, 0, pair32(0, column(c.root, "Id")));
+            auto parameter = root.add(3, 0, command_parameter(301, "minimum"), true, 1);
+            auto predicate = root.add(4, 4, pair32(id, parameter));
+            root.clause(1, record({token(1, predicate)}));
+            root.clause(6, selection_record({{id, "Id", scalar(3)}}, true));
+            auto snapshot = root;
+            auto imported = root.add(7, 4, u32(0));
+            root.clause(9, record({token(1, imported), num(2, 1)}));
+            auto direct = c.query();
+            auto did = direct.column(0, column(c.root, "Id"));
+            auto dp = direct.parameter({301, "minimum", scalar(3), 3});
+            where(direct, direct.binary(4, did, dp));
+            select(direct, {{did, "Id", scalar(3)}});
+            auto dimport = direct.import_plan(direct.clone_selected()->seal(8));
+            direct.clause(9, record({token(1, dimport), num(2, 1)}));
+            same_command(compile(query_command({snapshot, root})), direct.seal(8), {u64(3)});
+        }
+        {
+            auto body = selected_command(c, 1);
+            auto declared = c.declared("SelectedParents");
+            auto cte = create_query_command_cte(query_command({body}), dependencies, context, declared,
+                                                declared.model->table_id(), 0);
+            const std::vector<QueryCommandDependency> external{declared, cte};
+            CommandBlock root{0, declared.model->table_id()};
+            auto imported = root.add(7, 3, u32(1));
+            root.clause(10, record({token(1, imported)}));
+            auto id = root.add(1, 0, pair32(0, column(declared, "Id")));
+            root.clause(3, record({token(1, id), num(2, 0), num(3, 1), num(4, 1)}));
+            root.clause(6, selection_record({{id, "Id", scalar(3)}}, true));
+            const auto result = execute(compile_query_command(query_command({root}), external, context, 0));
+            const auto oracle = oracle_cases(c);
+            const auto expected = std::find_if(oracle.begin(), oracle.end(),
+                                               [](const auto& value) { return value.first == "cte-snapshot"; });
+            check(result.sql == expected->second.sql && result.parameter_bytes == expected->second.parameter_bytes,
+                  "complete command CTE compilation and immutable owner import");
+            rejects(NW_INVALID_ARGUMENT,
+                    [&]
+                    {
+                        (void)create_query_command_cte(query_command({body}), dependencies, context, declared,
+                                                       declared.model->table_id(), 1);
+                    });
+        }
+        {
+            auto declared = c.declared("Numbers");
+            const std::vector<QueryCommandDependency> recursive_dependencies{c.root, declared};
+            CommandBlock member{1, declared.model->table_id()};
+            auto id = member.add(1, 0, pair32(0, column(declared, "Id")));
+            auto one = member.add(2, 0, cells(profile, scalar(3), {u64(1)}), true, 1);
+            auto three = member.add(2, 0, cells(profile, scalar(3), {u64(3)}), true, 2);
+            auto next = member.add(4, 7, pair32(id, one));
+            auto predicate = member.add(4, 5, pair32(id, three));
+            member.clause(1, record({token(1, predicate)}));
+            member.clause(6, selection_record({{next, "Id", scalar(3)}}, true));
+            auto anchor = selected_command(c, 0, 3);
+            put_u16(anchor.records[2], 6, 1);
+            auto imported = anchor.add(7, 4, u32(0));
+            anchor.clause(9, record({token(1, imported), num(2, 1)}));
+            auto cte = create_query_command_cte(query_command({member, anchor}), recursive_dependencies, context,
+                                                declared, declared.model->table_id(), 1);
+            const std::vector<QueryCommandDependency> external{declared, cte};
+            CommandBlock root{0, declared.model->table_id()};
+            imported = root.add(7, 3, u32(1));
+            root.clause(10, record({token(1, imported)}));
+            id = root.add(1, 0, pair32(0, column(declared, "Id")));
+            root.clause(3, record({token(1, id), num(2, 0), num(3, 1), num(4, 1)}));
+            root.clause(6, selection_record({{id, "Id", scalar(3)}}, true));
+            const auto result = execute(compile_query_command(query_command({root}), external, context, 0));
+            const auto oracle = oracle_cases(c);
+            const auto expected = std::find_if(oracle.begin(), oracle.end(),
+                                               [](const auto& value) { return value.first == "recursive-cte"; });
+            check(result.sql == expected->second.sql && result.parameter_bytes == expected->second.parameter_bytes,
+                  "complete command recursive CTE anchor/member validation");
+        }
+        {
+            // An optional predicate may be constructed but not selected. Its
+            // escaped native literal is retained and still subject to budgets.
+            QueryLimits limits;
+            limits.bytes = 9000;
+            const QueryCommandContext bounded{c.registry, limits, all_caps(profile), 10'000'000'000};
+            const auto literal = cells(profile, scalar(5), {bytes(std::string(3000, '%'))});
+            auto declared = c.declared("UnusedFilter");
+            auto direct = c.query(limits);
+            auto did = direct.column(0, column(c.root, "Id"));
+            auto dname = direct.column(0, column(c.root, "Name"));
+            direct.clause(16, record({num(1, 0), token(2, dname), {3, 6, literal}, num(4, 92)}));
+            direct.clause(6, selection_record({{did, "Id", scalar(3)}}, true));
+            auto dcte = NativeCte::create(declared, declared.model->table_id(), direct, 0);
+            auto dclone = direct.clone_selected();
+            auto dimport = dclone->import_cte(dcte);
+            dclone->clause(10, record({token(1, dimport)}));
+            auto expected = dclone->seal(8);
+            check(execute(expected).parameter_expectation.descriptors.empty(),
+                  "unused CTE filter emits no parameters and fits the original literal budget");
+
+            CommandBlock body{0, c.root.model->table_id()};
+            auto id = body.add(1, 0, pair32(0, column(c.root, "Id")));
+            auto name = body.add(1, 0, pair32(0, column(c.root, "Name")));
+            body.clause(16, record({num(1, 0), token(2, name), {3, 6, literal}, num(4, 92)}), true, 1);
+            body.clause(6, selection_record({{id, "Id", scalar(3)}}, true));
+            auto cte = create_query_command_cte(query_command({body}), dependencies, bounded, declared,
+                                                declared.model->table_id(), 0);
+            const auto original = body;
+            auto external = dependencies;
+            external.emplace_back(cte);
+            auto imported = body.add(7, 3, u32(2));
+            body.clause(10, record({token(1, imported)}));
+            auto seeded = compile_query_command(query_command({body}, {{1, 2, 1}}), external, bounded, 8);
+            same_command(seeded, expected);
+            check(seeded->retained_literal_bytes() == expected->retained_literal_bytes(),
+                  "CTE origin seed preserves actual native literal-byte accounting");
+            check(seeded->owned_bytes == expected->owned_bytes,
+                  "CTE origin comparison uses the same projection record bytes");
+            rejects(NW_DOMAIN_ERROR, [&] { (void)compile_query_command(query_command({body}), external, bounded, 8); });
+            auto wide = bounded;
+            wide.limits.bytes = 20000;
+            auto independent = compile_query_command(query_command({body}), external, wide, 8);
+            std::cout << "origin-budget provider=" << static_cast<std::uint32_t>(profile)
+                      << " limit=9000 direct_status=0 unseeded_status=13 seeded_status=0"
+                      << " direct_owned=" << expected->owned_bytes << " direct_expanded=" << expected->expanded_nodes()
+                      << " direct_literal=" << expected->retained_literal_bytes()
+                      << " unseeded_owned=" << independent->owned_bytes
+                      << " unseeded_expanded=" << independent->expanded_nodes()
+                      << " unseeded_literal=" << independent->retained_literal_bytes()
+                      << " seeded_literal=" << seeded->retained_literal_bytes() << '\n';
+            for (const auto& binding :
+                 std::vector<std::array<std::uint32_t, 3>>{{0, 2, 1}, {1, 0, 1}, {1, 2, 0}, {1, 2, 2}, {2, 2, 1}})
+                rejects(NW_INVALID_ARGUMENT, [&]
+                        { (void)compile_query_command(query_command({original}, {binding}), external, bounded, 8); });
+            rejects(NW_INVALID_ARGUMENT,
+                    [&]
+                    {
+                        (void)compile_query_command(query_command({original}, {{1, 2, 1}, {1, 2, 1}}), external,
+                                                    bounded, 8);
+                    });
+            auto altered = original;
+            auto changed_literal = cells(profile, scalar(5), {bytes(std::string(3000, '_'))});
+            const auto changed = record({num(1, 0), token(2, name), {3, 6, changed_literal}, num(4, 92)});
+            altered.records[2].resize(16);
+            altered.records[2].insert(altered.records[2].end(), changed.begin(), changed.end());
+            put_u32(altered.records[2], 0, static_cast<std::uint32_t>(altered.records[2].size()));
+            rejects(NW_INVALID_ARGUMENT,
+                    [&] { (void)compile_query_command(query_command({altered}, {{1, 2, 1}}), external, bounded, 8); });
+
+            auto declared2 = c.declared("SecondUnusedFilter");
+            auto cte2 = create_query_command_cte(query_command({original}, {{1, 2, 1}}), external, bounded, declared2,
+                                                 declared2.model->table_id(), 0);
+            auto direct2 = NativeCte::create(declared2, declared2.model->table_id(), direct, 0);
+            auto douter = c.query(limits);
+            auto outer_id = douter.column(0, column(c.root, "Id"));
+            select(douter, {{outer_id, "Id", scalar(3)}});
+            douter.clause(10, record({token(1, douter.import_cte(dcte))}));
+            douter.clause(10, record({token(1, douter.import_cte(direct2))}));
+            CommandBlock outer{0, c.root.model->table_id()};
+            outer_id = outer.add(1, 0, pair32(0, column(c.root, "Id")));
+            outer.clause(6, selection_record({{outer_id, "Id", scalar(3)}}, true));
+            outer.clause(10, record({token(1, outer.add(7, 3, u32(1)))}));
+            outer.clause(10, record({token(1, outer.add(7, 3, u32(2)))}));
+            std::vector<QueryCommandDependency> two_ctes{c.root, cte, cte2};
+            same_command(compile_query_command(query_command({outer}), two_ctes, bounded, 8), douter.seal(8));
+            // Equal literals from independently constructed bodies retain distinct
+            // identity; omitting a seed must not silently merge them by value.
+            two_ctes[2] = create_query_command_cte(query_command({original}), dependencies, bounded, declared2,
+                                                   declared2.model->table_id(), 0);
+            rejects(NW_DOMAIN_ERROR,
+                    [&] { (void)compile_query_command(query_command({outer}), two_ctes, bounded, 8); });
+            cte.reset();
+            external.clear();
+            two_ctes.clear();
+            // Origin scalar ownership outlives release of the first CTE owner.
+            const std::vector<QueryCommandDependency> retained{c.root, cte2};
+            same_command(compile_query_command(query_command({original}, {{1, 1, 1}}), retained, bounded, 8),
+                         direct.clone_selected()->seal(8));
+        }
+        {
+            const auto valid = query_command({selected_command(c)});
+            const std::vector<std::pair<std::size_t, std::uint32_t>> invalid32{
+                {0, 0},  {8, 31},    {12, 0}, {16, 1}, {20, 0},  {24, 1}, {28, 1}, {32, 23}, {36, 99},
+                {40, 0}, {44, 9999}, {48, 0}, {52, 1}, {56, 15}, {64, 2}, {68, 1}, {72, 1}};
+            for (auto [offset, value] : invalid32)
+            {
+                auto bad = valid;
+                put_u32(bad, offset, value);
+                rejects(NW_INVALID_ARGUMENT, [&] { (void)compile(bad); });
+            }
+            auto version = valid;
+            put_u32(version, 4, 2);
+            rejects(NW_NOT_SUPPORTED, [&] { (void)compile(version); });
+            auto unknown = valid;
+            put_u16(unknown, 60, 99);
+            rejects(NW_NOT_SUPPORTED, [&] { (void)compile(unknown); });
+            for (auto size : {0U, 4U, 31U, 32U, 55U, 56U, 71U, 72U})
+            {
+                auto truncated = Bytes(valid.begin(), valid.begin() + size);
+                if (size >= 12)
+                    put_u32(truncated, 8, size);
+                rejects(NW_INVALID_ARGUMENT, [&] { (void)compile(truncated); });
+            }
+            auto no_capability = context;
+            no_capability.capabilities.command = false;
+            rejects(NW_NOT_SUPPORTED, [&] { (void)compile_query_command(valid, dependencies, no_capability, 8); });
+            auto mixed = dependencies;
+            auto wrong = c.root;
+            ++wrong.source.generation;
+            mixed[1] = wrong;
+            rejects(NW_INVALID_STATE, [&] { (void)compile_query_command(valid, mixed, context, 8); });
+        }
+        {
+            CommandBlock broken{0, c.root.model->table_id()};
+            broken.add(3, 0, command_parameter(401, "failed_command"), true, 1);
+            broken.add(99, 0, {}, false);
+            rejects(NW_NOT_SUPPORTED, [&] { (void)compile(query_command({broken})); });
+            auto direct = c.query();
+            direct.parameter({401, "after_failed_command", scalar(3), 3});
+            check(true, "failed command does not register parameter IDs");
+            direct.parameter({402, "existing_identity", scalar(3), 3});
+            CommandBlock collision{0, c.root.model->table_id()};
+            auto id = collision.add(1, 0, pair32(0, column(c.root, "Id")));
+            collision.add(3, 0, command_parameter(403, "would_be_new"), true, 1);
+            collision.add(3, 0, command_parameter(402, "conflicting_identity"), true, 2);
+            collision.clause(6, selection_record({{id, "Id", scalar(3)}}, true));
+            rejects(NW_INVALID_ARGUMENT, [&] { (void)compile(query_command({collision})); });
+            direct.parameter({403, "after_atomic_rejection", scalar(3), 3});
+            check(true, "source parameter batch registration rejects atomically");
+        }
+    }
+}
 
 std::vector<std::pair<std::string, RenderedQuery>> oracle_cases(const Context& c)
 {
@@ -423,7 +943,8 @@ void binding_and_safety()
     const auto capabilities = all_caps(Profile::Sqlite);
     check(capabilities.query && capabilities.metadata && capabilities.scalar_codecs,
           "schema draft capability leaves existing query capabilities available");
-    rejects(NW_INVALID_ARGUMENT, [] { (void)Capabilities::from_mask(1ULL << 26, Profile::Sqlite); });
+    check(Capabilities::from_mask(1ULL << 26, Profile::Sqlite).command, "complete query capability bit");
+    rejects(NW_INVALID_ARGUMENT, [] { (void)Capabilities::from_mask(1ULL << 27, Profile::Sqlite); });
     rejects(NW_INVALID_ARGUMENT, [] { (void)Capabilities::from_mask(1ULL << 63, Profile::PostgreSql); });
     Context c(Profile::Sqlite);
     auto q = c.query();
@@ -559,6 +1080,70 @@ void plans_and_cache()
         auto count = unsafe.clause(13, record({num(1, 0), num(3, 0), num(5, 3)}));
         auto list = unsafe.list(1, count, cells(profile, scalar(3), {u64(1)}));
         rejects(NW_INVALID_ARGUMENT, [&] { where(unsafe, list); });
+    }
+}
+
+void concurrent_shape_cache()
+{
+    for (auto profile : {Profile::Sqlite, Profile::PostgreSql})
+    {
+        Context c(profile);
+        std::array<std::shared_ptr<NativePlan>, 3> plans;
+        std::array<std::string, 3> sql;
+        for (std::size_t i = 0; i < plans.size(); ++i)
+        {
+            auto query = c.query();
+            auto id = query.column(0, column(c.root, "Id"));
+            auto parameter = query.parameter({7, "threshold", scalar(3), 3});
+            where(query, query.binary(std::array<std::uint32_t, 3>{1, 4, 5}[i], id, parameter));
+            select(query, {{id, "Id", scalar(3)}});
+            plans[i] = query.seal(8);
+            sql[i] = plans[i]->render_shape().first;
+        }
+        Hash abi;
+        abi.fill(11);
+        ShapeCache cache(2, 8192, abi);
+        std::vector<std::future<bool>> workers;
+        for (std::size_t worker = 0; worker < 4; ++worker)
+            workers.push_back(std::async(std::launch::async,
+                                         [&, worker]
+                                         {
+                                             for (std::size_t i = 0; i < 256; ++i)
+                                             {
+                                                 const auto selected = (worker + i) % plans.size();
+                                                 const auto value = worker * 1000 + i + 1;
+                                                 auto rendered = execute(plans[selected], {u64(value)}, &cache);
+                                                 if (rendered.sql != sql[selected])
+                                                     return false;
+                                                 auto batch = Batch::parse(rendered.parameter_bytes,
+                                                                           rendered.parameter_expectation);
+                                                 auto cell = batch.cell(0, 0);
+                                                 if (!cell || read_u64(*cell, 0) != value)
+                                                     return false;
+                                                 auto retained = cache.acquire(*plans[selected]);
+                                                 auto [entries, bytes] = cache.counts();
+                                                 if (entries > 2 || bytes > 8192 || (entries == 0 && bytes != 0))
+                                                     return false;
+                                                 std::this_thread::yield();
+                                                 if (retained->sql != sql[selected])
+                                                     return false;
+                                             }
+                                             return true;
+                                         }));
+        bool clear_retains_shape = true;
+        for (std::size_t i = 0; i < 256; ++i)
+        {
+            const auto selected = i % plans.size();
+            auto retained = cache.acquire(*plans[selected]);
+            cache.clear();
+            std::this_thread::yield();
+            clear_retains_shape &= retained->sql == sql[selected];
+        }
+        for (auto& worker : workers)
+            check(worker.get(), "concurrent cache renders keep SQL, parameter values and bounds isolated");
+        check(clear_retains_shape, "concurrent cache clear preserves acquired shape lifetime");
+        cache.clear();
+        check(cache.counts() == std::pair<std::size_t, std::size_t>{0, 0}, "concurrent cache releases bookkeeping");
     }
 }
 
@@ -841,6 +1426,8 @@ int main(int argc, char** argv)
         assert_oracle(Profile::PostgreSql);
         binding_and_safety();
         plans_and_cache();
+        concurrent_shape_cache();
+        complete_query_commands();
         sql_lexer();
         mutations_and_relations();
         std::cout << "query: " << checks << " checks passed; 52 SQL/ordered-argument goldens\n";

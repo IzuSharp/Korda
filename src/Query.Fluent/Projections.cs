@@ -6,13 +6,13 @@ namespace Korda.Query;
 
 /// <summary>A stack-independent typed root-table proxy that belongs to one live native query.</summary>
 /// <typeparam name="TEntity">The declared root entity class.</typeparam>
-/// <remarks>This borrowed proxy retains its query association. Default, foreign, closed or sealed owners reject. Each operation forwards immediately to a finite native arena; no managed SQL tree or captured callback is retained.</remarks>
+/// <remarks>This borrowed proxy retains its query association. Default, foreign, closed or sealed owners reject. Each operation records a bounded command with immediate owner and type validation; the complete command is submitted to the native compiler without retaining the callback.</remarks>
 public readonly struct QueryRow<TEntity> where TEntity : class
 {
     private readonly QueryContext? _owner;
     internal QueryRow(QueryContext owner) => _owner = owner;
     private QueryContext Owner => _owner ?? throw new InvalidOperationException("The default query row is invalid.");
-    /// <summary>Creates an immediate native expression for an exact root-table column.</summary>
+    /// <summary>Creates a typed command expression for an exact root-table column.</summary>
     /// <inheritdoc cref="QueryRow{TEntity}"/>
     /// <param name="column">The strongly typed column from the declared table; foreign table identities reject.</param>
     /// <typeparam name="T">The statically known CLR value or owned result type with the exact declared codec/nullability.</typeparam>

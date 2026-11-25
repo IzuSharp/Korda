@@ -100,6 +100,18 @@ internal static class Suite
             Throws<InvalidOperationException>(() => expiredCallback.Right(Models.ParentId));
             Check((await q.Select(q.Column(alias, Models.ChildId)).ToListAsync()).SequenceEqual([10L]), "JOIN abort leaves query usable");
         }
+        using (var subquery = Q())
+        using (var outer = Q())
+        {
+            Throws<MappingFailure>(() => subquery.LeftJoin(Models.Children, "deep_abort", on =>
+            {
+                var predicate = on.Right(Models.ParentId).IsNull();
+                for (var depth = 2; depth < session.Source.Limits.MaxQueryDepth; depth++) predicate = predicate.Not();
+                throw new MappingFailure();
+            }));
+            var selected = subquery.SelectAll();
+            Check(await outer.Where(outer.Exists(selected)).CountAsync() == 3, "Aborted deep JOIN tokens do not inflate the imported snapshot depth");
+        }
         await Done("joins-nullability-abort");
         using (var q = Q())
         {
@@ -426,23 +438,23 @@ internal static class Suite
         for (var i = 0; i < 1000; i++) { GC.KeepAlive(zero.AsAsyncEnumerable(session)); GC.KeepAlive(one.AsAsyncEnumerable(session, values)); }
         const int iterations = 10000;
         for (var window = 0; window < 3; window++)
-        for (var lane = 0; lane < 2; lane++)
-        {
-            var sql = diagnostic.Count(6); var owners = diagnostic.Counts();
-            var before0 = GC.CollectionCount(0); var before1 = GC.CollectionCount(1); var before2 = GC.CollectionCount(2);
-            var before = GC.GetTotalAllocatedBytes(precise: true);
-            if (lane == 0) for (var i = 0; i < iterations; i++) GC.KeepAlive(zero.AsAsyncEnumerable(session));
-            else for (var i = 0; i < iterations; i++) GC.KeepAlive(one.AsAsyncEnumerable(session, values));
-            var after = GC.GetTotalAllocatedBytes(precise: true);
-            var gen0 = GC.CollectionCount(0) - before0; var gen1 = GC.CollectionCount(1) - before1; var gen2 = GC.CollectionCount(2) - before2;
-            // These are bounded construction regressions, not a zero-allocation
-            // claim. The old metadata rebuild exceeds both ceilings by a wide margin.
-            var maximum = lane == 0 ? 2_000_000L : 10_000_000L;
-            PreparedCosts.Add(new(session.Source.Provider.ToString(), lane == 0 ? "parameterless" : "one-int64-snapshot",
-                window, iterations, before, after, after - before, gen0, gen1, gen2, maximum));
-            Check(after - before <= maximum, "Prepared public construction allocation ceiling");
-            Check(diagnostic.Count(6) == sql && diagnostic.Counts().SequenceEqual(owners), "Lazy construction performs no SQL or native ownership change");
-        }
+            for (var lane = 0; lane < 2; lane++)
+            {
+                var sql = diagnostic.Count(6); var owners = diagnostic.Counts();
+                var before0 = GC.CollectionCount(0); var before1 = GC.CollectionCount(1); var before2 = GC.CollectionCount(2);
+                var before = GC.GetTotalAllocatedBytes(precise: true);
+                if (lane == 0) for (var i = 0; i < iterations; i++) GC.KeepAlive(zero.AsAsyncEnumerable(session));
+                else for (var i = 0; i < iterations; i++) GC.KeepAlive(one.AsAsyncEnumerable(session, values));
+                var after = GC.GetTotalAllocatedBytes(precise: true);
+                var gen0 = GC.CollectionCount(0) - before0; var gen1 = GC.CollectionCount(1) - before1; var gen2 = GC.CollectionCount(2) - before2;
+                // These are bounded construction regressions, not a zero-allocation
+                // claim. The old metadata rebuild exceeds both ceilings by a wide margin.
+                var maximum = lane == 0 ? 2_000_000L : 10_000_000L;
+                PreparedCosts.Add(new(session.Source.Provider.ToString(), lane == 0 ? "parameterless" : "one-int64-snapshot",
+                    window, iterations, before, after, after - before, gen0, gen1, gen2, maximum));
+                Check(after - before <= maximum, "Prepared public construction allocation ceiling");
+                Check(diagnostic.Count(6) == sql && diagnostic.Counts().SequenceEqual(owners), "Lazy construction performs no SQL or native ownership change");
+            }
     }
     private static async Task CheckPreparedStreamFailureTiming(DataSession session, Diagnostic diagnostic)
     {

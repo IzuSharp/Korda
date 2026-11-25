@@ -7,8 +7,8 @@ using Korda.Query.Internal;
 
 namespace Korda.Query;
 
-// Owner/metadata orchestration only. Expressions are immediately forwarded to
-// B09/B11; this class contains no managed SQL tree or provider SQL rendering.
+// Owner/metadata orchestration. Binding records a bounded complete command;
+// the C++ compiler retains dialect rendering and authoritative validation.
 internal sealed class QueryContext : IDisposable
 {
     internal DataSession Session { get; }
@@ -74,7 +74,7 @@ internal sealed class QueryContext : IDisposable
     internal ExpressionReference Unary(uint operation, ExpressionReference a) => Run(() => Binding.Unary(operation, a));
     internal ulong Clause(uint operation, params ControlField[] fields) => Run(() => Binding.Clause(operation, OperandEncoding.Clause(fields)));
     // Keep the same nested admission and failure translation without capturing a
-    // borrowed span in a delegate or extending its lifetime beyond the ABI call.
+    // borrowed span in a delegate or extending its lifetime beyond the binding call.
     private ulong Clause(uint operation, ReadOnlySpan<byte> operands)
     {
         using var admission = Enter();
@@ -201,8 +201,7 @@ internal sealed class QueryContext : IDisposable
     });
     internal unsafe string Render<T>(Projection<T> projection) => Run(() =>
     {
-        Selection(projection); using var query = Binding.Enter(); nint output = 0; var error = BindingChecks.Error();
-        HostFailure.Check(Source.Binding, Binding.Calls.nw_db_query_render_v1(query.Pointer, &output, &error), error);
+        Selection(projection); var output = Binding.Render();
         using var buffer = new NativeBuffer(Source.Binding, output); return HostEncoding.Utf8.GetString(buffer.Copy());
     });
     public void Dispose()

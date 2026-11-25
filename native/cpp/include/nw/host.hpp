@@ -97,7 +97,7 @@ struct Source : std::enable_shared_from_this<Source>
     std::atomic<std::size_t> pending{0}, close_waiters{0};
     WorkerPool workers;
     WorkerPool controls{2};
-    std::mutex mutex, registry_mutex, shape_mutex, join_mutex;
+    std::mutex mutex, registry_mutex, join_mutex;
     std::condition_variable changed;
 #ifdef NW_HOST_TEST_HOOKS
     std::function<void()> test_before_join_wait;

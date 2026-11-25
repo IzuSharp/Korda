@@ -20,7 +20,7 @@ public readonly struct QuerySelection<T>
     /// <inheritdoc cref="QuerySelection{T}"/>
     /// <param name="other">The compatible same-source selection or same-query expression required by this operation.</param>
     /// <param name="operation">The native SQL set operation with exact compatible row shapes.</param>
-    /// <returns>The borrowed current-selection view; its owning query retains the native arena.</returns>
+    /// <returns>The borrowed current-selection view; its owning query retains the command and its dependencies.</returns>
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
@@ -247,9 +247,8 @@ public sealed class CommonTable<T> : IDisposable where T : class
         return owner.Run(() =>
         {
             owner.Selection(body.Projection); var model = owner.Source.RegisterModel(declaredShape);
-            using var m = model.Borrow(DatabaseOwnerKind.Model); using var q = owner.Binding.Enter(); nint result = 0; var error = BindingChecks.Error();
-            HostFailure.Check(owner.Source.Binding, owner.Binding.Calls.nw_db_cte_create_v1(m.Pointer, declaredShape.Identity.Id, q.Pointer, recursive ? 1u : 0u, &result, &error), error);
-            return new CommonTable<T>(new(owner.Source.Binding, DatabaseOwnerKind.Cte, result), owner.Parameters.Values.ToArray());
+            var handle = owner.Binding.CreateCte(model, declaredShape.Identity.Id, recursive);
+            return new CommonTable<T>(handle, owner.Parameters.Values.ToArray());
         });
     }
     /// <summary>Prevents new CTE imports and releases this native snapshot reference.</summary>
@@ -257,7 +256,7 @@ public sealed class CommonTable<T> : IDisposable where T : class
     public void Dispose() => Handle.Dispose();
 }
 /// <summary>Finite mutable native window state; each Over/rank call snapshots its current definition.</summary>
-/// <remarks>The owning query bounds lifetime and concurrent access. Rank, RowNumber and Over snapshot native window state immediately; subsequent mutation cannot change existing expressions. Defaults and limits follow the provider capability contract.</remarks>
+/// <remarks>The owning query bounds lifetime and concurrent access. Rank, RowNumber and Over snapshot the current window specification immediately; subsequent mutation cannot change existing expressions. Defaults and limits follow the provider capability contract.</remarks>
 public sealed class WindowDefinition
 {
     internal QueryContext Owner { get; }

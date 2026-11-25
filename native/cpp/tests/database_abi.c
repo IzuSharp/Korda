@@ -3,11 +3,15 @@
  * C++ module. C++ definitions also compile against its private declaration view.
  */
 #include "../../database/binding/korda_database_binding_v1.h"
+#include "../../database/binding/korda_query_command_v1.h"
 #include <assert.h>
+#include <stddef.h>
 #include <stdint.h>
 
 _Static_assert(sizeof(nw_db_ref) == 8, "Linux x64 opaque owner size");
 _Static_assert(sizeof(nw_db_token) == 8, "opaque generation token size");
+_Static_assert(sizeof(nw_db_query_dependency_v1) == 16, "query dependency sidecar x64 layout");
+_Static_assert(offsetof(nw_db_query_dependency_v1, kind) == 8, "query dependency kind offset");
 
 int main(void)
 {
@@ -20,6 +24,15 @@ int main(void)
     nw_db_ref operation = (nw_db_ref)(uintptr_t)1;
     assert(nw_db_session_open_create_v1(NULL, &operation, &error) == NW_INVALID_STATE);
     assert(operation == NULL);
+    nw_db_ref plan = (nw_db_ref)(uintptr_t)1;
+    assert(nw_db_query_command_compile_v1(NULL, empty, NULL, 0, 8, &plan, &error) == NW_INVALID_STATE);
+    assert(plan == NULL);
+    nw_db_buffer* sql = (nw_db_buffer*)(uintptr_t)1;
+    assert(nw_db_query_command_render_v1(NULL, empty, NULL, 0, &sql, &error) == NW_INVALID_STATE);
+    assert(sql == NULL);
+    nw_db_ref cte = (nw_db_ref)(uintptr_t)1;
+    assert(nw_db_query_command_cte_v1(NULL, empty, NULL, 0, NULL, 0, 0, &cte, &error) == NW_INVALID_STATE);
+    assert(cte == NULL);
     nw_db_operation_release_v1(NULL);
     nw_db_owner_release_v1(NULL);
     nw_db_buffer_release_v1(NULL);

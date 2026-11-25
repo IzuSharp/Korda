@@ -34,6 +34,11 @@ builder.UseSqlite(args[0]);
 await using var source = builder.Build();
 await using var session = await source.OpenSessionAsync();
 using var identity = new NativeIdentity(source.Provider);
+#if POSTGRES
+var databaseVersion = await session.ScalarAsync(SqlCommand.Create("SELECT version()"), Codecs.String);
+#else
+var databaseVersion = await session.ScalarAsync(SqlCommand.Create("SELECT sqlite_version()"), Codecs.String);
+#endif
 if (args.Length == 5 && args[4] == "initialize")
     await Initialize(session);
 using var probe = new PhaseProbe(session);
@@ -82,7 +87,7 @@ var teardownEnded = Stopwatch.GetTimestamp();
 var drained = identity.Read();
 if (drained is not { Sources: 0, Sessions: 0, Operations: 0, Cursors: 0, Buffers: 0, Owners: 0 })
     throw new InvalidOperationException("Native owners did not drain after explicit disposal.");
-var receipt = new Receipt(1, source.Provider.ToString(), true,
+var receipt = new Receipt(2, source.Provider.ToString(), true, databaseVersion,
     typeof(DataSource).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "unknown",
     NativeIdentity.Hash(Environment.ProcessPath!), identity.Path, identity.Sha256, sql, rawTemplate,
     "Int64 tenant alternates 1 and 2; ordered full List<PhaseRow> with 100 rows, exact Id/Note/null checks",
@@ -227,7 +232,7 @@ internal readonly record struct Sample(long ConstructTicks, long SubmitToFirstRo
 internal sealed record Window(string Route, int Index, int Operations, long AllocatedBefore, long AllocatedAfter, int Gen0, int Gen1, int Gen2,
     long CpuBeforeTicks, long CpuAfterTicks, long ResidentBytes, long PeakResidentBytes, long StartedTicks, long FinishedTicks,
     Counts NativeBefore, Counts NativeAfter, Sample[] Samples);
-internal sealed record Receipt(int SchemaVersion, string Provider, bool NativeAot, string PackageVersion, string ExecutableSha256,
+internal sealed record Receipt(int SchemaVersion, string Provider, bool NativeAot, string DatabaseVersion, string PackageVersion, string ExecutableSha256,
     string NativePath, string NativeSha256, string Sql, string RawTemplate, string ParametersAndResults, long StopwatchFrequency,
     long PreparationTicks, int WarmupPerRoute, Sample[] FirstExecutions, Window[] Windows, long TeardownTicks, Counts Drained, string Scope);
 [JsonSerializable(typeof(Receipt))]

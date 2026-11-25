@@ -36,6 +36,9 @@ public sealed partial class DataSource : IDisposable, IAsyncDisposable
         var info = descriptor.Inspect();
         var calls = new NativeCalls(descriptor.EngineId, symbol => EngineModuleLoader.ResolveExport(descriptor, symbol));
         var binding = new SourceBinding(calls, provider == DatabaseProvider.Sqlite ? 1u : 2u);
+        binding.Commands = new(new QueryCommandCalls(symbol => EngineModuleLoader.ResolveExport(descriptor, symbol)),
+            limits.MaxQueryNodes, limits.MaxQueryDepth, limits.MaxParameters, checked((int)limits.MaxParameterBytes),
+            info.Capabilities.Select(capability => capability.Name));
         BindingChecks.Require((nint)calls.nw_db_source_create_v1, "source_create");
         nint pointer = 0; var error = BindingChecks.Error(); fixed (byte* bytes = config)
             HostFailure.Check(binding, calls.nw_db_source_create_v1(BindingChecks.View(bytes, config.Length), &pointer, &error), error);
@@ -159,7 +162,8 @@ public sealed partial class DataSource : IDisposable, IAsyncDisposable
             using var lease = Owner.Borrow(DatabaseOwnerKind.Source); var bytes = codec.Configuration is { } config ? HostEncoding.Utf8.GetBytes(config) : [];
             uint result = 0; var error = BindingChecks.Error(); fixed (byte* input = bytes)
                 HostFailure.Check(Binding, Binding.Calls.nw_db_codec_register_v1(lease.Pointer, codec.Id, BindingChecks.View(input, bytes.Length), &result, &error), error);
-            if (result == 0) throw new NativeEngineException("The native codec binding is zero."); _codecs.Add(codec, result); return result;
+            if (result == 0) throw new NativeEngineException("The native codec binding is zero.");
+            Binding.Commands?.RegisterCodec(result, codec); _codecs.Add(codec, result); return result;
         }
     }
     internal DatabaseOwner RegisterModel<TEntity>(Table<TEntity> table) where TEntity : class

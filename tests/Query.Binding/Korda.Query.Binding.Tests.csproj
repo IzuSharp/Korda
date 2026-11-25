@@ -5,5 +5,5 @@
     <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifiers)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifiers).aot.lock.json</NuGetLockFilePath>
     <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifier)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifier).aot.lock.json</NuGetLockFilePath>
   </PropertyGroup>
-  <ItemGroup><Compile Include="Program.cs" /><Compile Include="ProjectionEncodingTests.cs" /><ProjectReference Include="../../src/Query.Binding/Korda.Query.Binding.csproj" /></ItemGroup>
+  <ItemGroup><Compile Include="Program.cs" /><Compile Include="ProjectionEncodingTests.cs" /><Compile Include="CommandOnlyTests.cs" /><ProjectReference Include="../../src/Query.Binding/Korda.Query.Binding.csproj" /></ItemGroup>
 </Project>

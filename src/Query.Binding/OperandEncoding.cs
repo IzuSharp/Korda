@@ -4,7 +4,7 @@ using Korda.Data;
 
 namespace Korda.Query.Internal;
 
-/// <summary>Exact immediate kind6/kind13/kind22 fields over B01 encoders; no query tree is accumulated.</summary>
+/// <summary>Exact kind6/kind13/kind22 fields shared by direct calls and bounded query commands.</summary>
 internal static class OperandEncoding
 {
     internal const int StackScratchBytes = 4096;
@@ -38,7 +38,7 @@ internal static class OperandEncoding
         return bytes;
     }
     // The returned view borrows caller scratch only for the immediate synchronous
-    // native call. Large frames retain the independently owned array fallback.
+    // binding call. Large frames retain the independently owned array fallback.
     internal static ReadOnlySpan<byte> ProjectionInto<T>(Projection<T> projection, Func<CodecDescriptor, uint> bindCodec,
         Span<byte> scratch, ReadOnlySpan<ulong> expressions = default)
     {
