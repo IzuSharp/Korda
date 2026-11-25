@@ -29,7 +29,7 @@ jobs:
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
       NUGET_PACKAGES: ${{ github.workspace }}/artifacts/nuget-packages
       CMAKE_BUILD_PARALLEL_LEVEL: "4"
-      DB_PERF_REQUIRED_IMAGE_VERSION: "20261116.376.1"
+      DB_PERF_REQUIRED_IMAGE_VERSION: "20261116.133.1"
     steps:
       - name: Require the observed measurement image before preparing binaries
         run: |
@@ -110,7 +110,7 @@ jobs:
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
       DOTNET_EnableDiagnostics: "1"
       PYTHONDONTWRITEBYTECODE: "1"
-      DB_PERF_REQUIRED_IMAGE_VERSION: "20261116.376.1"
+      DB_PERF_REQUIRED_IMAGE_VERSION: "20261116.133.1"
     steps:
       - name: Require the same frozen runner image for measurement
         run: |
