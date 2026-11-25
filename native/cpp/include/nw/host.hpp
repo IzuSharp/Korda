@@ -89,6 +89,24 @@ class WorkerPool
     std::mutex stop_mutex_;
 };
 
+// Independent of the owners whose last references a worker releases. A worker
+// may destroy those owners before completing its ticket without accessing them
+// again, and an explicit parent join can await all descendant accessors.
+class RetirementFence
+{
+  public:
+    void add();
+    void complete();
+    void wait();
+    void wait_until(Clock::time_point deadline);
+    [[nodiscard]] bool done() const;
+
+  private:
+    mutable std::mutex mutex_;
+    std::condition_variable changed_;
+    std::size_t pending_ = 0;
+};
+
 struct Source : std::enable_shared_from_this<Source>
 {
     HostConfig config;
@@ -96,12 +114,14 @@ struct Source : std::enable_shared_from_this<Source>
     std::shared_ptr<ParameterRegistry> parameters;
     std::atomic<bool> closing{false}, retired{false}, poisoned{false};
     std::atomic<std::size_t> pending{0}, close_waiters{0};
+    std::shared_ptr<RetirementFence> transaction_workers = std::make_shared<RetirementFence>();
     WorkerPool workers;
     WorkerPool controls{2};
     std::mutex mutex, registry_mutex, join_mutex;
     std::condition_variable changed;
 #ifdef NW_HOST_TEST_HOOKS
     std::function<void()> test_before_join_wait;
+    std::function<void()> test_before_transaction_wait;
 #endif
     std::vector<std::weak_ptr<Session>> children;
     std::vector<std::shared_ptr<ProviderConnection>> idle;
@@ -333,6 +353,11 @@ struct Transaction : std::enable_shared_from_this<Transaction>
     // provider binaries contain neither these fields nor either dispatch seam.
     std::function<bool(bool)> test_finish;
     std::function<void()> test_retire_gate;
+    std::function<void()> test_after_finish_worker;
+    std::function<void()> test_after_deadline_worker;
+    std::function<void()> test_before_finish_dispatch;
+    std::function<void()> test_before_join_wait;
+    std::function<void(std::uint32_t)> test_before_worker_start;
 #endif
     static std::shared_ptr<Transaction> begin(std::shared_ptr<Session> session, TransactionOptions options,
                                               std::shared_ptr<Cancel> cancel, std::shared_ptr<CommandGate> gate);
@@ -350,6 +375,9 @@ struct Transaction : std::enable_shared_from_this<Transaction>
     Bytes dispose_savepoint(std::uint64_t token);
 
   private:
+    struct Worker;
+    class WorkerLaunch;
+    std::shared_ptr<RetirementFence> completion_ = std::make_shared<RetirementFence>();
     void finish_worker(bool commit, std::shared_ptr<CommandGate> gate);
     void deadline_worker();
 };

@@ -11,6 +11,7 @@ internal sealed class CallbackCoordinator : IDisposable
     private readonly Timer _timer;
     private bool _closing;
     private int _count;
+    private int _occupiedLimit;
 
     internal CallbackCoordinator(int capacity, TimeSpan? retryInterval = null)
     {
@@ -34,6 +35,7 @@ internal sealed class CallbackCoordinator : IDisposable
                 if (_slots[i] is not null) continue;
                 _slots[i] = context;
                 _count++;
+                _occupiedLimit = Math.Max(_occupiedLimit, i + 1);
                 return i;
             }
         }
@@ -49,6 +51,7 @@ internal sealed class CallbackCoordinator : IDisposable
                 throw new InvalidOperationException("A callback cleanup slot has a different owner.");
             _slots[slot] = null;
             _count--;
+            while (_occupiedLimit > 0 && _slots[_occupiedLimit - 1] is null) _occupiedLimit--;
             stopTimer = _closing && _count == 0;
         }
         if (stopTimer) _timer.Dispose();
@@ -56,9 +59,12 @@ internal sealed class CallbackCoordinator : IDisposable
 
     private void Retry()
     {
-        // Read one slot at a time: no per-tick array/list allocation and no calls
-        // into the context while holding the coordinator's reservation gate.
-        for (int i = 0; i < _slots.Length; i++)
+        // New reservations signal immediately; rejected scheduling is retried
+        // on the next tick. Capture the occupied range, then read one slot at a
+        // time without allocating or calling a context under the reservation gate.
+        int limit;
+        lock (_gate) limit = _occupiedLimit;
+        for (int i = 0; i < limit; i++)
         {
             CoordinatedCallback? context;
             lock (_gate) context = _slots[i];

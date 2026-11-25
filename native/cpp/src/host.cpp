@@ -306,6 +306,37 @@ void WorkerPool::stop()
         }
 }
 
+void RetirementFence::add()
+{
+    std::lock_guard lock(mutex_);
+    ++pending_;
+}
+void RetirementFence::complete()
+{
+    {
+        std::lock_guard lock(mutex_);
+        if (!pending_)
+            std::terminate();
+        --pending_;
+    }
+    changed_.notify_all();
+}
+void RetirementFence::wait()
+{
+    std::unique_lock lock(mutex_);
+    changed_.wait(lock, [&] { return pending_ == 0; });
+}
+void RetirementFence::wait_until(Clock::time_point deadline)
+{
+    std::unique_lock lock(mutex_);
+    changed_.wait_until(lock, deadline, [&] { return pending_ == 0; });
+}
+bool RetirementFence::done() const
+{
+    std::lock_guard lock(mutex_);
+    return pending_ == 0;
+}
+
 Source::Source(HostConfig value)
     : config(std::move(value)), identity{module_identity(), next_source.fetch_add(1), 1, config.provider.profile},
       parameters(std::make_shared<ParameterRegistry>(identity, config.limits.nodes)),
@@ -324,6 +355,9 @@ std::shared_ptr<Source> Source::create(HostConfig config)
 }
 Source::~Source()
 {
+    // A detached transaction's last reference may destroy this Source before
+    // its independent ticket completes. Only explicit join waits that fence;
+    // waiting here would make the worker wait for its own final release.
     {
         std::lock_guard lock(mutex);
         admission_stop = true;
@@ -587,6 +621,13 @@ void Source::join()
     changed.notify_all();
     if (admission_thread.joinable())
         admission_thread.join();
+    // The join caller retains this Source. Wait without its state mutex and
+    // before stopping the pools which descendant cleanup can still use.
+#ifdef NW_HOST_TEST_HOOKS
+    if (!transaction_workers->done() && test_before_transaction_wait)
+        test_before_transaction_wait();
+#endif
+    transaction_workers->wait();
     workers.stop();
     controls.stop();
     retired.store(true);
@@ -1855,14 +1896,171 @@ void Transaction::command_failed()
     if (!retired && state == 0)
         state = 1;
 }
+
+struct Transaction::Worker
+{
+    struct Start
+    {
+        std::mutex mutex;
+        std::condition_variable changed;
+        bool decided = false, run = false, dispatched = false;
+        void publish(bool value)
+        {
+            {
+                std::lock_guard lock(mutex);
+                if (decided)
+                    return;
+                decided = true;
+                run = value;
+            }
+            changed.notify_all();
+        }
+        bool wait()
+        {
+            std::unique_lock lock(mutex);
+            changed.wait(lock, [&] { return decided; });
+            return run;
+        }
+        void permit_deadline()
+        {
+            {
+                std::lock_guard lock(mutex);
+                dispatched = true;
+            }
+            changed.notify_all();
+        }
+        void await_dispatch()
+        {
+            std::unique_lock lock(mutex);
+            changed.wait(lock, [&] { return dispatched; });
+        }
+    };
+
+    std::shared_ptr<Transaction> owner;
+    std::shared_ptr<CommandGate> gate;
+    std::shared_ptr<Start> start;
+    std::shared_ptr<RetirementFence> completion, parent;
+    bool finish, commit;
+
+    Worker(std::shared_ptr<Transaction> value, std::shared_ptr<CommandGate> command, std::shared_ptr<Start> launch,
+           bool finishing, bool committing)
+        : owner(std::move(value)), gate(std::move(command)), start(std::move(launch)), completion(owner->completion_),
+          parent(owner->session->source->transaction_workers), finish(finishing), commit(committing)
+    {
+        completion->add();
+        parent->add();
+    }
+    ~Worker()
+    {
+        // CommandGate destruction can schedule cleanup. Release it while the
+        // Transaction is still retained, then release every parent owner before
+        // publishing either independent ticket. No Source is held by a ticket.
+        gate.reset();
+        owner.reset();
+        completion->complete();
+        parent->complete();
+    }
+    void run()
+    {
+        if (!start->wait())
+            return;
+        if (finish)
+        {
+#ifdef NW_HOST_TEST_HOOKS
+            if (owner->test_before_finish_dispatch)
+                owner->test_before_finish_dispatch();
+#endif
+            // Previously the deadline thread was created inside finish_worker,
+            // after this dispatch marker. Preserve that order even though both
+            // workers are now prepared before publishing finish admission.
+            gate->dispatched = true;
+            start->permit_deadline();
+            owner->finish_worker(commit, gate);
+#ifdef NW_HOST_TEST_HOOKS
+            if (owner->test_after_finish_worker)
+                owner->test_after_finish_worker();
+#endif
+        }
+        else
+        {
+            start->await_dispatch();
+            owner->deadline_worker();
+#ifdef NW_HOST_TEST_HOOKS
+            if (owner->test_after_deadline_worker)
+                owner->test_after_deadline_worker();
+#endif
+        }
+    }
+};
+
+class Transaction::WorkerLaunch
+{
+  public:
+    WorkerLaunch(const std::shared_ptr<Transaction>& owner, bool commit, const std::shared_ptr<CommandGate>& gate)
+        : completion_(owner->completion_)
+    {
+        try
+        {
+            for (std::uint32_t index = 0; index != 2; ++index)
+            {
+                auto worker = std::make_unique<Worker>(owner, index == 0 ? gate : nullptr, start_, index == 0, commit);
+#ifdef NW_HOST_TEST_HOOKS
+                if (owner->test_before_worker_start)
+                    owner->test_before_worker_start(index);
+#endif
+                std::thread thread([worker = std::move(worker)] { worker->run(); });
+                try
+                {
+                    thread.detach();
+                }
+                catch (...)
+                {
+                    start_->publish(false);
+                    thread.join();
+                    throw;
+                }
+            }
+        }
+        catch (...)
+        {
+            // No worker enters Transaction methods until both launches succeed.
+            // The caller retains owner and gate while these canceled workers
+            // release their captures, so compensation cannot reenter its lock.
+            start_->publish(false);
+            completion_->wait();
+            throw;
+        }
+    }
+    ~WorkerLaunch()
+    {
+        if (!started_)
+        {
+            start_->publish(false);
+            completion_->wait();
+        }
+    }
+    void start()
+    {
+        start_->publish(true);
+        started_ = true;
+    }
+
+  private:
+    std::shared_ptr<Worker::Start> start_ = std::make_shared<Worker::Start>();
+    std::shared_ptr<RetirementFence> completion_;
+    bool started_ = false;
+};
+
 Bytes Transaction::finish(bool commit, std::shared_ptr<Cancel> cancel, std::shared_ptr<CommandGate> gate)
 {
+    std::optional<WorkerLaunch> launch;
     {
         std::lock_guard lock(mutex);
         if (closing || finishing || retired || (commit ? state != 0 : (state != 0 && state != 1)))
             throw Error::state("transaction admission rejected");
         if (cancel->requested())
             throw Error::canceled();
+        launch.emplace(shared_from_this(), commit, gate);
         finishing = true;
         closing = true;
         state = commit ? 2 : 3;
@@ -1873,8 +2071,7 @@ Bytes Transaction::finish(bool commit, std::shared_ptr<Cancel> cancel, std::shar
         phase_deadline =
             Clock::now() + std::chrono::nanoseconds(commit ? options.commit_timeout_ns : options.cleanup_timeout_ns);
     }
-    auto self = shared_from_this();
-    std::thread([self, commit, gate] { self->finish_worker(commit, gate); }).detach();
+    launch->start();
     {
         std::unique_lock lock(mutex);
         changed.wait(lock, [&] { return primary_ready; });
@@ -1919,9 +2116,6 @@ void Transaction::deadline_worker()
 }
 void Transaction::finish_worker(bool commit, std::shared_ptr<CommandGate> gate)
 {
-    gate->dispatched = true;
-    auto self = shared_from_this();
-    std::thread([self] { self->deadline_worker(); }).detach();
     std::optional<Error> failure;
     bool committed = false;
     bool known_rollback = false;
@@ -2129,20 +2323,40 @@ void Transaction::request_close()
 Bytes Transaction::wait_close(std::uint64_t wait_ns)
 {
     request_close();
+    const auto deadline = Clock::now() + std::chrono::nanoseconds(wait_ns);
     {
         std::unique_lock lock(mutex);
-        changed.wait_for(lock, std::chrono::nanoseconds(wait_ns), [&] { return retired; });
+        changed.wait_until(lock, deadline, [&] { return retired; });
     }
+    completion_->wait_until(deadline);
     return snapshot();
 }
 void Transaction::schedule_cleanup()
 {
+    std::optional<WorkerLaunch> launch;
+    std::shared_ptr<CommandGate> gate;
     {
         std::lock_guard lock(mutex);
         if (!closing || retired || finishing || session->active.load())
             return;
         if (session->active.exchange(true))
             return;
+        try
+        {
+            gate = std::make_shared<CommandGate>(session);
+            launch.emplace(shared_from_this(), false, gate);
+        }
+        catch (...)
+        {
+            // A launch failure has run no provider work and published no
+            // finishing state. Leave automatic cleanup retryable, without a
+            // gate destructor recursively retrying while this mutex is held.
+            if (gate)
+                gate->completed = true;
+            session->active.store(false);
+            session->changed.notify_all();
+            throw;
+        }
         finishing = true;
         state = 3;
         cleanup = 1;
@@ -2150,21 +2364,26 @@ void Transaction::schedule_cleanup()
         deadline_phase = 2;
         phase_deadline = Clock::now() + std::chrono::nanoseconds(options.cleanup_timeout_ns);
     }
-    auto gate = std::make_shared<CommandGate>(session);
-    auto self = shared_from_this();
-    std::thread([self, gate] { self->finish_worker(false, gate); }).detach();
+    launch->start();
 }
 void Transaction::join()
 {
     request_close();
-    std::unique_lock lock(mutex);
-    changed.wait(lock, [&] { return retired; });
+    {
+        std::unique_lock lock(mutex);
+        changed.wait(lock, [&] { return retired; });
+    }
+#ifdef NW_HOST_TEST_HOOKS
+    if (!completion_->done() && test_before_join_wait)
+        test_before_join_wait();
+#endif
+    completion_->wait();
 }
 Bytes Transaction::snapshot() const
 {
     std::lock_guard lock(mutex);
-    return snapshot_record(state, outcome, attempted, cleanup, disposition, retired, deadline_exceeded, correlation,
-                           provider);
+    return snapshot_record(state, outcome, attempted, cleanup, disposition, retired && completion_->done(),
+                           deadline_exceeded, correlation, provider);
 }
 std::shared_ptr<Savepoint> Transaction::create_savepoint(std::shared_ptr<Cancel> cancel,
                                                          std::shared_ptr<CommandGate> gate)

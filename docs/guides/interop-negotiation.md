@@ -139,7 +139,7 @@ trust model described by the pinned consumption specification.
 | Option snapshot | At most 64 unique capabilities and a 4,096-byte absolute override path |
 | First Inspect | O(asset bytes) hashing, bounded metadata allocations, OS mapping, one bootstrap FFI; no native executor or domain owner |
 | Compatible repeated Inspect | Cached metadata and local identity/option checks; explicit path overrides intentionally revalidate bytes |
-| Supports/Require success | Ordinal hash lookup, no FFI and no managed allocation after initialization; the 10,000-call Supports check is measured in JIT and AOT |
+| Supports/Require success | Ordinal hash lookup, no FFI and no managed allocation after initialization; the initialized known/unknown Supports cases assert this per-call contract without a sampling window |
 
 These bounds do not claim a limit on the OS loader, whole-process RSS or arbitrary
 metadata objects created by application code. CPU profiles selected here are

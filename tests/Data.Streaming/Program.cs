@@ -42,17 +42,13 @@ if (args.Contains("--allocation-gate-only", StringComparer.Ordinal))
     await AllocationProbeGate.RunAsync(args[0]);
     return;
 }
-if (!args.Contains("--correctness-only", StringComparer.Ordinal))
-{
-    await AllocationProbeGate.RunAsync(args[0]);
-    OwnedBatchProbe.Run(args[0]);
-}
+// The default and --correctness-only paths execute the same behavior checks.
+// Allocation probes remain explicit local diagnostic entry points above.
 await AllocationProbeRaces.RunAsync();
+OwnedBatchProbe.RunCorrectness();
 StableBatchTests.Run();
 await RowLeaseReuseChecks.RunAsync();
 var cases = new List<Observation>();
-var allocatedBefore = GC.GetTotalAllocatedBytes(true);
-var workingSetBefore = Process.GetCurrentProcess().WorkingSet64;
 var assertions = 0;
 var ordinary = Projection<Item>.Create([ResultField.Create("id", Codecs.Int64), ResultField.Create("label", Codecs.NullableReference(Codecs.String))], row => new(row.Read(0, Codecs.Int64), row.Read(1, Codecs.NullableReference(Codecs.String))));
 var limits = new StreamLimits(3, 256, 100, 64 * 1024);
@@ -274,9 +270,7 @@ using (var json = new Utf8JsonWriter(output, new JsonWriterOptions { Indented = 
     json.WriteStartObject(); json.WriteString("task", "B06"); json.WriteString("status", "passed"); json.WriteString("platform", "linux-x64");
     json.WriteBoolean("dynamicCodeSupported", RuntimeFeature.IsDynamicCodeSupported); json.WriteNumber("assertions", assertions);
     json.WriteNumber("nativeToManagedCopyBytes", NativeBatch.CopiedBytes); json.WriteNumber("peakTransportManagedBytes", NativeBatch.PeakBytes);
-    json.WriteNumber("managedAllocatedBytes", GC.GetTotalAllocatedBytes(true) - allocatedBefore); json.WriteNumber("workingSetBefore", workingSetBefore);
-    using var process = Process.GetCurrentProcess(); json.WriteNumber("workingSetAfter", process.WorkingSet64); json.WriteNumber("peakWorkingSet", process.PeakWorkingSet64);
-    json.WriteString("memoryScope", "Owned reservation and wire/copy counters are bounded; measured CLR allocations and process RSS include SQLx/SQLite/Tokio/allocator/GC effects and are not asserted as hard bounds.");
+    json.WriteString("memoryScope", "Correctness records owned reservation and wire/copy counters. Process allocation, GC and RSS sampling belong to explicit local diagnostics.");
     json.WriteStartArray("cases");
     foreach (var item in cases)
     {

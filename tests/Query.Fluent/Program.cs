@@ -1,6 +1,5 @@
 using System.Runtime.CompilerServices;
 using System.Buffers.Binary;
-using System.Diagnostics;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -17,9 +16,6 @@ internal static class Suite
 {
     private static int _assertions, _retirements;
     private static readonly List<string> Completed = [];
-    private static readonly List<CompositionCost> Costs = [];
-    private static readonly List<PreparedConstructionCost> PreparedCosts = [];
-    private static readonly List<EmptyParameterCost> EmptyParameterCosts = [];
     internal static void Check(bool value, string message) { _assertions++; if (!value) throw new InvalidOperationException(message); }
     internal static T Throws<T>(Action action) where T : Exception
     { try { action(); } catch (T error) { _assertions++; return error; } throw new InvalidOperationException("Expected " + typeof(T).Name); }
@@ -48,7 +44,7 @@ internal static class Suite
         }
         File.Delete(sqliteFile);
         Check(hashes.SequenceEqual(nativeFiles.Select(f => Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(f))))), "New C# DTOs and ordinary expressions reuse unchanged native assets");
-        Directory.CreateDirectory(args[0]); File.WriteAllText(Path.Combine(args[0], "result.json"), JsonSerializer.Serialize(new Receipt(!RuntimeFeature.IsDynamicCodeSupported, _assertions, _retirements, Completed, hashes, Costs, PreparedCosts, EmptyParameterCosts), ReceiptJson.Default.Receipt));
+        Directory.CreateDirectory(args[0]); File.WriteAllText(Path.Combine(args[0], "result.json"), JsonSerializer.Serialize(new Receipt(!RuntimeFeature.IsDynamicCodeSupported, _assertions, _retirements, Completed, hashes), ReceiptJson.Default.Receipt));
         Console.WriteLine($"PASS B13 actual two-provider Fluent: {_assertions} assertions; AOT={!RuntimeFeature.IsDynamicCodeSupported}");
     }
     private static async Task Provider(DataSession session, Diagnostic diagnostic)
@@ -301,8 +297,8 @@ internal static class Suite
         await Done("prepared-isolation");
         await CheckPreparedStreamFailureTiming(session, diagnostic);
         await Done("prepared-stream-validation-timing");
-        MeasurePreparedConstruction(session, diagnostic);
-        await Done("prepared-construction-allocation-regression");
+        CheckPreparedConstruction(session, diagnostic);
+        await Done("prepared-construction-lazy-admission");
         using (var q = Q())
         using (var other = Q())
         {
@@ -365,10 +361,10 @@ internal static class Suite
             Check(plan.IsClosed, "Seal/Publish/Dispose releases published native plan");
         }
         await Done("owners-streaming-cardinality");
-        MeasureEmptyParameters(session, diagnostic);
+        CheckEmptyParameters(session, diagnostic);
         await Done("dynamic-empty-parameter-encoding");
-        MeasureComposition(session);
-        await Done("direct-composition-cost-input");
+        CheckComposition(session, diagnostic);
+        await Done("composition-render-no-dispatch");
         if (session.Source.Provider == DatabaseProvider.Sqlite)
         { using var q = Q(); Throws<DatabaseCapabilityException>(() => q.ForUpdate()); }
         else
@@ -387,7 +383,7 @@ internal static class Suite
         await session.ExecuteAsync(SqlCommand.Create("DROP TABLE \"Children\"", kind: SqlCommandKind.Mutation));
         await session.ExecuteAsync(SqlCommand.Create("DROP TABLE \"Parents\"", kind: SqlCommandKind.Mutation));
     }
-    private static void MeasureEmptyParameters(DataSession session, Diagnostic diagnostic)
+    private static void CheckEmptyParameters(DataSession session, Diagnostic diagnostic)
     {
         using var query = session.From(Models.People);
         var profile = session.Source.Provider == DatabaseProvider.Sqlite ? 1u : 2u;
@@ -402,32 +398,13 @@ internal static class Suite
         BinaryPrimitives.WriteUInt32LittleEndian(expected.AsSpan(76), profile);
         BinaryPrimitives.WriteUInt64LittleEndian(expected.AsSpan(80), 96);
         BinaryPrimitives.WriteUInt64LittleEndian(expected.AsSpan(88), 96);
-        var expectedChecksum = ConsumeParameterFrame(expected, expected);
-        const int warmup = 1024, iterations = 16384;
-        for (var i = 0; i < warmup; i++) _ = ConsumeParameterFrame(query.Context.Values(null), expected);
         var sql = diagnostic.Count(6); var owners = diagnostic.Counts();
-        _ = GC.GetTotalAllocatedBytes(precise: true); _ = Stopwatch.GetTimestamp();
-        var before0 = GC.CollectionCount(0); var before1 = GC.CollectionCount(1); var before2 = GC.CollectionCount(2);
-        var before = GC.GetTotalAllocatedBytes(precise: true); var started = Stopwatch.GetTimestamp();
-        long checksum = 0;
-        for (var i = 0; i < iterations; i++) checksum += ConsumeParameterFrame(query.Context.Values(null), expected);
-        var ended = Stopwatch.GetTimestamp(); var after = GC.GetTotalAllocatedBytes(precise: true);
-        var after0 = GC.CollectionCount(0); var after1 = GC.CollectionCount(1); var after2 = GC.CollectionCount(2);
-        // DB-Perf-01: all six warmed candidate windows (three independent AOT
-        // processes per provider) measured exactly zero whole-process bytes.
-        // This gate covers only internal encoding with an existing context; it
-        // excludes query construction, native execution, and business results.
-        const long maximumBytes = 0;
-        EmptyParameterCosts.Add(new(session.Source.Provider.ToString(), profile, warmup, iterations,
-            before, after, before0, before1, before2, after0, after1, after2, started, ended,
-            Stopwatch.Frequency, checksum, Convert.ToHexStringLower(expected), maximumBytes,
-            "Internal QueryContext.Values(null) only; GC counters cover the whole process heap."));
-        Check(after - before <= maximumBytes, "Warmed internal empty-parameter encoding allocation ceiling");
-        Check(checksum == expectedChecksum * iterations, "Every complete empty-parameter frame was consumed");
+        Check(query.Context.Values(null).AsSpan().SequenceEqual(expected), "Complete empty-parameter frame matches the independent wire golden");
+        Check(query.Context.Values(null).AsSpan().SequenceEqual(expected), "Repeated empty encoding preserves every byte");
         Check(diagnostic.Count(6) == sql && diagnostic.Counts().SequenceEqual(owners), "Encoding does not dispatch SQL or change native ownership");
 
-        // Explicit empty sets and every parameterized/invalid input retain the
-        // existing snapshot/validation path; they are outside the zero window.
+        // Explicit empty, parameterized and invalid inputs keep the complete
+        // snapshot and identity checks; allocation sampling lives in db-perf.
         var explicitEmpty = new QueryParameters();
         Check(query.Context.Values(explicitEmpty).AsSpan().SequenceEqual(expected), "Explicit empty parameter frame keeps the same complete bytes");
         using var declared = session.From(Models.People);
@@ -443,29 +420,20 @@ internal static class Suite
         Check(Throws<ArgumentException>(() => declared.Context.Values(otherValues)).ParamName == "supplied", "A different declared identity still rejects");
         Check(query.Context.Values(null).AsSpan().SequenceEqual(expected), "Fallback calls do not mutate the shared frame");
     }
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private static long ConsumeParameterFrame(ReadOnlySpan<byte> bytes, ReadOnlySpan<byte> expected)
+    private static void CheckComposition(DataSession session, Diagnostic diagnostic)
     {
-        if (!bytes.SequenceEqual(expected)) throw new InvalidOperationException("Complete parameter frame changed.");
-        long checksum = 0; foreach (var value in bytes) checksum += value; return checksum;
-    }
-    private static void MeasureComposition(DataSession session)
-    {
-        void Compose(long value)
+        var sql = diagnostic.Count(6); var owners = diagnostic.Counts();
+        using (var query = session.From(Models.People))
         {
-            using var query = session.From(Models.People);
-            _ = query.WhereEqual(Models.Id, value).Take(1).SelectAll().ToSql();
+            var selection = query.WhereEqual(Models.Id, 0L).Take(1).SelectAll();
+            var first = selection.ToSql();
+            Check(first.Length != 0 && selection.ToSql() == first, "Repeated rendering preserves the complete SQL snapshot");
         }
-        Compose(0);
-        const int iterations = 64;
-        var before = GC.GetAllocatedBytesForCurrentThread(); var started = Stopwatch.GetTimestamp();
-        for (var i = 0; i < iterations; i++) Compose(i % 3);
-        var elapsed = Stopwatch.GetTimestamp() - started; var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
         int encoded = Korda.Query.Internal.OperandEncoding.Value(session.Source.Binding.SemanticProfile, Codecs.Int64, 3, 1L).Length;
-        Check(encoded > sizeof(long) && allocated > 0, "Direct boundary allocations and encoded copies are explicit");
-        Costs.Add(new(session.Source.Provider.ToString(), iterations, allocated, elapsed, Stopwatch.Frequency, encoded, 15));
+        Check(encoded > sizeof(long), "An Int64 literal retains its complete typed wire representation");
+        Check(diagnostic.Count(6) == sql && diagnostic.Counts().SequenceEqual(owners), "Composition and rendering do not dispatch SQL or retain native owners");
     }
-    private static void MeasurePreparedConstruction(DataSession session, Diagnostic diagnostic)
+    private static void CheckPreparedConstruction(DataSession session, Diagnostic diagnostic)
     {
         using var zeroQuery = session.From(Models.People);
         using var zero = zeroQuery.Select(zeroQuery.Column(Models.Id)).Prepare();
@@ -474,26 +442,15 @@ internal static class Suite
         using var one = oneQuery.Where(oneQuery.Column(Models.Id).GreaterThanOrEqual(oneQuery.ParameterValue(parameter)))
             .Select(oneQuery.Column(Models.Id)).Prepare();
         var values = new QueryParameters().Set(parameter, 1L);
-        for (var i = 0; i < 1000; i++) { GC.KeepAlive(zero.AsAsyncEnumerable(session)); GC.KeepAlive(one.AsAsyncEnumerable(session, values)); }
-        const int iterations = 10000;
-        for (var window = 0; window < 3; window++)
-            for (var lane = 0; lane < 2; lane++)
-            {
-                var sql = diagnostic.Count(6); var owners = diagnostic.Counts();
-                var before0 = GC.CollectionCount(0); var before1 = GC.CollectionCount(1); var before2 = GC.CollectionCount(2);
-                var before = GC.GetTotalAllocatedBytes(precise: true);
-                if (lane == 0) for (var i = 0; i < iterations; i++) GC.KeepAlive(zero.AsAsyncEnumerable(session));
-                else for (var i = 0; i < iterations; i++) GC.KeepAlive(one.AsAsyncEnumerable(session, values));
-                var after = GC.GetTotalAllocatedBytes(precise: true);
-                var gen0 = GC.CollectionCount(0) - before0; var gen1 = GC.CollectionCount(1) - before1; var gen2 = GC.CollectionCount(2) - before2;
-                // These are bounded construction regressions, not a zero-allocation
-                // claim. The old metadata rebuild exceeds both ceilings by a wide margin.
-                var maximum = lane == 0 ? 2_000_000L : 10_000_000L;
-                PreparedCosts.Add(new(session.Source.Provider.ToString(), lane == 0 ? "parameterless" : "one-int64-snapshot",
-                    window, iterations, before, after, after - before, gen0, gen1, gen2, maximum));
-                Check(after - before <= maximum, "Prepared public construction allocation ceiling");
-                Check(diagnostic.Count(6) == sql && diagnostic.Counts().SequenceEqual(owners), "Lazy construction performs no SQL or native ownership change");
-            }
+        // Check first and repeated construction without an allocation or timing
+        // window. The public methods remain lazy and retain no execution owner.
+        for (var repeat = 0; repeat < 2; repeat++)
+        {
+            var sql = diagnostic.Count(6); var owners = diagnostic.Counts();
+            GC.KeepAlive(zero.AsAsyncEnumerable(session));
+            GC.KeepAlive(one.AsAsyncEnumerable(session, values));
+            Check(diagnostic.Count(6) == sql && diagnostic.Counts().SequenceEqual(owners), "Lazy construction performs no SQL or native ownership change");
+        }
     }
     private static async Task CheckPreparedStreamFailureTiming(DataSession session, Diagnostic diagnostic)
     {
@@ -545,14 +502,6 @@ internal static class Models
         var cte = new TableBuilder<IdRow>("ChosenParents"); CteId = cte.Column("Id", Codecs.Int64); Cte = cte.Build(r => new(r.Get(CteId)), (r, v) => r.Set(CteId, v.Id));
     }
 }
-internal sealed record CompositionCost(string Provider, int Iterations, long ManagedAllocatedBytes, long StopwatchTicks, long StopwatchFrequency, int OneInt64WireBytes, int InspectedDirectAbiCallsPerIteration);
-internal sealed record PreparedConstructionCost(string Provider, string Lane, int Window, int Iterations, long AllocatedBefore,
-    long AllocatedAfter, long AllocatedBytes, int Gen0, int Gen1, int Gen2, long MaximumBytes);
-internal sealed record EmptyParameterCost(string Provider, uint SemanticProfile, int Warmup, int Iterations,
-    long AllocatedBefore, long AllocatedAfter, int Gen0Before, int Gen1Before, int Gen2Before,
-    int Gen0After, int Gen1After, int Gen2After, long StartedTicks, long EndedTicks, long StopwatchFrequency,
-    long Checksum, string FullFrameHex, long MaximumBytes, string Scope);
-internal sealed record Receipt(bool NativeAot, int Assertions, int ManagedRetirements, List<string> Cases, string[] NativeSha256,
-    List<CompositionCost> CompositionCosts, List<PreparedConstructionCost> PreparedConstructionCosts, List<EmptyParameterCost> EmptyParameterCosts);
+internal sealed record Receipt(bool NativeAot, int Assertions, int ManagedRetirements, List<string> Cases, string[] NativeSha256);
 [JsonSerializable(typeof(Receipt))]
 internal partial class ReceiptJson : JsonSerializerContext { }

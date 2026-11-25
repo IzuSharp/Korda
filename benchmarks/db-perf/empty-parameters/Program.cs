@@ -55,13 +55,13 @@ foreach (var provider in new[] { "sqlite", "postgresql" })
         observations.Add(Measure(provider, profile, "dynamic-explicit-empty-fallback", () => context.Values(suppliedEmpty), expected, Operations, Warmup));
         var prepared = new PreparedParameterLayout(source, context.Parameters.Values);
         observations.Add(Measure(provider, profile, "prepared-empty-unchanged", () => prepared.Encode(source, null), expected, Operations, Warmup));
-        var legacy = ParameterDefinition.Encode(source, context.Parameters.Values, null);
-        Require(legacy.AsSpan().SequenceEqual(expected), "independent golden equals original encoder for " + provider);
+        var preparedFrame = prepared.Encode(source, null);
+        Require(preparedFrame.AsSpan().SequenceEqual(expected), "independent golden equals prepared encoder for " + provider);
 
         using var parameterQuery = session.From(table);
         var parameter = parameterQuery.Parameter("id", Codecs.Int64);
         var supplied = new QueryParameters().Set(parameter, 17L);
-        var nonemptyGolden = ParameterDefinition.Encode(source, parameterQuery.Context.Parameters.Values, supplied);
+        var nonemptyGolden = new PreparedParameterLayout(source, parameterQuery.Context.Parameters.Values).Encode(source, supplied);
         observations.Add(Measure(provider, profile, "dynamic-one-parameter-unchanged", () => parameterQuery.Context.Values(supplied), nonemptyGolden, Operations, Warmup));
         ObserveError(provider, "declared-missing-null", () => parameterQuery.Context.Values(null));
         ObserveError(provider, "declared-missing-explicit-empty", () => parameterQuery.Context.Values(suppliedEmpty));

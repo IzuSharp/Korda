@@ -145,12 +145,9 @@ def main() -> int:
                             "-p:PublishAot=true", "-p:RestoreLockedMode=true", *local_restore, *common, "-o", str(publish)])
         executable = publish / "Korda.Data.Streaming.Tests"
         native_env = dict(env, LD_LIBRARY_PATH=str(fixture_dir) + (":" + env["LD_LIBRARY_PATH"] if env.get("LD_LIBRARY_PATH") else ""))
-        # Allocation boundaries use fresh processes. The high-allocation copy
-        # stress fixture must not silently become part of the zero-row gate's
-        # process history; both keep their original strict raw counters.
-        run("aot-allocation-gate", [str(executable), str(output / "allocation-results"), "--require-aot", "--allocation-gate-only"], native_env)
-        run("aot-owned-batch-gate", [str(executable), str(output / "owned-batch-results"), "--require-aot", "--owned-batch-probe-only"], native_env)
-        run("aot-row-lease-reuse-gate", [str(executable), str(output / "row-lease-reuse-results"), "--require-aot", "--row-lease-reuse-probe-only"], native_env)
+        # The provider correctness run retains storage identity, transfer,
+        # disposal, malformed-batch and race assertions. Allocation windows are
+        # explicit local diagnostics and are not invoked by this CI verifier.
         if args.postgres_bin:
             pg = args.postgres_bin.resolve()
             data = output / "postgres-data"

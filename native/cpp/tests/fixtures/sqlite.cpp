@@ -301,7 +301,8 @@ void codecs(const std::filesystem::path& file)
     (void)rejects([&] { (void)decode_parameters(encoded, wrong, 4096, MAX_BYTES, 65536); });
     check(!session->active.load(), "no admitted command retained after codecs");
 }
-void savepoints(const std::filesystem::path& file)
+void savepoints(const std::filesystem::path& file,
+                const std::function<void(const std::shared_ptr<Transaction>&)>& configure = {})
 {
     Scope scope(configuration(file.string()));
     auto session = scope.open();
@@ -309,6 +310,8 @@ void savepoints(const std::filesystem::path& file)
     execute(session, "CREATE TABLE parent(id INTEGER PRIMARY KEY)");
     execute(session, "CREATE TABLE child(id INTEGER REFERENCES parent(id))");
     auto tx = begin(session);
+    if (configure)
+        configure(tx);
     auto point = tx->create_savepoint(token(), session->admit(true));
     (void)rejects([&] { execute(session, "INSERT INTO child VALUES (9)"); });
     check(!tx->active(), "constraint failure closes ordinary transaction admission");
@@ -364,6 +367,37 @@ struct ReleaseGate
         gate->release();
     }
 };
+void savepoint_worker_epilogues(const std::filesystem::path& root)
+{
+    for (const bool deadline : {false, true})
+    {
+        auto gate = std::make_shared<Gate>();
+        std::future<void> work;
+        ReleaseGate release{gate};
+        const auto file = root / (deadline ? "case-4-deadline-epilogue.db" : "case-4-finish-epilogue.db");
+        work = std::async(std::launch::async,
+                          [file, gate, deadline]
+                          {
+                              savepoints(file,
+                                         [gate, deadline](const auto& tx)
+                                         {
+                                             auto hook = [gate] { gate->enter(); };
+                                             if (deadline)
+                                                 tx->test_after_deadline_worker = std::move(hook);
+                                             else
+                                                 tx->test_after_finish_worker = std::move(hook);
+                                         });
+                          });
+        gate->wait();
+        check(work.wait_for(20ms) != std::future_status::ready,
+              "case 4 returned before its transaction worker released the last references");
+        gate->release();
+        joined(work);
+        check(!gate->timed_out && source_count == 0 && session_count == 0 && cursor_count == 0 && buffer_count == 0 &&
+                  operation_count == 0,
+              "case 4 worker completion did not release every native owner");
+    }
+}
 sqlite3* handle(const std::shared_ptr<Session>& session)
 {
     auto* result = static_cast<sqlite3*>(session->connection->test_sqlite_handle());
@@ -791,6 +825,7 @@ void run_suite(const std::filesystem::path& root)
                 break;
             case 4:
                 savepoints(file);
+                savepoint_worker_epilogues(root);
                 break;
             case 5:
                 cancellation(file);

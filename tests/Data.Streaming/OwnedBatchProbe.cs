@@ -30,6 +30,31 @@ internal static class OwnedBatchProbe
     private readonly record struct Window(string Lane, int Round, Counter Before, Counter After,
         long Operations, long Rows, long Checksum);
 
+    internal static void RunCorrectness()
+    {
+        var payload = Encode(Rows);
+        Correctness(payload);
+        foreach (var owned in new[] { false, true })
+        {
+            var batches = Prepare(payload, 2, owned);
+            long rows = 0, checksum = 0;
+            foreach (var owner in batches)
+            {
+                using var lease = new RowBatchLease(owner, Expected, Shape.Fields, Limits);
+                for (uint row = 0; row < lease.Rows; row++)
+                {
+                    var value = lease.Materialize(row, Shape);
+                    Check(value == row + 1, "Complete batch consumption changed a numeric value.");
+                    rows++; checksum += value;
+                }
+            }
+            Check(rows == 2 * Rows && checksum == (long)Rows * (Rows + 1),
+                "Borrowed/owned batches changed their complete row count or checksum.");
+            AssertReleased(batches, takes: owned ? 1 : 0);
+        }
+        Console.WriteLine($"PASS owned batch correctness: {s_assertions} assertions; complete consumption, ownership and malformed-transfer compensation");
+    }
+
     internal static void Run(string output)
     {
         var payload = Encode(Rows);

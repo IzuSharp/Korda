@@ -764,10 +764,11 @@ try
         invalid("value flags");
     auto codec = root.codecs->get(bound, flags == 1);
     Expectation expected{3, root.source.profile, {}, 0, 0, {{1, codec, bound}}, exact};
-    auto batch = Batch::parse(bytes, expected);
+    auto batch = BatchView::parse(bytes, expected);
     if (batch.rows() > limits.parameters)
         capacity("expression collection size");
     DecodedValues result{codec, bound, {}};
+    result.cells.reserve(batch.rows());
     for (std::uint32_t row = 0; row < batch.rows(); ++row)
     {
         auto cell = batch.cell(row, 0);
@@ -1878,7 +1879,12 @@ std::shared_ptr<NativePlan> NativeQuery::seal(std::uint32_t terminal)
     for (const auto& node : data.nodes)
         if (node.valid && node.kind == NodeKind::Expression)
             plan->depth = std::max(plan->depth, node.expression.type.depth);
-    plan->impl_->data = std::make_shared<const QueryData>(data);
+    // A complete command has no published mutable query owner. Its validated
+    // arena can become the immutable plan storage directly. Independently
+    // callable query handles retain their arena and existing state semantics.
+    static_assert(std::is_nothrow_move_constructible_v<QueryData>);
+    plan->impl_->data = impl_->command_private ? std::make_shared<const QueryData>(std::move(impl_->data))
+                                               : std::make_shared<const QueryData>(data);
     plan->impl_->limits = impl_->limits;
     plan->impl_->submitted = impl_->submitted;
     plan->impl_->command_origins = impl_->command_origins;
@@ -2382,8 +2388,8 @@ class Renderer
 };
 } // namespace
 
-std::shared_ptr<NativeCte> NativeCte::create(ModelBinding declared, std::uint32_t table_id, const NativeQuery& body,
-                                             std::uint32_t recursive)
+void NativeCte::validate(const ModelBinding& declared, std::uint32_t table_id, const NativeQuery& body,
+                         std::uint32_t recursive)
 {
     const auto& data = body.impl_->data;
     if (recursive == 1)
@@ -2422,7 +2428,13 @@ std::shared_ptr<NativeCte> NativeCte::create(ModelBinding declared, std::uint32_
     declared.ensure_source(body.source());
     if (declared.model->table_id() != table_id || recursive > 1)
         invalid("CTE declaration/recursive flag");
-    auto plan = body.clone_selected()->seal(8);
+}
+
+namespace
+{
+std::shared_ptr<NativeCte> cte_from_plan(ModelBinding declared, std::shared_ptr<NativePlan> plan,
+                                         std::uint32_t recursive)
+{
     if (!plan->projection || !row_codecs_match(*declared.model, *plan->projection->projection))
         invalid("CTE declared/body shape");
     auto result = std::make_shared<NativeCte>();
@@ -2432,6 +2444,27 @@ std::shared_ptr<NativeCte> NativeCte::create(ModelBinding declared, std::uint32_
     result->body = std::move(plan);
     result->recursive = recursive == 1;
     return result;
+}
+} // namespace
+
+std::shared_ptr<NativeCte> NativeCte::create(ModelBinding declared, std::uint32_t table_id, const NativeQuery& body,
+                                             std::uint32_t recursive)
+{
+    validate(declared, table_id, body, recursive);
+    auto snapshot = body.clone_selected();
+    // The public body remains independently mutable. The private snapshot has
+    // no caller and does not need another arena copy when it is sealed.
+    snapshot->impl_->command_private = true;
+    return cte_from_plan(std::move(declared), snapshot->seal(8), recursive);
+}
+
+std::shared_ptr<NativeCte> NativeCte::create_owned(ModelBinding declared, std::uint32_t table_id, NativeQuery& body,
+                                                   std::uint32_t recursive)
+{
+    if (!body.impl_->command_private)
+        state_error("CTE command body is not private");
+    validate(declared, table_id, body, recursive);
+    return cte_from_plan(std::move(declared), body.seal(8), recursive);
 }
 
 // A complete command is replayed in private arenas, using the same authoritative
@@ -2505,6 +2538,23 @@ class QueryCommandReplay
         registry_ = std::make_shared<ParameterRegistry>(context_.parameters->source, context_.limits.parameters);
     }
 
+    std::shared_ptr<NativePlan> compile(std::uint32_t terminal)
+    {
+        return replay()->seal(terminal);
+    }
+
+    std::shared_ptr<NativeCte> create_cte(ModelBinding declared, std::uint32_t table_id, std::uint32_t recursive)
+    {
+        auto body = replay();
+        return NativeCte::create_owned(std::move(declared), table_id, *body, recursive);
+    }
+
+    void commit(const NativePlan& plan) const
+    {
+        context_.parameters->register_identities(plan.parameters);
+    }
+
+  private:
     std::shared_ptr<NativeQuery> replay()
     {
         std::vector<std::shared_ptr<NativePlan>> plans;
@@ -2666,16 +2716,10 @@ class QueryCommandReplay
             invalid("query command origin binding is not used by a record");
         if (!origins_.empty())
             root->impl_->command_origins = std::make_shared<const CommandOrigins>(std::move(origins_));
-        root->impl_->command_private = false;
+        // Only compile/create_cte can receive this root. Both consume its arena
+        // into an immutable plan; no command-private mutable owner escapes.
         return root;
     }
-
-    void commit(const NativePlan& plan) const
-    {
-        context_.parameters->register_identities(plan.parameters);
-    }
-
-  private:
     ByteView command_;
     std::span<const QueryCommandDependency> dependencies_;
     const QueryCommandContext& context_;
@@ -2766,7 +2810,7 @@ std::shared_ptr<NativePlan> compile_query_command(ByteView command,
 try
 {
     QueryCommandReplay replay(command, dependencies, context);
-    auto plan = replay.replay()->seal(terminal);
+    auto plan = replay.compile(terminal);
     (void)plan->compiled_shape();
     replay.commit(*plan);
     return plan;
@@ -2791,8 +2835,7 @@ try
     if (!declared.model || !declared.codecs)
         invalid("query command CTE declaration");
     declared.ensure_source(context.parameters->source);
-    auto query = replay.replay();
-    auto cte = NativeCte::create(std::move(declared), table_id, *query, recursive);
+    auto cte = replay.create_cte(std::move(declared), table_id, recursive);
     (void)cte->body->compiled_shape();
     replay.commit(*cte->body);
     return cte;

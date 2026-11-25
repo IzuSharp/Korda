@@ -44,6 +44,7 @@ internal static class SnapshotProbe
         var output = args[1]; var iterations = int.Parse(args[2]); var windows = int.Parse(args[3]);
         Bounds(iterations, windows); Directory.CreateDirectory(output);
         var oracleInputs = Verify();
+        VerifyAllocationBudget();
         var normal = Frame(Standard()); var releasedFields = Standard();
         releasedFields[3] = new(4, 1, U32(2)); releasedFields[5] = new(6, 1, U32(1));
         var released = Frame(releasedFields); var provider = Frame(Standard("40001"));

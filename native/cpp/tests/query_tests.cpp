@@ -371,7 +371,11 @@ void complete_query_commands()
             check(encoded == original, "complete command decoding must not rewrite caller input");
             std::fill(encoded.begin(), encoded.end(), 0);
             auto direct = c.selected(4, 7);
-            same_command(plan, direct.seal(8));
+            const auto counts = direct.counts();
+            auto expected = direct.seal(8);
+            check(direct.counts() == counts, "public seal retains its independently owned query arena");
+            direct.close();
+            same_command(plan, expected);
         }
         {
             // Clause references are decoded directly from the input. Neither a
@@ -538,7 +542,13 @@ void complete_query_commands()
             select(direct, {{did, "Id", scalar(3)}});
             auto dimport = direct.import_plan(direct.clone_selected()->seal(8));
             direct.clause(9, record({token(1, dimport), num(2, 1)}));
-            same_command(compile(query_command({snapshot, root})), direct.seal(8));
+            auto encoded = query_command({snapshot, root});
+            auto plan = compile(encoded);
+            // Both the direct literal decoder and the complete-command block
+            // must own their cells after the synchronous input borrow ends.
+            std::fill(values.begin(), values.end(), 0);
+            std::fill(encoded.begin(), encoded.end(), 0);
+            same_command(plan, direct.seal(8));
         }
         for (std::uint32_t operation = 0; operation < 4; ++operation)
         {
@@ -614,8 +624,10 @@ void complete_query_commands()
         {
             auto body = selected_command(c, 1);
             auto declared = c.declared("SelectedParents");
-            auto cte = create_query_command_cte(query_command({body}), dependencies, context, declared,
-                                                declared.model->table_id(), 0);
+            auto encoded = query_command({body});
+            auto cte =
+                create_query_command_cte(encoded, dependencies, context, declared, declared.model->table_id(), 0);
+            std::fill(encoded.begin(), encoded.end(), 0);
             const std::vector<QueryCommandDependency> external{declared, cte};
             CommandBlock root{0, declared.model->table_id()};
             auto imported = root.add(7, 3, u32(1));

@@ -251,6 +251,13 @@ struct NativeCte
     std::string name;
     static std::shared_ptr<NativeCte> create(ModelBinding declared, std::uint32_t table_id, const NativeQuery& body,
                                              std::uint32_t recursive);
+
+  private:
+    friend class QueryCommandReplay;
+    static void validate(const ModelBinding& declared, std::uint32_t table_id, const NativeQuery& body,
+                         std::uint32_t recursive);
+    static std::shared_ptr<NativeCte> create_owned(ModelBinding declared, std::uint32_t table_id, NativeQuery& body,
+                                                   std::uint32_t recursive);
 };
 
 // The sidecar is resolved by the Host handle registry before decoding. The

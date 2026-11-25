@@ -286,9 +286,10 @@ version, a dirty production patch hash and complete entry provenance; the normal
 bundle composer must regenerate matching closure/shared digests, and the provider
 facade's embedded identity must match that experimental version. Such experiments
 do not replace final producer-CI or public NuGet package validation. The affected
-Query.Fluent correctness suite includes a short all-thread allocation ceiling for
-public lazy construction, plus snapshot/source/NULL/disposal/concurrency checks;
-the ceiling is explicitly nonzero.
+Query.Fluent correctness suite retains snapshot/source/NULL/disposal/concurrency
+checks and verifies that first and repeated lazy construction dispatch no SQL and
+change no native ownership. Timing, allocation ceilings and whole-process GC
+sampling run only in these local diagnostics, outside CI correctness gates.
 
 ## Evidence and limits
 
@@ -310,3 +311,44 @@ Primary implementation guidance:
 - Npgsql AOT compatibility: <https://www.npgsql.org/doc/compatibility.html>
 - SQLite async behavior: <https://learn.microsoft.com/en-us/dotnet/standard/data/sqlite/async>
 - SQLite native version selection: <https://learn.microsoft.com/en-us/dotnet/standard/data/sqlite/custom-versions>
+
+## Local streaming allocation diagnostics
+
+The `Data.Streaming` correctness verifier publishes the existing Native AOT test
+consumer and executes provider, storage identity, owner transfer/release,
+malformed-batch, row-lease and race assertions. It does not run allocation
+windows. A normal invocation and `--correctness-only` both select correctness.
+
+After the consumer has been built, run these diagnostics locally in separate
+processes with fresh output directories and no concurrent build or timing run:
+
+```bash
+/absolute/streaming-aot/Korda.Data.Streaming.Tests /absolute/inbatch-allocation \
+  --require-aot --allocation-gate-only
+/absolute/streaming-aot/Korda.Data.Streaming.Tests /absolute/owned-batch-allocation \
+  --require-aot --owned-batch-probe-only
+/absolute/streaming-aot/Korda.Data.Streaming.Tests /absolute/reused-lease-allocation \
+  --require-aot --row-lease-reuse-probe-only
+```
+
+These retain their existing raw process counters, exact-zero or bounded-byte
+criteria, and owner/checksum assertions. They isolate synthetic in-batch,
+exclusive managed storage, or reused-lease work. They do not establish complete
+public query allocation or measured PostgreSQL/SQLite throughput. No CI action,
+ordinary component verifier or release command invokes these profiling flags.
+
+### Additional explicit local diagnostics
+
+The default component verifiers run correctness, API and ownership tests. Allocation windows for abstraction codecs, control records, query projection encoding and Host snapshot parsing are local diagnostics only. The existing published AOT test executables retain these explicit entries:
+
+```bash
+<abstractions-aot>/Korda.Data.Tests <fresh-output> --require-aot --allocation-probe --allocation-regression
+<abstractions-aot>/Korda.Data.Tests <fresh-output> --require-aot --owned-wire-allocation-regression
+<abstractions-aot>/Korda.Data.Tests <fresh-output> --require-aot --control-record-allocation-regression
+<abstractions-aot>/Korda.Data.Tests <fresh-output> --require-aot --configured-scalar-probe --allocation-regression
+<binding-aot>/Korda.Query.Binding.Tests --projection-allocation <fresh-output>
+<binding-aot>/Korda.Query.Binding.Tests --projection-scratch-allocation <fresh-output>
+<host-aot>/Korda.Data.NativeHost.Tests --snapshot-probe <fresh-output> 10000 3
+```
+
+The parser-only snapshot entry also checks its existing allocation budget before collecting its explicit windows. These commands are not invoked by a default verifier, workflow, release script or package build. Keep their raw process allocation and GC counters with their exact source and binary identities; they do not establish complete-query performance. The ordinary suites still execute wire goldens, codec rejection matrices, snapshot parser equivalence, projection scratch/ownership checks, bounded-input rejection, and all batch lifetime checks.

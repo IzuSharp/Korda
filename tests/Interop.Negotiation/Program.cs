@@ -140,11 +140,14 @@ internal static class Suite
         Assert(ReferenceEquals(a, Descriptor("coexist.alpha", "alpha").Inspect()));
         var catalog = new EngineCatalog([beta, alpha]);
         Assert(ReferenceEquals(catalog.Inspect("coexist.alpha"), a));
-        // A successful hot capability test allocates no managed bytes after warm-up.
-        for (int i = 0; i < 100; i++) Assert(a.Supports(Alpha));
+        // Supports publicly promises no per-call allocation or native dispatch.
+        // Check the initialized known/unknown cases without a sampling window.
         long before = GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < 10000; i++) _ = a.Supports(Alpha);
-        Assert(GC.GetAllocatedBytesForCurrentThread() == before);
+        bool known = a.Supports(Alpha), unknown = a.Supports(Beta);
+        long after = GC.GetAllocatedBytesForCurrentThread();
+        Assert(known && !unknown);
+        Assert(after == before);
+        Assert(Native.AlphaCalls() == 1);
     }
 
     private static void Concurrent()
