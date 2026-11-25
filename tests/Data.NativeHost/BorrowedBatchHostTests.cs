@@ -13,24 +13,25 @@ internal static class BorrowedBatchHostTests
     private static readonly TimeSpan Bound = TimeSpan.FromSeconds(10);
     private static readonly ValueCodec<BorrowedHostPayload> Json = Codecs.Json(BorrowedHostJson.Default.BorrowedHostPayload);
     private static int _checks;
-    private enum Stop { Dispose, Cancel, SourceClose }
+    private enum Stop { Dispose, Cancel, SourceClose, SessionClose }
 
     internal static async Task Run(DatabaseProvider provider, string connection)
     {
         var before = _checks;
-        foreach (var stop in new[] { Stop.Dispose, Stop.Cancel, Stop.SourceClose })
-            foreach (var failMapping in new[] { false, true })
-                await DuringMapping(provider, connection, stop, failMapping);
-        Console.WriteLine($"BORROWED_HOST_PASS provider={provider} scenarios=6 assertions={_checks - before}; real native buffers survive complete mapper scopes and decoded values own their data");
+        foreach (var batchRows in new[] { 1, 2 })
+            foreach (var stop in new[] { Stop.Dispose, Stop.Cancel, Stop.SourceClose, Stop.SessionClose })
+                foreach (var failMapping in new[] { false, true })
+                    await DuringMapping(provider, connection, stop, failMapping, batchRows);
+        Console.WriteLine($"BORROWED_HOST_PASS provider={provider} scenarios=16 assertions={_checks - before}; unknown/known EOF buffers survive complete mapper scopes and decoded values own their data");
     }
 
-    private static async Task DuringMapping(DatabaseProvider provider, string connection, Stop stop, bool failMapping)
+    private static async Task DuringMapping(DatabaseProvider provider, string connection, Stop stop, bool failMapping, int batchRows)
     {
-        Console.WriteLine($"BORROWED_HOST_CASE provider={provider} stop={stop} mapperFailure={failMapping}");
+        Console.WriteLine($"BORROWED_HOST_CASE provider={provider} stop={stop} mapperFailure={failMapping} batchRows={batchRows}");
         var engine = provider == DatabaseProvider.Sqlite ? SqliteDataSource.Engine : PostgreSqlDataSource.Engine;
         await WaitZero(engine);
         var builder = new DataSourceBuilder().WithName($"borrowed-{provider}-{stop}-{failMapping}")
-            .ConfigureLimits(new DatabaseLimits { MaxConnections = 1, MaxBatchRows = 1, MaxBatchBytes = 4096, MaxFieldBytes = 1024 });
+            .ConfigureLimits(new DatabaseLimits { MaxConnections = 1, MaxBatchRows = batchRows, MaxBatchBytes = 4096, MaxFieldBytes = 1024 });
         if (provider == DatabaseProvider.Sqlite) builder.UseSqlite(connection);
         else builder.UsePostgreSql(connection, options => options.TlsMode = PostgreSqlTlsMode.DisableForLocalDevelopment);
         var source = builder.Build();
@@ -70,7 +71,7 @@ internal static class BorrowedBatchHostTests
             .Add("bytes", inputBytes, Codecs.Bytes).Add("json", inputJson, Json));
         var reader = session.StreamAsync(command, projection, cancellation.Token).GetAsyncEnumerator();
         var move = Task.Run(() => reader.MoveNextAsync().AsTask());
-        Task? disposing = null, closingSource = null;
+        Task? disposing = null, closingSource = null, closingSession = null;
         try
         {
             var entered = await Task.WhenAny(enteredMapper.Task, move).WaitAsync(Bound);
@@ -97,6 +98,9 @@ internal static class BorrowedBatchHostTests
                 case Stop.SourceClose:
                     closingSource = source.DisposeAsync().AsTask();
                     break;
+                case Stop.SessionClose:
+                    closingSession = session.DisposeAsync().AsTask();
+                    break;
             }
             // Confirm that the stop/close control really retired, instead of
             // checking the buffer before a queued native action had run.
@@ -107,6 +111,11 @@ internal static class BorrowedBatchHostTests
             {
                 await closingSource.WaitAsync(Bound);
                 Check(source.Cleanup.LocalResourcesReleased, "source shutdown joins native safety independently of a held result buffer");
+            }
+            if (closingSession is not null)
+            {
+                await closingSession.WaitAsync(Bound);
+                Check(session.Cleanup.LocalResourcesReleased, "session shutdown joins native safety independently of a held result buffer");
             }
             Check(!move.IsCompleted, "control completion cannot finish an executing synchronous mapper");
             Check(Counts(engine)[4] == 1, "the real native result buffer survives completed stop/close control while the mapper is paused");
@@ -128,6 +137,13 @@ internal static class BorrowedBatchHostTests
                 }
                 else if (stop == Stop.SourceClose)
                     await Failure<ObjectDisposedException>(reader.MoveNextAsync().AsTask());
+                else if (stop == Stop.SessionClose)
+                {
+                    var failure = await Failure<InvalidOperationException>(reader.MoveNextAsync().AsTask());
+                    Check(failure.GetType() == typeof(InvalidOperationException)
+                        && failure.Message == "The native operation is not legal in the current state.",
+                        "parent session closure keeps native cursor InvalidState mapping at both EOF boundaries");
+                }
             }
             await reader.DisposeAsync().AsTask().WaitAsync(Bound);
             if (disposing is not null) await disposing.WaitAsync(Bound);

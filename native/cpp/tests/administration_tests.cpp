@@ -124,6 +124,53 @@ std::int64_t scalar(ProviderOptions options, std::string_view sql)
     return std::stoll(*rows[0][0]);
 }
 
+void administrative_row_boundaries(const ProviderOptions& options)
+{
+    const bool postgres = options.profile == Profile::PostgreSql;
+    auto connection = ProviderConnection::open(options, {});
+    const auto blob = [&](std::size_t size)
+    {
+        return postgres ? "decode(repeat('00'," + std::to_string(size) + "),'hex')"
+                        : "zeroblob(" + std::to_string(size) + ")";
+    };
+    connection->execute_script("CREATE TABLE _sqlx_migrations(version BIGINT PRIMARY KEY,checksum " +
+                                   std::string(postgres ? "BYTEA" : "BLOB") +
+                                   ",success BOOLEAN); INSERT INTO _sqlx_migrations VALUES(1," + blob(1) + "," +
+                                   (postgres ? "true" : "1") + ")",
+                               {});
+    const auto status = request(options.profile, 1, {"SELECT 1"});
+    for (const auto length : {MAX_BYTES - 64, MAX_BYTES})
+    {
+        (void)connection->execute("UPDATE _sqlx_migrations SET checksum=" + blob(length), {}, {});
+        (void)rejects(NW_DOMAIN_ERROR, 15, [&] { (void)run(options, status); });
+        require(scalar(options, "SELECT length(checksum) FROM _sqlx_migrations") == static_cast<std::int64_t>(length),
+                "large administrative field reaches checksum validation without mutating persisted input");
+    }
+    (void)connection->execute("UPDATE _sqlx_migrations SET success=" + std::string(postgres ? "false" : "0"), {}, {});
+    (void)rejects(NW_DOMAIN_ERROR, 8, [&] { (void)run(options, status); });
+    (void)connection->execute("UPDATE _sqlx_migrations SET checksum=" + blob(MAX_BYTES + 1), {}, {});
+    (void)rejects(NW_DOMAIN_ERROR, 1, [&] { (void)run(options, status); });
+
+    const auto& entry = status.bundle->migrations[0];
+    (void)connection->execute("UPDATE _sqlx_migrations SET checksum=" + std::string(postgres ? "$1" : "?1") +
+                                  ",success=" + (postgres ? "true" : "1"),
+                              {{{6, {}, false}, entry.checksum}}, {});
+    connection->execute_script("CREATE TABLE _nativeweave_migration_phases(version BIGINT,provider INTEGER,sql_hash " +
+                                   std::string(postgres ? "BYTEA" : "BLOB") + ",bundle_hash " +
+                                   (postgres ? "BYTEA" : "BLOB") +
+                                   ",description TEXT,non_transactional BOOLEAN,phase TEXT); "
+                                   "INSERT INTO _nativeweave_migration_phases VALUES(1," +
+                                   (postgres ? "0" : "1") + "," + blob(MAX_BYTES) + "," + blob(MAX_BYTES) +
+                                   ",'migration 1'," + (postgres ? "false" : "0") + ",'applied')",
+                               {});
+    (void)rejects(NW_DOMAIN_ERROR, 15, [&] { (void)run(options, status); });
+    require(scalar(options, "SELECT length(sql_hash)+length(bundle_hash) FROM _nativeweave_migration_phases") ==
+                static_cast<std::int64_t>(2 * MAX_BYTES),
+            "administrative row preserves per-field admission above the Host's aggregate frame limit");
+    connection->execute_script("DROP TABLE _nativeweave_migration_phases; DROP TABLE _sqlx_migrations", {});
+    connection->close();
+}
+
 void verify_catalog(const Bytes& output)
 {
     const auto envelope = Fields::parse(output, 19, {{1, 1, true}, {2, 5, true}});
@@ -195,6 +242,9 @@ int main(int argc, char** argv)
         ProviderOptions options;
         options.profile = Profile::Sqlite;
         options.connection = (root / "history.db").string();
+        auto row_bounds = options;
+        row_bounds.connection = (root / "row-bounds.db").string();
+        administrative_row_boundaries(row_bounds);
         const std::vector<std::string> scripts{
             "CREATE TABLE contended(id INTEGER PRIMARY KEY, name TEXT NOT NULL); CREATE TABLE audit(value TEXT);",
             "INSERT INTO contended VALUES(1,'one'); INSERT INTO audit VALUES('one;two')"};
@@ -273,6 +323,7 @@ int main(int argc, char** argv)
             pg.profile = Profile::PostgreSql;
             pg.connection = argv[1];
             pg.verify_tls = false;
+            administrative_row_boundaries(pg);
             const std::vector<std::string> pg_scripts{"CREATE TABLE seed(id BIGINT PRIMARY KEY)",
                                                       "INSERT INTO seed VALUES(1),(2)"};
             const auto pg_manifest = request(Profile::PostgreSql, 0, pg_scripts);

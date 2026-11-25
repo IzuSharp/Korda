@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 // B14 Host adapter regressions use the real product C ABI, not Host test hooks.
 // Fixed Rust reference: native/database/relations/host.rs at 465cd0f.
+#include "../../database/binding/korda_result_batch_v1.h"
 #include "nw/contracts.hpp"
 #include "nw_database_declarations.hpp"
 
@@ -170,6 +171,10 @@ struct Operation
     {
         nw_db_ref result{};
         auto error = error_slot();
+        nw_db_batch_result_v1 wrong{};
+        check(nw_db_operation_take_batch_v1(value, &wrong, &error) == NW_INVALID_STATE && !wrong.owner &&
+                  !wrong.bytes.data && !wrong.bytes.length,
+              "a wrong batch take must leave an owner result available");
         ok(nw_db_operation_take_owner_v1(value, kind, &result, &error), error, "actual owner transfer");
         return result;
     }
@@ -187,7 +192,36 @@ struct Operation
         ok(failed ? nw_db_operation_take_error_v1(value, &result, &error)
                   : nw_db_operation_take_buffer_v1(value, &result, &error),
            error, "actual buffer transfer");
+        if (!failed)
+        {
+            nw_db_batch_result_v1 twice{};
+            check(nw_db_operation_take_batch_v1(value, &twice, &error) == NW_INVALID_STATE && !twice.owner &&
+                      !twice.bytes.data && !twice.bytes.length,
+                  "a legacy buffer take must consume the same additive batch result");
+        }
         return copy_buffer(result);
+    }
+    Bytes take_batch()
+    {
+        nw_db_batch_result_v1 result{};
+        auto error = error_slot();
+        ok(nw_db_operation_take_batch_v1(value, &result, &error), error, "actual batch result transfer");
+        std::unique_ptr<nw_db_buffer, decltype(&nw_db_buffer_release_v1)> owner(result.owner, nw_db_buffer_release_v1);
+        check(result.owner && result.bytes.data && result.bytes.length >= 96 && result.known_end == 1 &&
+                  result.reserved == 0,
+              "one-row relation batch must carry its already observed EOF");
+        nw_bytes_view_v1 same{};
+        ok(nw_db_buffer_view_v1(owner.get(), &same, &error), error, "legacy view of transferred batch");
+        check(same.data == result.bytes.data && same.length == result.bytes.length,
+              "batch result must borrow the creating buffer allocation");
+        auto twice = result;
+        check(nw_db_operation_take_batch_v1(value, &twice, &error) == NW_INVALID_STATE && !twice.owner &&
+                  !twice.bytes.data && !twice.bytes.length && !twice.known_end && !twice.reserved,
+              "second batch take must reject and clear every output");
+        auto legacy = result.owner;
+        check(nw_db_operation_take_buffer_v1(value, &legacy, &error) == NW_INVALID_STATE && !legacy,
+              "new and old buffer takes must share one transfer gate");
+        return {result.bytes.data, result.bytes.data + result.bytes.length};
     }
 };
 void close_owner(Owner& owner)
@@ -433,7 +467,7 @@ struct Fixture
             ok(nw_db_cursor_fetch_create_v1(cursor.value, 2, 8192, &fetch.value, &error), error,
                "actual relation fetch");
             fetch.run();
-            const auto payload = fetch.take_buffer();
+            const auto payload = fetch.take_batch();
             Expectation expected{
                 2, Profile::Sqlite, projection->hash(),
                 0, projection_id,   {{0, {3, {}, false}, 3}, {1, {5, {}, false}, 5}, {2, {5, {}, false}, 5}},
@@ -441,6 +475,16 @@ struct Fixture
             const auto batch = Batch::parse(payload, expected);
             check(batch.rows() == 1 && read_u64(*batch.cell(0, 0), 0) == 1, "actual relation row unchanged");
         }
+        auto error = error_slot();
+        const auto operations = nw_db_diagnostic_count_v1(2);
+        const auto executions = nw_db_diagnostic_count_v1(6);
+        const auto submissions = nw_db_diagnostic_count_v1(7);
+        ok(nw_db_cursor_check_read_admission_v1(cursor.value, &error), error, "actual known EOF read admission");
+        check(nw_db_diagnostic_count_v1(2) == operations && nw_db_diagnostic_count_v1(6) == executions &&
+                  nw_db_diagnostic_count_v1(7) == submissions,
+              "EOF admission check creates no operation, SQL execution or protocol submission");
+        check(nw_db_cursor_check_read_admission_v1(session.value, &error) == NW_INVALID_STATE,
+              "EOF admission rejects a noncursor owner");
         close_owner(cursor);
     }
     void reject(const Bytes& key_bytes, bool wrong_projection = false)

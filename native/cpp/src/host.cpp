@@ -40,15 +40,16 @@ std::size_t sqlite_input_remaining(const Session& session, const SqlPlan& plan)
         throw Error(NW_DOMAIN_ERROR, 8, "invalid SQLite SQL byte length");
     return maximum - plan.sql.size();
 }
-std::vector<Scalar> decode_command_parameters(const Session& session, const SqlPlan& plan)
+const std::vector<Scalar>& command_parameters(const Session& session, const SqlPlan& plan)
 {
     const auto& limits = session.source->config.limits;
     if (session.source->config.provider.profile != Profile::Sqlite)
     {
         try
         {
-            return decode_parameters(plan.parameters, plan.expectation, limits.parameters, limits.parameter_bytes,
-                                     std::min(limits.field_bytes, limits.parameter_bytes));
+            validate_parameters(plan.arguments, plan.expectation, plan.parameter_wire_bytes, limits.parameters,
+                                limits.parameter_bytes, std::min(limits.field_bytes, limits.parameter_bytes));
+            return plan.arguments;
         }
         catch (const Error&)
         {
@@ -56,17 +57,19 @@ std::vector<Scalar> decode_command_parameters(const Session& session, const SqlP
         }
     }
 
-    // Fixed Rust B03 Session::prepare reserves SQL plus two complete wire-sized
-    // input copies before decoding or dispatch. Host creates that grant per
-    // physical session, not per Source. Our existing exclusive CommandGate
-    // retains this single admitted input until command/cursor retirement.
+    // Preserve B03's published admission boundary: SQL plus two complete
+    // logical wire lengths per physical session. Typed arguments no longer
+    // allocate those two frames. The existing CommandGate still owns this
+    // conservative grant until command/cursor retirement.
     const auto remaining = sqlite_input_remaining(session, plan);
-    if (plan.parameters.size() > remaining / 2)
+    if (plan.parameter_wire_bytes > remaining / 2)
         throw Error::capacity();
-    const auto available = std::min(remaining, std::max(plan.parameters.size(), std::size_t{1}));
+    const auto available = std::min(remaining, std::max(plan.parameter_wire_bytes, std::size_t{1}));
     try
     {
-        return decode_parameters(plan.parameters, plan.expectation, MAX_NODES, available, available);
+        validate_parameters(plan.arguments, plan.expectation, plan.parameter_wire_bytes, MAX_NODES, available,
+                            available);
+        return plan.arguments;
     }
     catch (const Error&)
     {
@@ -107,7 +110,7 @@ Bytes snapshot_record(std::uint32_t state, std::uint32_t outcome, bool attempted
 }
 std::uint64_t capability_mask()
 {
-    std::uint64_t result = (1ULL << 27) - 1;
+    std::uint64_t result = (1ULL << 28) - 1;
 #if !NW_ENABLE_POSTGRES
     result &= ~((1ULL << 11) | (1ULL << 14));
 #endif
@@ -770,8 +773,8 @@ StreamReservation::~StreamReservation()
         source->stream_stats[1] -= bytes;
     }
 }
-Buffer::Buffer(std::shared_ptr<Source> parent, Bytes value, std::shared_ptr<Cursor> cursor_owner)
-    : source(std::move(parent)), bytes(std::move(value)), cursor(std::move(cursor_owner))
+Buffer::Buffer(std::shared_ptr<Source> parent, Bytes value, std::shared_ptr<Cursor> cursor_owner, bool end_known)
+    : source(std::move(parent)), bytes(std::move(value)), cursor(std::move(cursor_owner)), known_end(end_known)
 {
     if (cursor)
     {
@@ -1001,7 +1004,8 @@ std::shared_ptr<SqlPlan> SqlPlan::parse(std::shared_ptr<Source> source, ByteView
     }
     schema += "]}";
     expected.hash = sha256(text_view(schema));
-    (void)Batch::parse(values, expected);
+    plan->expectation = std::move(expected);
+    plan->capture_parameters(values);
     std::string sql;
     if (fields.u32(6) == 0)
     {
@@ -1015,8 +1019,6 @@ std::shared_ptr<SqlPlan> SqlPlan::parse(std::shared_ptr<Source> source, ByteView
     else
         throw Error::invalid("SQL template kind");
     plan->sql = render_sql_template(sql, names, source->config.provider.profile, plan->kind).sql;
-    plan->parameters.assign(values.begin(), values.end());
-    plan->expectation = std::move(expected);
     if (plan->result_kind != 0)
         plan->projection = source->projection(projection_id);
     return plan;
@@ -1026,7 +1028,8 @@ std::shared_ptr<SqlPlan> SqlPlan::rendered(std::shared_ptr<Source> source, Rende
     auto plan = std::make_shared<SqlPlan>();
     plan->source = source;
     plan->sql = std::move(rendered.sql);
-    plan->parameters = std::move(rendered.parameter_bytes);
+    plan->arguments = std::move(rendered.arguments);
+    plan->parameter_wire_bytes = rendered.parameter_wire_bytes;
     plan->expectation = std::move(rendered.parameter_expectation);
     plan->timeout_ns = rendered.timeout_ns;
     plan->submitted.store(true);
@@ -1046,6 +1049,22 @@ std::shared_ptr<SqlPlan> SqlPlan::rendered(std::shared_ptr<Source> source, Rende
         plan->projection = source->resolve_projection(std::move(*rendered.projection));
     return plan;
 }
+void SqlPlan::capture_parameters(ByteView values)
+{
+    const auto batch = BatchView::parse(values, expectation);
+    std::vector<Scalar> accepted;
+    accepted.reserve(expectation.descriptors.size());
+    for (std::size_t i = 0; i < expectation.descriptors.size(); ++i)
+    {
+        const auto value = batch.cell(0, i);
+        accepted.push_back({expectation.descriptors[i].codec,
+                            value ? std::optional<Bytes>(Bytes(value->begin(), value->end())) : std::nullopt});
+    }
+    parameters.assign(values.begin(), values.end());
+    arguments = std::move(accepted);
+    parameter_wire_bytes = values.size();
+}
+
 void SqlPlan::submit(const Source& owner)
 {
     if (source->identity != owner.identity)
@@ -1228,7 +1247,7 @@ Value Session::execute(std::shared_ptr<SqlPlan> plan, std::shared_ptr<Cancel> ca
         const auto& limits = source->config.limits;
         if (plan->result_kind == 0)
         {
-            auto parameters = decode_command_parameters(*this, *plan);
+            const auto& parameters = command_parameters(*this, *plan);
             const bool observe = source->config.provider.profile == Profile::Sqlite;
             std::int64_t count;
             try
@@ -1477,13 +1496,15 @@ std::shared_ptr<Cursor> Cursor::open(std::shared_ptr<Session> session, std::shar
         // stream's SQL + two-wire input grant. Preserve missing-table/syntax
         // failure precedence without executing or copying parameter values.
         (void)sqlite_input_remaining(*session, *plan);
-        (void)session->connection->describe_sqlite(plan->sql, {cancel, deadline});
+        cursor->statement = session->connection->prepare_unbound(plan->sql, {cancel, deadline});
     }
-    auto parameters = decode_command_parameters(*session, *plan);
+    const auto& parameters = command_parameters(*session, *plan);
     try
     {
-        cursor->statement = session->connection->query(plan->sql, parameters, {cancel, deadline});
-        cursor->statement->confirm_description();
+        if (cursor->statement)
+            cursor->statement->bind_parameters(parameters);
+        else
+            cursor->statement = session->connection->query(plan->sql, parameters, {cancel, deadline});
     }
     catch (...)
     {
@@ -1509,9 +1530,11 @@ std::shared_ptr<Cursor> Cursor::open(std::shared_ptr<Session> session, std::shar
         throw Error::capacity();
     if (96 + 16 * cursor->codecs.size() + 24 * cursor->codecs.size() > limits.batch_bytes)
         throw Error(NW_DOMAIN_ERROR, 14, "single row descriptors exceed batch capacity");
-    // Five wire-size credits cover staging, bounded lookahead, reference cells,
-    // final encoding and conversion scratch. Metadata is charged separately.
-    const auto reserved = 5 * limits.batch_bytes + limits.batch_rows * (sizeof(Row) + sizeof(std::size_t)) +
+    // Preserve the previous admission grant until peak-lifetime measurements
+    // justify reducing it. These are conservative bookkeeping credits; no
+    // owning row or cell-vector staging remains on the result path.
+    const auto reserved = 5 * limits.batch_bytes +
+                          limits.batch_rows * (sizeof(std::vector<std::optional<Bytes>>) + sizeof(std::size_t)) +
                           3 * projection.projection->bytes().size() +
                           cursor->codecs.size() * (sizeof(Descriptor) + sizeof(ProviderColumn));
     cursor->reservation = session->source->reserve_stream(reserved);
@@ -1533,27 +1556,44 @@ Cursor::~Cursor()
 {
     --cursor_count;
 }
+namespace
+{
+struct CursorReadAdmission
+{
+    Cursor& cursor;
+    explicit CursorReadAdmission(Cursor& value) : cursor(value)
+    {
+        if (cursor.active.exchange(true))
+            throw Error(NW_DOMAIN_ERROR, 7, "concurrent cursor fetch");
+    }
+    ~CursorReadAdmission()
+    {
+        cursor.active.store(false);
+        cursor.changed.notify_all();
+        if (cursor.closing.load())
+            cursor.schedule_cleanup();
+    }
+    void check() const
+    {
+        if (cursor.closing.load() || cursor.retired.load())
+            throw Error::closed();
+        if (cursor.batch_live.load())
+            throw Error::state("previous row batch remains live");
+        if (cursor.end_sent)
+            throw Error::state("cursor end already transferred");
+    }
+};
+} // namespace
+void Cursor::check_read_admission()
+{
+    session->source->admit();
+    CursorReadAdmission admission(*this);
+    admission.check();
+}
 std::shared_ptr<Buffer> Cursor::fetch(std::shared_ptr<Cancel> cancel, std::size_t rows, std::size_t bytes)
 {
-    if (active.exchange(true))
-        throw Error(NW_DOMAIN_ERROR, 7, "concurrent cursor fetch");
-    struct End
-    {
-        Cursor& cursor;
-        ~End()
-        {
-            cursor.active.store(false);
-            cursor.changed.notify_all();
-            if (cursor.closing.load())
-                cursor.schedule_cleanup();
-        }
-    } end{*this};
-    if (closing.load() || retired.load())
-        throw Error::closed();
-    if (batch_live.load())
-        throw Error::state("previous row batch remains live");
-    if (end_sent)
-        throw Error::state("cursor end already transferred");
+    CursorReadAdmission admission(*this);
+    admission.check();
     if (cancel->requested())
         throw Error::canceled();
     {
@@ -1566,56 +1606,38 @@ std::shared_ptr<Buffer> Cursor::fetch(std::shared_ptr<Cancel> cancel, std::size_
     const std::size_t base = 96 + 16 * codecs.size(), per_row = 24 * codecs.size();
     if (base + per_row > bytes)
         throw Error(NW_DOMAIN_ERROR, 14, "single row descriptors exceed batch capacity");
-    std::vector<std::optional<Bytes>> cells;
-    std::size_t length = base, count = 0;
     try
     {
-        while (count < rows)
+        BatchWriter writer(expectation, static_cast<std::uint32_t>(rows), bytes);
+        while (writer.rows() < rows)
         {
-            std::optional<Row> row;
-            if (pending_row)
+            RowAppendResult result{RowAppendState::End, false};
+            if (!ended)
             {
-                row = std::move(pending_row);
-                pending_row.reset();
-            }
-            else if (!ended)
-            {
-                row = statement->next(codecs, std::min({limits.field_bytes, bytes - base - per_row, MAX_BYTES}),
-                                      {cancel, deadline}, bytes - base - per_row);
-                if (row)
+                result = statement->append_next(writer, codecs,
+                                                std::min({limits.field_bytes, bytes - base - per_row, MAX_BYTES}),
+                                                {cancel, deadline});
+                if (result.advanced)
                 {
                     ++rows_pulled;
                     provider_rows_peak = std::max<std::size_t>(provider_rows_peak, 1);
                 }
             }
-            if (!row)
+            if (result.state == RowAppendState::End)
             {
                 ended = true;
                 retire_provider();
                 break;
             }
-            std::size_t row_bytes = per_row;
-            for (const auto& value : *row)
-                if (value)
-                    row_bytes += value->size();
-            if (base + row_bytes > bytes)
-                throw Error(NW_DOMAIN_ERROR, 14, "single inline row exceeds batch capacity");
-            if (length + row_bytes > bytes)
-            {
-                pending_row = std::move(row);
+            if (result.state == RowAppendState::Full)
                 break;
-            }
-            length += row_bytes;
-            ++count;
-            for (auto& value : *row)
-                cells.push_back(std::move(value));
         }
-        auto encoded = Batch::encode(expectation, static_cast<std::uint32_t>(count), cells);
-        if (count == 0)
+        if (writer.rows() == 0)
             end_sent = true;
+        auto encoded = writer.finish();
         batch_live.store(true);
         cancel->detach();
-        return std::make_shared<Buffer>(session->source, std::move(encoded), shared_from_this());
+        return std::make_shared<Buffer>(session->source, std::move(encoded), shared_from_this(), ended);
     }
     catch (...)
     {
@@ -1671,7 +1693,6 @@ void Cursor::close_resources()
             test_retire_gate();
 #endif
         retire_provider();
-        pending_row.reset();
         if (gate)
         {
             gate->finish(failed);
@@ -1700,8 +1721,9 @@ void Cursor::retire_provider()
 {
     if (statement)
     {
-        // Exactly one original stream-retirement confirmation, at EOF or stop.
-        // A cleanup failure changes the receipt, not already delivered rows.
+        // Natural EOF already consumed this execution's ReadyForQuery. An
+        // unfinished reader still owes its bounded drain/confirmation. A
+        // cleanup failure changes the receipt, not already delivered rows.
         statement->close(true);
         statement.reset();
     }

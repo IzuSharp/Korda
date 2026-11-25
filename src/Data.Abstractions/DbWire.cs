@@ -44,7 +44,7 @@ internal readonly struct DbWire
         {
             var d = expected.Descriptors[i % expected.Descriptors.Length]; var cell = cells[i];
             if (cell is null && !d.Codec.Nullable) throw new ArgumentException("SQL NULL requires a nullable descriptor.");
-            if (cell is { } value) ValidateScalar(d.Codec, value.Span);
+            if (cell is { } value) ValidateScalarPayload(d.Codec, value.Span);
             var offset = WireSchema.HeaderBytes + expected.Descriptors.Length * WireSchema.DescriptorBytes + i * WireSchema.CellBytes;
             U16(result, offset, (ushort)d.Codec.Id); U16(result, offset + 2, cell is null ? (ushort)1 : (ushort)0); U32(result, offset + 4, d.BoundCodecId);
             if (cell is { } bytes)
@@ -54,6 +54,69 @@ internal readonly struct DbWire
             }
         }
         return result;
+    }
+    // The immutable parameter layout owns all shape validation and fixed wire
+    // bytes. An execution validates its values once, then fills one owned frame;
+    // no row/cell collection or second metadata encoding is required.
+    internal sealed class ParameterLayout
+    {
+        private readonly WireDescriptor[] _descriptors;
+        private readonly byte[] _prefix;
+        private readonly int _cellsOffset;
+        internal int PayloadOffset => _prefix.Length;
+
+        internal ParameterLayout(WireExpectation expected)
+        {
+            if (expected.Kind != PayloadKind.Parameters) throw new ArgumentException("A parameter layout requires a parameter shape.", nameof(expected));
+            CheckExpectation(expected, 1);
+            _descriptors = expected.Descriptors;
+            _cellsOffset = checked(WireSchema.HeaderBytes + _descriptors.Length * WireSchema.DescriptorBytes);
+            _prefix = new byte[checked(_cellsOffset + _descriptors.Length * WireSchema.CellBytes)];
+            "NWDB"u8.CopyTo(_prefix);
+            U16(_prefix, 4, 1); U16(_prefix, 6, (ushort)PayloadKind.Parameters); U32(_prefix, 8, WireSchema.HeaderBytes);
+            expected.MetadataHash.CopyTo(_prefix, 24); U32(_prefix, 56, 1); U32(_prefix, 60, (uint)_descriptors.Length);
+            U32(_prefix, 76, expected.Profile); U64(_prefix, 80, WireSchema.HeaderBytes); U64(_prefix, 88, (ulong)_prefix.Length);
+            for (var i = 0; i < _descriptors.Length; i++)
+            {
+                var descriptor = _descriptors[i]; var at = WireSchema.HeaderBytes + i * WireSchema.DescriptorBytes;
+                U32(_prefix, at, descriptor.Id); U16(_prefix, at + 4, (ushort)descriptor.Codec.Id);
+                U16(_prefix, at + 6, descriptor.Codec.Nullable ? (ushort)1 : (ushort)0); U32(_prefix, at + 8, descriptor.BoundCodecId);
+                at = _cellsOffset + i * WireSchema.CellBytes;
+                U16(_prefix, at, (ushort)descriptor.Codec.Id); U32(_prefix, at + 4, descriptor.BoundCodecId);
+            }
+        }
+
+        internal int ValidateValue(int ordinal, byte[]? value)
+        {
+            var codec = _descriptors[ordinal].Codec;
+            if (value is null)
+            {
+                if (!codec.Nullable) throw new ArgumentException("SQL NULL requires a nullable descriptor.");
+                return 0;
+            }
+            ValidateScalarPayload(codec, value);
+            return value.Length;
+        }
+
+        internal byte[] CreateFrame(int payloadBytes)
+        {
+            if ((uint)payloadBytes > (uint)(MaxEncodedBytes - _prefix.Length))
+                throw new ArgumentException("Payload exceeds the configured wire byte limit.");
+            var frame = new byte[_prefix.Length + payloadBytes];
+            _prefix.CopyTo(frame, 0); U64(frame, 16, (ulong)frame.Length);
+            return frame;
+        }
+
+        // Only an execution which owns the value snapshot and the frame calls
+        // this after ValidateValue. No mutable parameter set escapes its lock.
+        internal void WriteValue(Span<byte> frame, int ordinal, byte[]? value, ref int position)
+        {
+            var at = _cellsOffset + ordinal * WireSchema.CellBytes;
+            if (value is null) { U16(frame, at + 2, 1); return; }
+            U64(frame, at + 8, (ulong)(value.Length == 0 ? _prefix.Length : position));
+            U64(frame, at + 16, (ulong)value.Length);
+            value.CopyTo(frame[position..]); position += value.Length;
+        }
     }
     internal static DbWire Parse(ReadOnlySpan<byte> bytes, WireExpectation expected)
         => ParseCore(bytes, expected, null);
@@ -104,7 +167,7 @@ internal readonly struct DbWire
                     if (dataOffset < previousEnd) needsRangeSort = true;
                     previousEnd = dataOffset + length;
                 }
-                ValidateScalar(d.Codec, bytes.Slice((int)dataOffset, (int)length));
+                ValidateScalarPayload(d.Codec, bytes.Slice((int)dataOffset, (int)length));
             }
             // Product encoders append nonempty cells in row-major order. That
             // layout proves non-overlap in one pass without a temporary list.
@@ -176,6 +239,10 @@ internal readonly struct DbWire
     internal static void ValidateScalar(CodecDescriptor codec, ReadOnlySpan<byte> bytes)
     {
         CodecRegistry.Validate(codec);
+        ValidateScalarPayload(codec, bytes);
+    }
+    private static void ValidateScalarPayload(CodecDescriptor codec, ReadOnlySpan<byte> bytes)
+    {
         switch (codec.Id)
         {
             case 1: if (bytes.Length != 2) Bad("Int16 width."); break;

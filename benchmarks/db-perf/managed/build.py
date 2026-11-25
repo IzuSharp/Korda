@@ -100,7 +100,7 @@ def main():
     if args.kind == 'resource-probe':
         receipt['workloadManifestUse'] = 'Identity retained only; this diagnostic uses its own source-bound cold/concurrent/exhaustion cases, not the 35-case timing workload.'
     if args.kind == 'query-phases':
-        receipt['workloadManifestUse'] = 'Identity retained only; this diagnostic uses its own identical 100-row result and phase observations, not the 35-case timing workload.'
+        receipt['workloadManifestUse'] = 'Identity retained only; this diagnostic uses its own identical 1/100/1000-row results and phase observations, not the 35-case timing workload.'
     try:
         if result.returncode == 0:
             assets = json.loads((app / 'obj/project.assets.json').read_text())

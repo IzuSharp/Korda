@@ -5,6 +5,7 @@
 // only its `template` parameter name. Every definition is type-checked against
 // the normative declarations; applications still consume the original C ABI.
 #include "../../database/binding/korda_query_command_v1.h"
+#include "../../database/binding/korda_result_batch_v1.h"
 #include "nw_database_declarations.hpp"
 
 #include <algorithm>
@@ -377,6 +378,24 @@ NW_DATABASE_API nw_status NW_CDECL nw_db_operation_take_buffer_v1(nw_db_ref raw,
                         auto buffer = std::get<std::shared_ptr<Buffer>>(std::move(value));
                         buffer->mark_taken();
                         *output = reinterpret_cast<nw_db_buffer*>(publish(std::move(buffer)));
+                    });
+}
+NW_DATABASE_API nw_status NW_CDECL nw_db_operation_take_batch_v1(nw_db_ref raw, nw_db_batch_result_v1* output,
+                                                                 nw_error_info_v1* error)
+{
+    return boundary(error,
+                    [&]
+                    {
+                        clear(output);
+                        auto value = take(get<std::shared_ptr<DbOperation>>(raw), 101);
+                        if (!std::holds_alternative<std::shared_ptr<Buffer>>(value))
+                            throw Error::state("buffer result required");
+                        auto buffer = std::get<std::shared_ptr<Buffer>>(std::move(value));
+                        const nw_bytes_view_v1 bytes{buffer->bytes.data(), buffer->bytes.size()};
+                        const auto known_end = buffer->known_end ? 1u : 0u;
+                        buffer->mark_taken();
+                        auto owner = reinterpret_cast<nw_db_buffer*>(publish(std::move(buffer)));
+                        *output = {owner, bytes, known_end, 0};
                     });
 }
 NW_DATABASE_API nw_status NW_CDECL nw_db_operation_take_error_v1(nw_db_ref raw, nw_db_buffer** output,
@@ -796,6 +815,10 @@ NW_DATABASE_API nw_status NW_CDECL nw_db_cursor_fetch_create_v1(nw_db_ref raw, s
                                         cursor->session->source, 101, false, [cursor, rows, bytes](auto cancel) -> Value
                                         { return cursor->fetch(cancel, rows, static_cast<std::size_t>(bytes)); }));
                     });
+}
+NW_DATABASE_API nw_status NW_CDECL nw_db_cursor_check_read_admission_v1(nw_db_ref raw, nw_error_info_v1* error)
+{
+    return boundary(error, [&] { typed<std::shared_ptr<Cursor>>(raw)->check_read_admission(); });
 }
 NW_DATABASE_API nw_status NW_CDECL nw_db_relation_load_create_v1(nw_db_ref raw, nw_db_ref input, nw_bytes_view_v1 key,
                                                                  std::uint32_t projection, nw_db_ref* output,

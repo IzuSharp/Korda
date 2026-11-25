@@ -143,11 +143,12 @@ class ShapeCache;
 struct RenderedQuery
 {
     std::string sql;
-    Bytes parameter_bytes;
+    std::vector<Scalar> arguments;
     Expectation parameter_expectation;
     std::optional<ProjectionBinding> projection;
     std::uint32_t terminal = 0;
     std::uint64_t timeout_ns = 0;
+    std::size_t parameter_wire_bytes = 0;
 };
 
 // This object owns no runtime or connection. The Host supplies fail-fast single-writer admission.
@@ -188,6 +189,8 @@ class NativeQuery
     struct Impl;
     std::unique_ptr<Impl> impl_;
     explicit NativeQuery(std::unique_ptr<Impl> implementation);
+    std::uint64_t clause(std::uint32_t opcode, ByteView operands, std::span<const std::uint64_t> command_slots,
+                         const Fields* text_fields = nullptr);
 };
 
 class CompiledShape
@@ -225,7 +228,6 @@ class NativePlan
     RenderedQuery render(SourceIdentity session, ByteView values, ShapeCache* cache = nullptr) const;
     std::pair<std::string, std::vector<std::shared_ptr<const query_detail::Slot>>> render_shape() const;
     std::shared_ptr<const CompiledShape> compiled_shape() const;
-    std::pair<std::size_t, std::size_t> retained_counts() const;
     std::size_t retained_literal_bytes() const;
     std::size_t expanded_nodes() const;
     const query_detail::QueryData& data() const;

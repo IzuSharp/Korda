@@ -1,4 +1,4 @@
-#include "nw/scalar.hpp"
+#include "scalar_test_support.hpp"
 
 #include <bit>
 #include <iostream>
@@ -8,6 +8,8 @@
 namespace
 {
 using namespace nw;
+using test::postgres_decode;
+using test::sqlite_decode;
 
 void require(bool value, const char* message)
 {

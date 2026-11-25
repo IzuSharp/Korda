@@ -68,12 +68,61 @@ Bytes decimal(std::uint32_t coefficient, std::uint8_t scale, bool negative)
     result[13] = negative;
     return result;
 }
+
+void arena_batches()
+{
+    const Expectation expected{2, Profile::Sqlite, {}, 0, 1, {{0, {5, {}, true}, 5}, {1, {6, {}, true}, 6}}, {}};
+    const std::vector<std::optional<Bytes>> cells{bytes("abc"),     Bytes{}, std::nullopt,
+                                                  Bytes{0, 4, 255}, Bytes{}, std::nullopt};
+    BatchWriter writer(expected, 8, 512);
+    for (std::size_t row = 0; row < 3; ++row)
+    {
+        writer.begin_row();
+        for (std::size_t column = 0; column < 2; ++column)
+        {
+            const auto& value = cells[row * 2 + column];
+            writer.append_validated(value ? std::optional<ByteView>(*value) : std::nullopt);
+        }
+        require(writer.commit_row(), "bounded arena row accepted");
+    }
+    auto result = writer.finish();
+    require(result == Batch::encode(expected, 3, cells), "arena compaction preserves canonical NWDB bytes");
+    const auto view = BatchView::parse(result, expected);
+    require(view.rows() == 3 && view.cell(0, 1)->empty() && !view.cell(1, 0) && view.cell(2, 0)->empty() &&
+                !view.cell(2, 1),
+            "arena preserves distinct empty and NULL cell extents");
+    rejects([&] { (void)writer.finish(); });
+
+    BatchWriter bounded(expected, 8, 256);
+    const Bytes text(40, 'x');
+    bounded.begin_row();
+    bounded.append_validated(text);
+    bounded.append_validated(ByteView{});
+    require(bounded.commit_row(), "first arena row fits byte budget");
+    bounded.begin_row();
+    bounded.append_validated(bytes("z"));
+    bounded.append_validated(bytes("q"));
+    require(!bounded.commit_row(), "second arena row reports remaining capacity independently");
+    require(bounded.finish() == Batch::encode(expected, 1, {text, Bytes{}}),
+            "unpublished lookahead rollback preserves accepted row and its offsets");
+
+    BatchWriter growing(expected, 8, 8192);
+    const Bytes large_text(5000, 'y');
+    const Bytes large_blob(2000, 0x80);
+    growing.begin_row();
+    growing.append_validated(large_text);
+    growing.append_validated(large_blob);
+    require(growing.commit_row(), "large admitted cells grow the arena within its byte allowance");
+    require(growing.finish() == Batch::encode(expected, 1, {large_text, large_blob}),
+            "arena growth and final compaction preserve every cell byte and offset");
+}
 } // namespace
 
 int main(int argc, char** argv)
 {
     try
     {
+        arena_batches();
         require(argc == 2, "managed fixture directory argument required");
         const std::filesystem::path root(argv[1]);
         auto read = [&](const char* name)

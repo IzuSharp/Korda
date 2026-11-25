@@ -2,16 +2,19 @@
 
 This local Linux Native AOT diagnostic compares ordinary Fluent, warmed
 `.Prepare()` and complete parameterized SQL through the same C++ Host. It is not
-a CI job. The three routes return the same complete 100-element generated DTO
+a CI job. The three routes return the same complete generated DTO
 list, with identical ordered IDs, strings and nulls. A single persistent session
 and physical connection are used. Tenant values alternate between 1 and 2.
+`--rows 1`, `--rows 100` (default), and `--rows 1000` select a full composite
+primary-key lookup or a bounded ordered DTO query. Initialization creates 1,000
+rows for each of two tenants; every route consumes and checks the selected count.
 
 The SQL is obtained from the native Fluent renderer. The parameterized query must
-render exactly the same text; the raw Host template replaces its single provider
-marker with the equivalent typed logical parameter. Both observed Fluent SQL and
-raw template are recorded. PostgreSQL renders `$1` in both routes. SQLite Fluent
-renders `?` and the raw-template compiler renders `?1`: these address the same
-sole parameter at ordinal one, but are **not byte-identical SQL**. This known
+render exactly the same text; the raw Host template replaces the provider
+markers with equivalent typed logical parameters. Both observed Fluent SQL and
+raw template are recorded. PostgreSQL renders the same ordinal markers in both
+routes. SQLite Fluent renders `?` and the raw-template compiler numbers them:
+these address the same parameters in the same order, but are **not byte-identical SQL**. This known
 marker normalization is the only SQL difference. Predicates, selected columns,
 aliases, null ordering, parameter types/values and result mapping are identical.
 A Fluent/prepared text mismatch aborts.
@@ -34,7 +37,7 @@ python3 benchmarks/db-perf/managed/build.py --kind query-phases --provider sqlit
   --feed /absolute/path/to/exact-feed --version 0.1.0-ci.1 \
   --output /absolute/path/to/new-external-consumer
 /absolute/path/to/new-external-consumer/out/DbPerf.QueryPhases \
-  /absolute/path/to/new-database.sqlite result.json 256 3 initialize
+  /absolute/path/to/new-database.sqlite result.json 256 3 initialize --rows 100
 ```
 
 Use `--provider postgresql` and the dedicated local PostgreSQL connection string
@@ -47,7 +50,7 @@ package/executable/native hashes and raw receipts in the existing Plan batch.
 The session queries `version()` or `sqlite_version()` before any measured phase
 and records the returned database version. Summarize fresh receipts with
 `python3 benchmarks/db-perf/query-phases/summarize.py receipt.json --output summary.json`.
-The summary preserves raw counter totals and computes nearest-rank p50/p99 without
+The summary preserves raw counter totals and computes nearest-rank p50/p95/p99 without
 trimming samples. It does not grant measurement or environment acceptance.
 
 ## Failure evidence
@@ -56,7 +59,9 @@ An unhandled failure also attempts to create `result.json.failure.json` beside
 the requested result, using an exclusive create so earlier evidence is not
 replaced. The original exception still terminates the consumer; the probe does
 not retry, change timeouts, or turn a failed attempt into a successful result.
-Success receipts retain schema 2 and their existing phase/CPU/allocation meaning.
+Success receipts use schema 3, add `ResultRows`, and retain the existing
+phase/CPU/allocation meaning. The summarizer also accepts historical schema-2
+100-row receipts without relabeling their fixture or SQL.
 
 The separate schema-1 failure receipt records exception type and stack, the public
 `DatabaseException` Kind, ProviderCode, CorrelationId and IsTransient fields,

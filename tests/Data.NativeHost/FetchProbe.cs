@@ -89,14 +89,14 @@ internal static class FetchProbe
         json.WriteNumber("DataRows", DataRows); json.WriteNumber("BatchRows", BatchRows);
         json.WriteString("Boundary", "Raw whole-process all-thread GC.GetTotalAllocatedBytes(true); no subtraction. Complete queries include one-shot stream, all rows, final false and Dispose; preparations/fixture/sample arrays are outside.");
         json.WriteString("Attribution", "No business DTO/string/list/result-array within measurements. Runtime/harness async infrastructure remains in raw process totals; static retirement observer has no per-operation managed allocation.");
-        json.WriteString("FetchAccounting", "Complete-query fetch count is inferred from configured 32-row batches and one empty EOS; actual per-region retirement counts are separately recorded. Supplemental interval must retire exactly one operation and consume row33.");
+        json.WriteString("FetchAccounting", "Complete-query fetch count is inferred from configured 32-row batches: a partial final batch carries known EOF, while an exact row boundary needs an additional fetch. Actual per-region retirement counts are separately recorded. Supplemental interval must retire exactly one operation and consume row33.");
         json.WriteString("Scope", "Source-project public Fluent Native AOT attribution, not final independent-package or long-run acceptance; diagnostic ticks are not a throughput comparison.");
         json.WriteStartArray("Queries");
         for (var i = 0; i < plans.Length; i++)
         {
             json.WriteStartObject(); json.WriteNumber("ResultRows", rowCounts[i]); json.WriteString("Sql", sql[i]);
             json.WriteNumber("ExpectedDataBatches", (rowCounts[i] + BatchRows - 1) / BatchRows);
-            json.WriteNumber("ExpectedFetchesIncludingEos", (rowCounts[i] + BatchRows - 1) / BatchRows + 1);
+            json.WriteNumber("ExpectedFetchesIncludingEos", rowCounts[i] / BatchRows + 1);
             json.WriteStartArray("Measurements"); foreach (var sample in full[i]) Write(json, sample); json.WriteEndArray(); json.WriteEndObject();
         }
         json.WriteEndArray(); json.WriteStartArray("SupplementalAndWithinBatch"); foreach (var sample in slices) Write(json, sample); json.WriteEndArray();

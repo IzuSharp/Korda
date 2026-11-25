@@ -80,7 +80,7 @@ internal sealed class TypedStream<T> : IAsyncEnumerable<T>
             }
             descriptors[i] = new((uint)i, codec, boundCodecs[i]);
         }
-        var expectation = new WireExpectation(PayloadKind.Rows, profile, Convert.FromHexString(projection.ShapeHash), 0, projectionId, descriptors);
+        var expectation = new WireExpectation(PayloadKind.Rows, profile, projection.ShapeBytes, 0, projectionId, descriptors);
         var empty = DbWire.Encode(expectation, 0, Array.Empty<ReadOnlyMemory<byte>?>());
         minimumBatchBytes = checked(empty.Length + descriptors.Length * WireSchema.CellBytes);
         return expectation;
@@ -198,7 +198,11 @@ internal sealed class TypedStream<T> : IAsyncEnumerable<T>
                 if (_batch is null || !_batch.IsActive || _row == _batch.Rows)
                 {
                     _batch?.Dispose();
-                    if (_lastBatch) { _finished = true; await CleanupAsync().ConfigureAwait(false); return false; }
+                    if (_lastBatch)
+                    {
+                        _transport.CheckReadAdmission();
+                        _finished = true; await CleanupAsync().ConfigureAwait(false); return false;
+                    }
                     var owner = await _transport.FetchAsync().ConfigureAwait(false);
                     // The serialized move reuses only its own inactive lease.
                     // Construction/attachment owns compensation if validation fails.

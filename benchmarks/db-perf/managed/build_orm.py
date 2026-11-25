@@ -19,7 +19,7 @@ def sha(path):
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument("--provider", choices=("sqlite","postgresql"), required=True)
-    p.add_argument("--kind", choices=("probe","benchmark"), default="probe")
+    p.add_argument("--kind", choices=("probe","benchmark","query-phases"), default="probe")
     p.add_argument("--output", type=Path, required=True)
     p.add_argument("--manifest", type=Path, default=HERE.parent/"workload/queries-v3.json")
     a=p.parse_args(); app=a.output.resolve()
@@ -32,7 +32,7 @@ def main():
     if app.exists() or app == ROOT or ROOT in app.parents:
         raise ValueError("Use a fresh output directory outside the source tree")
     app.mkdir(parents=True)
-    folder="DapperProbe" if a.kind == "probe" else "Dapper"
+    folder={"probe":"DapperProbe","benchmark":"Dapper","query-phases":"DapperQueryPhases"}[a.kind]
     for file in (HERE/folder).iterdir():
         if file.suffix in (".cs", ".csproj"): shutil.copy2(file, app/file.name)
     if a.kind == "benchmark":
@@ -61,12 +61,26 @@ def main():
                 package=Path(folder)/data["path"]/(identity.replace("/",".").lower()+".nupkg")
                 if package.is_file():
                     receipt["packages"][identity]={"sha256":sha(package),"path":str(package)}; break
-        binary=app/"out"/("DbPerf.DapperProbe" if a.kind == "probe" else "DbPerf.Dapper")
+        binary=app/"out"/{"probe":"DbPerf.DapperProbe","benchmark":"DbPerf.Dapper","query-phases":"DbPerf.DapperQueryPhases"}[a.kind]
         if binary.read_bytes()[:4] != b"\x7fELF" or binary.with_suffix(".dll").exists():
             raise ValueError("Expected a standalone Native AOT ELF")
         receipt["executableSha256"]=sha(binary)
         generated=app/"obj/Release/net11.0/linux-x64/generated"
         if generated.is_dir(): shutil.copytree(generated,app/"generated")
+        if a.kind == "query-phases":
+            try:
+                receipt["generatedSourceSha256"]={str(file.relative_to(app/"generated")):sha(file)
+                    for file in sorted((app/"generated").rglob("*.cs"))}
+                interceptors=list((app/"generated").rglob("*DapperQueryPhases.generated.cs"))
+                if len(interceptors)!=1:
+                    raise ValueError("Expected the actual Dapper.AOT generated phase consumer")
+                text=interceptors[0].read_text(encoding="utf-8-sig")
+                if not all(token in text for token in ("QueryUnbufferedAsync", "CommandFactory", "RowFactory", "Tokenize", "GetInt64", "GetString", "DbType.Int64")):
+                    raise ValueError("The phase consumer lacks the expected generated typed parameter/DTO path")
+            except Exception as error:
+                receipt["postValidationError"]={"type":type(error).__name__,"message":str(error)}
+                (app/"build-receipt.json").write_text(json.dumps(receipt,indent=2)+"\n")
+                raise
     (app/"build-receipt.json").write_text(json.dumps(receipt,indent=2)+"\n")
     print(json.dumps(receipt,indent=2))
     raise SystemExit(result.returncode)

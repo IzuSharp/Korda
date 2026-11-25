@@ -23,6 +23,7 @@ internal static class RowLeaseReuseChecks
             await IndependentEnumerators(storage);
             await MalformedLaterBatch(storage);
             await ReentrantMapping(storage);
+            ValidatedLayout(storage);
         }
         Console.WriteLine($"PASS row lease reuse: {s_checks} assertions; inactive checks, ownership compensation, later malformed batches, independent enumerators and reentrant mapper rejection across owned/unmarked/native storage");
     }
@@ -185,6 +186,48 @@ internal static class RowLeaseReuseChecks
         Throws<ObjectDisposedException>(() => { _ = lease.Value(0); });
         Throws<ObjectDisposedException>(() => { _ = lease.RowBytes(0); });
         Throws<ObjectDisposedException>(() => { _ = lease.Materialize(0, Shape); });
+    }
+
+    private static void ValidatedLayout(string storage)
+    {
+        var maps = 0;
+        var equivalent = Codecs.Nullable(Codecs.Int64);
+        var foreign = new ResultColumn<long?>(new object(), 0, "id", NullableLong);
+        var shape = Projection<long?>.Create(Shape.Fields, row =>
+        {
+            maps++;
+            try { _ = row.Read(0, Codecs.Int32); throw new InvalidOperationException("Wrong codec accepted by a validated row."); }
+            catch (DatabaseException error) when (error.Kind == DatabaseErrorKind.ShapeMismatch) { s_checks++; }
+            try { _ = row.Read(1, NullableLong); throw new InvalidOperationException("Out-of-range ordinal accepted by a validated row."); }
+            catch (ArgumentOutOfRangeException) { s_checks++; }
+            try { _ = row.Get(foreign); throw new InvalidOperationException("Foreign token accepted by a validated row."); }
+            catch (ArgumentException) { s_checks++; }
+            return row.Read(0, equivalent);
+        });
+        var expected = Expected with { MetadataHash = shape.ShapeBytes };
+        var owner = Owner(storage, Encode(81, null));
+        using (var lease = new RowBatchLease(owner, expected, shape.Fields, Limits))
+        {
+            Check(lease.Materialize(0, shape) == 81 && lease.Materialize(1, shape) is null && maps == 2,
+                "Validated layout changed equivalent codec reads or nullable values.");
+            var wrong = Projection<long?>.Create([ResultField.Create("other", NullableLong)], _ => { maps++; return 0; });
+            Check(Throws<DatabaseException>(() => lease.Materialize(0, wrong)).Kind == DatabaseErrorKind.ShapeMismatch && maps == 2,
+                "A foreign projection reused another layout's validation proof.");
+            Check(lease.Materialize(0, shape) == 81 && maps == 3, "A rejected projection corrupted the validated layout.");
+        }
+        Released(owner);
+
+        RowBatchLease? retiring = null;
+        var retiringShape = Projection<long?>.Create(Shape.Fields, row =>
+        {
+            retiring!.Dispose();
+            try { return row.Read(0, NullableLong); }
+            catch (ObjectDisposedException) { s_checks++; return -1; }
+        });
+        var retiringOwner = Owner(storage, Encode(91));
+        retiring = new(retiringOwner, Expected with { MetadataHash = retiringShape.ShapeBytes }, retiringShape.Fields, Limits);
+        Check(retiring.Materialize(0, retiringShape) == -1, "A validated reader outlived its retired lease.");
+        Released(retiringOwner); Inactive(retiring);
     }
     private static void Released(ITrackedBatch owner) => Check(owner.Disposals == 1 && !owner.Active
         && (owner is not BorrowedBatchFixture || owner.NativeReleases == 1), "batch owner was not released exactly once");

@@ -72,11 +72,12 @@ def collect(build_manifest_path, provider=None):
             if sha(Path(actual['source']) / name) != expected:
                 raise ValueError('Dependency source changed after compilation')
     signatures = json.loads((ROOT / 'native/database/binding/signatures-v1.json').read_text())['signatures']
-    extension = json.loads((ROOT / 'native/database/binding/query-command-v1.json').read_text())
-    if (extension['version'] != 1 or extension['capability_bit'] != 26 or
-            DATABASE_CAPABILITIES[26] != extension['capability']):
-        raise ValueError('Query command extension capability differs from the package descriptor')
-    signatures += extension['signatures']
+    for name, bit in (('query-command-v1.json', 26), ('result-batch-v1.json', 27)):
+        extension = json.loads((ROOT / 'native/database/binding' / name).read_text())
+        if (extension['version'] != 1 or extension['capability_bit'] != bit or
+                DATABASE_CAPABILITIES[bit] != extension['capability']):
+            raise ValueError(name + ': extension capability differs from the package descriptor')
+        signatures += extension['signatures']
     exports = [re.search(r'\b(nw_db_\w+_v1)\(', item).group(1) for item in signatures]
     exports += ['nw_db_diagnostic_count_v1', 'nw_database_get_abi_v1']
     assets = {item['engineId']: item for item in build['assets']}

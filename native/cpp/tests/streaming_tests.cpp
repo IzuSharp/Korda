@@ -121,7 +121,7 @@ struct Scope
                                    ") SELECT fixture_value(x) AS value FROM n");
         plan->projection = ProjectionBinding{source->identity, 7, shape, source->codecs()};
         plan->expectation = {1, Profile::Sqlite, sha256(text_view("{\"version\":1,\"parameters\":[]}")), 0, 0, {}, 1};
-        plan->parameters = Batch::encode(plan->expectation, 1, {});
+        plan->capture_parameters(Batch::encode(plan->expectation, 1, {}));
         auto result = session->execute(plan, std::make_shared<Cancel>(), session->admit(false));
         auto owner = std::get<std::shared_ptr<Owner>>(std::move(result));
         auto cursor = std::get<std::shared_ptr<Cursor>>(std::move(owner->data));
@@ -190,6 +190,123 @@ void batch_outlives_cursor()
     buffer.reset();
     check(scope.budget()[1] == 0, "last batch returns inherited reservation");
 }
+
+void arena_lookahead_and_end()
+{
+    {
+        Scope scope;
+        auto cursor = scope.open(5);
+        auto first = cursor->fetch(std::make_shared<Cancel>(), 3, 256);
+        check(BatchView::parse(first->bytes, cursor->expectation).rows() == 1 && scope.probe->reads == 2,
+              "byte-bound batch retains exactly one provider row as lookahead");
+        check(!first->known_end && cursor->rows_pulled == 2, "held provider row is counted once without EOF claim");
+        first.reset();
+        auto canceled = std::make_shared<Cancel>();
+        canceled->request();
+        check(reject([&] { (void)cursor->fetch(canceled, 3, 256); }).status == NW_CANCELED,
+              "held row does not bypass canceled fetch admission");
+        check(scope.probe->reads == 2, "canceled held-row fetch performs no new step");
+        auto second = cursor->fetch(std::make_shared<Cancel>(), 1, 256);
+        check(BatchView::parse(second->bytes, cursor->expectation).rows() == 1 && scope.probe->reads == 2 &&
+                  cursor->rows_pulled == 2,
+              "next fetch consumes the held row without executing its function again");
+        check(!second->known_end, "row-limit completion does not probe or claim EOF");
+        second.reset();
+        auto third = cursor->fetch(std::make_shared<Cancel>(), 3, 256);
+        check(scope.probe->reads == 4 && cursor->rows_pulled == 4,
+              "further byte-bound fetch never retains more than one provider row");
+        third.reset();
+        cursor->close_now();
+        check(scope.probe->reads == 4, "closing a held SQLite row does not step the remainder");
+    }
+    for (const auto rows : {0U, 1U, 3U})
+    {
+        Scope scope;
+        scope.probe->length = 10;
+        auto cursor = scope.open(rows);
+        auto buffer = cursor->fetch(std::make_shared<Cancel>(), 3, 256);
+        check(BatchView::parse(buffer->bytes, cursor->expectation).rows() == rows,
+              "EOF marker retains full business cardinality");
+        check(buffer->known_end == (rows < 3), "only an observed provider end marks the transferred batch");
+        check(scope.probe->reads == rows, "end knowledge adds no provider row prefetch");
+        buffer.reset();
+        if (rows == 3)
+        {
+            auto end = cursor->fetch(std::make_shared<Cancel>(), 3, 256);
+            check(end->known_end && BatchView::parse(end->bytes, cursor->expectation).rows() == 0,
+                  "exact row boundary keeps the legacy empty EOF fetch correct");
+        }
+        cursor->close_now();
+    }
+}
+
+void known_end_read_admission()
+{
+    Scope scope;
+    scope.probe->length = 10;
+    auto cursor = scope.open(1);
+    auto buffer = cursor->fetch(std::make_shared<Cancel>(), 3, 256);
+    check(buffer->known_end, "read admission fixture observes natural EOF");
+    check(reject([&] { cursor->check_read_admission(); }).status == NW_INVALID_STATE,
+          "read admission preserves the live previous batch rejection");
+    buffer.reset();
+    const auto operations = operation_count.load();
+    const auto executions = provider_dispatch_count();
+    const auto submissions = provider_protocol_count();
+    const auto reads = scope.probe->reads.load();
+    const auto batches = scope.budget()[6];
+    cursor->check_read_admission();
+    check(!cursor->active.load() && operation_count == operations && provider_dispatch_count() == executions &&
+              provider_protocol_count() == submissions && scope.probe->reads == reads && scope.budget()[6] == batches,
+          "known EOF admission performs no operation allocation, provider read, batch or protocol work");
+    cursor->active.store(true);
+    const auto concurrent = reject([&] { cursor->check_read_admission(); });
+    check(concurrent.status == NW_DOMAIN_ERROR && concurrent.code == 7 && cursor->active.load(),
+          "concurrent read admission rejects without releasing another caller's gate");
+    cursor->active.store(false);
+    scope.source->poisoned.store(true);
+    check(reject([&] { cursor->check_read_admission(); }).status == NW_ENGINE_POISONED,
+          "known EOF still observes an independently poisoned native source");
+    scope.source->poisoned.store(false);
+    scope.session->request_close();
+    scope.session->join();
+    const auto closed = reject([&] { cursor->check_read_admission(); });
+    check(closed.status == NW_INVALID_STATE && closed.code == 8,
+          "parent session closure retains the original closed cursor status");
+    scope.source->poisoned.store(true);
+    check(reject([&] { cursor->check_read_admission(); }).status == NW_ENGINE_POISONED,
+          "source admission remains earlier than closed cursor admission");
+    scope.source->poisoned.store(false);
+
+    Scope empty;
+    auto ended = empty.open(0);
+    auto end = ended->fetch(std::make_shared<Cancel>(), 3, 256);
+    end.reset();
+    check(reject([&] { ended->check_read_admission(); }).status == NW_INVALID_STATE,
+          "read admission does not resurrect an already transferred empty end");
+    ended->close_now();
+}
+
+void arena_lookahead_error()
+{
+    Scope scope;
+    scope.probe->length = 40;
+    scope.shape = std::make_shared<Projection>(Projection::parse(
+        text_view("{\"version\":1,\"fields\":[{\"ordinal\":0,\"name\":\"value\",\"codec\":5,\"codec_config\":null,"
+                  "\"nullable\":true},{\"ordinal\":1,\"name\":\"other\",\"codec\":4,\"codec_config\":null,\"nullable\":"
+                  "false}]}"),
+        Profile::Sqlite));
+    auto cursor = scope.open(2, "WITH n(x) AS (VALUES(1),(2)) SELECT fixture_value(x) AS value,"
+                                "CASE WHEN x=1 THEN 1 ELSE 2 END AS other FROM n");
+    check(reject([&] { (void)cursor->fetch(std::make_shared<Cancel>(), 3, 256); }).code == 3,
+          "late conversion failure in a full lookahead row wins over earlier-row publication");
+    check(scope.probe->reads == 2 && scope.budget()[3] == 0,
+          "lookahead conversion failure transfers no partial batch or extra row");
+    cursor->join();
+    cursor.reset();
+    check(scope.budget()[1] == 0, "failed arena and held provider row retire their reservation");
+}
+
 void field_and_shape()
 {
     Scope scope;
@@ -408,6 +525,9 @@ int main()
         unknown_and_invalid();
         bounded_batches();
         batch_outlives_cursor();
+        arena_lookahead_and_end();
+        known_end_read_admission();
+        arena_lookahead_error();
         field_and_shape();
         abandoned_close();
         partial_fetch_cancel();

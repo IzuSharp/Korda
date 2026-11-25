@@ -66,9 +66,10 @@ struct Buffer
     std::shared_ptr<Source> source;
     Bytes bytes;
     std::shared_ptr<Cursor> cursor;
+    const bool known_end = false;
     std::atomic<bool> taken{false};
     void mark_taken();
-    Buffer(std::shared_ptr<Source> source, Bytes bytes, std::shared_ptr<Cursor> cursor = {});
+    Buffer(std::shared_ptr<Source> source, Bytes bytes, std::shared_ptr<Cursor> cursor = {}, bool known_end = false);
     ~Buffer();
 };
 using Value = std::variant<std::shared_ptr<Owner>, std::shared_ptr<Buffer>, std::int64_t>;
@@ -194,7 +195,11 @@ struct SqlPlan
 {
     std::shared_ptr<Source> source;
     std::string sql;
+    // Raw SQL keeps its exact accepted snapshot only for the frozen ABI's
+    // optional equality check. Execution uses typed arguments for every route.
     Bytes parameters;
+    std::vector<Scalar> arguments;
+    std::size_t parameter_wire_bytes = 0;
     Expectation expectation;
     std::optional<ProjectionBinding> projection;
     std::shared_ptr<RelationBinding> relation;
@@ -205,6 +210,7 @@ struct SqlPlan
     static std::shared_ptr<SqlPlan> parse(std::shared_ptr<Source> source, ByteView sql, ByteView parameters,
                                           ByteView options);
     static std::shared_ptr<SqlPlan> rendered(std::shared_ptr<Source> source, RenderedQuery rendered);
+    void capture_parameters(ByteView values);
     void submit(const Source& source);
 };
 
@@ -264,7 +270,6 @@ struct Cursor : std::enable_shared_from_this<Cursor>
     std::mutex mutex;
     std::condition_variable changed;
     std::weak_ptr<Cancel> current_cancel;
-    std::optional<Row> pending_row;
     bool ended = false, failed = false, end_sent = false;
     std::atomic<bool> close_started{false}, cleanup_unconfirmed{false};
     std::atomic<bool> protocol_quarantined{false};
@@ -277,6 +282,7 @@ struct Cursor : std::enable_shared_from_this<Cursor>
                                         std::shared_ptr<Cancel> cancel, std::shared_ptr<CommandGate> gate,
                                         Clock::time_point deadline);
     ~Cursor();
+    void check_read_admission();
     std::shared_ptr<Buffer> fetch(std::shared_ptr<Cancel> cancel, std::size_t rows, std::size_t bytes);
     void request_close();
     void close_now();

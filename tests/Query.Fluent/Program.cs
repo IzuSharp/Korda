@@ -230,6 +230,33 @@ internal static class Suite
         }
         using (var query = Q())
         {
+            var number = query.Parameter("number", Codecs.Int64);
+            var initialValues = new QueryParameters().Set(number, 11L);
+            _ = query.Context.Values(initialValues);
+            var text = query.Parameter("text", Codecs.NullableReference(Codecs.String));
+            var bytes = query.Parameter("bytes", Codecs.Bytes);
+            Throws<ArgumentException>(() => query.Context.Values(initialValues));
+
+            var builder = query.Projection<ParameterRow>();
+            var numberColumn = builder.Add(query.ParameterValue(number), "number");
+            var textColumn = builder.Add(query.ParameterValue(text), "text");
+            var bytesColumn = builder.Add(query.ParameterValue(bytes), "bytes");
+            var projection = builder.Build(row => new(row.Get(numberColumn), row.Get(textColumn), row.Get(bytesColumn)));
+            using var prepared = query.OrderBy(Models.Id).Take(1).Select(projection).Prepare();
+            byte[] input = [1, 2, 3];
+            var values = new QueryParameters().Set(bytes, input).Set(text, (string?)null).Set(number, 21L);
+            input[0] = 99;
+            var captured = prepared.AsAsyncEnumerable(session, values);
+            values.Set(number, 22L).Set(text, "changed 🦀").Set(bytes, []);
+            var before = new List<ParameterRow>(); await foreach (var row in captured) before.Add(row);
+            var after = (await prepared.ToListAsync(session, values)).Single();
+            Check(before.Count == 1 && before[0].Number == 21 && before[0].Text is null && before[0].Bytes.SequenceEqual(new byte[] { 1, 2, 3 }),
+                "Compiled parameter ordinals preserve reverse insertion, Set ownership and the complete admission snapshot");
+            Check(after.Number == 22 && after.Text == "changed 🦀" && after.Bytes.Length == 0,
+                "A later execution sees new parameter values without collapsing empty bytes to SQL NULL");
+        }
+        using (var query = Q())
+        {
             using var prepared = query.OrderBy(Models.Id).Select(query.Column(Models.Id)).Prepare();
             query.Dispose();
             await using (var a = await session.Source.OpenSessionAsync())
@@ -309,8 +336,20 @@ internal static class Suite
         }
         using (var q = Q())
         {
-            await using var stream = q.SelectAll().AsAsyncEnumerable().GetAsyncEnumerator();
+            await using var stream = q.OrderBy(Models.Id).Take(1).SelectAll().AsAsyncEnumerable().GetAsyncEnumerator();
             Check(await stream.MoveNextAsync(), "Active query row before query disposal"); q.Dispose();
+            await ThrowsAsync<OperationCanceledException>(() => stream.MoveNextAsync().AsTask());
+        }
+        await using (var parent = await session.Source.OpenSessionAsync())
+        using (var q = parent.From(Models.People))
+        {
+            await using var stream = q.OrderBy(Models.Id).Take(1).SelectAll().AsAsyncEnumerable().GetAsyncEnumerator();
+            Check(await stream.MoveNextAsync(), "Fluent last row before parent session closure");
+            await parent.DisposeAsync();
+            var failure = await ThrowsAsync<InvalidOperationException>(() => stream.MoveNextAsync().AsTask());
+            Check(failure.GetType() == typeof(InvalidOperationException)
+                && failure.Message == "The native operation is not legal in the current state.",
+                "Fluent known EOF preserves the closed native cursor error instead of silently completing");
         }
         // Deterministic interleavings of actual native plan publication and Dispose.
         // No fake executor or timing-sensitive thread race supplies these owners.
@@ -478,6 +517,7 @@ internal static class Suite
         finally { File.Delete(file); }
     }
     private sealed class MappingFailure : Exception;
+    private sealed record ParameterRow(long Number, string? Text, byte[] Bytes);
     private sealed record Joined(long Id, long? Child, bool Matched);
     private sealed record Aggregates(long Count, long? Sum, double? Average, long? Min, long? Max);
 }

@@ -65,19 +65,19 @@ template <typename T> T integer(ByteView bytes, bool big_endian = false)
     return std::bit_cast<T>(bits);
 }
 
-template <typename T> Bytes little(T value)
+template <typename T> ByteView little(T value, std::span<std::uint8_t> storage)
 {
     static_assert(std::is_integral_v<T>);
     const auto bits = std::bit_cast<std::make_unsigned_t<T>>(value);
-    Bytes result(sizeof(T));
+    auto result = storage.first(sizeof(T));
     for (std::size_t i = 0; i < result.size(); ++i)
         result[i] = static_cast<std::uint8_t>(bits >> (i * 8));
     return result;
 }
 
-Bytes as_bytes(std::string_view text)
+ByteView as_view(std::string_view text)
 {
-    return Bytes(text.begin(), text.end());
+    return {reinterpret_cast<const std::uint8_t*>(text.data()), text.size()};
 }
 std::string as_text(ByteView bytes)
 {
@@ -122,13 +122,15 @@ struct Decimal
         return static_cast<unsigned>(remainder);
     }
 
-    Bytes encode() const
+    ByteView encode(std::span<std::uint8_t> storage) const
     {
-        Bytes result(16);
+        auto result = storage.first(16);
         for (std::size_t i = 0; i < coefficient.size(); ++i)
-            put_u32(result, i * 4, coefficient[i]);
+            for (std::size_t byte = 0; byte < 4; ++byte)
+                result[i * 4 + byte] = static_cast<std::uint8_t>(coefficient[i] >> (byte * 8));
         result[12] = scale;
         result[13] = negative;
+        result[14] = result[15] = 0;
         return result;
     }
 
@@ -405,7 +407,7 @@ StorageValue sqlite_encode(const Codec& codec, ByteView bytes)
     }
 }
 
-Bytes sqlite_decode(const Codec& codec, int sqlite_type, const StorageValue& value)
+void sqlite_decode_into(const Codec& codec, int sqlite_type, const StorageView& value, ScalarSink sink)
 {
     check_profile(codec, Profile::Sqlite, true);
     int expected_type = 0;
@@ -440,7 +442,8 @@ Bytes sqlite_decode(const Codec& codec, int sqlite_type, const StorageValue& val
     }
     if (sqlite_type != expected_type || value.index() != static_cast<std::size_t>(expected_type - 1))
         shape("SQLite runtime storage type mismatch");
-    Bytes result;
+    std::array<std::uint8_t, 16> scratch{};
+    ByteView result;
     switch (codec.id)
     {
         case 1:
@@ -448,7 +451,7 @@ Bytes sqlite_decode(const Codec& codec, int sqlite_type, const StorageValue& val
             const auto number = std::get<std::int64_t>(value);
             if (number < std::numeric_limits<std::int16_t>::min() || number > std::numeric_limits<std::int16_t>::max())
                 conversion("SQLite Int16 outside CLR domain");
-            result = little(static_cast<std::int16_t>(number));
+            result = little(static_cast<std::int16_t>(number), scratch);
             break;
         }
         case 2:
@@ -457,38 +460,39 @@ Bytes sqlite_decode(const Codec& codec, int sqlite_type, const StorageValue& val
             const auto number = std::get<std::int64_t>(value);
             if (number < std::numeric_limits<std::int32_t>::min() || number > std::numeric_limits<std::int32_t>::max())
                 conversion("SQLite Int32 outside CLR domain");
-            result = little(static_cast<std::int32_t>(number));
+            result = little(static_cast<std::int32_t>(number), scratch);
             break;
         }
         case 3:
         case 10:
         case 15:
-            result = little(std::get<std::int64_t>(value));
+            result = little(std::get<std::int64_t>(value), scratch);
             break;
         case 4:
         {
             const auto number = std::get<std::int64_t>(value);
             if (number != 0 && number != 1)
                 conversion("SQLite Boolean must be zero or one");
-            result = {static_cast<std::uint8_t>(number)};
+            scratch[0] = static_cast<std::uint8_t>(number);
+            result = ByteView(scratch).first(1);
             break;
         }
         case 5:
         case 16:
-            result = as_bytes(std::get<std::string>(value));
+            result = as_view(std::get<std::string_view>(value));
             break;
         case 6:
         case 7:
-            result = std::get<Bytes>(value);
+            result = std::get<ByteView>(value);
             break;
         case 8:
-            result = little(parse_date(std::get<std::string>(value)));
+            result = little(parse_date(std::get<std::string_view>(value)), scratch);
             break;
         case 9:
-            result = little(parse_time(std::get<std::string>(value)));
+            result = little(parse_time(std::get<std::string_view>(value)), scratch);
             break;
         case 11:
-            result = little(std::bit_cast<std::uint64_t>(std::get<double>(value)));
+            result = little(std::bit_cast<std::uint64_t>(std::get<double>(value)), scratch);
             break;
         case 12:
         {
@@ -496,17 +500,17 @@ Bytes sqlite_decode(const Codec& codec, int sqlite_type, const StorageValue& val
             const auto narrow = static_cast<float>(number);
             if (!std::isfinite(narrow) || static_cast<double>(narrow) != number)
                 conversion("SQLite Single conversion would lose precision");
-            result = little(std::bit_cast<std::uint32_t>(narrow));
+            result = little(std::bit_cast<std::uint32_t>(narrow), scratch);
             break;
         }
         case 14:
-            result = decimal_text(std::get<std::string>(value)).encode();
+            result = decimal_text(std::get<std::string_view>(value)).encode(scratch);
             break;
         default:
             conversion("unsupported SQLite logical codec");
     }
     checked_scalar(codec, result, Profile::Sqlite);
-    return result;
+    sink.write(sink.state, result);
 }
 
 std::uint32_t postgres_oid(const Codec& codec)
@@ -646,41 +650,42 @@ std::string postgres_encode(const Codec& codec, ByteView bytes)
     }
 }
 
-Bytes postgres_decode(const Codec& codec, std::uint32_t oid, ByteView bytes)
+void postgres_decode_into(const Codec& codec, std::uint32_t oid, ByteView bytes, ScalarSink sink)
 {
     check_profile(codec, Profile::PostgreSql, true);
     if (!postgres_compatible(codec, oid))
         shape("PostgreSQL result type mismatch");
-    Bytes result;
+    std::array<std::uint8_t, 16> scratch{};
+    ByteView result;
     switch (codec.id)
     {
         case 1:
-            result = little(integer<std::int16_t>(bytes, true));
+            result = little(integer<std::int16_t>(bytes, true), scratch);
             break;
         case 2:
         case 17:
-            result = little(integer<std::int32_t>(bytes, true));
+            result = little(integer<std::int32_t>(bytes, true), scratch);
             break;
         case 3:
         case 15:
-            result = little(integer<std::int64_t>(bytes, true));
+            result = little(integer<std::int64_t>(bytes, true), scratch);
             break;
         case 4:
             if (bytes.size() != 1 || bytes[0] > 1)
                 conversion("invalid PostgreSQL Boolean");
-            result = {bytes[0]};
+            result = bytes;
             break;
         case 5:
         case 6:
         case 7:
-            result = Bytes(bytes.begin(), bytes.end());
+            result = bytes;
             break;
         case 8:
         {
             const auto days = integer<std::int32_t>(bytes, true);
             if (days < -730119 || days > 2921939)
                 conversion("PostgreSQL date outside CLR domain");
-            result = little(static_cast<std::int32_t>(days + 10957));
+            result = little(static_cast<std::int32_t>(days + 10957), scratch);
             break;
         }
         case 9:
@@ -688,7 +693,7 @@ Bytes postgres_decode(const Codec& codec, std::uint32_t oid, ByteView bytes)
             const auto micros = integer<std::int64_t>(bytes, true);
             if (micros < 0 || micros > 86'399'999'999LL)
                 conversion("PostgreSQL time outside CLR domain");
-            result = little(static_cast<std::uint64_t>(micros));
+            result = little(static_cast<std::uint64_t>(micros), scratch);
             break;
         }
         case 10:
@@ -696,17 +701,17 @@ Bytes postgres_decode(const Codec& codec, std::uint32_t oid, ByteView bytes)
             const auto micros = integer<std::int64_t>(bytes, true);
             if (micros < -63'082'281'600'000'000LL || micros > 252'455'615'999'999'999LL)
                 conversion("PostgreSQL instant outside CLR domain");
-            result = little(micros + 946'684'800'000'000LL);
+            result = little(micros + 946'684'800'000'000LL, scratch);
             break;
         }
         case 11:
-            result = little(integer<std::uint64_t>(bytes, true));
+            result = little(integer<std::uint64_t>(bytes, true), scratch);
             break;
         case 12:
-            result = little(integer<std::uint32_t>(bytes, true));
+            result = little(integer<std::uint32_t>(bytes, true), scratch);
             break;
         case 13:
-            result = numeric(bytes).encode();
+            result = numeric(bytes).encode(scratch);
             break;
         case 16:
             if (oid == 3802)
@@ -723,13 +728,13 @@ Bytes postgres_decode(const Codec& codec, std::uint32_t oid, ByteView bytes)
             while (!bytes.empty() &&
                    (bytes.back() == ' ' || bytes.back() == '\t' || bytes.back() == '\r' || bytes.back() == '\n'))
                 bytes = bytes.first(bytes.size() - 1);
-            result = Bytes(bytes.begin(), bytes.end());
+            result = bytes;
             break;
         default:
             conversion("unsupported PostgreSQL logical codec");
     }
     checked_scalar(codec, result, Profile::PostgreSql);
-    return result;
+    sink.write(sink.state, result);
 }
 
 } // namespace nw

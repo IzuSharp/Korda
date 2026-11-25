@@ -36,6 +36,10 @@ public sealed partial class DataSource : IDisposable, IAsyncDisposable
         var info = descriptor.Inspect();
         var calls = new NativeCalls(descriptor.EngineId, symbol => EngineModuleLoader.ResolveExport(descriptor, symbol));
         var binding = new SourceBinding(calls, provider == DatabaseProvider.Sqlite ? 1u : 2u);
+        if (!info.Capabilities.Any(capability => capability.Name == BatchResultCalls.Capability))
+            throw new DatabaseCapabilityException(BatchResultCalls.Capability, provider == DatabaseProvider.Sqlite ? "sqlite.v1" : "postgresql.v1");
+        binding.Batches = new(symbol => EngineModuleLoader.ResolveExport(descriptor, symbol));
+        binding.Batches.Require();
         binding.Commands = new(new QueryCommandCalls(symbol => EngineModuleLoader.ResolveExport(descriptor, symbol)),
             limits.MaxQueryNodes, limits.MaxQueryDepth, limits.MaxParameters, checked((int)limits.MaxParameterBytes),
             info.Capabilities.Select(capability => capability.Name));

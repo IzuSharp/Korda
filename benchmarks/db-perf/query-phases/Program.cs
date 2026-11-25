@@ -18,8 +18,19 @@ using Korda.Database.Sqlite;
 
 if (RuntimeFeature.IsDynamicCodeSupported)
     throw new InvalidOperationException("Run the published Linux Native AOT executable.");
+var resultRows = 100;
+var positional = new List<string>();
+for (var index = 0; index < args.Length; index++)
+{
+    if (args[index] == "--rows")
+        resultRows = ++index < args.Length ? int.Parse(args[index], CultureInfo.InvariantCulture)
+            : throw new ArgumentException("--rows needs 1, 100 or 1000.");
+    else positional.Add(args[index]);
+}
+args = positional.ToArray();
+if (resultRows is not (1 or 100 or 1000)) throw new ArgumentOutOfRangeException(nameof(resultRows));
 if (args.Length is < 2 or > 5)
-    throw new ArgumentException("connection output.json [iterations=256] [windows=3] [initialize]");
+    throw new ArgumentException("connection output.json [iterations=256] [windows=3] [initialize] [--rows 1|100|1000]");
 var iterations = args.Length > 2 ? int.Parse(args[2], CultureInfo.InvariantCulture) : 256;
 var windows = args.Length > 3 ? int.Parse(args[3], CultureInfo.InvariantCulture) : 3;
 if (iterations is < 1 or > 100000 || windows is < 1 or > 30)
@@ -45,7 +56,7 @@ var databaseVersion = await session.ScalarAsync(SqlCommand.Create("SELECT sqlite
 diagnostics.DatabaseVersion = databaseVersion;
 if (args.Length == 5 && args[4] == "initialize")
     await Initialize(session);
-using var probe = new PhaseProbe(session, diagnostics);
+using var probe = new PhaseProbe(session, diagnostics, resultRows);
 var first = new Sample[3];
 for (var lane = 0; lane < 3; lane++)
 {
@@ -108,16 +119,17 @@ var teardownEnded = Stopwatch.GetTimestamp();
 var drained = identity.Read();
 if (drained is not { Sources: 0, Sessions: 0, Operations: 0, Cursors: 0, Buffers: 0, Owners: 0 })
     throw new InvalidOperationException("Native owners did not drain after explicit disposal.");
-var receipt = new Receipt(2, source.Provider.ToString(), true, databaseVersion,
+var receipt = new Receipt(3, source.Provider.ToString(), true, databaseVersion,
     typeof(DataSource).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "unknown",
     NativeIdentity.Hash(Environment.ProcessPath!), identity.Path, identity.Sha256, sql, rawTemplate,
-    "Int64 tenant alternates 1 and 2; ordered full List<PhaseRow> with 100 rows, exact Id/Note/null checks",
+    $"Int64 tenant alternates 1 and 2; ordered full List<PhaseRow> with {resultRows} rows, exact Id/Note/null checks; the one-row case binds the complete composite primary key",
+    resultRows,
     Stopwatch.Frequency, prepareTicks, warmup, first, measurements,
     teardownEnded - teardownStarted, drained,
     "Local phase diagnostic. Construction includes the route's query/parameter/stream construction and result List. " +
     "Submit-to-first-row includes GetAsyncEnumerator/first MoveNextAsync/first DTO mapping. Read-complete includes all remaining rows and EOF. " +
     "Release includes enumerator retirement and dynamic query disposal. All routes materialize and verify the complete List with the same mapper. " +
-    "Fluent and prepared SQL text are identical. SQLite raw SQL uses ?1 where Fluent uses ?; both bind the same sole ordinal-one value. PostgreSQL uses $1 in both. " +
+    "Fluent and prepared SQL text are identical. SQLite raw SQL numbers ? markers; all routes bind the same ordered Int64 values. PostgreSQL markers are identical. " +
     "Preparation and first execution are reported separately; SQL rendering and shared metadata setup precede the first route executions, which are not independent process-cold measurements. " +
     "Window allocation and GC are whole process; phase samples are timestamp durations, not thread-local allocation attribution. " +
     "CPU/RSS are local process observations. Protocol submissions are not physical network-round-trip measurements. No hosted-runner identity is required. " +
@@ -134,7 +146,7 @@ static async Task Initialize(DataSession session)
     for (var tenant = 1; tenant <= 2; tenant++)
     {
         var sql = new StringBuilder("INSERT INTO query_phases VALUES ");
-        for (var id = 1; id <= 100; id++)
+        for (var id = 1; id <= 1000; id++)
         {
             if (id > 1) sql.Append(',');
             sql.Append('(').Append(tenant).Append(',').Append(id).Append(',');
@@ -155,39 +167,58 @@ internal sealed class PhaseProbe : IDisposable
     private readonly DataSession _session;
     private readonly PreparedQuery<PhaseRow> _prepared;
     private readonly QueryParameter<long> _tenant;
+    private readonly QueryParameter<long> _key;
+    private readonly int _resultRows;
     private readonly QueryParameters _values = new();
     private readonly FailureDiagnostics _diagnostics;
-    private readonly string?[][] _notes = [new string?[100], new string?[100]];
+    private readonly string?[][] _notes = [new string?[1000], new string?[1000]];
     internal long PrepareTicks { get; }
     internal string Sql { get; private set; } = "";
     internal string RawTemplate { get; private set; } = "";
 
-    internal PhaseProbe(DataSession session, FailureDiagnostics diagnostics)
+    internal PhaseProbe(DataSession session, FailureDiagnostics diagnostics, int resultRows)
     {
-        _session = session; _diagnostics = diagnostics;
+        _session = session; _diagnostics = diagnostics; _resultRows = resultRows;
         for (var tenant = 1; tenant <= 2; tenant++)
-        for (var id = 1; id <= 100; id++)
+        for (var id = 1; id <= 1000; id++)
             _notes[tenant - 1][id - 1] = id % 5 == 0 ? null : $"note-{tenant}-{id}";
         var started = Stopwatch.GetTimestamp();
         using var query = session.From(PhaseOrders.Table);
         _tenant = query.Parameter("tenant", Codecs.Int64);
-        query.Where(query.Column(PhaseOrders.TenantId).Equal(query.ParameterValue(_tenant))).OrderBy(PhaseOrders.Id);
+        query.Where(query.Column(PhaseOrders.TenantId).Equal(query.ParameterValue(_tenant)));
+        _key = query.Parameter("id", Codecs.Int64);
+        if (_resultRows == 1)
+            query.Where(query.Column(PhaseOrders.Id).Equal(query.ParameterValue(_key)));
+        else query.Where(query.Column(PhaseOrders.Id).LessThanOrEqual(query.ParameterValue(_key)));
+        query.OrderBy(PhaseOrders.Id);
         _prepared = Select(query).Prepare();
         PrepareTicks = Stopwatch.GetTimestamp() - started;
         // The trusted SQL template uses the shape emitted by this same native
         // dialect; VerifySql checks dynamic and parameterized shapes. SQLite's
-        // raw-template compiler numbers its marker (?1) whereas Fluent emits
-        // an anonymous marker (?). Both bind the sole value at ordinal one.
+        // raw-template compiler numbers its markers whereas Fluent emits
+        // anonymous markers. Both bind the same values in the same order.
         using var rendered = Build(1);
         Sql = Select(rendered).ToSql();
-        var marker = Sql.Contains("$1", StringComparison.Ordinal) ? "$1" : "?";
-        if (!Sql.Contains(marker, StringComparison.Ordinal) || Sql.Contains("$2", StringComparison.Ordinal) || Sql.Split(marker, StringSplitOptions.None).Length != 2)
-            throw new InvalidOperationException("Expected one ordered provider parameter in the observed SQL: " + Sql);
-        RawTemplate = Sql.Replace(marker, "@tenant", StringComparison.Ordinal);
+        RawTemplate = Sql;
+        var names = new[] { "tenant", "id" };
+        for (var ordinal = 0; ordinal < names.Length; ordinal++)
+        {
+            var marker = Sql.Contains("$1", StringComparison.Ordinal) ? "$" + (ordinal + 1) : "?";
+            var at = RawTemplate.IndexOf(marker, StringComparison.Ordinal);
+            if (at < 0) throw new InvalidOperationException("Missing ordered provider parameter: " + Sql);
+            RawTemplate = RawTemplate[..at] + "@" + names[ordinal] + RawTemplate[(at + marker.Length)..];
+        }
+        if (RawTemplate.Contains('?', StringComparison.Ordinal) || RawTemplate.Contains('$', StringComparison.Ordinal))
+            throw new InvalidOperationException("Unexpected provider parameter: " + Sql);
     }
 
     private Query<PhaseOrder> Build(long tenant)
-        => _session.From(PhaseOrders.Table).WhereEqual(PhaseOrders.TenantId, tenant).OrderBy(PhaseOrders.Id);
+    {
+        var query = _session.From(PhaseOrders.Table).WhereEqual(PhaseOrders.TenantId, tenant);
+        if (_resultRows == 1) query.WhereEqual(PhaseOrders.Id, 1L);
+        else query.Where(query.Column(PhaseOrders.Id).LessThanOrEqual((long)_resultRows));
+        return query.OrderBy(PhaseOrders.Id);
+    }
     private static QuerySelection<PhaseRow> Select(Query<PhaseOrder> query)
         => query.Select(PhaseRows.Bind(query, Id: query.Column(PhaseOrders.Id), Note: query.Column(PhaseOrders.Note)));
 
@@ -197,7 +228,12 @@ internal sealed class PhaseProbe : IDisposable
         if (Select(dynamicQuery).ToSql() != Sql) throw new InvalidOperationException("Values changed the dynamic SQL shape.");
         using var preparedQuery = _session.From(PhaseOrders.Table);
         var parameter = preparedQuery.Parameter("tenant", Codecs.Int64);
-        preparedQuery.Where(preparedQuery.Column(PhaseOrders.TenantId).Equal(preparedQuery.ParameterValue(parameter))).OrderBy(PhaseOrders.Id);
+        preparedQuery.Where(preparedQuery.Column(PhaseOrders.TenantId).Equal(preparedQuery.ParameterValue(parameter)));
+        var key = preparedQuery.Parameter("id", Codecs.Int64);
+        if (_resultRows == 1)
+            preparedQuery.Where(preparedQuery.Column(PhaseOrders.Id).Equal(preparedQuery.ParameterValue(key)));
+        else preparedQuery.Where(preparedQuery.Column(PhaseOrders.Id).LessThanOrEqual(preparedQuery.ParameterValue(key)));
+        preparedQuery.OrderBy(PhaseOrders.Id);
         if (Select(preparedQuery).ToSql() != Sql) throw new InvalidOperationException("Prepared and dynamic SQL differ.");
     }
 
@@ -210,7 +246,7 @@ internal sealed class PhaseProbe : IDisposable
             Query<PhaseOrder>? query = null;
             IAsyncEnumerator<PhaseRow>? reader = null;
             var started = Stopwatch.GetTimestamp();
-            rows = new List<PhaseRow>(100);
+            rows = new List<PhaseRow>(_resultRows);
             IAsyncEnumerable<PhaseRow> stream;
             if (lane == 0)
             {
@@ -218,9 +254,17 @@ internal sealed class PhaseProbe : IDisposable
                 stream = Select(query).AsAsyncEnumerable();
             }
             else if (lane == 1)
-                stream = _prepared.AsAsyncEnumerable(_session, _values.Set(_tenant, tenant));
+            {
+                _values.Set(_tenant, tenant);
+                _values.Set(_key, (long)_resultRows);
+                stream = _prepared.AsAsyncEnumerable(_session, _values);
+            }
             else if (lane == 2)
-                stream = _session.StreamAsync(SqlCommand.Create(RawTemplate, new SqlParameters().Add("tenant", tenant, Codecs.Int64)), PhaseRows.Row);
+            {
+                var parameters = new SqlParameters().Add("tenant", tenant, Codecs.Int64)
+                    .Add("id", (long)_resultRows, Codecs.Int64);
+                stream = _session.StreamAsync(SqlCommand.Create(RawTemplate, parameters), PhaseRows.Row);
+            }
             else throw new ArgumentOutOfRangeException(nameof(lane));
             var constructed = Stopwatch.GetTimestamp();
             long first = constructed, complete = constructed, released;
@@ -252,7 +296,7 @@ internal sealed class PhaseProbe : IDisposable
             // Verify the complete result outside phase times, but within every
             // whole-process window so its equal diagnostic overhead stays visible.
             _diagnostics.Stage = FailureStage.Verify;
-            if (rows.Count != 100) throw new InvalidOperationException("Incomplete result.");
+            if (rows.Count != _resultRows) throw new InvalidOperationException("Incomplete result.");
             for (var i = 0; i < rows.Count; i++)
                 if (rows[i].Id != i + 1 || rows[i].Note != _notes[tenant - 1][i])
                     throw new InvalidOperationException("Result field or null differs.");
@@ -279,7 +323,7 @@ internal sealed record Window(string Route, int Index, int Operations, long Allo
     long CpuBeforeTicks, long CpuAfterTicks, long ResidentBytes, long PeakResidentBytes, long StartedTicks, long FinishedTicks,
     Counts NativeBefore, Counts NativeAfter, Sample[] Samples);
 internal sealed record Receipt(int SchemaVersion, string Provider, bool NativeAot, string DatabaseVersion, string PackageVersion, string ExecutableSha256,
-    string NativePath, string NativeSha256, string Sql, string RawTemplate, string ParametersAndResults, long StopwatchFrequency,
+    string NativePath, string NativeSha256, string Sql, string RawTemplate, string ParametersAndResults, int ResultRows, long StopwatchFrequency,
     long PreparationTicks, int WarmupPerRoute, Sample[] FirstExecutions, Window[] Windows, long TeardownTicks, Counts Drained, string Scope);
 [JsonSerializable(typeof(Receipt))]
 [JsonSerializable(typeof(FailureReceipt))]
@@ -375,7 +419,7 @@ internal sealed class FailureDiagnostics
             if (args.ExceptionObject is Exception failure) Capture(failure, null, "unhandled");
             FailureObservation[] observations;
             lock (_gate) observations = _observations.Take(_count).Select(value => value!).ToArray();
-            var receipt = new FailureReceipt(1, 2, Provider, DatabaseVersion,
+            var receipt = new FailureReceipt(1, 3, Provider, DatabaseVersion,
                 typeof(DataSource).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "unknown",
                 NativeIdentity.Hash(Environment.ProcessPath!), Identity?.Sha256, Stopwatch.Frequency,
                 args.IsTerminating, false, _dropped, _captureError, observations,

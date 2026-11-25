@@ -33,7 +33,9 @@ public readonly ref struct RowReader
     private readonly IRowLease? _lease;
     private readonly object? _projection;
     private readonly TableIdentity? _table;
-    internal RowReader(IRowLease lease, object projection, TableIdentity? table) { _lease = lease; _projection = projection; _table = table; }
+    private readonly ResultField[]? _validatedFields;
+    internal RowReader(IRowLease lease, object projection, TableIdentity? table, ResultField[]? validatedFields = null)
+    { _lease = lease; _projection = projection; _table = table; _validatedFields = validatedFields; }
     /// <summary>Reads a typed token belonging to this exact projection.</summary>
     /// <typeparam name="T">The result value type.</typeparam>
     /// <param name="column">The projection-bound result token.</param>
@@ -80,8 +82,9 @@ public readonly ref struct RowReader
     /// <exception cref="ObjectDisposedException">The lease has retired.</exception>
     public T Read<T>(int ordinal, ValueCodec<T> codec)
     {
-        ArgumentNullException.ThrowIfNull(codec); var lease = Lease(ordinal); var actual = lease.Codec(ordinal);
-        if (!actual.SameScalar(codec.Descriptor) || actual.Nullable != codec.Descriptor.Nullable)
+        ArgumentNullException.ThrowIfNull(codec); var lease = Lease(ordinal);
+        var actual = _validatedFields is { } fields ? fields[ordinal].Descriptor : lease.Codec(ordinal);
+        if (!ReferenceEquals(actual, codec.Descriptor) && (!actual.SameScalar(codec.Descriptor) || actual.Nullable != codec.Descriptor.Nullable))
             throw new DatabaseException("The requested codec differs from the row shape.", DatabaseErrorKind.ShapeMismatch);
         return codec.Decode(lease.Value(ordinal));
     }
@@ -89,7 +92,7 @@ public readonly ref struct RowReader
     {
         var lease = _lease ?? throw new InvalidOperationException("The default RowReader has no lease.");
         lease.AssertAlive();
-        if ((uint)ordinal >= (uint)lease.Count) throw new ArgumentOutOfRangeException(nameof(ordinal));
+        if ((uint)ordinal >= (uint)(_validatedFields?.Length ?? lease.Count)) throw new ArgumentOutOfRangeException(nameof(ordinal));
         return lease;
     }
 }
@@ -166,13 +169,18 @@ public sealed class ResultField
 public sealed class Projection<T>
 {
     internal Projection(ResultField[] fields, RowMaterializer<T> materializer, TableIdentity? table = null, bool scalar = false, object? tokenIdentity = null)
-    { Fields = fields; Materializer = materializer; Table = table; IsScalar = scalar; TokenIdentity = tokenIdentity ?? this; CanonicalBytes = Canonical.Projection(fields); ShapeHash = Canonical.Hash(CanonicalBytes); }
+    {
+        Fields = fields; Materializer = materializer; Table = table; IsScalar = scalar; TokenIdentity = tokenIdentity ?? this;
+        CanonicalBytes = Canonical.Projection(fields); ShapeBytes = System.Security.Cryptography.SHA256.HashData(CanonicalBytes);
+        ShapeHash = Convert.ToHexStringLower(ShapeBytes);
+    }
     private object TokenIdentity { get; }
     internal ResultField[] Fields { get; }
     internal RowMaterializer<T> Materializer { get; }
     internal TableIdentity? Table { get; }
     internal bool IsScalar { get; }
     internal byte[] CanonicalBytes { get; }
+    internal byte[] ShapeBytes { get; }
     /// <summary>Gets lowercase SHA-256 of the exact logical shape, excluding managed delegate and native IDs.</summary>
     public string ShapeHash { get; }
     /// <summary>Copies a unique ordered field sequence and retains an AOT-visible materializer.</summary>
@@ -207,6 +215,30 @@ public sealed class Projection<T>
             if (lease.Value(i) is null && !expected.IsNullable) throw new DatabaseException("A non-null column contains SQL NULL.", DatabaseErrorKind.Conversion);
         }
         return Materializer(new RowReader(lease, TokenIdentity, Table));
+    }
+
+    // A retained immutable batch validates every cell, including NULL and scalar
+    // representation, before it exposes any row. Bind that proof to this exact
+    // projection once; ordinary leases retain the full per-row validation above.
+    internal bool MatchesValidatedBatch(ResultField[] fields, WireExpectation expected)
+    {
+        if (!ReferenceEquals(fields, Fields) || expected.Kind != PayloadKind.Rows
+            || expected.Descriptors.Length != fields.Length || !expected.MetadataHash.AsSpan().SequenceEqual(ShapeBytes)) return false;
+        for (var i = 0; i < fields.Length; i++)
+        {
+            var actual = expected.Descriptors[i]; var field = fields[i];
+            if (actual.Id != (uint)i || !actual.Codec.SameScalar(field.Descriptor) || actual.Codec.Nullable != field.IsNullable) return false;
+        }
+        return true;
+    }
+
+    internal T ReadValidatedBatch(IRowLease lease)
+    {
+        // Called only by the internal batch lease after MatchesValidatedBatch.
+        // The public reader still checks live ownership, token identity, ordinal
+        // and the requested codec on every access; no unchecked API is exposed.
+        lease.AssertAlive();
+        return Materializer(new RowReader(lease, TokenIdentity, Table, Fields));
     }
 }
 

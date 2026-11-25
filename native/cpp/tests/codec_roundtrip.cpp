@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 // B07 real-service roundtrip of the unchanged managed JIT/AOT vector producer.
-#include "nw/provider.hpp"
 #include "nw/scalar.hpp"
+#include "parameter_test_support.hpp"
+#include "provider_test_support.hpp"
 
 #include <nlohmann/json.hpp>
 
@@ -17,6 +18,7 @@
 namespace
 {
 using namespace nw;
+using test::decode_parameters;
 using Json = nlohmann::json;
 Bytes read(const std::filesystem::path& path)
 {
@@ -135,10 +137,10 @@ std::optional<Bytes> field(ProviderConnection& connection, std::string_view sql,
                            const std::vector<Scalar>& parameters = {}, std::size_t maximum = MAX_BYTES)
 {
     auto statement = connection.query(sql, parameters, {});
-    auto row = statement->next({codec}, maximum, {});
+    auto row = test::next_row(*statement, connection.profile(), {codec}, maximum, {});
     check(row && row->size() == 1, "roundtrip result row shape");
     auto value = (*row)[0];
-    check(!statement->next({codec}, maximum, {}), "roundtrip returned excess rows");
+    check(!test::next_row(*statement, connection.profile(), {codec}, maximum, {}), "roundtrip returned excess rows");
     statement->close();
     return value;
 }
@@ -290,7 +292,7 @@ int main(int argc, char** argv)
             [&]
             {
                 auto statement = pg->query("SELECT NULL::text", {}, {});
-                (void)statement->next({{5, {}, true}, {5, {}, true}}, 4096, {});
+                (void)test::next_row(*statement, Profile::PostgreSql, {{5, {}, true}, {5, {}, true}}, 4096, {});
             },
             4);
         reject([&] { (void)field(*pg, "SELECT 'Infinity'::double precision", {11, {}, false}); });
@@ -318,7 +320,7 @@ int main(int argc, char** argv)
             [&]
             {
                 auto statement = sqlite->query("SELECT 'too long'", {}, {});
-                (void)statement->next({{5, {}, true}, {5, {}, true}}, 2, {});
+                (void)test::next_row(*statement, Profile::Sqlite, {{5, {}, true}, {5, {}, true}}, 2, {});
             },
             4);
         // PostgreSQL's microsecond storage cannot preserve an input with nine

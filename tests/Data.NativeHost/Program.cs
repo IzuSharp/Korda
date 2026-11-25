@@ -15,6 +15,7 @@ if (await FetchProbe.RunIfRequested(args)) return;
 if (await TransactionDefaultProbe.RunIfRequested(args)) return;
 Console.WriteLine("snapshot parser oracle inputs=" + SnapshotProbe.Verify());
 SnapshotProbe.VerifyAllocationBudget();
+BatchResultTests.VerifyRecord();
 try { await Suite.Run(); } catch (DatabaseException failure) { Console.Error.WriteLine($"kind={failure.Kind} provider={failure.ProviderCode} correlation={failure.CorrelationId}"); throw; }
 
 internal static class Suite
@@ -132,6 +133,10 @@ internal static class Suite
         }
         await BorrowedBatchHostTests.Run(DatabaseProvider.Sqlite, Path.Combine(directory, "borrowed.db"));
         await BorrowedBatchHostTests.Run(DatabaseProvider.PostgreSql, pg);
+        await BatchResultTests.VerifyFetches(DatabaseProvider.Sqlite, Path.Combine(directory, "batch-result.db"));
+        await BatchResultTests.VerifyFetches(DatabaseProvider.PostgreSql, pg);
+        await BatchResultTests.VerifyParentTransactions(DatabaseProvider.Sqlite, Path.Combine(directory, "batch-parent.db"));
+        await BatchResultTests.VerifyParentTransactions(DatabaseProvider.PostgreSql, pg);
         await DependencyInjection(Path.Combine(directory, "di.db"));
         await WaitZero(SqliteDataSource.Engine);
         Directory.Delete(directory, true);
@@ -166,7 +171,7 @@ internal static class Suite
         {
             using (var first = await Fetch(1))
             {
-                using var batch = new HostStreamBatch(first, checked((int)source.Limits.MaxBatchBytes));
+                using var batch = LegacyBatch(first, checked((int)source.Limits.MaxBatchBytes));
                 var borrowed = batch.Bytes;
                 Check(!System.Runtime.InteropServices.MemoryMarshal.TryGetArray(borrowed, out _),
                     "host batch exposes native storage without an intermediate managed array");
@@ -185,6 +190,21 @@ internal static class Suite
             Check(BinaryPrimitives.ReadUInt32LittleEndian(second.Copy().AsSpan(56)) == 2, "native per-fetch two-row demand after prior buffer release");
         }
         finally { close.Request(); await close.JoinAsync(); }
+    }
+    private static unsafe HostStreamBatch LegacyBatch(Korda.Database.NativeBuffer owner, int maximum)
+    {
+        // Only this compatibility fixture composes the frozen take_buffer and
+        // buffer_view ABI. Production streams use the result-batch extension.
+        var retained = false;
+        try
+        {
+            owner.DangerousAddRef(ref retained);
+            owner.ViewWhileRetained(maximum, out var address, out var length);
+            if (length < 96) throw new InvalidOperationException("Incomplete legacy batch header.");
+            var end = BinaryPrimitives.ReadUInt32LittleEndian(new ReadOnlySpan<byte>((void*)address, length)[56..]) == 0;
+            return new(owner, new NwBytesViewV1 { Data = (byte*)address, Length = (ulong)length }, end ? 1u : 0u, 0, maximum);
+        }
+        finally { if (retained) owner.DangerousRelease(); }
     }
     private static async Task PrivateFetchOwnerFailures(DataSource source, DataSession session, string table, Projection<Row> projection)
     {

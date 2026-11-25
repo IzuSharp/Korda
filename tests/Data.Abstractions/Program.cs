@@ -495,6 +495,35 @@ ReadOnlyMemory<byte>?[] cells = [Codecs.Int16.Encode(-7), Codecs.Int32.Encode(42
 var descriptors = codecs.Select((codec, i) => new WireDescriptor((uint)i + 1, codec, codec.Configuration is null ? codec.Id : (uint)(1024 + i))).ToArray();
 var expectation = new WireExpectation(PayloadKind.Parameters, 2, new byte[32], 0, 0, descriptors);
 var wire = DbWire.Encode(expectation, 1, cells);
+Test("compiled_parameter_layout_matches_complete_wire_and_rejections", () =>
+{
+    foreach (var profile in new uint[] { 1, 2 })
+    {
+        var expected = expectation with { Profile = profile, ExactRows = 1 };
+        var layout = new DbWire.ParameterLayout(expected);
+        var snapshots = cells.Select(cell => cell?.ToArray()).ToArray();
+        var total = 0;
+        for (var i = 0; i < snapshots.Length; i++) total += layout.ValidateValue(i, snapshots[i]);
+        var frame = layout.CreateFrame(total); var position = layout.PayloadOffset;
+        for (var i = 0; i < snapshots.Length; i++) layout.WriteValue(frame, i, snapshots[i], ref position);
+        Check(position == frame.Length && frame.AsSpan().SequenceEqual(DbWire.Encode(expected, 1, cells)),
+            "Compiled parameters changed the complete wire bytes or ordinal order.");
+        var parsed = DbWire.Parse(frame, expected);
+        Check(parsed.Cell(0, 17) is null && parsed.Cell(0, 18) is { Length: 0 }, "Compiled parameters collapsed SQL NULL and empty bytes.");
+        snapshots[2]![0] ^= 0xff;
+        Check(parsed.Cell(0, 2)!.Value.Span.SequenceEqual(cells[2]!.Value.Span), "An admitted parameter frame retained mutable caller bytes.");
+        Reject<ArgumentException>(() => layout.ValidateValue(2, null));
+        Reject<ArgumentException>(() => layout.ValidateValue(2, new byte[7]));
+        Reject<ArgumentException>(() => layout.ValidateValue(3, new byte[] { 2 }));
+        Reject<System.Text.DecoderFallbackException>(() => layout.ValidateValue(4, new byte[] { 0xff }));
+        Reject<ArgumentException>(() => layout.CreateFrame(DbWire.MaxEncodedBytes));
+        var empty = new WireExpectation(PayloadKind.Parameters, profile, new byte[32], 0, 0, []) { ExactRows = 1 };
+        Check(new DbWire.ParameterLayout(empty).CreateFrame(0).AsSpan().SequenceEqual(DbWire.Encode(empty, 1, [])),
+            "Compiled empty parameter frame changed.");
+    }
+    Reject<ArgumentException>(() => new DbWire.ParameterLayout(expectation with { Descriptors = [descriptors[0], descriptors[0]] }));
+    Reject<ArgumentException>(() => new DbWire.ParameterLayout(expectation with { Kind = PayloadKind.Rows }));
+});
 Test("db_wire_all_scalar_golden_and_malformed_inputs", () =>
 {
     var parsed = DbWire.Parse(wire, expectation); Check(parsed.Cell(0, 17) is null && parsed.Cell(0, 18) is { Length: 0 }, "Wire NULL/empty collapsed.");

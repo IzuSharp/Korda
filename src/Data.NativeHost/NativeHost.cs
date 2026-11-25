@@ -40,6 +40,10 @@ internal sealed class NativeBuffer : SafeHandle
     {
         var view = new NwBytesViewV1(); var error = BindingChecks.Error();
         var status = _binding.Calls.nw_db_buffer_view_v1(DangerousGetHandle(), &view, &error); HostFailure.Check(_binding, status, error);
+        CheckView(view, maximum, out address, out length);
+    }
+    internal static unsafe void CheckView(NwBytesViewV1 view, int maximum, out nint address, out int length)
+    {
         if (view.Length > (ulong)maximum || view.Length != 0 && view.Data is null)
             throw new DatabaseException("Native buffer exceeds the admitted range.", DatabaseErrorKind.ResourceLimit);
         address = (nint)view.Data; length = checked((int)view.Length);
@@ -143,6 +147,30 @@ internal static class NativeHost
     { long result = 0; var error = BindingChecks.Error(); HostFailure.Check(binding, binding.Calls.nw_db_operation_take_count_v1(operation, &result, &error), error); return result; }
     internal static unsafe NativeBuffer TakeBuffer(SourceBinding binding, nint operation)
     { nint result = 0; var error = BindingChecks.Error(); HostFailure.Check(binding, binding.Calls.nw_db_operation_take_buffer_v1(operation, &result, &error), error); try { return new(binding, result); } catch { binding.Calls.nw_db_buffer_release_v1(result); throw; } }
+    internal static unsafe HostStreamBatch TakeBatch(SourceBinding binding, nint operation, int maximum)
+    {
+        var calls = binding.Batches ?? throw new NotSupportedException("The native result batch extension is unavailable.");
+        calls.Require(); NativeBatchResult result = default; var error = BindingChecks.Error();
+        NativeBuffer? owner = null;
+        try
+        {
+            HostFailure.Check(binding, calls.Take(operation, &result, &error), error);
+            owner = new(binding, result.Owner);
+            return new(owner, result.Bytes, result.KnownEnd, result.Reserved, maximum);
+        }
+        catch
+        {
+            if (owner is not null) owner.Dispose();
+            else if (result.Owner != 0) binding.Calls.nw_db_buffer_release_v1(result.Owner);
+            throw;
+        }
+    }
+    internal static unsafe void CheckCursorReadAdmission(DatabaseOwner cursor)
+    {
+        var calls = cursor.Source.Batches ?? throw new NotSupportedException("The native result batch extension is unavailable.");
+        using var lease = cursor.Borrow(DatabaseOwnerKind.Cursor); var error = BindingChecks.Error();
+        HostFailure.Check(cursor.Source, calls.CheckReadAdmission(lease.Pointer, &error), error);
+    }
     internal static unsafe TransactionSnapshot Snapshot(DatabaseOwner owner)
     {
         using var lease = owner.Borrow(owner.Kind); nint result = 0; var error = BindingChecks.Error();

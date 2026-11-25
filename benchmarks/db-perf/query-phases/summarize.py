@@ -16,6 +16,7 @@ def quantiles(values, scale):
     return {
         "meanMicroseconds": sum(ordered) / len(ordered) * scale,
         "p50Microseconds": ordered[math.ceil(len(ordered) * .50) - 1] * scale,
+        "p95Microseconds": ordered[math.ceil(len(ordered) * .95) - 1] * scale,
         "p99Microseconds": ordered[math.ceil(len(ordered) * .99) - 1] * scale,
         "method": "nearest-rank observed durations; no trimming or subtraction",
     }
@@ -32,7 +33,10 @@ def summarize(path):
     scale = 1_000_000 / data["StopwatchFrequency"]
     result = {name: data.get(name) for name in (
         "SchemaVersion", "Provider", "DatabaseVersion", "PackageVersion", "ExecutableSha256",
-        "NativeSha256", "Sql", "RawTemplate", "ParametersAndResults", "Scope")}
+        "NativeSha256", "Sql", "RawTemplate", "ParametersAndResults", "ResultRows", "Scope")}
+    result_rows = data.get("ResultRows", 100)
+    if result_rows not in (1, 100, 1000):
+        raise ValueError("Unexpected result shape")
     result.update(input=str(path), inputSha256=hashlib.sha256(raw).hexdigest(),
                   preparationMicroseconds=data["PreparationTicks"] * scale,
                   firstExecutionRouteOrder=["fluent", "prepared", "host-sql"],
@@ -42,7 +46,7 @@ def summarize(path):
         windows = [window for window in data["Windows"] if window["Route"] == route]
         samples = [sample for window in windows for sample in window["Samples"]]
         operations = sum(window["Operations"] for window in windows)
-        if not windows or operations != len(samples) or any(sample["Rows"] != 100 for sample in samples):
+        if not windows or operations != len(samples) or any(sample["Rows"] != result_rows for sample in samples):
             raise ValueError("Incomplete same-result operation accounting")
         elapsed = sum(window["FinishedTicks"] - window["StartedTicks"] for window in windows)
         allocated = sum(window["AllocatedAfter"] - window["AllocatedBefore"] for window in windows)

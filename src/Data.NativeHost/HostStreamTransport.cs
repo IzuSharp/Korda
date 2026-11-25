@@ -1,7 +1,7 @@
 using System.Buffers;
-using System.Buffers.Binary;
 using System.Runtime.InteropServices;
 using Korda.Database.Internal;
+using Korda.Interop.Abi;
 using Korda.Query.Internal;
 
 namespace Korda.Database;
@@ -22,11 +22,11 @@ internal sealed class HostStreamTransport : IStreamTransport
     }
     public ValueTask<IStreamBatch> FetchAsync() => _source.StartRetiredValueTask(_createFetch, _takeBatch, _token);
     private nint CreateFetch() => NativeHost.Fetch(_cursor, _rows, _source.Limits.MaxBatchBytes);
-    private IStreamBatch TakeBatch(nint operation)
+    private IStreamBatch TakeBatch(nint operation) => NativeHost.TakeBatch(_source.Binding, operation, checked((int)_source.Limits.MaxBatchBytes));
+    public void CheckReadAdmission()
     {
-        var owner = NativeHost.TakeBuffer(_source.Binding, operation);
-        try { return (IStreamBatch)new HostStreamBatch(owner, checked((int)_source.Limits.MaxBatchBytes)); }
-        catch { owner.Dispose(); throw; }
+        _source.CheckOpen(); _token.ThrowIfCancellationRequested();
+        NativeHost.CheckCursorReadAdmission(_cursor);
     }
     public void RequestStop() => _close.Request();
     public async Task<StreamRetirement> JoinAsync()
@@ -37,12 +37,14 @@ internal sealed class HostStreamBatch : MemoryManager<byte>, IBorrowedStreamBatc
     private NativeBuffer? _owner;
     private readonly nint _address;
     private readonly int _length;
-    internal unsafe HostStreamBatch(NativeBuffer owner, int maximum)
+    internal unsafe HostStreamBatch(NativeBuffer owner, NwBytesViewV1 bytes, uint knownEnd, uint reserved, int maximum)
     {
         using var read = new BatchReadScope(owner);
-        owner.ViewWhileRetained(maximum, out _address, out _length);
+        if (knownEnd > 1 || reserved != 0)
+            throw new Korda.Data.DatabaseException("Native batch result flags are invalid.", Korda.Data.DatabaseErrorKind.ShapeMismatch);
+        NativeBuffer.CheckView(bytes, maximum, out _address, out _length);
         if (_length < 96) throw new Korda.Data.DatabaseException("Native batch header is incomplete.", Korda.Data.DatabaseErrorKind.ShapeMismatch);
-        End = BinaryPrimitives.ReadUInt32LittleEndian(new ReadOnlySpan<byte>((void*)_address, _length)[56..]) == 0;
+        End = knownEnd != 0;
         _owner = owner;
     }
     public SafeHandle ReadOwner => Volatile.Read(ref _owner) ?? throw new ObjectDisposedException(nameof(HostStreamBatch));

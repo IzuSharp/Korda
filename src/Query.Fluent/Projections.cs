@@ -194,6 +194,7 @@ public sealed class QueryParameters
 {
     private readonly object _gate = new();
     private readonly Dictionary<uint, ParameterSnapshot> _values = [];
+    private Korda.Database.DataSource? _source;
     /// <summary>Creates an empty explicit parameter set.</summary>
     /// <inheritdoc cref="QueryParameters"/>
     public QueryParameters() { }
@@ -213,11 +214,13 @@ public sealed class QueryParameters
         var bytes = parameter.Codec!.Encode(value);
         lock (_gate)
         {
-            if (_values.Count != 0 && !ReferenceEquals(_values.First().Value.Parameter.Source, definition.Source)) throw new ArgumentException("Parameters belong to different sources.", nameof(parameter));
+            if (_source is not null && !ReferenceEquals(_source, definition.Source)) throw new ArgumentException("Parameters belong to different sources.", nameof(parameter));
             if (!_values.ContainsKey(definition.Id) && _values.Count == definition.Source.Limits.MaxParameters) throw new DatabaseException("Parameter count limit exceeded.", DatabaseErrorKind.ResourceLimit);
             _values[definition.Id] = new(definition, bytes);
+            _source = definition.Source;
         }
         return this;
     }
-    internal ParameterSnapshot[] Snapshot() { lock (_gate) return _values.Values.OrderBy(v => v.Parameter.Id).ToArray(); }
+    internal byte[] Encode(PreparedParameterLayout layout, Korda.Database.DataSource source)
+    { lock (_gate) return layout.EncodeLocked(source, _values); }
 }

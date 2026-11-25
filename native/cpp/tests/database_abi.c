@@ -4,6 +4,7 @@
  */
 #include "../../database/binding/korda_database_binding_v1.h"
 #include "../../database/binding/korda_query_command_v1.h"
+#include "../../database/binding/korda_result_batch_v1.h"
 #include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -12,6 +13,11 @@ _Static_assert(sizeof(nw_db_ref) == 8, "Linux x64 opaque owner size");
 _Static_assert(sizeof(nw_db_token) == 8, "opaque generation token size");
 _Static_assert(sizeof(nw_db_query_dependency_v1) == 16, "query dependency sidecar x64 layout");
 _Static_assert(offsetof(nw_db_query_dependency_v1, kind) == 8, "query dependency kind offset");
+_Static_assert(sizeof(nw_db_batch_result_v1) == 32, "owned batch x64 layout");
+_Static_assert(offsetof(nw_db_batch_result_v1, owner) == 0, "owned batch owner offset");
+_Static_assert(offsetof(nw_db_batch_result_v1, bytes) == 8, "owned batch byte view offset");
+_Static_assert(offsetof(nw_db_batch_result_v1, known_end) == 24, "owned batch EOF offset");
+_Static_assert(offsetof(nw_db_batch_result_v1, reserved) == 28, "owned batch reserved offset");
 
 int main(void)
 {
@@ -33,6 +39,11 @@ int main(void)
     nw_db_ref cte = (nw_db_ref)(uintptr_t)1;
     assert(nw_db_query_command_cte_v1(NULL, empty, NULL, 0, NULL, 0, 0, &cte, &error) == NW_INVALID_STATE);
     assert(cte == NULL);
+    nw_db_batch_result_v1 batch = {(nw_db_buffer*)(uintptr_t)1, {(const uint8_t*)(uintptr_t)1, 42}, 1, 1};
+    assert(nw_db_operation_take_batch_v1(NULL, &batch, &error) == NW_INVALID_STATE);
+    assert(batch.owner == NULL && batch.bytes.data == NULL && batch.bytes.length == 0 && batch.known_end == 0 &&
+           batch.reserved == 0);
+    assert(nw_db_cursor_check_read_admission_v1(NULL, &error) == NW_INVALID_STATE);
     nw_db_operation_release_v1(NULL);
     nw_db_owner_release_v1(NULL);
     nw_db_buffer_release_v1(NULL);

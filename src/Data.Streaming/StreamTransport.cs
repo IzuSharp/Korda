@@ -60,6 +60,9 @@ internal readonly record struct StreamRetirement(bool NativeRetired, bool Connec
 internal interface IStreamTransport
 {
     ValueTask<IStreamBatch> FetchAsync();
+    // Called only when a known final batch replaces a fetch. A real host keeps
+    // the same source-admission failure boundary without dispatching more work.
+    void CheckReadAdmission() { }
     void RequestStop();
     Task<StreamRetirement> JoinAsync();
 }
@@ -85,6 +88,8 @@ internal sealed class RowBatchLease : IRowLease, IDisposable
     private IStreamBatch? _owner;
     private DbWire? _wire;
     private readonly ResultField[] _fields;
+    private object? _validatedProjection;
+    private WireExpectation? _validatedExpectation;
     private uint _row;
     internal RowBatchLease(IStreamBatch owner, WireExpectation expected, ResultField[] fields, StreamLimits limits)
     {
@@ -139,9 +144,15 @@ internal sealed class RowBatchLease : IRowLease, IDisposable
     internal T Materialize<T>(uint row, Projection<T> projection)
     {
         using var read = new BatchReadScope((_owner as IBorrowedStreamBatch)?.ReadOwner);
-        if (row >= Rows) throw new ArgumentOutOfRangeException(nameof(row));
+        var wire = Wire;
+        if (row >= wire.Rows) throw new ArgumentOutOfRangeException(nameof(row));
         _row = row;
-        return projection.Read(this);
+        if (!ReferenceEquals(_validatedProjection, projection) || !ReferenceEquals(_validatedExpectation, wire.Expected))
+        {
+            if (!projection.MatchesValidatedBatch(_fields, wire.Expected)) return projection.Read(this);
+            _validatedProjection = projection; _validatedExpectation = wire.Expected;
+        }
+        return projection.ReadValidatedBatch(this);
     }
     private DbWire Wire => _wire ?? throw new ObjectDisposedException(nameof(RowBatchLease));
     public int Count { get { AssertAlive(); return _fields.Length; } }

@@ -122,7 +122,7 @@ public readonly struct QuerySelection<T>
             owner.Selection(projection); var id = owner.Source.RegisterProjection(projection);
             var bound = projection.Fields.Select(f => owner.Source.BindCodec(f.Descriptor)).ToArray();
             // Finish managed layout construction before acquiring the native plan.
-            var parameters = new PreparedParameterLayout(owner.Source, owner.Parameters.Values);
+            var parameters = owner.ParameterLayout();
             return new PreparedQuery<T>(owner.Source, owner.Seal(8), projection, id, bound, parameters);
         });
     }

@@ -152,6 +152,14 @@ void order(NativeQuery& query, std::uint64_t expression)
 {
     query.clause(3, record({token(1, expression), num(2, 0), num(3, 1), num(4, 1)}));
 }
+Bytes parameter_wire(const RenderedQuery& command)
+{
+    std::vector<std::optional<ByteView>> values;
+    values.reserve(command.arguments.size());
+    for (const auto& argument : command.arguments)
+        values.push_back(argument.value ? std::optional<ByteView>(*argument.value) : std::nullopt);
+    return Batch::encode_views(command.parameter_expectation, 1, values);
+}
 RenderedQuery execute(const std::shared_ptr<NativePlan>& plan, const std::vector<std::optional<Bytes>>& values = {},
                       ShapeCache* cache = nullptr)
 {
@@ -310,7 +318,7 @@ void same_command(const std::shared_ptr<NativePlan>& actual, const std::shared_p
     const auto a = execute(actual, parameters);
     const auto b = execute(expected, parameters);
     check(a.sql == b.sql, "complete command SQL differs: " + a.sql + " / " + b.sql);
-    check(a.parameter_bytes == b.parameter_bytes, "complete command ordered parameters differ");
+    check(parameter_wire(a) == parameter_wire(b), "complete command ordered parameters differ");
     check(actual->parameter_schema() == expected->parameter_schema(), "complete command parameter schema differs");
     check(actual->nodes == expected->nodes && actual->depth == expected->depth,
           "complete command native node/depth accounting differs");
@@ -358,10 +366,60 @@ void complete_query_commands()
         }
         {
             auto encoded = query_command({selected_command(c)});
+            const auto original = encoded;
             auto plan = compile(encoded);
+            check(encoded == original, "complete command decoding must not rewrite caller input");
             std::fill(encoded.begin(), encoded.end(), 0);
             auto direct = c.selected(4, 7);
             same_command(plan, direct.seal(8));
+        }
+        {
+            // Clause references are decoded directly from the input. Neither a
+            // native token nor a zero/self/forward local index may bypass the
+            // block's earlier-result bound, including nested projection tokens.
+            for (auto reference : {std::uint64_t{0}, std::uint64_t{2}, std::uint64_t{1} << 32,
+                                   std::numeric_limits<std::uint64_t>::max()})
+            {
+                CommandBlock invalid{0, c.root.model->table_id()};
+                invalid.add(1, 0, pair32(0, column(c.root, "Id")));
+                invalid.clause(6, selection_record({{reference, "Id", scalar(3)}}, true));
+                rejects(NW_INVALID_ARGUMENT, [&] { (void)compile(query_command({invalid})); });
+            }
+            CommandBlock root{0, c.root.model->table_id()};
+            const auto id = root.add(1, 0, pair32(0, column(c.root, "Id")));
+            root.add(1, 0, pair32(0, column(c.root, "Id")));
+            auto selection = selection_record({{id, "Id", scalar(3)}}, true);
+            const auto selected = Fields::parse(selection, 6, {{1, 8, true}, {2, 5, true}});
+            const auto projection = Fields::parse(selected.bytes(2), 13, {{1, 5, true}, {2, 5, true}});
+            const auto item = Fields::parse(sequence(projection.bytes(1)).front(), 22,
+                                            {{1, 1, true}, {2, 4, true}, {3, 1, true}, {4, 1, true}, {5, 2, true}});
+            put_u64(selection, static_cast<std::size_t>(item.bytes(5).data() - selection.data()), 2);
+            root.clause(6, selection);
+            rejects(NW_INVALID_ARGUMENT, [&] { (void)compile(query_command({root})); });
+        }
+        {
+            // Optional fields still carry references even when the operation
+            // does not use them. Valid extra references keep their old behavior.
+            for (std::uint16_t field : {2, 3})
+            {
+                CommandBlock root{0, c.root.model->table_id()};
+                const auto id = root.add(1, 0, pair32(0, column(c.root, "Id")));
+                root.clause(11, record({num(1, 0), token(field, id)}), true);
+                root.clause(6, selection_record({{id, "Id", scalar(3)}}, true));
+                check(!execute(compile(query_command({root}))).sql.empty(), "valid unused command reference");
+                auto& record = root.records[1];
+                const auto f = Fields::parse(ByteView(record).subspan(16), 6, {{1, 1, true}, {field, 2, true}});
+                put_u64(record, static_cast<std::size_t>(f.bytes(field).data() - record.data()), 2);
+                rejects(NW_INVALID_ARGUMENT, [&] { (void)compile(query_command({root})); });
+            }
+        }
+        {
+            auto root = selected_command(c);
+            const auto unknown = record({token(1, 3), num(2, 0)});
+            root.records[3].resize(16);
+            root.records[3].insert(root.records[3].end(), unknown.begin(), unknown.end());
+            put_u32(root.records[3], 0, static_cast<std::uint32_t>(root.records[3].size()));
+            rejects(NW_INVALID_ARGUMENT, [&] { (void)compile(query_command({root})); });
         }
         {
             auto snapshot = selected_command(c);
@@ -402,6 +460,15 @@ void complete_query_commands()
             select(direct, {{did, "Id", scalar(3)}});
             auto expected = direct.seal(8);
             same_command(compile(query_command({snapshot, root})), expected);
+            if (operation == 0)
+            {
+                auto invalid = root;
+                const auto extra = record({token(1, imported), num(2, operation), token(3, predicate)});
+                invalid.records[2].resize(16);
+                invalid.records[2].insert(invalid.records[2].end(), extra.begin(), extra.end());
+                put_u32(invalid.records[2], 0, static_cast<std::uint32_t>(invalid.records[2].size()));
+                rejects(NW_INVALID_ARGUMENT, [&] { (void)compile(query_command({snapshot, invalid})); });
+            }
             // The same complete root can import an existing immutable owner.
             put_u16(root.records[1], 6, 2);
             put_u32(root.records[1], 16, 2);
@@ -430,7 +497,7 @@ void complete_query_commands()
             const auto oracle = oracle_cases(c);
             const auto expected = std::find_if(oracle.begin(), oracle.end(),
                                                [](const auto& value) { return value.first == "nullable-left-join"; });
-            check(result.sql == expected->second.sql && result.parameter_bytes == expected->second.parameter_bytes,
+            check(result.sql == expected->second.sql && parameter_wire(result) == parameter_wire(expected->second),
                   "complete command JOIN reserve/commit/nullable projection");
             // A provisional column captured before commit is invalid afterwards.
             root.add(5, 1, u32(child));
@@ -496,6 +563,36 @@ void complete_query_commands()
             same_command(compile(query_command({snapshot, root})), direct.seal(8));
         }
         {
+            const auto literal = cells(profile, scalar(5), {bytes("a_%'")});
+            auto command = [&](std::uint32_t operation, std::uint32_t escape, const Bytes& repeated_literal)
+            {
+                CommandBlock root{0, c.root.model->table_id()};
+                const auto id = root.add(1, 0, pair32(0, column(c.root, "Id")));
+                const auto first = root.add(1, 0, pair32(0, column(c.root, "Name")));
+                const auto second = root.add(1, 0, pair32(0, column(c.root, "Name")));
+                root.clause(16, record({num(1, 0), token(2, first), {3, 6, literal}, num(4, 92)}), true, 1);
+                const auto predicate = root.clause(
+                    16, record({num(1, operation), token(2, second), {3, 6, repeated_literal}, num(4, escape)}), true,
+                    1);
+                root.clause(1, record({token(1, predicate)}));
+                root.clause(6, selection_record({{id, "Id", scalar(3)}}, true));
+                return query_command({root});
+            };
+            // Origin identity excludes the expression token, but includes all
+            // text-transform inputs. Reusing one origin with another expression
+            // preserves the literal snapshot after the command buffer is freed.
+            auto encoded = command(0, 92, literal);
+            auto plan = compile(encoded);
+            std::fill(encoded.begin(), encoded.end(), 0);
+            const auto result = execute(plan);
+            check(result.arguments.size() == 1 && result.arguments[0].value == bytes("%a\\_\\%'%"),
+                  "text origin shares transform inputs while retaining its own scalar snapshot");
+            rejects(NW_INVALID_ARGUMENT, [&] { (void)compile(command(1, 92, literal)); });
+            rejects(NW_INVALID_ARGUMENT, [&] { (void)compile(command(0, 33, literal)); });
+            rejects(NW_INVALID_ARGUMENT,
+                    [&] { (void)compile(command(0, 92, cells(profile, scalar(5), {bytes("a_")}))); });
+        }
+        {
             CommandBlock root{0, c.root.model->table_id()};
             auto id = root.add(1, 0, pair32(0, column(c.root, "Id")));
             auto parameter = root.add(3, 0, command_parameter(301, "minimum"), true, 1);
@@ -530,7 +627,7 @@ void complete_query_commands()
             const auto oracle = oracle_cases(c);
             const auto expected = std::find_if(oracle.begin(), oracle.end(),
                                                [](const auto& value) { return value.first == "cte-snapshot"; });
-            check(result.sql == expected->second.sql && result.parameter_bytes == expected->second.parameter_bytes,
+            check(result.sql == expected->second.sql && parameter_wire(result) == parameter_wire(expected->second),
                   "complete command CTE compilation and immutable owner import");
             rejects(NW_INVALID_ARGUMENT,
                     [&]
@@ -567,7 +664,7 @@ void complete_query_commands()
             const auto oracle = oracle_cases(c);
             const auto expected = std::find_if(oracle.begin(), oracle.end(),
                                                [](const auto& value) { return value.first == "recursive-cte"; });
-            check(result.sql == expected->second.sql && result.parameter_bytes == expected->second.parameter_bytes,
+            check(result.sql == expected->second.sql && parameter_wire(result) == parameter_wire(expected->second),
                   "complete command recursive CTE anchor/member validation");
         }
         {
@@ -720,6 +817,22 @@ void complete_query_commands()
             rejects(NW_INVALID_ARGUMENT, [&] { (void)compile(query_command({collision})); });
             direct.parameter({403, "after_atomic_rejection", scalar(3), 3});
             check(true, "source parameter batch registration rejects atomically");
+
+            // This fails after WHERE has appended its AST and marker to the
+            // private arena. The entire command and its shadow identities must
+            // be discarded, including a parameter that was already admitted.
+            CommandBlock overflow{0, c.root.model->table_id()};
+            id = overflow.add(1, 0, pair32(0, column(c.root, "Id")));
+            const auto parameter = overflow.add(3, 0, command_parameter(404, "private_before_failure"), true, 1);
+            const auto predicate = overflow.add(4, 1, pair32(id, parameter));
+            overflow.clause(6, selection_record({{id, "Id", scalar(3)}}, true));
+            overflow.clause(1, record({token(1, predicate)}));
+            auto bounded = context;
+            bounded.limits.nodes = 9;
+            rejects(NW_DOMAIN_ERROR,
+                    [&] { (void)compile_query_command(query_command({overflow}), dependencies, bounded, 8); });
+            direct.parameter({404, "after_private_failure", scalar(3), 3});
+            check(true, "failed private arena does not publish its already-admitted parameter identity");
         }
     }
 }
@@ -926,7 +1039,7 @@ void assert_oracle(Profile profile)
         check(label == want.at("label").get<std::string>(), "oracle label");
         check(rendered.sql == want.at("sql").get<std::string>(),
               "SQL golden " + label + "\nactual: " + rendered.sql + "\nwanted: " + want.at("sql").get<std::string>());
-        auto batch = Batch::parse(rendered.parameter_bytes, rendered.parameter_expectation);
+        auto batch = Batch::parse(parameter_wire(rendered), rendered.parameter_expectation);
         const auto& args = want.at("ordered_arguments");
         check(args.size() == rendered.parameter_expectation.descriptors.size(), "argument count " + label);
         for (std::size_t k = 0; k < args.size(); ++k)
@@ -944,7 +1057,9 @@ void binding_and_safety()
     check(capabilities.query && capabilities.metadata && capabilities.scalar_codecs,
           "schema draft capability leaves existing query capabilities available");
     check(Capabilities::from_mask(1ULL << 26, Profile::Sqlite).command, "complete query capability bit");
-    rejects(NW_INVALID_ARGUMENT, [] { (void)Capabilities::from_mask(1ULL << 27, Profile::Sqlite); });
+    check(!Capabilities::from_mask(1ULL << 27, Profile::Sqlite).query,
+          "result batch capability does not authorize query composition");
+    rejects(NW_INVALID_ARGUMENT, [] { (void)Capabilities::from_mask(1ULL << 28, Profile::Sqlite); });
     rejects(NW_INVALID_ARGUMENT, [] { (void)Capabilities::from_mask(1ULL << 63, Profile::PostgreSql); });
     Context c(Profile::Sqlite);
     auto q = c.query();
@@ -1002,6 +1117,25 @@ void binding_and_safety()
         }
     }
     check(rejected && std::get<2>(limited.counts()) <= 128, "expanded tree is bounded");
+    {
+        // WHERE mutates its candidate before the final expanded-node check.
+        // Public ABI edits must still roll that late failure back and remain
+        // usable; only command-private arenas may be abandoned in place.
+        auto atomic = c.query({8, 64, 4 * 1024 * 1024, 4096});
+        const auto id = atomic.column(0, column(c.root, "Id"));
+        const auto predicate = atomic.binary(1, id, id);
+        select(atomic, {{id, "Id", scalar(3)}});
+        const auto snapshot = atomic.counts();
+        const auto sql = atomic.clone_selected()->seal(8)->compiled_shape()->sql;
+        rejects(NW_DOMAIN_ERROR, [&] { where(atomic, predicate); });
+        check(atomic.state() == QueryState::Mutable && atomic.counts() == snapshot,
+              "late public clause failure preserves mutable arena and counters");
+        check(atomic.clone_selected()->seal(8)->compiled_shape()->sql == sql,
+              "late public clause failure does not retain its predicate");
+        order(atomic, id);
+        check(atomic.seal(8)->compiled_shape()->sql.find("ORDER BY") != std::string::npos,
+              "public arena remains usable after a rolled-back clause");
+    }
     auto closed = c.query();
     closed.close();
     rejects(NW_INVALID_STATE, [&] { closed.column(0, column(c.root, "Id")); });
@@ -1022,7 +1156,7 @@ void plans_and_cache()
         order(q, id);
         q.clause(5, record({token(1, 5), token(2, 2)}));
         auto rendered = execute(q.seal(0));
-        auto b = Batch::parse(rendered.parameter_bytes, rendered.parameter_expectation);
+        auto b = Batch::parse(parameter_wire(rendered), rendered.parameter_expectation);
         for (std::size_t i = 0; i < 3; ++i)
             check(read_u64(*b.cell(0, i), 0) == std::array<std::uint64_t, 3>{7, 5, 2}[i],
                   "filter/limit/offset argument order");
@@ -1034,7 +1168,7 @@ void plans_and_cache()
         auto prepared = param_query.seal(8);
         auto a = execute(prepared, {u64(1)});
         auto second = execute(prepared, {u64(2)});
-        check(a.sql == second.sql && a.parameter_bytes != second.parameter_bytes,
+        check(a.sql == second.sql && parameter_wire(a) != parameter_wire(second),
               "prepared parameter snapshots isolated");
         auto wrong_source = c.source;
         ++wrong_source.source;
@@ -1058,7 +1192,7 @@ void plans_and_cache()
         check(shape != retained && cache.counts().first == 1, "cache bounded eviction");
         a = execute(first, {}, &cache);
         second = execute(next, {}, &cache);
-        check(a.sql == second.sql && a.parameter_bytes != second.parameter_bytes, "cache never captures values");
+        check(a.sql == second.sql && parameter_wire(a) != parameter_wire(second), "cache never captures values");
         cache.clear();
         check(cache.counts() == std::pair<std::size_t, std::size_t>{0, 0} && !retained->sql.empty(),
               "retained shape outlives clear");
@@ -1115,7 +1249,7 @@ void concurrent_shape_cache()
                                                  auto rendered = execute(plans[selected], {u64(value)}, &cache);
                                                  if (rendered.sql != sql[selected])
                                                      return false;
-                                                 auto batch = Batch::parse(rendered.parameter_bytes,
+                                                 auto batch = Batch::parse(parameter_wire(rendered),
                                                                            rendered.parameter_expectation);
                                                  auto cell = batch.cell(0, 0);
                                                  if (!cell || read_u64(*cell, 0) != value)
@@ -1331,7 +1465,7 @@ void mutations_and_relations()
                 rejects(NW_INVALID_ARGUMENT,
                         [&] { (void)compile_mutation(model, kind, encode_control(4, invalid), projection, {}, 1); });
             }
-            auto batch = Batch::parse(result.command.parameter_bytes, result.command.parameter_expectation);
+            auto batch = Batch::parse(parameter_wire(result.command), result.command.parameter_expectation);
             if (kind == 6)
             {
                 check(result.command.sql.find("DO UPDATE SET") != std::string::npos &&
@@ -1403,7 +1537,7 @@ void mutations_and_relations()
         check(command.sql == "SELECT \"Id\", \"ParentId\" FROM \"Children\" WHERE \"ParentId\" = " +
                                  std::string(profile == Profile::Sqlite ? "?" : "$1"),
               "relation ordinary child SELECT");
-        auto batch = Batch::parse(command.parameter_bytes, command.parameter_expectation);
+        auto batch = Batch::parse(parameter_wire(command), command.parameter_expectation);
         check(read_u64(*batch.cell(0, 0), 0) == 7, "relation copied parent key");
         auto other = source;
         ++other.source;

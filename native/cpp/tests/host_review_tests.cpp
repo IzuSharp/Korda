@@ -2,6 +2,7 @@
 // Independent DB-CPP-01 review regressions. Link host.cpp and provider.cpp with
 // the common native sources; this test does not need the public ABI entry points.
 #include "nw/host.hpp"
+#include "parameter_test_support.hpp"
 
 #include <algorithm>
 #include <cstdlib>
@@ -24,6 +25,7 @@ std::uint64_t module_identity()
 namespace
 {
 using namespace nw;
+using test::decode_parameters;
 void check(bool value, std::string_view message)
 {
     if (!value)
@@ -115,7 +117,7 @@ void cursor_end_once()
     plan->source = source;
     plan->sql = "SELECT 1 AS \"v\"";
     plan->expectation = {1, Profile::Sqlite, {}, 0, 0, {}, 1};
-    plan->parameters = Batch::encode(plan->expectation, 1, {});
+    plan->capture_parameters(Batch::encode(plan->expectation, 1, {}));
     plan->projection = binding;
     plan->result_kind = 3;
     plan->timeout_ns = 5'000'000'000;
@@ -260,7 +262,7 @@ std::shared_ptr<SqlPlan> input_plan(const std::shared_ptr<Source>& source, std::
     plan->source = source;
     plan->sql = std::move(sql);
     plan->expectation = {1, source->config.provider.profile, {}, 0, 0, {{1, codec, codec.id}}, 1};
-    plan->parameters = Batch::encode(plan->expectation, 1, {value});
+    plan->capture_parameters(Batch::encode(plan->expectation, 1, {value}));
     plan->kind = 1;
     plan->timeout_ns = 5'000'000'000;
     return plan;
@@ -335,20 +337,20 @@ void sqlite_physical_input()
         return plan;
     };
     auto oversized = mutation_plan(98, 7000);
-    check(oversized->parameters.size() < 8192 && oversized->sql.size() + 2 * oversized->parameters.size() > 8192,
+    check(oversized->parameter_wire_bytes < 8192 && oversized->sql.size() + 2 * oversized->parameter_wire_bytes > 8192,
           "negative control must fit logical wire but exceed physical input");
     (void)run_command(session, oversized, NW_DOMAIN_ERROR, 6);
     check(count() == 0 && !session->active.load(), "physical input refusal dispatched SQL or retained admission");
     auto valid = mutation_plan(99, 3000);
-    check(valid->sql.size() + 2 * valid->parameters.size() <= 8192, "valid control exceeds physical input budget");
+    check(valid->sql.size() + 2 * valid->parameter_wire_bytes <= 8192, "valid control exceeds physical input budget");
     check(std::get<std::int64_t>(run_command(session, valid, NW_OK)) == 1 && count() == 1,
           "3000-byte JSON must commit through the same physical session");
 
     auto exact = input_plan(source, "INSERT INTO b14_budget_rows(\"Id\") VALUES(77)", {3, {}, false}, u64_bytes(0));
     exact->expectation.descriptors.clear();
-    exact->parameters = Batch::encode(exact->expectation, 1, {});
-    check(exact->parameters.size() == 96, "zero parameters still retain the complete B01 envelope");
-    exact->sql.resize(8192 - 2 * exact->parameters.size(), ' ');
+    exact->capture_parameters(Batch::encode(exact->expectation, 1, {}));
+    check(exact->parameter_wire_bytes == 96, "zero parameters still retain the complete B01 envelope charge");
+    exact->sql.resize(8192 - 2 * exact->parameter_wire_bytes, ' ');
     check(std::get<std::int64_t>(run_command(session, exact, NW_OK)) == 1 && count() == 2,
           "exact SQL plus two-wire boundary must remain admissible");
     exact->sql += ' ';
