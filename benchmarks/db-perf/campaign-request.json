@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "task": "DB-Perf-01",
   "enabled": true,
-  "harnessCommit": "db0f674f3849fa86f69d86eea2c830dc1c84da83",
+  "harnessCommit": "9bd6a581f80020521ff342fa2462d47b9edf250f",
   "before": {
     "sourceCommit": "771bc77cbd68d3f932b99ed2497c0697bbba5f02",
     "runId": 45356659607,
@@ -24,21 +24,21 @@
     }
   },
   "after": {
-    "sourceCommit": "3df4f4f3ac455cb8bae8901c80a4fefb33021970",
-    "runId": 45511550343,
+    "sourceCommit": "7f67b43c0e4ab08d1552c3b5a522e2669d73a604",
+    "runId": 45564003099,
     "providers": {
       "postgresql": {
         "version": "0.1.0-ci.1",
-        "artifactId": 14976706095,
-        "artifactZipSha256": "9c216025003006bb7bb39e5b190397a6b1c323221ca34a58d18e7f9b025a4d00",
-        "nupkgSha256": "f4e8ddbbd154d513ba4f78f11ec99ff9973f49f87465899ba4183418134cb0b3",
+        "artifactId": 14999585949,
+        "artifactZipSha256": "030beb427f04ec9c948b1d5a8815b162b88a0ab4922f6ad79ab427f8d47da908",
+        "nupkgSha256": "5dba9b52245de69d3765fa8ea5a5a025e0420d76160db5d526726689690ef7f4",
         "nativeSha256": "73f725104fb1bee5fc86a9bc371e556ea8358ac3a2d774c4823185e6da8984c6"
       },
       "sqlite": {
         "version": "0.1.0-ci.1",
-        "artifactId": 14976720909,
-        "artifactZipSha256": "0aaf88176b4bb5e397be5abc201357f7fcfda243acd908e0d10e41e601e1a950",
-        "nupkgSha256": "2724680534384262e5a289e741da506a9ad40d4e37bc21c47ed14f77683feefc",
+        "artifactId": 14999156844,
+        "artifactZipSha256": "888ac32556d0860aaa6b5874aacd24baf6ac33ac4f250f7dec57c166e1d19643",
+        "nupkgSha256": "8c8083fcf7324a4a02277c63d10066505d6e67c9ac4827de3f5a26d1674bbe75",
         "nativeSha256": "970a8868290cec37c353bbd8e48bb7bf4ef18cfa1da9e495fc06d7eb08d71d40"
       }
     }
@@ -222,7 +222,7 @@
       ]
     }
   },
-  "activationNote": "Start a separate complete final-candidate matrix for reviewed production/harness db0f674f3849fa86f69d86eea2c830dc1c84da83 using the exact successful normal-CI package producer 3df4f4f3ac455cb8bae8901c80a4fefb33021970 from run 45511550343. The original completed campaign 45461269267 remains bound to its original after producer 3d5ba3f and is not relabeled or mixed into this matrix. Fixed main 771bc77, both original before packages, all 35 cases, query/result contracts, native preparation layers, CPU partitions, durability, noise and admission thresholds, capacity/SLO gates, finite time budgets, and all eight sequential 1800-second segments remain unchanged. The existing before/native/independent-ORM-only calibration freezes this new VM's common offered rates; the after route cannot lower them. Uncommitted empty-parameter and Find SQL experiments are not included. This new matrix freezes the actual ubuntu24 image 20261116.133.1 observed in both pre-build failures of run 45553940210; those failed attempts retain zero measurement credit. Both preparation and measurement must match that exact image, and bundle-to-VM identity equality, all admission checks and the complete eight segments are unchanged. The historical completed matrix on 20261116.376.1 remains separate.",
+  "activationNote": "Start a separate complete final-candidate matrix for the reviewed production including the dynamic empty-parameter frame cache, using unchanged campaign harness 9bd6a581f80020521ff342fa2462d47b9edf250f and the exact successful normal-CI package producer 7f67b43c0e4ab08d1552c3b5a522e2669d73a604 from run 45564003099. That successful CI head is 1cacd91d8f200e608deee1a658b04e1c5c3bf067; its only change after 9bd is two invalid test fixture parameter names, with no production or benchmark change. Failed run 45562204270 and its package producer d1c3985 remain separately recorded and are not campaign inputs. The original completed campaign 45461269267 remains bound to its original after producer 3d5ba3f and is not relabeled or mixed into this matrix. Fixed main 771bc77, both original before packages, all 35 cases, query/result contracts, native preparation layers, CPU partitions, durability, noise and admission thresholds, capacity/SLO gates, finite time budgets, and all eight sequential 1800-second segments remain unchanged. Before/native/independent-ORM-only calibration freezes this new VM common offered rates; the after route cannot lower them. A single campaign job now prepares, verifies, becomes quiescent, admits and measures on the same VM with exact ubuntu24 image 20261116.133.1. The pre-build failures in run 45553940210 and the prepare/measure image mismatch in run 45555341689 retain zero measurement credit. No admission guard or eight-segment requirement is relaxed. The historical completed matrix on 20261116.376.1 remains separate.",
   "nativeBaseline": {
     "physicalPrepare": "reuse",
     "protocolConfirmation": "drain-only"
