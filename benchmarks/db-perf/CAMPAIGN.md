@@ -53,20 +53,41 @@ python3 benchmarks/db-perf/campaign.py prepare \
 ```
 
 Preparation requires read-only GitHub Actions artifact access through `gh` and the
-repository's pinned toolchain/PostgreSQL installation. It runs in a separate job,
-outside all timing boundaries. No credential is written to the bundle.
+repository's pinned toolchain/PostgreSQL installation. Preparation completes in
+the campaign's reserved VM before admission and every timing boundary. No
+credential is written to the bundle.
 
 ## Dedicated measurement environment
 
 `.github/workflows/db-perf-campaign.yml` has a manual dispatch trigger and a
 task-branch push trigger restricted to `campaign-request.json`; ordinary
-pull-request CI remains short. The
-measurement job has a 360-minute timeout. All eight sequential long steps run in
-that single job and therefore on the same hosted VM. Every step uploads a distinct
+pull-request CI remains short. One job prepares the immutable runtime bundle,
+uploads and downloads it with the original SHA-256 check, then admits that same
+VM and runs all eight sequential long steps. This avoids assigning preparation
+and measurement to different images during a hosted-runner rollout. Both actual
+image guards and the controller's exact preparation/measurement image equality
+remain. The job has a 360-minute timeout. Every long step uploads a distinct
 checkpoint artifact, so a later failure cannot delete an earlier checkpoint.
 
-The preflight step allows 85 minutes and the controller's monotonic deadline is
-340 minutes; the job retains another 20 minutes for final artifact handling.
+Before admission, SDK build servers are shut down and three process snapshots
+must show no active build tools or unreadable processes owned by the job user.
+Process-directory enumeration errors and a missing sampling-process PID fail
+this check; an incomplete observation cannot prove that compilation has stopped.
+The independent `db-perf-build-quiescence-<run>` artifact records this boundary,
+the same boot/image and bundle-manifest identity. It does not replace the normal
+VM idle/noise, resource/quota or before-only calibration gates. Compiler and
+dependency setup, all AOT/native builds, bundle transport and this boundary must
+finish within 15 minutes; a failure stops before measurements.
+
+The preflight step still allows 85 minutes and the controller's monotonic deadline
+is unchanged at 340 minutes. The 360-minute job budget permits at most 15 minutes
+for preparation, leaving a nominal five-minute allowance outside that controller
+budget. Runner job setup, the quiescence artifact upload and the initial bundle
+verification before the controller clock starts also share this allowance with
+final artifact handling. The job deadline remains authoritative; the allowance
+does not guarantee completion. Preparation, warmup, calibration and drain earn no effective
+long-load time. Failed budget checks retain partial evidence and never shorten
+a required long segment.
 `timeBudgetEstimate` in the request is checked against the actual frozen layer
 settings. Each ordinary cell uses `measurement seconds + idle windows × 5 seconds`:
 native currently has two idle windows, managed

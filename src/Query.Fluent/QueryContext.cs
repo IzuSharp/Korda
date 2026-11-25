@@ -128,7 +128,32 @@ internal sealed class QueryContext : IDisposable
         if (HasOffset && !UniqueOrder) throw new InvalidOperationException("Offset paging lost its unique ordering.");
         var plan = Binding.Seal(terminal); _sealed = true; return plan;
     });
-    internal byte[] Values(QueryParameters? supplied) => ParameterDefinition.Encode(Source, Parameters.Values, supplied);
+    internal byte[] Values(QueryParameters? supplied)
+    {
+        if (supplied is null && Parameters.Count == 0)
+        {
+            var profile = Source.Binding.SemanticProfile;
+            if (profile == 1) return SqliteEmptyParameters.Bytes;
+            if (profile == 2) return PostgreSqlEmptyParameters.Bytes;
+        }
+        return ParameterDefinition.Encode(Source, Parameters.Values, supplied);
+    }
+    // Only this private empty shape is shared. Explicit parameter sets retain
+    // their original snapshot and identity validation, including empty sets.
+    // Lazy streams hold a read-only view; execute_create owns rendered bytes
+    // before returning, and no public API exposes either cached mutable array.
+    private static byte[] EmptyParameterFrame(uint profile) => DbWire.Encode(
+        new(PayloadKind.Parameters, profile, SHA256.HashData("{\"version\":1,\"parameters\":[]}"u8), 0, 0, []) { ExactRows = 1 }, 1, []);
+    private static class SqliteEmptyParameters
+    {
+        internal static readonly byte[] Bytes = EmptyParameterFrame(1);
+        static SqliteEmptyParameters() { }
+    }
+    private static class PostgreSqlEmptyParameters
+    {
+        internal static readonly byte[] Bytes = EmptyParameterFrame(2);
+        static PostgreSqlEmptyParameters() { }
+    }
     internal void PublishPlan(DatabaseOwner plan)
     {
         Interlocked.Exchange(ref _plan, plan)?.Dispose();

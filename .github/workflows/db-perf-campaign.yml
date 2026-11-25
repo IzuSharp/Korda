@@ -17,16 +17,16 @@ concurrency:
   group: db-perf-01-linux-campaign
   cancel-in-progress: false
 jobs:
-  prepare:
+  campaign:
     if: github.repository == 'IzuSharp/Korda' && github.ref == 'refs/heads/task/DB-Perf-01-linux'
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
-    outputs:
-      bundle_sha256: ${{ steps.prepare.outputs.bundle_sha256 }}
+    timeout-minutes: 360
     env:
       CI: "true"
       DOTNET_NOLOGO: "true"
       DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_EnableDiagnostics: "1"
+      PYTHONDONTWRITEBYTECODE: "1"
       NUGET_PACKAGES: ${{ github.workspace }}/artifacts/nuget-packages
       CMAKE_BUILD_PARALLEL_LEVEL: "4"
       DB_PERF_REQUIRED_IMAGE_VERSION: "20261116.133.1"
@@ -35,6 +35,11 @@ jobs:
         run: |
           test "$ImageOS" = ubuntu24
           test "$ImageVersion" = "$DB_PERF_REQUIRED_IMAGE_VERSION"
+          python3 - <<'PYTHON'
+          import os,time
+          from pathlib import Path
+          Path(os.environ['RUNNER_TEMP'],'db-perf-preparation-start').write_text(str(time.monotonic_ns()))
+          PYTHON
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.sha }}
@@ -100,18 +105,6 @@ jobs:
             ${{ runner.temp }}/db-perf-prepared/build/**/build-receipt.json
           retention-days: 30
           if-no-files-found: ignore
-  measure:
-    needs: prepare
-    runs-on: ubuntu-24.04
-    timeout-minutes: 360
-    env:
-      CI: "true"
-      DOTNET_NOLOGO: "true"
-      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
-      DOTNET_EnableDiagnostics: "1"
-      PYTHONDONTWRITEBYTECODE: "1"
-      DB_PERF_REQUIRED_IMAGE_VERSION: "20261116.133.1"
-    steps:
       - name: Require the same frozen runner image for measurement
         run: |
           test "$ImageOS" = ubuntu24
@@ -123,7 +116,7 @@ jobs:
           path: ${{ runner.temp }}/db-perf-incoming
       - name: Verify transport bytes and safely unpack runtime files
         env:
-          EXPECTED_BUNDLE_SHA256: ${{ needs.prepare.outputs.bundle_sha256 }}
+          EXPECTED_BUNDLE_SHA256: ${{ steps.prepare.outputs.bundle_sha256 }}
         run: |
           python3 - <<'PYTHON'
           from pathlib import Path
@@ -138,6 +131,62 @@ jobs:
               stream.write('DB_PERF_BUNDLE='+str(root/'db-perf-runtime/bundle')+'\n')
               stream.write('LD_LIBRARY_PATH='+str(root/'db-perf-runtime/bundle/postgres/lib')+':'+str(root/'db-perf-runtime/bundle/native')+'\n')
           PYTHON
+      - name: Retire build servers and verify a quiet preparation boundary
+        run: |
+          dotnet build-server shutdown > "$RUNNER_TEMP/db-perf-build-shutdown.log" 2>&1
+          python3 - <<'PYTHON'
+          from pathlib import Path
+          import datetime,hashlib,json,os,time
+          root=Path(os.environ['RUNNER_TEMP'])
+          tools={'dotnet','clang','clang++','clang-cl','gcc','g++','cc','c++','cc1','cc1plus','collect2','ld','ld.lld','lld','ninja','cmake','make','gmake','csc','ilc'}
+          samples=[]
+          for index in range(3):
+              active=[]; unreadable=[]; enumeration_error=None; procs=[]
+              try:
+                  # glob may suppress enumeration errors; do not treat an
+                  # unreadable process directory as an empty/quiet machine.
+                  with os.scandir('/proc') as entries:
+                      procs=[Path(entry.path) for entry in entries if entry.name.isdecimal()]
+              except OSError as error:
+                  enumeration_error={'type':type(error).__name__,'errno':error.errno}
+              own_pid_seen=any(proc.name==str(os.getpid()) for proc in procs)
+              for proc in procs:
+                  own=None
+                  try:
+                      # Do not record arguments or environment contents.
+                      own=proc.stat().st_uid==os.getuid()
+                      name=(proc/'exe').readlink().name.removesuffix(' (deleted)')
+                  except FileNotFoundError:
+                      continue
+                  except PermissionError:
+                      if own is not False: unreadable.append(int(proc.name))
+                      continue
+                  if name in tools or name.startswith('clang-'):
+                      active.append({'pid':int(proc.name),'executableName':name})
+              samples.append({'monotonicNs':time.monotonic_ns(),'activeBuildTools':active,'unreadableOwnProcesses':unreadable,
+                  'enumerationError':enumeration_error,'ownPidEnumerated':own_pid_seen})
+              if index!=2: time.sleep(1)
+          elapsed=(time.monotonic_ns()-int((root/'db-perf-preparation-start').read_text()))/1e9
+          bundle=Path(os.environ['DB_PERF_BUNDLE'],'bundle.json')
+          receipt={'schemaVersion':1,'task':'DB-Perf-01','kind':'same_vm_build_quiescence','observedUtc':datetime.datetime.now(datetime.timezone.utc).isoformat(),
+              'runId':os.environ['GITHUB_RUN_ID'],'job':os.environ['GITHUB_JOB'],'bootId':Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
+              'imageOS':os.environ['ImageOS'],'imageVersion':os.environ['ImageVersion'],'bundleManifestSha256':hashlib.sha256(bundle.read_bytes()).hexdigest(),
+              'preparationElapsedSeconds':elapsed,'maximumPreparationSeconds':900,'controllerMinutesUnchanged':340,'jobMinutes':360,
+              'samples':samples,'passed':elapsed<=900 and all(s['enumerationError'] is None and s['ownPidEnumerated'] and not s['activeBuildTools'] and not s['unreadableOwnProcesses'] for s in samples),
+              'scope':'Preparation is outside all measured windows. This checks build-tool retirement; unchanged full VM idle/noise/quota and before-only calibration must still pass.'}
+          (root/'db-perf-build-quiescence.json').write_text(json.dumps(receipt,indent=2)+'\n')
+          assert receipt['passed'], 'Build tools remain active, observation is incomplete, or the preparation budget was exceeded'
+          PYTHON
+      - name: Preserve the same-VM preparation boundary
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: db-perf-build-quiescence-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/db-perf-build-quiescence.json
+            ${{ runner.temp }}/db-perf-build-shutdown.log
+          retention-days: 30
+          if-no-files-found: warn
       - name: Admit this VM and freeze noise, capacity and offered load
         timeout-minutes: 85
         run: >-
