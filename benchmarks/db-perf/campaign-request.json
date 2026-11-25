@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "task": "DB-Perf-01",
   "enabled": true,
-  "harnessCommit": "da153c22ef1093fccc3233ec76bfda96e6cc59df",
+  "harnessCommit": "db0f674f3849fa86f69d86eea2c830dc1c84da83",
   "before": {
     "sourceCommit": "771bc77cbd68d3f932b99ed2497c0697bbba5f02",
     "runId": 45356659607,
@@ -24,21 +24,21 @@
     }
   },
   "after": {
-    "sourceCommit": "3d5ba3f9884308caa691718f73a74aa42be19d94",
-    "runId": 45438460386,
+    "sourceCommit": "3df4f4f3ac455cb8bae8901c80a4fefb33021970",
+    "runId": 45511550343,
     "providers": {
       "postgresql": {
         "version": "0.1.0-ci.1",
-        "artifactId": 14943151333,
-        "artifactZipSha256": "6bb86cde0f2e86b53d5dc74cf4e52cd8761d77be0c7323ecb6183c30ef46ab75",
-        "nupkgSha256": "c9a35d9d1bc2a3bc47a771120481f857ecdc381d99efb95387d1d1890020d94c",
+        "artifactId": 14976706095,
+        "artifactZipSha256": "9c216025003006bb7bb39e5b190397a6b1c323221ca34a58d18e7f9b025a4d00",
+        "nupkgSha256": "f4e8ddbbd154d513ba4f78f11ec99ff9973f49f87465899ba4183418134cb0b3",
         "nativeSha256": "73f725104fb1bee5fc86a9bc371e556ea8358ac3a2d774c4823185e6da8984c6"
       },
       "sqlite": {
         "version": "0.1.0-ci.1",
-        "artifactId": 14942282883,
-        "artifactZipSha256": "52e970d42635320ee8a25349cb002fa017ce2a0460473b9e123394fa8b4ad01f",
-        "nupkgSha256": "7bd4b5458226b02ce5fed07651fdd3f2816650e404266d3f525d61d9eb3735ed",
+        "artifactId": 14976720909,
+        "artifactZipSha256": "0aaf88176b4bb5e397be5abc201357f7fcfda243acd908e0d10e41e601e1a950",
+        "nupkgSha256": "2724680534384262e5a289e741da506a9ad40d4e37bc21c47ed14f77683feefc",
         "nativeSha256": "970a8868290cec37c353bbd8e48bb7bf4ef18cfa1da9e495fc06d7eb08d71d40"
       }
     }
@@ -222,7 +222,7 @@
       ]
     }
   },
-  "activationNote": "Run 45452087158 retained 69 PostgreSQL preflight cells and stopped before all long segments because no scheduled C4 rate for original Korda passed the unchanged SLO. The reviewed controller can now spend its existing maximum of three five-second refinement windows halving the lowest failed rate until a successful/failing bracket exists, then use bounded midpoints. All failed observations remain; the before/native/independent columns alone freeze the common rate. Actual packages, compiled consumers, workload, concurrency, queue size, SLO, environment gates and all eight 1800-second durations are unchanged.",
+  "activationNote": "Start a separate complete final-candidate matrix for reviewed production/harness db0f674f3849fa86f69d86eea2c830dc1c84da83 using the exact successful normal-CI package producer 3df4f4f3ac455cb8bae8901c80a4fefb33021970 from run 45511550343. The original completed campaign 45461269267 remains bound to its original after producer 3d5ba3f and is not relabeled or mixed into this matrix. Fixed main 771bc77, both original before packages, all 35 cases, query/result contracts, native preparation layers, CPU partitions, durability, noise and admission thresholds, capacity/SLO gates, finite time budgets, and all eight sequential 1800-second segments remain unchanged. The existing before/native/independent-ORM-only calibration freezes this new VM's common offered rates; the after route cannot lower them. Uncommitted empty-parameter and Find SQL experiments are not included.",
   "nativeBaseline": {
     "physicalPrepare": "reuse",
     "protocolConfirmation": "drain-only"
