@@ -380,7 +380,7 @@ internal static class Suite
         var explicitEmpty = new QueryParameters();
         Check(query.Context.Values(explicitEmpty).AsSpan().SequenceEqual(expected), "Explicit empty parameter frame keeps the same complete bytes");
         using var declared = session.From(Models.People);
-        var parameter = declared.Parameter("empty-frame-control", Codecs.Int64);
+        var parameter = declared.Parameter("empty_frame_control", Codecs.Int64);
         var values = new QueryParameters().Set(parameter, 17L);
         var encoded = ParameterDefinition.Encode(session.Source, declared.Context.Parameters.Values, values);
         Check(declared.Context.Values(values).AsSpan().SequenceEqual(encoded), "Declared value preserves original encoding");
@@ -388,7 +388,7 @@ internal static class Suite
         Check(Throws<ArgumentException>(() => declared.Context.Values(explicitEmpty)).ParamName == "supplied", "Missing explicit parameter set still rejects");
         Check(Throws<ArgumentException>(() => query.Context.Values(values)).ParamName == "supplied", "Extra parameters cannot enter the empty fast path");
         using var other = session.From(Models.People);
-        var otherValues = new QueryParameters().Set(other.Parameter("foreign-identity", Codecs.Int64), 17L);
+        var otherValues = new QueryParameters().Set(other.Parameter("foreign_identity", Codecs.Int64), 17L);
         Check(Throws<ArgumentException>(() => declared.Context.Values(otherValues)).ParamName == "supplied", "A different declared identity still rejects");
         Check(query.Context.Values(null).AsSpan().SequenceEqual(expected), "Fallback calls do not mutate the shared frame");
     }
