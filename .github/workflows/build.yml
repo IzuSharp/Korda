@@ -46,7 +46,7 @@ jobs:
         if: contains(fromJSON(inputs.resources), 'design')
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          repository: IzuSharp/NativeWeave-Design
+          repository: IzuSharp/Korda-Design
           ref: c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9
           path: artifacts/frozen-design
           persist-credentials: false
@@ -62,7 +62,7 @@ jobs:
         if: contains(fromJSON(inputs.resources), 'scope-design')
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          repository: IzuSharp/NativeWeave-Design
+          repository: IzuSharp/Korda-Design
           ref: 8298dc4128b745cf1809bad0c3cf02c45eb7f522
           fetch-depth: 0
           path: artifacts/scope-design

@@ -58,7 +58,7 @@ def home_files_probe(output,run,build,native_env):
         'original_cases':len(cases),'tls':tls},indent=2)+'\n')
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('--output',type=Path,required=True);parser.add_argument('--postgres-bin',type=Path,default=ROOT/'artifacts/postgres-tools/install/bin');parser.add_argument('--native-build',type=Path,default=ROOT/'artifacts/cmake/linux-x64-release');parser.add_argument('--offline-config',type=Path);parser.add_argument('--native-only',action='store_true');parser.add_argument('--write-reference',action='store_true');parser.add_argument('--update-locks',action='store_true');parser.add_argument('--design-root',type=Path,default=ROOT.parent/'NativeWeave-Design')
+    parser=argparse.ArgumentParser();parser.add_argument('--output',type=Path,required=True);parser.add_argument('--postgres-bin',type=Path,default=ROOT/'artifacts/postgres-tools/install/bin');parser.add_argument('--native-build',type=Path,default=ROOT/'artifacts/cmake/linux-x64-release');parser.add_argument('--offline-config',type=Path);parser.add_argument('--native-only',action='store_true');parser.add_argument('--write-reference',action='store_true');parser.add_argument('--update-locks',action='store_true');parser.add_argument('--design-root',type=Path,default=ROOT.parent/'Korda-Design')
     phase=parser.add_mutually_exclusive_group()
     phase.add_argument('--api-only',action='store_true')
     phase.add_argument('--test-only',action='store_true')

@@ -57,7 +57,7 @@ Connections use prepare/bind/step/finalize on finite workers. The configured bus
 
 `native/dependencies.lock.json` locks upstream versions, download hashes, patches, consumed JSON/amalgamation sources, tool binaries and notices. Linux statically links libpq, SQLite and LLVM 23.1.5 libc++/libc++abi, uses nlohmann/json 3.12.0 headers, and dynamically uses the declared platform OpenSSL 3/zlib/glibc runtime closure. The two provider leaves include only their selected database implementation. The C++ runtime does not introduce a consumer dependency on libstdc++ or a C++ compiler.
 
-Original MIT, PostgreSQL, public-domain, Apache-2.0/LLVM-exception and platform notices accompany candidate packages. SeaQuery's MIT notice accompanies the adapted query algorithms. SQLx, KDb, sqlpp11/23, Drogon, ADBC and WCDB were behavioral or architecture references, not linked dependencies. See the [design decision](https://github.com/IzuSharp/NativeWeave-Design/blob/main/docs/database/cpp-migration.md) for the finite comparison.
+Original MIT, PostgreSQL, public-domain, Apache-2.0/LLVM-exception and platform notices accompany candidate packages. SeaQuery's MIT notice accompanies the adapted query algorithms. SQLx, KDb, sqlpp11/23, Drogon, ADBC and WCDB were behavioral or architecture references, not linked dependencies. See the [design decision](https://github.com/IzuSharp/Korda-Design/blob/main/docs/database/cpp-migration.md) for the finite comparison.
 
 ## Reproduce the Linux build
 

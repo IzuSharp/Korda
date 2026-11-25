@@ -7,7 +7,7 @@ Pull requests run the checks selected by the committed diff and registered modul
 Use a clean committed checkout, the pinned toolchain in the [native build guide](guides/cpp-native.md), and a disposable PostgreSQL 18 server. Its test account needs permission to create and drop test databases and roles. Set `NW_TEST_POSTGRES` to that server's connection string and `NW_POSTGRES_BIN` to the matching server tools directory.
 
 ```sh
-git clone https://github.com/IzuSharp/NativeWeave-Design artifacts/frozen-design
+git clone https://github.com/IzuSharp/Korda-Design artifacts/frozen-design
 git -C artifacts/frozen-design checkout c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9
 git clone https://github.com/IzuSharp/Plan artifacts/frozen-plan
 git -C artifacts/frozen-plan checkout 8afa0311f45ab8a8157fc45c51e95a0b17dd09f2

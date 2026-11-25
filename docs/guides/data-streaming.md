@@ -7,7 +7,7 @@ adapter on Linux x64. It composes the actual B02 PostgreSQL and B03 SQLite sessi
 adapters and B07 checked scalar codecs. B01 remains the sole owner of projections,
 row readers, scalar declarations, errors, and the `db-wire/1` representation.
 
-The exact design input is NativeWeave-Design commit
+The exact design input is Korda-Design commit
 `c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9`, B06 revision 0.4.0. The input manifest
 in [the tests](../../tests/Data.Streaming/design-inputs.json) records the packet,
 fragment, API/declaration and contract hashes. Earlier design executions are
