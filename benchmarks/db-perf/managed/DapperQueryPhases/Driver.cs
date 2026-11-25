@@ -69,10 +69,10 @@ internal sealed class PhaseDriver : IAsyncDisposable
         await Connection.OpenAsync();
 #if POSTGRES
         await Connection.ExecuteAsync("SET timezone TO 'UTC'");
-        DatabaseVersion = await Connection.ExecuteScalarAsync<string>("SELECT version()") ?? throw new InvalidOperationException("Missing server version.");
+        DatabaseVersion = await Connection.QuerySingleAsync<string>("SELECT version()") ?? throw new InvalidOperationException("Missing server version.");
 #else
         await Connection.ExecuteAsync("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA busy_timeout=5000;");
-        DatabaseVersion = await Connection.ExecuteScalarAsync<string>("SELECT sqlite_version()") ?? throw new InvalidOperationException("Missing SQLite version.");
+        DatabaseVersion = await Connection.QuerySingleAsync<string>("SELECT sqlite_version()") ?? throw new InvalidOperationException("Missing SQLite version.");
         CompileOptions = Connection.Query<string>("PRAGMA compile_options").Order(StringComparer.Ordinal).ToArray();
 #endif
     }
