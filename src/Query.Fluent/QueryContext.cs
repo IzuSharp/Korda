@@ -235,11 +235,7 @@ internal sealed class QueryContext : IDisposable
     }
 }
 
-internal sealed record ParameterDefinition(DataSource Source, uint Id, string Name, CodecDescriptor Codec, uint BoundCodec)
-{
-    internal static byte[] Encode(DataSource source, IEnumerable<ParameterDefinition> definitions, QueryParameters? supplied)
-        => new PreparedParameterLayout(source, definitions).Encode(source, supplied);
-}
+internal sealed record ParameterDefinition(DataSource Source, uint Id, string Name, CodecDescriptor Codec, uint BoundCodec);
 internal readonly record struct ParameterSnapshot(ParameterDefinition Parameter, byte[]? Bytes);
 
 // One immutable layout belongs to one prepared plan. Execution still snapshots

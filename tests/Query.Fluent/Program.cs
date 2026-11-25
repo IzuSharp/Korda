@@ -433,7 +433,7 @@ internal static class Suite
         using var declared = session.From(Models.People);
         var parameter = declared.Parameter("empty_frame_control", Codecs.Int64);
         var values = new QueryParameters().Set(parameter, 17L);
-        var encoded = ParameterDefinition.Encode(session.Source, declared.Context.Parameters.Values, values);
+        var encoded = declared.Context.ParameterLayout().Encode(session.Source, values);
         Check(declared.Context.Values(values).AsSpan().SequenceEqual(encoded), "Declared value preserves original encoding");
         Check(Throws<ArgumentException>(() => declared.Context.Values(null)).ParamName == "supplied", "Missing null parameter set still rejects");
         Check(Throws<ArgumentException>(() => declared.Context.Values(explicitEmpty)).ParamName == "supplied", "Missing explicit parameter set still rejects");
