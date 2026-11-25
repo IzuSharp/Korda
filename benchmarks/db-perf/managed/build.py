@@ -25,7 +25,7 @@ def main():
     parser.add_argument('--version', required=True)
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--manifest', type=Path, default=HERE.parent/'workload/queries-v3.json')
-    parser.add_argument('--kind', choices=('workload', 'prepared-probe', 'resource-probe'), default='workload')
+    parser.add_argument('--kind', choices=('workload', 'prepared-probe', 'resource-probe', 'query-phases'), default='workload')
     args = parser.parse_args()
     app = args.output.resolve()
     if app == ROOT or ROOT in app.parents:
@@ -43,8 +43,9 @@ def main():
         raise FileNotFoundError(manifest)
     app.mkdir(parents=True)
     source_folder = {'workload': HERE / 'Korda', 'prepared-probe': HERE / 'PreparedProbe',
-                     'resource-probe': HERE.parent / 'resources'}[args.kind]
-    assembly = {'workload': 'DbPerf.Korda', 'prepared-probe': 'DbPerf.PreparedProbe', 'resource-probe': 'ResourceProbe'}[args.kind]
+                     'resource-probe': HERE.parent / 'resources', 'query-phases': HERE.parent / 'query-phases'}[args.kind]
+    assembly = {'workload': 'DbPerf.Korda', 'prepared-probe': 'DbPerf.PreparedProbe',
+                'resource-probe': 'ResourceProbe', 'query-phases': 'DbPerf.QueryPhases'}[args.kind]
     for file in source_folder.iterdir():
         if file.suffix in ('.cs', '.csproj'):
             shutil.copy2(file, app / file.name)
@@ -98,6 +99,8 @@ def main():
     receipt['workloadManifestSha256'] = sha(manifest)
     if args.kind == 'resource-probe':
         receipt['workloadManifestUse'] = 'Identity retained only; this diagnostic uses its own source-bound cold/concurrent/exhaustion cases, not the 35-case timing workload.'
+    if args.kind == 'query-phases':
+        receipt['workloadManifestUse'] = 'Identity retained only; this diagnostic uses its own identical 100-row result and phase observations, not the 35-case timing workload.'
     try:
         if result.returncode == 0:
             assets = json.loads((app / 'obj/project.assets.json').read_text())
