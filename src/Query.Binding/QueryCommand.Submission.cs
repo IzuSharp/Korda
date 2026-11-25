@@ -5,6 +5,32 @@ namespace Korda.Query.Internal;
 
 internal sealed partial class QueryCommand
 {
+    private const int SingleRootScratchBytes = 4096;
+
+    // QueryBinding holds exclusive admission throughout encoding and submission.
+    // A private root cannot gain another origin owner here. Shared snapshots and
+    // captured values retain the complete graph/owner binding path below.
+    private bool TryEncodeSingleRoot(Span<byte> scratch, out int length)
+    {
+        length = 0;
+        if (_dependencies.Count != 0) return false;
+        foreach (var origin in _origins)
+            if (origin.Identity.References != 1 || origin.Identity.Capture is not null) return false;
+        var size = checked(56 + _written);
+        if (_environment.MaxDepth < 1 || size > _environment.MaxEnvelopeBytes || _recordCount > 2 * _environment.MaxNodes) Capacity();
+        if (size > scratch.Length) return false;
+        var bytes = scratch[..size]; bytes[..56].Clear();
+        DbWire.U32(bytes, 0, 0x4351574e); DbWire.U32(bytes, 4, 1); DbWire.U32(bytes, 8, (uint)size);
+        DbWire.U32(bytes, 12, 1); DbWire.U32(bytes, 20, (uint)_recordCount);
+        DbWire.U32(bytes, 32, (uint)(24 + _written)); DbWire.U32(bytes, 40, _model.TableId);
+        DbWire.U32(bytes, 44, (uint)_recordCount); DbWire.U32(bytes, 48, (uint)_slots.Count);
+        _records.AsSpan(0, _written).CopyTo(bytes[56..]);
+        // Each local scalar record creates a distinct origin. Only imports or
+        // clones can share it; equal values and repeated parameter IDs do not.
+        for (var i = 0; i < _origins.Count; i++) DbWire.U32(bytes, 56 + _origins[i].Offset, checked((uint)i + 1));
+        length = size; return true;
+    }
+
     private EncodedCommand Encode()
     {
         var blocks = new List<QueryCommand>();
@@ -78,29 +104,54 @@ internal sealed partial class QueryCommand
 
     internal unsafe DatabaseOwner Seal(uint terminal)
     {
-        ValidateSeal(terminal); using var gates = LockOrigins(false); var encoded = Encode();
+        ValidateSeal(terminal); using var gates = LockOrigins(false);
+        Span<byte> scratch = stackalloc byte[SingleRootScratchBytes];
+        Span<QueryCommandDependency> root = stackalloc QueryCommandDependency[1];
+        scoped ReadOnlySpan<byte> command; scoped ReadOnlySpan<QueryCommandDependency> dependencies;
+        EncodedCommand? encoded = null;
+        if (gates.Origins.Length == 0 && TryEncodeSingleRoot(scratch, out var length))
+        {
+            root[0] = new() { Owner = _root.Pointer, Kind = 1 };
+            command = scratch[..length]; dependencies = root;
+        }
+        else
+        {
+            encoded = Encode(); command = encoded.Value.Bytes; dependencies = encoded.Value.Dependencies;
+        }
         using var session = _session.Borrow(DatabaseOwnerKind.Session); nint result = 0; var error = BindingChecks.Error();
-        fixed (byte* bytes = encoded.Bytes)
-        fixed (QueryCommandDependency* dependencies = encoded.Dependencies)
-            BindingChecks.Status(Calls.Compile(session.Pointer, BindingChecks.View(bytes, encoded.Bytes.Length), dependencies,
-                (uint)encoded.Dependencies.Length, terminal, &result, &error), error);
+        fixed (byte* bytes = command)
+        fixed (QueryCommandDependency* owners = dependencies)
+            BindingChecks.Status(Calls.Compile(session.Pointer, BindingChecks.View(bytes, command.Length), owners,
+                (uint)dependencies.Length, terminal, &result, &error), error);
         if (result == 0) throw new BindingFailure(NativeStatus.ContractViolation, 0, 0, 0);
         DatabaseOwner plan;
         try { plan = new(Source, DatabaseOwnerKind.Plan, result) { QueryPlan = Metadata() }; }
         catch { Source.Calls.nw_db_owner_release_v1(result); throw; }
-        try { PublishOrigins(plan, encoded, gates); }
+        try { if (encoded is { } complete) PublishOrigins(plan, complete, gates); }
         catch { plan.Dispose(); throw; }
         _sealed = true; return plan;
     }
 
     internal unsafe nint Render()
     {
-        ValidateSeal(8); var encoded = Encode();
+        ValidateSeal(8);
+        Span<byte> scratch = stackalloc byte[SingleRootScratchBytes];
+        Span<QueryCommandDependency> root = stackalloc QueryCommandDependency[1];
+        scoped ReadOnlySpan<byte> command; scoped ReadOnlySpan<QueryCommandDependency> dependencies;
+        if (TryEncodeSingleRoot(scratch, out var length))
+        {
+            root[0] = new() { Owner = _root.Pointer, Kind = 1 };
+            command = scratch[..length]; dependencies = root;
+        }
+        else
+        {
+            var encoded = Encode(); command = encoded.Bytes; dependencies = encoded.Dependencies;
+        }
         using var session = _session.Borrow(DatabaseOwnerKind.Session); nint result = 0; var error = BindingChecks.Error();
-        fixed (byte* bytes = encoded.Bytes)
-        fixed (QueryCommandDependency* dependencies = encoded.Dependencies)
-            BindingChecks.Status(Calls.Render(session.Pointer, BindingChecks.View(bytes, encoded.Bytes.Length), dependencies,
-                (uint)encoded.Dependencies.Length, &result, &error), error);
+        fixed (byte* bytes = command)
+        fixed (QueryCommandDependency* owners = dependencies)
+            BindingChecks.Status(Calls.Render(session.Pointer, BindingChecks.View(bytes, command.Length), owners,
+                (uint)dependencies.Length, &result, &error), error);
         if (result == 0) throw new BindingFailure(NativeStatus.ContractViolation, 0, 0, 0);
         return result;
     }

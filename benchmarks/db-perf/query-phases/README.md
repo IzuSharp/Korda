@@ -50,5 +50,34 @@ and records the returned database version. Summarize fresh receipts with
 The summary preserves raw counter totals and computes nearest-rank p50/p99 without
 trimming samples. It does not grant measurement or environment acceptance.
 
+## Failure evidence
+
+An unhandled failure also attempts to create `result.json.failure.json` beside
+the requested result, using an exclusive create so earlier evidence is not
+replaced. The original exception still terminates the consumer; the probe does
+not retry, change timeouts, or turn a failed attempt into a successful result.
+Success receipts retain schema 2 and their existing phase/CPU/allocation meaning.
+
+The separate schema-1 failure receipt records exception type and stack, the public
+`DatabaseException` Kind, ProviderCode, CorrelationId and IsTransient fields,
+route, first/warmup/window location, zero-based window/iteration, current
+construct/first/read/release/verify stage, completed window count and available
+native owner/SQL/protocol counts. The failure is captured before reader disposal;
+if disposal then throws, both errors remain in the diagnostic and normal exception
+precedence is preserved. It does not fill in an unobserved final owner count.
+An unhandled-only observation has the last probe location, which is not proof
+that a background-thread exception occurred on that route. Exception Message/Data,
+connection strings, parameters and environment are not serialized. Inner errors
+are bounded to four levels/eight children and at most eight observations.
+
+Steady execution adds scalar location/stage assignments and exception capture
+boundaries, with no per-operation logging, serialization or additional native
+counter reads. Those assignments are included in the existing measured windows
+and corresponding phase intervals; failure reporting has no timing credit. Use
+the same updated harness for every future comparison and retain prior attempts
+under their original identities. A finite diagnostic reproduction may use an
+existing exact package in a new external consumer, but cannot relabel an earlier
+failed attempt or replace its original bytes.
+
 This phase diagnostic does not replace the local mixed-load correctness runs or
 the final candidate/Dapper.AOT 1,800-second segments for each provider.

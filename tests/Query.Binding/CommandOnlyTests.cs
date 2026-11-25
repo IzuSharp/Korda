@@ -12,6 +12,9 @@ internal static unsafe class CommandOnlyTests
 {
     private static QueryCommandCalls _native = null!;
     private static int _compiles, _renders, _ctes, _assertions;
+    [ThreadStatic] private static bool _observe;
+    [ThreadStatic] private static CapturedCommand? _observed;
+    private sealed record CapturedCommand(byte[] Bytes, QueryCommandDependency[] Owners);
     private static void Check(bool condition, string message)
     { _assertions++; if (!condition) throw new InvalidOperationException(message); }
     private static void Reject<T>(Action action) where T : Exception
@@ -23,23 +26,36 @@ internal static unsafe class CommandOnlyTests
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static uint Compile(nint session, NwBytesViewV1 command, QueryCommandDependency* dependencies, uint count, uint terminal, nint* output, NwErrorInfoV1* error)
-    { Interlocked.Increment(ref _compiles); return _native.Compile(session, command, dependencies, count, terminal, output, error); }
+    { Interlocked.Increment(ref _compiles); Observe(command, dependencies, count); return _native.Compile(session, command, dependencies, count, terminal, output, error); }
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static uint Render(nint session, NwBytesViewV1 command, QueryCommandDependency* dependencies, uint count, nint* output, NwErrorInfoV1* error)
-    { Interlocked.Increment(ref _renders); return _native.Render(session, command, dependencies, count, output, error); }
+    { Interlocked.Increment(ref _renders); Observe(command, dependencies, count); return _native.Render(session, command, dependencies, count, output, error); }
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static uint Cte(nint session, NwBytesViewV1 command, QueryCommandDependency* dependencies, uint count, nint declared, uint tableId, uint recursive, nint* output, NwErrorInfoV1* error)
     { Interlocked.Increment(ref _ctes); return _native.Cte(session, command, dependencies, count, declared, tableId, recursive, output, error); }
+
+    private static void Observe(NwBytesViewV1 command, QueryCommandDependency* dependencies, uint count)
+    {
+        if (_observe) _observed = new(new ReadOnlySpan<byte>(command.Data, checked((int)command.Length)).ToArray(),
+            new ReadOnlySpan<QueryCommandDependency>(dependencies, checked((int)count)).ToArray());
+    }
+
+    private static CapturedCommand RenderCommand(QueryBinding query, out string sql)
+    {
+        _observe = true;
+        try { sql = Sql(query); return _observed ?? throw new InvalidOperationException("The complete command was not observed."); }
+        finally { _observe = false; _observed = null; }
+    }
 
     private static readonly string[] Capabilities = ["db.metadata.v1", "db.query.v1", "db.scalar-codecs.v1", "db.query.command.v1",
         "db.null-safe-equality.v1", "db.relationships.explicit.v1", "db.set-operations.v1", "db.cte.v1", "db.recursive-cte.v1",
         "db.window.v1", "db.row-lock.v1", "db.prepared-shape.v1"];
 
-    private static DatabaseOwner Source(NativeCalls calls, uint profile, QueryCommandCalls commands, int depth = 64)
+    private static DatabaseOwner Source(NativeCalls calls, uint profile, QueryCommandCalls commands, int depth = 64, int nodes = 4096)
     {
         nint result = 0; var error = BindingChecks.Error(); var value = (byte)profile;
         BindingChecks.Status(calls.nw_db_source_create_v1(new() { Data = &value, Length = 1 }, &result, &error), error);
-        var binding = new SourceBinding(calls, profile) { Commands = new(commands, 4096, depth, 4096, 4 * 1024 * 1024, Capabilities) };
+        var binding = new SourceBinding(calls, profile) { Commands = new(commands, nodes, depth, 4096, 4 * 1024 * 1024, Capabilities) };
         binding.Commands.RegisterCodec(3, Codecs.Int64.Descriptor); binding.Commands.RegisterCodec(4, Codecs.Boolean.Descriptor);
         binding.Commands.RegisterCodec(5, Codecs.String.Descriptor);
         return new(binding, DatabaseOwnerKind.Source, result);
@@ -128,6 +144,9 @@ internal static unsafe class CommandOnlyTests
             recovery.Clause(4, OperandEncoding.Clause(OperandEncoding.U64(1, text.Value)));
             using (var plan = recovery.Seal(8)) Check(_compiles == before + 1, "Rejected mutations and a failed Seal leave the builder usable.");
 
+            SingleRoot(session, model, table, id, name);
+            SingleRootQuota(calls, counted, library, profile, table, id, name);
+
             using var foreignSource = Source(calls, profile, counted); using var foreignSession = Session(foreignSource, library);
             using var foreignModel = MetadataBindings.RegisterModel(foreignSource, table);
             using var foreign = QueryBinding.CreateBuffered(foreignSession, foreignModel, table.Identity.Id);
@@ -169,6 +188,76 @@ internal static unsafe class CommandOnlyTests
         MissingCapability(calls, counted, library, table);
         Console.WriteLine($"PASS complete-command-only: assertions={_assertions}, compile={_compiles}, render={_renders}, cte={_ctes}");
         return _assertions;
+    }
+
+    private static void SingleRoot(DatabaseOwner session, DatabaseOwner model, Table<Parent> table,
+        Column<Parent, long> id, Column<Parent, string> name)
+    {
+        using var query = QueryBinding.CreateBuffered(session, model, table.Identity.Id);
+        var key = query.Column(id.Id); var text = query.Column(name.Id);
+        var value = query.Value(OperandEncoding.Value(query.Source.SemanticProfile, Codecs.Int64, 3, 19L));
+        var parameter = query.Parameter(71, "minimum"u8, 3, false);
+        var predicate = query.Binary(12, query.Binary(1, key, value), query.Binary(4, key, parameter));
+        query.Clause(1, OperandEncoding.Clause(OperandEncoding.U64(1, predicate.Value)));
+        Select(query, table.Row, key, text);
+        var renders = _renders;
+        var first = RenderCommand(query, out var expected);
+        Check(_renders == renders + 1 && first.Bytes.Length <= 4096 && DbWire.R32(first.Bytes, 12) == 1
+            && DbWire.R32(first.Bytes, 24) == 0 && first.Owners.Length == 1
+            && first.Owners[0].Kind == 1 && first.Owners[0].Reserved == 0,
+            "A private single root submits one complete bounded command with one initialized model sidecar.");
+        query.Column(id.Id);
+        var continued = RenderCommand(query, out var afterRender);
+        Check(afterRender == expected && continued.Bytes.Length > first.Bytes.Length, "Rendering keeps the tape mutable and preserves unused records.");
+        using var clone = query.CloneSelected();
+        var shared = RenderCommand(clone, out var clonedSql);
+        Check(clonedSql == expected && shared.Bytes.AsSpan().SequenceEqual(continued.Bytes)
+            && shared.Owners.Length == 1 && shared.Owners[0].Owner == continued.Owners[0].Owner,
+            "Private stack and shared graph encoders submit identical bytes, origin ordinals and model identity.");
+        var compiles = _compiles;
+        using var retained = clone.Seal(8);
+        Check(_compiles == compiles + 1, "A shared clone still compiles in one command.");
+        clone.Dispose(); retained.Dispose();
+        var captured = RenderCommand(query, out var capturedSql);
+        Check(capturedSql == expected && DbWire.R32(captured.Bytes, 24) == 2 && captured.Owners.Length == 2,
+            "A sole remaining builder still seeds captured literal and parameter origins after public plan disposal.");
+        using (var plan = query.Seal(8)) Check(_compiles == compiles + 2, "Captured origins retain the complete graph compile path.");
+        query.Dispose(); Reject<ObjectDisposedException>(() => { using var admission = query.Enter(); });
+
+        // This canonical two-column command has 666 bytes besides its string.
+        // Exercise both sides of the fixed scratch boundary with the same SQL.
+        foreach (var characters in new[] { 3430, 3431 })
+        {
+            using var large = QueryBinding.CreateBuffered(session, model, table.Identity.Id);
+            _ = large.Value(OperandEncoding.Value(large.Source.SemanticProfile, Codecs.String, 5, new string('x', characters)));
+            Select(large, table.Row, large.Column(id.Id), large.Column(name.Id));
+            var largeFrame = RenderCommand(large, out var largeSql);
+            Check(largeFrame.Bytes.Length == 666 + characters && DbWire.R32(largeFrame.Bytes, 12) == 1
+                && DbWire.R32(largeFrame.Bytes, 24) == 0 && largeFrame.Owners.Length == 1,
+                "Exact-size and oversized private roots preserve their unused literal at the stack/fallback boundary.");
+            using var largeClone = large.CloneSelected();
+            var largeShared = RenderCommand(largeClone, out var largeCloneSql);
+            Check(largeCloneSql == largeSql && largeShared.Bytes.AsSpan().SequenceEqual(largeFrame.Bytes),
+                "Stack-sized and oversized commands match the shared graph encoder byte for byte.");
+            largeClone.Dispose();
+            using var largePlan = large.Seal(8);
+        }
+    }
+
+    private static void SingleRootQuota(NativeCalls calls, QueryCommandCalls commands, nint library, uint profile,
+        Table<Parent> table, Column<Parent, long> id, Column<Parent, string> name)
+    {
+        using var source = Source(calls, profile, commands, nodes: 6); using var session = Session(source, library);
+        using var model = MetadataBindings.RegisterModel(source, table);
+        using var query = QueryBinding.CreateBuffered(session, model, table.Identity.Id);
+        Select(query, table.Row, query.Column(id.Id), query.Column(name.Id));
+        query.Column(id.Id);
+        var before = _compiles;
+        Reject<BindingFailure>(() => query.Value(OperandEncoding.Value(profile, Codecs.Int64, 3, 42L)));
+        var frame = RenderCommand(query, out _);
+        Check(DbWire.R32(frame.Bytes, 20) == 4 && _compiles == before, "Rejected capacity mutations do not add records or submit a command.");
+        using var plan = query.Seal(8);
+        Check(_compiles == before + 1, "A private root at its finite node quota can still be sealed after rejection.");
     }
 
     private static Table<Parent> Declaration(string name)

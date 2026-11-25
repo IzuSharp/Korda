@@ -62,7 +62,11 @@ internal sealed class QueryModelMetadata(uint tableId, string table, ColumnDefin
     internal uint TableId { get; } = tableId;
     internal string Table { get; } = table;
     internal ColumnDefinition[] Columns { get; } = columns;
-    internal ColumnDefinition Column(uint id) => Array.Find(Columns, c => c.Id == id) ?? throw new ArgumentException("Unknown query column.");
+    internal ColumnDefinition Column(uint id)
+    {
+        foreach (var column in Columns) if (column.Id == id) return column;
+        throw new ArgumentException("Unknown query column.");
+    }
 }
 
 internal sealed record QueryParameterMetadata(uint Id, string Name, CodecDescriptor Codec, uint BoundCodec);

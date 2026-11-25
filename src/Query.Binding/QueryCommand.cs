@@ -97,7 +97,15 @@ internal sealed partial class QueryCommand
 
     internal static void Capacity() => throw new BindingFailure(NativeStatus.DomainError, 0x4442, 11, 0);
     private static void Unsupported() => throw new BindingFailure(NativeStatus.NotSupported, 0, 11, 0);
-    private int LiteralBytes => _literals.Values.Sum();
+    private int LiteralBytes
+    {
+        get
+        {
+            var bytes = 0;
+            foreach (var literal in _literals) bytes = checked(bytes + literal.Value);
+            return bytes;
+        }
+    }
 
     private void Quota(int bytes, int depth = 0, int expanded = 0, int literalBytes = 0, int retainedNodes = 0)
     {
@@ -295,10 +303,14 @@ internal sealed partial class QueryCommand
         }
     }
 
-    internal QueryPlanMetadata Metadata() => new(_nodes + _retainedNodes, _expanded, _statementNodes, _ownedBytes,
-        Math.Max(_importedDepth, _slots.Where(node => node.Valid && node.Expression is not null).Select(node => node.Expression!.Depth).DefaultIfEmpty(1).Max()),
-        new Dictionary<object, int>(_literals, ReferenceEqualityComparer.Instance),
-        _parameters.Values.ToArray(), _projection);
+    internal QueryPlanMetadata Metadata()
+    {
+        var depth = 1;
+        foreach (var node in _slots)
+            if (node.Valid && node.Expression is { } expression) depth = Math.Max(depth, expression.Depth);
+        return new(_nodes + _retainedNodes, _expanded, _statementNodes, _ownedBytes, Math.Max(_importedDepth, depth),
+            new Dictionary<object, int>(_literals, ReferenceEqualityComparer.Instance), _parameters.Values.ToArray(), _projection);
+    }
 
     private void CheckImport(QueryPlanMetadata plan)
     {
