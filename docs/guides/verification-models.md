@@ -20,7 +20,7 @@ Plan-locked Design checkout:
 
 ```sh
 python3 tests/Verification.Models/run.py \
-  --design-root ../NativeWeave-Design \
+  --design-root ../Korda-Design \
   --output-dir artifacts/A19/linux-1
 ```
 

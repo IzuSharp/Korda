@@ -56,7 +56,7 @@ def main():
     locked = [] if args.prepare else ["--locked-mode"]
     sample = ROOT / "samples/api/verification-compatibility/CompatibilitySample.csproj"
     try:
-        design = args.design_root or next((p for p in [ROOT.parent / "NativeWeave-Design", ROOT.parents[2] / "NativeWeave-Design"] if p.is_dir()), None)
+        design = args.design_root or next((p for p in [ROOT.parent / "Korda-Design", ROOT.parents[2] / "Korda-Design"] if p.is_dir()), None)
         assert design is not None, "Use --design-root for the locked read-only Design checkout"
         design_inputs = compat.read_json(ROOT / "src/Verification.Compatibility/design-inputs.json")
         design_commit = subprocess.check_output(["git", "-C", str(design), "rev-parse", "HEAD"], text=True).strip()

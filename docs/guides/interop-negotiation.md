@@ -155,7 +155,7 @@ Run the scoped verifier with the pinned SDK/Clang toolchain:
 ```sh
 python3 tests/Interop.Negotiation/verify.py \
   --plan-root /path/to/Plan \
-  --design-root /path/to/NativeWeave-Design \
+  --design-root /path/to/Korda-Design \
   --output artifacts/A02/verification
 ```
 

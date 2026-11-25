@@ -15,7 +15,7 @@ runtime, executes and streams on that fixed physical session, and supplies the
 same-session B05 transaction driver. It contains no managed PostgreSQL driver,
 second physical pool, global Tokio runtime, or application-specific native model.
 
-The unchanged declaration and component-oracle checks use NativeWeave-Design commit
+The unchanged declaration and component-oracle checks use Korda-Design commit
 `c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9`. Hashes and the exact current public
 symbol inventory are in `src/Data.Postgres/design-inputs.json` and
 `public-api.expected.json`. The compiled XML contribution is
@@ -259,7 +259,7 @@ the repository's maintainer build first, then run against the pinned Design snap
 ```sh
 python3 tests/Data.Postgres/verify.py \
   --output artifacts/B02/attempt-001 \
-  --design-root /path/to/locked/NativeWeave-Design \
+  --design-root /path/to/locked/Korda-Design \
   --postgres-bin /path/to/postgres18/bin
 ```
 

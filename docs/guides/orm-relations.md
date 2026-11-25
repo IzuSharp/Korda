@@ -322,11 +322,11 @@ Windows acceptance or the final A16/B24 pristine package gate.
 
 The exact public contract is pinned to Design commit
 `c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9`:
-[database API](https://github.com/IzuSharp/NativeWeave-Design/blob/c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9/docs/api/database.md),
-[query semantics](https://github.com/IzuSharp/NativeWeave-Design/blob/c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9/docs/database/query-semantics.md),
-and [public declarations](https://github.com/IzuSharp/NativeWeave-Design/blob/c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9/experiments/public-api/NativeWeave.Api.Design/Database.cs).
+[database API](https://github.com/IzuSharp/Korda-Design/blob/c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9/docs/api/database.md),
+[query semantics](https://github.com/IzuSharp/Korda-Design/blob/c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9/docs/database/query-semantics.md),
+and [public declarations](https://github.com/IzuSharp/Korda-Design/blob/c62cdb8aee833b6ab1a03e29a3f59f81a1b483f9/experiments/public-api/NativeWeave.Api.Design/Database.cs).
 DB-API-01 additions are recorded separately in the
-[Fluent ORM contract](https://github.com/IzuSharp/NativeWeave-Design/blob/main/docs/database/fluent-orm.md)
+[Fluent ORM contract](https://github.com/IzuSharp/Korda-Design/blob/main/docs/database/fluent-orm.md)
 and the implementation's explicit additive inventory. Generated
 [Database reference](../../src/Orm.Relations/reference/database.md) and
 [Data reference](../../src/Orm.Relations/reference/data.md) preserve every frozen
