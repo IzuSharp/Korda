@@ -151,16 +151,23 @@ internal sealed class HostPullController : CoordinatedCallback, IValueTaskSource
         }
         finally
         {
+            bool deferToReady;
             lock (_gate)
             {
                 if (control) _controls--;
                 if (!_registrationAttempted && !_registrationReady)
                 { _registrationReady = true; _registrationDrained = true; }
                 _setupReturned = true;
+                deferToReady = _accepted && !_ready && _failure is null
+                    && !_stopping && !_closed && !_indeterminate;
             }
+            // A normal accepted request cannot drain before ready. The callback and
+            // this decision use the same gate: early readiness is resumed here,
+            // and later readiness signals its own work item. Fault/stop paths
+            // retain their existing independent progress notifications.
             // A pre-reservation failure has no native/cancellation obligation
             // and needs no scheduler capacity in order to release its root.
-            Resume();
+            if (!deferToReady) Resume();
         }
         return new(this, version);
     }

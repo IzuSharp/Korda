@@ -1,6 +1,5 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using System.Threading.Tasks.Sources;
 using Korda.Interop.Abi;
 using Korda.Interop.Callbacks;
 using Korda.Interop.Lifetime;
@@ -18,8 +17,6 @@ internal abstract unsafe class AsyncNativeCalls
         NativeError.Create("async", "terminal", status, in error, token);
     /// <summary>Nonthrowingly closes the owning engine's ordinary admission, preserving trusted cleanup.</summary>
     internal abstract void Poison();
-    /// <summary>Observes a retired private result before its single consumer can resume.</summary>
-    internal virtual void ObserveRetirement(AsyncOperation operation) { }
 }
 
 /// <summary>Exact known setup outcome; Indeterminate retains potential native obligations.</summary>
@@ -35,7 +32,7 @@ internal enum AsyncBoundary { BeforeRoot, RootAllocated, BeforeRegister, Registe
 internal abstract class AsyncOperation : CoordinatedCallback, IDisposable, IAsyncDisposable
 {
     private readonly object _gate = new();
-    private readonly IDisposable _owner;
+    private readonly NativeResourceOwner _owner;
     private readonly AsyncNativeCalls _native;
     private readonly CallbackCoordinator _coordinator;
     private readonly CancellationToken _token;
@@ -85,19 +82,6 @@ internal abstract class AsyncOperation : CoordinatedCallback, IDisposable, IAsyn
 
     protected AsyncOperation(NativeResourceOwner owner, AsyncNativeCalls native, CallbackCoordinator coordinator,
         CancellationToken cancellationToken, IDisposable? inputLifetime, long inputBytes,
-        ICallbackScheduler? scheduler, Action<AsyncBoundary>? testBoundary)
-        : this((IDisposable)owner, native, coordinator, cancellationToken, inputLifetime, inputBytes, scheduler, testBoundary) { }
-
-    private AsyncOperation(SafeHandle owner, AsyncNativeCalls native, CallbackCoordinator coordinator,
-        CancellationToken cancellationToken, IDisposable? inputLifetime, long inputBytes,
-        ICallbackScheduler? scheduler, Action<AsyncBoundary>? testBoundary)
-        : this(ValidateOwner(owner), native, coordinator, cancellationToken, inputLifetime, inputBytes, scheduler, testBoundary) { }
-
-    // The only owner forms are the general owner contract and an exclusively
-    // transferred SafeHandle on the private retired-result path. One reference
-    // keeps the ordinary Task context's storage unchanged.
-    private AsyncOperation(IDisposable owner, AsyncNativeCalls native, CallbackCoordinator coordinator,
-        CancellationToken cancellationToken, IDisposable? inputLifetime, long inputBytes,
         ICallbackScheduler? scheduler, Action<AsyncBoundary>? testBoundary) : base(scheduler)
     {
         ArgumentNullException.ThrowIfNull(owner);
@@ -120,13 +104,6 @@ internal abstract class AsyncOperation : CoordinatedCallback, IDisposable, IAsyn
             _slot = coordinator.Reserve(this);
         }
         catch { _root.Free(); _rootLive = false; throw; }
-    }
-
-    private static IDisposable ValidateOwner(SafeHandle owner)
-    {
-        ArgumentNullException.ThrowIfNull(owner);
-        if (owner.IsClosed || owner.IsInvalid) throw new ArgumentException("An open, valid native owner is required.", nameof(owner));
-        return owner;
     }
 
     internal Task Retirement
@@ -277,20 +254,7 @@ internal abstract class AsyncOperation : CoordinatedCallback, IDisposable, IAsyn
         }
         try
         {
-            if (_owner is NativeResourceOwner resource) pointer = resource.Acquire(ref acquired);
-            else
-            {
-                var handle = (SafeHandle)_owner;
-                bool physical = false;
-                try
-                {
-                    handle.DangerousAddRef(ref physical);
-                    pointer = handle.DangerousGetHandle();
-                    acquired = true;
-                }
-                catch { if (physical) handle.DangerousRelease(); throw; }
-                finally { GC.KeepAlive(_native); }
-            }
+            pointer = _owner.Acquire(ref acquired);
             return true;
         }
         catch { acquired = false; lock (_gate) _controls--; Signal(); throw; }
@@ -300,16 +264,7 @@ internal abstract class AsyncOperation : CoordinatedCallback, IDisposable, IAsyn
     private void ReleaseControl(ref bool acquired, bool notify)
     {
         if (!acquired) return;
-        try
-        {
-            if (_owner is NativeResourceOwner resource) resource.Release(ref acquired);
-            else
-            {
-                acquired = false;
-                try { ((SafeHandle)_owner).DangerousRelease(); }
-                finally { GC.KeepAlive(_native); }
-            }
-        }
+        try { _owner.Release(ref acquired); }
         finally { lock (_gate) _controls--; if (notify) Signal(); }
     }
 
@@ -606,7 +561,6 @@ internal abstract class AsyncOperation : CoordinatedCallback, IDisposable, IAsyn
         TaskCompletionSource? retirement;
         lock (_gate) { _retirementPublished = true; retirement = _retirement; }
         retirement?.TrySetResult();
-        PublishRetired();
     }
 
     private async Task FinishRegistrationDrainAsync(ValueTask drain)
@@ -631,96 +585,7 @@ internal abstract class AsyncOperation : CoordinatedCallback, IDisposable, IAsyn
     protected abstract void PublishSuccess(nint operation);
     protected abstract void PublishFailure(Exception error);
     protected abstract void PublishCanceled(CancellationToken token);
-    protected virtual void PublishRetired() { }
 
-    /// <summary>One private result published only after complete operation retirement.</summary>
-    /// <remarks>This is a fresh, single-consumer context for each operation, never reset or pooled.
-    /// Typed take still runs under the native control lease. Its independent result remains held
-    /// until roots, controls, registration, input ownership and the coordinator reservation retire.
-    /// Ordinary AsyncOperation&lt;TResult&gt; retains its separate early Task publication contract.</remarks>
-    internal sealed class RetiredValueTask<TResult> : AsyncOperation, IValueTaskSource<TResult>
-    {
-        private readonly Func<nint, TResult> _takeAndMaterialize;
-        private ManualResetValueTaskSourceCore<TResult> _completion;
-        private TResult _value = default!;
-        private Exception? _failure;
-        private CancellationToken _canceledToken;
-        private byte _outcome;
-
-        internal RetiredValueTask(NativeResourceOwner owner, AsyncNativeCalls native, CallbackCoordinator coordinator,
-            Func<nint, TResult> takeAndMaterialize, CancellationToken cancellationToken = default,
-            IDisposable? inputLifetime = null, long inputBytes = 0, ICallbackScheduler? scheduler = null,
-            Action<AsyncBoundary>? testBoundary = null)
-            : base(owner, Validate(native, takeAndMaterialize), coordinator, cancellationToken, inputLifetime,
-                inputBytes, scheduler, testBoundary)
-        {
-            _takeAndMaterialize = takeAndMaterialize;
-            _completion.RunContinuationsAsynchronously = true;
-        }
-
-        // Only this private bridge transfers a fresh handle directly. Its
-        // control count prevents disposal during physical AddRef/Release;
-        // successful construction, not Start, transfers ownership.
-        internal RetiredValueTask(SafeHandle owner, AsyncNativeCalls native, CallbackCoordinator coordinator,
-            Func<nint, TResult> takeAndMaterialize, CancellationToken cancellationToken = default,
-            IDisposable? inputLifetime = null, long inputBytes = 0, ICallbackScheduler? scheduler = null,
-            Action<AsyncBoundary>? testBoundary = null)
-            : base(owner, Validate(native, takeAndMaterialize), coordinator, cancellationToken, inputLifetime,
-                inputBytes, scheduler, testBoundary)
-        {
-            _takeAndMaterialize = takeAndMaterialize;
-            _completion.RunContinuationsAsynchronously = true;
-        }
-
-        private static AsyncNativeCalls Validate(AsyncNativeCalls native, Func<nint, TResult> mapper)
-        { ArgumentNullException.ThrowIfNull(mapper); return native; }
-
-        internal ValueTask<TResult> Start() { StartCore(); return new(this, _completion.Version); }
-        protected override void PublishSuccess(nint operation)
-        {
-            var value = _takeAndMaterialize(operation);
-            lock (_gate) { if (_outcome == 0) { _value = value; _outcome = 1; } }
-        }
-        protected override void PublishFailure(Exception error)
-        { lock (_gate) { if (_outcome == 0) { _failure = error; _outcome = 2; } } }
-        protected override void PublishCanceled(CancellationToken token)
-        { lock (_gate) { if (_outcome == 0) { _canceledToken = token; _outcome = 3; } } }
-
-        protected override void PublishRetired()
-        {
-            TResult value; Exception? failure; CancellationToken canceled; byte outcome;
-            lock (_gate) { value = _value; failure = _failure; canceled = _canceledToken; outcome = _outcome; }
-            // Like DataSource.Complete's finally, an observer failure takes
-            // precedence over the earlier result without poisoning retired state.
-            try { _native.ObserveRetirement(this); }
-            catch (Exception error) { _completion.SetException(error); return; }
-            if (outcome == 1) _completion.SetResult(value);
-            else if (outcome == 2) _completion.SetException(failure!);
-            else if (outcome == 3)
-            {
-                // Preserve the domain's owned cleanup diagnostic. A normal
-                // cancellation also retains the canceled Task identity exposed
-                // by the former TaskCanceledException, only on this error path.
-                _completion.SetException(TerminalFailure is OperationCanceledException { InnerException: not null } enriched
-                    ? enriched : CanceledFailure(canceled));
-            }
-            else _completion.SetException(new InvalidOperationException("A retired operation has no captured result."));
-        }
-
-        private static OperationCanceledException CanceledFailure(CancellationToken token)
-        {
-            var canceled = new TaskCompletionSource<TResult>(TaskCreationOptions.RunContinuationsAsynchronously);
-            canceled.SetCanceled(token);
-            try { _ = canceled.Task.GetAwaiter().GetResult(); }
-            catch (OperationCanceledException failure) { return failure; }
-            throw new InvalidOperationException("A canceled completion returned a value.");
-        }
-
-        TResult IValueTaskSource<TResult>.GetResult(short token) => _completion.GetResult(token);
-        ValueTaskSourceStatus IValueTaskSource<TResult>.GetStatus(short token) => _completion.GetStatus(token);
-        void IValueTaskSource<TResult>.OnCompleted(Action<object?> continuation, object? state, short token,
-            ValueTaskSourceOnCompletedFlags flags) => _completion.OnCompleted(continuation, state, token, flags);
-    }
 }
 
 /// <summary>Typed managed Task bridge; TResult and its mapper never cross the unmanaged ABI.</summary>

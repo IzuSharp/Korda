@@ -876,6 +876,166 @@ void pull_first_fetch_admission()
               "first-fetch admission failure leaves no pull, cursor or buffer owner");
     }
 }
+
+void pull_stop_before_worker()
+{
+    Scope scope;
+    auto pull = scope.pull(3);
+    auto entered = std::make_shared<std::atomic<bool>>(false);
+    auto proceed = std::make_shared<std::binary_semaphore>(0);
+    pull->test_before_work = [entered, proceed]
+    {
+        entered->store(true);
+        proceed->acquire();
+    };
+    PullReady ready;
+    pull->request(1, 1, 256, ready.callbacks());
+    await([&] { return entered->load(); });
+    pull->request_close();
+    const bool no_read = scope.probe->reads == 0;
+    proceed->release();
+    ready.wait(1);
+    const auto failure = reject([&] { (void)pull->take(1); });
+    const auto rich = pull->take_error(1);
+    const auto duplicate = reject([&] { (void)pull->take_error(1); }).status;
+    pull->join();
+    pull.reset();
+    if (failure.status != NW_CANCELED)
+        std::cerr << "queued stop observed status=" << failure.status << " code=" << failure.code
+                  << " message=" << failure.what() << " rich-status=" << rich.status << '\n';
+    check(failure.status == NW_CANCELED, "accepted stop before worker dispatch preserves cancellation");
+    check(no_read && scope.probe->reads == 0, "queued cancellation never opens or steps the provider");
+    check(rich.status == failure.status && rich.correlation == failure.correlation && duplicate == NW_INVALID_STATE &&
+              ready.calls == 1,
+          "queued cancellation has one readiness and one matching rich error");
+    check(pull_count == 0 && cursor_count == 0 && buffer_count == 0 && !scope.session->active.load(),
+          "queued cancellation returns its channel, cursor, buffer and Session gate");
+}
+
+void pull_stop_before_wake()
+{
+    Scope scope;
+    auto pull = scope.pull(3);
+    auto entered = std::make_shared<std::atomic<bool>>(false);
+    auto work = std::make_shared<std::binary_semaphore>(0);
+    pull->test_before_work = [entered, work]
+    {
+        entered->store(true);
+        work->acquire();
+    };
+    auto stopping = std::make_shared<std::atomic<bool>>(false);
+    auto wake = std::make_shared<std::binary_semaphore>(0);
+    pull->test_before_stop_wake = [stopping, wake]
+    {
+        stopping->store(true);
+        wake->acquire();
+    };
+    PullReady ready;
+    pull->request(1, 1, 256, ready.callbacks());
+    await([&] { return entered->load(); });
+    auto stop = std::async(std::launch::async, [&] { pull->request_close(); });
+    bool released = false;
+    std::optional<Error> failure, rich;
+    try
+    {
+        await([&] { return stopping->load(); });
+        work->release();
+        released = true;
+        ready.wait(1);
+        failure = reject([&] { (void)pull->take(1); });
+        rich = pull->take_error(1);
+    }
+    catch (...)
+    {
+        if (!released)
+            work->release();
+        wake->release();
+        stop.wait();
+        throw;
+    }
+    wake->release();
+    stop.get();
+    pull->join();
+    pull.reset();
+    check(failure->status == NW_CANCELED && rich->status == NW_CANCELED && ready.calls == 1,
+          "stop intent is visible before its out-of-lock provider wake, with one canceled result");
+    check(scope.probe->reads == 0 && pull_count == 0 && cursor_count == 0 && buffer_count == 0 &&
+              !scope.session->active.load(),
+          "the stop publication window cannot execute SQL or retain a request owner");
+}
+
+void pull_queued_parent_priority()
+{
+    for (const bool poison : {false, true})
+    {
+        Scope scope;
+        auto pull = scope.pull(3);
+        auto entered = std::make_shared<std::atomic<bool>>(false);
+        auto proceed = std::make_shared<std::binary_semaphore>(0);
+        pull->test_before_work = [entered, proceed]
+        {
+            entered->store(true);
+            proceed->acquire();
+        };
+        PullReady ready;
+        pull->request(1, 1, 256, ready.callbacks());
+        await([&] { return entered->load(); });
+        pull->request_close();
+        if (poison)
+            scope.source->poisoned.store(true);
+        else
+            scope.session->request_close();
+        proceed->release();
+        ready.wait(1);
+        const auto failure = reject([&] { (void)pull->take(1); });
+        const auto rich = pull->take_error(1);
+        pull->join();
+        pull.reset();
+        check(failure.status == (poison ? NW_ENGINE_POISONED : NW_INVALID_STATE) && rich.status == failure.status &&
+                  scope.probe->reads == 0 && ready.calls == 1,
+              "queued Source poison and Session closure retain priority over the marked channel stop");
+    }
+    {
+        Scope scope;
+        auto pull = scope.pull(0);
+        Error original(NW_DOMAIN_ERROR, 1, "original asynchronous provider error");
+        original.provider = "57014";
+        original.cleanup = std::make_shared<Error>(NW_NATIVE_PANIC, 8, "original cleanup");
+        scope.source->workers.test_before_post = [original] { throw original; };
+        PullReady ready;
+        pull->request(1, 1, 256, ready.callbacks());
+        ready.wait(1);
+        pull->request_close();
+        const auto failure = reject([&] { (void)pull->take(1); });
+        const auto rich = pull->take_error(1);
+        scope.source->workers.test_before_post = {};
+        pull->join();
+        pull.reset();
+        check(failure.status == original.status && failure.code == original.code &&
+                  failure.correlation == original.correlation && rich.provider == original.provider &&
+                  rich.correlation == original.correlation && rich.cleanup == original.cleanup && ready.calls == 1,
+              "later stop never replaces a frozen provider SQLSTATE, correlation or cleanup error");
+    }
+}
+
+void closed_cursor_cancel_scope()
+{
+    Scope scope;
+    auto cursor = scope.open(3);
+    auto canceled = std::make_shared<Cancel>();
+    canceled->request();
+    cursor->request_close();
+    check(reject([&] { (void)cursor->fetch(canceled, 1, 256, true); }).status == NW_CANCELED,
+          "cursor closure after channel admission preserves the marked fetch cancellation");
+    check(reject([&] { (void)cursor->fetch(canceled, 1, 256); }).status == NW_INVALID_STATE,
+          "the frozen standalone fetch keeps closed-state priority even with a canceled token");
+    check(reject([&] { (void)cursor->fetch(std::make_shared<Cancel>(), 1, 256, true); }).status == NW_INVALID_STATE,
+          "an unrelated closed cursor still reports invalid state without cancellation");
+    cursor->join();
+    cursor.reset();
+    check(scope.probe->reads == 0 && cursor_count == 0 && buffer_count == 0,
+          "closed-cursor admission never dispatches provider rows");
+}
 void pull_end_and_abandonment()
 {
     Scope scope;
@@ -1191,6 +1351,10 @@ int main()
         retirement_worker_owner_barrier();
         retirement_notification_barrier();
         pull_generations_and_tail();
+        pull_stop_before_worker();
+        pull_stop_before_wake();
+        pull_queued_parent_priority();
+        closed_cursor_cancel_scope();
         pull_first_fetch_admission();
         pull_end_and_abandonment();
         pull_pending_and_active_abandonment();

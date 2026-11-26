@@ -1727,10 +1727,17 @@ struct CursorReadAdmission
         if (cursor.closing.load())
             cursor.schedule_cleanup();
     }
-    void check() const
+    void check(const Cancel* cancel = nullptr) const
     {
         if (cursor.closing.load() || cursor.retired.load())
+        {
+            // A stop can close the cursor after the channel's last admission
+            // check. Preserve that request's marked cancellation, without
+            // masking a live-batch/end/concurrent-use state error.
+            if (cancel && cancel->requested())
+                throw Error::canceled();
             throw Error::closed();
+        }
         if (cursor.batch_live.load())
             throw Error::state("previous row batch remains live");
         if (cursor.end_sent)
@@ -1744,10 +1751,13 @@ void Cursor::check_read_admission()
     CursorReadAdmission admission(*this);
     admission.check();
 }
-std::shared_ptr<Buffer> Cursor::fetch(std::shared_ptr<Cancel> cancel, std::size_t rows, std::size_t bytes)
+std::shared_ptr<Buffer> Cursor::fetch(std::shared_ptr<Cancel> cancel, std::size_t rows, std::size_t bytes,
+                                      bool preserve_cancel_on_close)
 {
     CursorReadAdmission admission(*this);
-    admission.check();
+    // Only the already-admitted pull path resolves its own stop/close race.
+    // The frozen standalone fetch keeps its existing closed-state precedence.
+    admission.check(preserve_cancel_on_close ? cancel.get() : nullptr);
     if (cancel->requested())
         throw Error::canceled();
     {
@@ -2246,6 +2256,11 @@ void CursorPull::run(std::uint64_t generation, std::size_t rows, std::size_t byt
 #endif
         {
             std::lock_guard lock(mutex_);
+            session->source->admit();
+            if (session->closing.load())
+                throw Error::closed();
+            if (cancel->requested())
+                throw Error::canceled();
             if (closing_)
                 throw Error::closed();
             cursor = cursor_;
@@ -2259,11 +2274,6 @@ void CursorPull::run(std::uint64_t generation, std::size_t rows, std::size_t byt
 #endif
             }
         }
-        session->source->admit();
-        if (session->closing.load())
-            throw Error::closed();
-        if (cancel->requested())
-            throw Error::canceled();
         if (!cursor)
         {
             if (admitted)
@@ -2288,17 +2298,17 @@ void CursorPull::run(std::uint64_t generation, std::size_t rows, std::size_t byt
         // This is the former second managed open/fetch boundary. Do not issue
         // Bind/Execute or step after a close, cancellation or source poison
         // that arrived while the full column description was being validated.
-        session->source->admit();
-        if (session->closing.load())
-            throw Error::closed();
-        if (cancel->requested())
-            throw Error::canceled();
         {
             std::lock_guard lock(mutex_);
+            session->source->admit();
+            if (session->closing.load())
+                throw Error::closed();
+            if (cancel->requested())
+                throw Error::canceled();
             if (closing_)
                 throw Error::closed();
         }
-        result = cursor->fetch(cancel, rows, bytes);
+        result = cursor->fetch(cancel, rows, bytes, true);
         // CursorReadAdmission is already destroyed at this point. All local
         // Session/plan/gate/provider accessors leave scope before readiness.
     }
@@ -2508,8 +2518,12 @@ void CursorPull::request_close()
     std::shared_ptr<CommandGate> gate;
     {
         std::lock_guard lock(mutex_);
-        closing_ = true;
         cancel = cancel_;
+        // The accepted generation sees cancellation and closure atomically.
+        // Its provider interrupt still runs outside the channel state lock.
+        if (cancel)
+            cancel->mark_requested();
+        closing_ = true;
         cursor = cursor_;
         if (!running_ && !cursor)
         {
@@ -2518,7 +2532,13 @@ void CursorPull::request_close()
         }
     }
     if (cancel)
+    {
+#ifdef NW_HOST_TEST_HOOKS
+        if (test_before_stop_wake)
+            test_before_stop_wake();
+#endif
         cancel->request();
+    }
     if (cursor)
         cursor->request_close();
     if (gate)

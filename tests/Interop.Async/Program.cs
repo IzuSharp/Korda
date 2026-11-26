@@ -200,10 +200,12 @@ internal static partial class Program
         {
             using var cancel = new CancellationTokenSource();
             var input = new InputLease();
+            var original = new ApplicationException("setup-boundary-" + boundary);
             var operation = new AsyncOperation<NativeBuffer>(Fixture.New(boundary == AsyncBoundary.StartReturned ? 2u : 0u),
                 new FixtureCalls(), coordinator, Fixture.TakeBuffer, cancel.Token, input, 3,
-                testBoundary: value => { if (value == boundary) throw new ApplicationException("setup-boundary"); });
-            await Failure<ApplicationException>(operation.Start());
+                testBoundary: value => { if (value == boundary) throw original; });
+            var failure = await Failure<ApplicationException>(operation.Start());
+            Check(ReferenceEquals(failure, original), "Setup settlement replaced the original boundary failure.");
             await Finish(operation);
             Check(input.Releases == 1, "Failed setup retained its input owner.");
             Check(operation.Snapshot.Start == (boundary == AsyncBoundary.StartReturned ? AsyncStartOutcome.AcceptedReturned : AsyncStartOutcome.Skipped),
@@ -244,11 +246,16 @@ internal static partial class Program
         foreach (int mode in new[] { 0, 1, 2 })
         {
             var input = new InputLease();
+            var original = new ApplicationException("before-take");
             var failing = new AsyncOperation<NativeBuffer>(Fixture.New(mode == 2 ? 18u : 2u), new FixtureCalls(), coordinator,
                 p => Fixture.TakeBuffer(p, throwAfterTake: mode == 1), inputLifetime: input, inputBytes: 3,
-                testBoundary: boundary => { if (mode == 0 && boundary == AsyncBoundary.BeforeTake) throw new ApplicationException("before-take"); });
+                testBoundary: boundary => { if (mode == 0 && boundary == AsyncBoundary.BeforeTake) throw original; });
             if (mode == 2) await Failure<NativeEngineException>(failing.Start());
-            else await Failure<ApplicationException>(failing.Start());
+            else
+            {
+                var failure = await Failure<ApplicationException>(failing.Start());
+                if (mode == 0) Check(ReferenceEquals(failure, original), "Typed take replaced the original boundary failure.");
+            }
             await Finish(failing);
             Check(input.Releases == 1 && Fixture.Count(5) == 0 && Fixture.Count(6) == 0, "Failed take/materialization leaked an owned or untaken result.");
         }
@@ -454,8 +461,6 @@ internal static partial class Program
     {
         if (args.Contains("--require-aot")) Check(!RuntimeFeature.IsDynamicCodeSupported && !RuntimeFeature.IsDynamicCodeCompiled, "Expected actual Native AOT execution.");
         if (args.Contains("--retire-fault")) { await RetireFaultQuarantine(); return; }
-        if (args.Contains("--retired-value-task-quarantine")) { RetiredValueTaskQuarantine(); return; }
-        if (args.Contains("--direct-retired-value-task-quarantine")) { RetiredValueTaskQuarantine(direct: true); return; }
         if (args.Contains("--binding-diagnostics")) { await BindingDiagnostics(); Console.WriteLine("A07 copied binding diagnostics regression passed."); return; }
         string? isolation = args.FirstOrDefault(a => a is "--indeterminate-start" or "--callback-then-reject");
         if (isolation is not null) { await Quarantine(isolation); return; }
@@ -469,8 +474,7 @@ internal static partial class Program
         await BindingFailureAndRejectedScheduling();
         await BindingDiagnostics();
         await ResultBeforeNativeQuiet();
-        await RetiredValueTaskChecks();
-        await DirectHandleChecks();
+        await OperationOwnershipChecks();
         await NativeWorkersAndGc();
         await ContextAndSelfWait();
         await DiscardedTaskCleanup();

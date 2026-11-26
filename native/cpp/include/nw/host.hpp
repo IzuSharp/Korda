@@ -311,7 +311,8 @@ struct Cursor : std::enable_shared_from_this<Cursor>
                                         Clock::time_point deadline);
     ~Cursor();
     void check_read_admission();
-    std::shared_ptr<Buffer> fetch(std::shared_ptr<Cancel> cancel, std::size_t rows, std::size_t bytes);
+    std::shared_ptr<Buffer> fetch(std::shared_ptr<Cancel> cancel, std::size_t rows, std::size_t bytes,
+                                  bool preserve_cancel_on_close = false);
     void request_close();
     void close_now();
     void schedule_cleanup() noexcept;
@@ -360,6 +361,8 @@ struct CursorPull : std::enable_shared_from_this<CursorPull>
     std::function<void()> test_before_first_fetch;
     std::function<void()> test_after_ready;
     std::function<void()> test_before_close_work;
+    // Observes logical stop before the out-of-lock provider wake.
+    std::function<void()> test_before_stop_wake;
 #endif
 
   private:

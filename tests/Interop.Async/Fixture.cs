@@ -31,6 +31,7 @@ internal sealed unsafe class FixtureCalls : AsyncNativeCalls
     internal int Poisoned;
     internal int Cancels;
     internal int Retires;
+    internal Exception? MappedFailure { get; set; }
     internal bool ThrowAfterStart { get; set; }
     internal override uint Start(nint operation, in NwOperationCallbacksV1 callbacks)
     {
@@ -46,6 +47,8 @@ internal sealed unsafe class FixtureCalls : AsyncNativeCalls
     }
     internal override uint TryRetire(nint operation) { Interlocked.Increment(ref Retires); return Fixture.Retire(operation); }
     internal override void Poison() => Interlocked.Increment(ref Poisoned);
+    internal override Exception MapFailure(nint operation, uint status, in NwErrorInfoV1 error, CancellationToken token) =>
+        MappedFailure ?? base.MapFailure(operation, status, in error, token);
 }
 
 internal static unsafe partial class Fixture

@@ -233,9 +233,13 @@ std::string text_result(std::uint32_t oid, ByteView bytes)
 #endif
 } // namespace
 
-void Cancel::request()
+void Cancel::mark_requested() noexcept
 {
     requested_.store(true, std::memory_order_release);
+}
+void Cancel::request()
+{
+    mark_requested();
     std::lock_guard lock(mutex_);
     if (hook_)
         hook_();

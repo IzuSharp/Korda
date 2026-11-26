@@ -81,8 +81,7 @@ def main():
         restore = ["--locked-mode"] + (["-p:NuGetAudit=false", "--ignore-failed-sources"] if args.offline else [])
         projects = [("tests", "tests/Interop.Async/Interop.Async.Tests.csproj", "Korda.Interop.Async.Tests"),
                     ("sample", "samples/api/interop-async/Interop.Async.Sample.csproj", "Korda.Interop.Async.Sample")]
-        isolated = ["--indeterminate-start", "--callback-then-reject", "--retire-fault", "--retired-value-task-quarantine",
-                    "--direct-retired-value-task-quarantine"]
+        isolated = ["--indeterminate-start", "--callback-then-reject", "--retire-fault"]
         for label, project, assembly in projects:
             run(label + "-restore", ["dotnet", "restore", project, *restore, *common])
             run(label + "-build", ["dotnet", "build", project, "-c", "Release", "--no-restore", *common])

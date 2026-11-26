@@ -23,6 +23,8 @@ using Clock = std::chrono::steady_clock;
 class Cancel
 {
   public:
+    // Publish intent under an owner's state lock without invoking provider code.
+    void mark_requested() noexcept;
     void request();
     void install(std::function<void()> hook);
     void detach();

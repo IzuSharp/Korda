@@ -20,6 +20,7 @@ if (await FetchProbe.RunIfRequested(args)) return;
 if (await TransactionDefaultProbe.RunIfRequested(args)) return;
 if (args.Contains("--pull-scheduler-races-only", StringComparer.Ordinal)) { await Suite.RejectedPullSchedulerOnly(); return; }
 if (args.Contains("--cursor-close-only", StringComparer.Ordinal)) { await CursorCloseTests.RunIfRequested(args); return; }
+if (args.Contains("--pull-ready-scheduling-only", StringComparer.Ordinal)) { await ReadySchedulingTests.RunIfRequested(); return; }
 Console.WriteLine("snapshot parser oracle inputs=" + SnapshotProbe.Verify());
 BatchResultTests.VerifyRecord();
 CursorCloseRecordTests.Verify();
@@ -150,6 +151,8 @@ internal static class Suite
         await BatchResultTests.VerifyParentTransactions(DatabaseProvider.PostgreSql, pg);
         await CursorCloseTests.Run(DatabaseProvider.Sqlite, Path.Combine(directory, "cursor-close.db"));
         await CursorCloseTests.Run(DatabaseProvider.PostgreSql, pg);
+        await ReadySchedulingTests.Run(DatabaseProvider.Sqlite, Path.Combine(directory, "ready-scheduling.db"));
+        await ReadySchedulingTests.Run(DatabaseProvider.PostgreSql, pg);
         await DependencyInjection(Path.Combine(directory, "di.db"));
         await WaitZero(SqliteDataSource.Engine);
         Directory.Delete(directory, true);
