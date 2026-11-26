@@ -7,6 +7,7 @@ using Korda.Database.Sqlite;
 using Korda.Database.PostgreSql;
 using Korda.Interop;
 using Korda.Interop.Async;
+using Korda.Interop.Callbacks;
 using Korda.Interop.Abi;
 using Korda.Query.Internal;
 using System.Buffers.Binary;
@@ -17,6 +18,7 @@ using NativeBuffer = Korda.Database.NativeBuffer;
 if (await SnapshotProbe.RunIfRequested(args)) return;
 if (await FetchProbe.RunIfRequested(args)) return;
 if (await TransactionDefaultProbe.RunIfRequested(args)) return;
+if (args.Contains("--pull-scheduler-races-only", StringComparer.Ordinal)) { await Suite.RejectedPullSchedulerOnly(); return; }
 Console.WriteLine("snapshot parser oracle inputs=" + SnapshotProbe.Verify());
 BatchResultTests.VerifyRecord();
 try { await Suite.Run(); } catch (DatabaseException failure) { Console.Error.WriteLine($"kind={failure.Kind} provider={failure.ProviderCode} correlation={failure.CorrelationId}"); throw; }
@@ -138,6 +140,8 @@ internal static class Suite
         }
         await BorrowedBatchHostTests.Run(DatabaseProvider.Sqlite, Path.Combine(directory, "borrowed.db"));
         await BorrowedBatchHostTests.Run(DatabaseProvider.PostgreSql, pg);
+        await RejectedPullScheduler(DatabaseProvider.Sqlite, Path.Combine(directory, "rejected-pull.db"));
+        await RejectedPullScheduler(DatabaseProvider.PostgreSql, pg);
         await BatchResultTests.VerifyFetches(DatabaseProvider.Sqlite, Path.Combine(directory, "batch-result.db"));
         await BatchResultTests.VerifyFetches(DatabaseProvider.PostgreSql, pg);
         await BatchResultTests.VerifyParentTransactions(DatabaseProvider.Sqlite, Path.Combine(directory, "batch-parent.db"));
@@ -380,6 +384,109 @@ internal static class Suite
         }
         Check(await session.ScalarAsync(SqlCommand.Create("SELECT COUNT(*) FROM " + table), Codecs.Int64) == 7,
             "pre-reservation concurrent stop leaves the same real session usable");
+    }
+    internal static async Task RejectedPullSchedulerOnly()
+    {
+        if (RuntimeFeature.IsDynamicCodeSupported) throw new InvalidOperationException("A real Native AOT correctness executable is required.");
+        var pg = Environment.GetEnvironmentVariable("NW_TEST_POSTGRES")
+            ?? throw new InvalidOperationException("Set NW_TEST_POSTGRES to an isolated PostgreSQL 18 cluster.");
+        var directory = Path.Combine(Path.GetTempPath(), "korda-pull-scheduler-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(directory);
+        await RejectedPullScheduler(DatabaseProvider.Sqlite, Path.Combine(directory, "fixture.db"));
+        await RejectedPullScheduler(DatabaseProvider.PostgreSql, pg);
+        Console.WriteLine($"PULL_REJECTED_SCHEDULER_PASS providers=2 cases=8 assertions={_assertions}; no accepted work item, original setup failure and all owners released");
+    }
+    private static async Task RejectedPullScheduler(DatabaseProvider provider, string connection)
+    {
+        var bound = TimeSpan.FromSeconds(10);
+        var engine = provider == DatabaseProvider.Sqlite ? SqliteDataSource.Engine : PostgreSqlDataSource.Engine;
+        foreach (var fault in new[] { HostPullBoundary.BeforeRoot, HostPullBoundary.RootAllocated })
+            foreach (var failStop in new[] { false, true })
+            {
+                await WaitZero(engine);
+                var builder = new DataSourceBuilder().ConfigureLimits(new DatabaseLimits { MaxConnections = 1, MaxBatchRows = 3 });
+                if (provider == DatabaseProvider.Sqlite) builder.UseSqlite(connection);
+                else builder.UsePostgreSql(connection, options => options.TlsMode = PostgreSqlTlsMode.DisableForLocalDevelopment);
+                await using var source = builder.Build();
+                await using var session = await source.OpenSessionAsync();
+                var projection = Projection<Row>.Create([ResultField.Create("id", Codecs.Int64), ResultField.Create("name", Codecs.String)],
+                    row => new(row.Read(0, Codecs.Int64), row.Read(1, Codecs.String)));
+                using var plan = SqlSubmission.Create(session, SqlCommand.Create("SELECT CAST(7 AS BIGINT) AS id, 'row 7' AS name"),
+                    3, source.RegisterProjection(projection));
+                source.TestPullScheduler = new RejectAllPullScheduler();
+                var transport = new HostStreamTransport(source, NativeHost.CreatePull(session, plan, ReadOnlyMemory<byte>.Empty), 3, default);
+                var original = new MappingFailure(); var stopFailure = new MappingFailure(); var published = 0;
+                using var stopEntered = new ManualResetEventSlim();
+                using var releaseStop = new ManualResetEventSlim();
+                Task? stopping = null;
+                var sqlBefore = Diagnostic(engine, 6);
+                source.TestPullBoundary = boundary =>
+                {
+                    if (boundary == HostPullBoundary.StopEntered)
+                    {
+                        stopEntered.Set();
+                        if (!releaseStop.Wait(bound)) throw new TimeoutException("Held native stop was not released.");
+                        if (failStop) throw stopFailure;
+                    }
+                    if (boundary != fault) return;
+                    stopping = Task.Run(transport.RequestStop);
+                    if (!stopEntered.Wait(bound)) throw new TimeoutException("Concurrent stop did not enter its held boundary.");
+                    throw original;
+                };
+                source.TestPullSnapshot = snapshot =>
+                {
+                    if (snapshot.Published && !snapshot.Consumed) Interlocked.Increment(ref published);
+                };
+                try
+                {
+                    var pending = transport.FetchAsync();
+                    var held = transport.PullSnapshot;
+                    Check(!pending.IsCompleted && held.Active && held.SetupReturned && held.Controls == 1
+                        && !held.SlotReserved && !held.Published,
+                        "pre-reservation setup failure remains pending while another thread holds a stop control");
+                    Check(held.Rooted == (fault == HostPullBoundary.RootAllocated),
+                        "the held stop cannot prematurely release a root allocated by the failing setup");
+                    releaseStop.Set();
+                    await (stopping ?? throw new InvalidOperationException("Missing concurrent stop task.")).WaitAsync(bound);
+                    var failure = await Throws<MappingFailure>(() => pending.AsTask().WaitAsync(bound));
+                    var completed = transport.PullSnapshot;
+                    Check(ReferenceEquals(failure, original) && Volatile.Read(ref published) == 1
+                        && completed.SetupReturned && completed.Published && completed.Consumed && !completed.Active
+                        && !completed.Rooted && !completed.SlotReserved && completed.Controls == 0 && completed.CallbackEntries == 0
+                        && completed.RegistrationDrained && !completed.Accepted && !completed.ResultTaken,
+                        "an unreserved pull completes once without scheduler acceptance after held stop/forced close releases every obligation");
+                    Check(Diagnostic(engine, 6) == sqlBefore, "a failed pre-reservation request never executes its SQL");
+                    if (failStop)
+                    {
+                        var cleanup = await Throws<MappingFailure>(() => transport.JoinAsync().WaitAsync(bound));
+                        Check(ReferenceEquals(cleanup, stopFailure), "final close preserves the separate native stop-boundary failure after cleanup");
+                    }
+                    else
+                    {
+                        var retirement = await transport.JoinAsync().WaitAsync(bound);
+                        Check(retirement.NativeRetired && completed.StopObserved, "a held successful native stop joins safely with every scheduler offer rejected");
+                        source.TestPullBoundary = null; source.TestPullSnapshot = null; source.TestPullScheduler = null;
+                        Check(await session.ScalarAsync(SqlCommand.Create("SELECT CAST(7 AS BIGINT)"), Codecs.Int64) == 7,
+                            "the same real session remains usable after an ordinary stop and failed setup");
+                    }
+                }
+                finally
+                {
+                    releaseStop.Set(); source.TestPullBoundary = null; source.TestPullSnapshot = null; source.TestPullScheduler = null;
+                    if (stopping is not null) await stopping.WaitAsync(bound);
+                    try { await transport.JoinAsync().WaitAsync(bound); }
+                    catch (MappingFailure error) when (failStop && ReferenceEquals(error, stopFailure)) { }
+                    plan.Dispose();
+                    await session.DisposeAsync().AsTask().WaitAsync(bound);
+                    await source.DisposeAsync().AsTask().WaitAsync(bound);
+                }
+                await WaitZero(engine);
+                Console.WriteLine($"PULL_REJECTED_SCHEDULER_CASE_PASS provider={provider} boundary={fault} stopFailure={failStop}; setup failure published once; SQL=0; final owners=0");
+            }
+    }
+    private sealed class RejectAllPullScheduler : ICallbackScheduler
+    {
+        public bool TryQueue(IThreadPoolWorkItem item) => false;
     }
     private static void InspectNativeBatch(LegacyBufferView batch, Korda.Database.NativeBuffer owner,
         EngineDescriptor engine, ulong expectedBuffers, bool dispose)

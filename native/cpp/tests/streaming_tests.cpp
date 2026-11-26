@@ -807,18 +807,19 @@ void pull_cleanup_queue_failure()
 }
 void pull_parent_cleanup_failure()
 {
+    for (const bool prepare_failure : {false, true})
     {
         Scope scope;
         auto transaction = Transaction::begin(scope.session, {0, false, 5'000'000'000, 5'000'000'000, {}},
                                               std::make_shared<Cancel>(), scope.session->admit(true));
-        auto pull = scope.pull(3);
+        auto pull = prepare_failure ? scope.pull(3, "SELECT value FROM missing_pull_table") : scope.pull(3);
         transaction->test_before_worker_start = [](std::uint32_t)
         { throw std::runtime_error("controlled transaction cleanup launch failure"); };
         transaction->request_close();
         auto posts = std::make_shared<std::atomic<unsigned>>(0);
-        scope.source->workers.test_before_post = [posts]
+        scope.source->workers.test_before_post = [posts, prepare_failure]
         {
-            if (++*posts == 1)
+            if (++*posts == 1 && !prepare_failure)
                 throw std::bad_alloc();
         };
         PullReady ready;
@@ -828,9 +829,10 @@ void pull_parent_cleanup_failure()
         const auto rich = pull->take_error(1);
         pull->join();
         pull.reset();
-        check(primary.status == NW_OUT_OF_MEMORY && rich.cleanup && rich.correlation == primary.correlation &&
+        check(primary.status == (prepare_failure ? NW_DOMAIN_ERROR : NW_OUT_OF_MEMORY) &&
+                  (!prepare_failure || primary.code == 1) && rich.cleanup && rich.correlation == primary.correlation &&
                   ready.calls == 1 && scope.source->poisoned.load() && scope.probe->reads == 0,
-              "lazy gate cleanup exception preserves the accepted queue error and delivers one ready");
+              "lazy gate cleanup exception preserves the accepted queue/provider error and delivers one ready");
         check(!scope.session->active.load() && scope.source->pending == 0 && scope.source->transaction_workers->done(),
               "failed parent launch leaves no request, transaction worker or session command guard");
         transaction->test_before_worker_start = {};

@@ -18,8 +18,8 @@ constexpr std::uint64_t hour_ns = 3'600'000'000'000;
 [[maybe_unused]] constexpr std::uint64_t second_ns = 1'000'000'000;
 const std::shared_ptr<Error>& cursor_cleanup_failure()
 {
-    // Initialized before the first channel can accept a request. Publishing
-    // an accepted request's cleanup failure must not allocate another error.
+    // Initialized before the Source can accept any operation. Publishing an
+    // accepted request's cleanup failure must not allocate another error.
     static const auto failure = std::make_shared<Error>(NW_NATIVE_PANIC, 8, "cleanup failed");
     return failure;
 }
@@ -356,6 +356,7 @@ Source::Source(HostConfig value)
       shapes(config.limits.prepared_plans, config.limits.prepared_bytes, database_abi_fingerprint)
 {
     stream_max_bytes = config.limits.batch_bytes * 8 * config.limits.connections;
+    (void)cursor_cleanup_failure();
     ++source_count;
 }
 std::shared_ptr<Source> Source::create(HostConfig config)
@@ -1325,8 +1326,41 @@ std::shared_ptr<Cursor> Session::open_cursor(std::shared_ptr<SqlPlan> plan, std:
     }
     catch (...)
     {
-        gate->finish(true);
-        throw;
+        const auto primary = std::current_exception();
+        try
+        {
+            gate->finish(true);
+        }
+        catch (...)
+        {
+            // Parent retirement is secondary to a failed prepare/description.
+            // In particular, a closing transaction's cleanup launch must not
+            // replace the provider error which made this gate finish.
+            discard.store(true);
+            source->poisoned.store(true);
+            try
+            {
+                std::rethrow_exception(primary);
+            }
+            catch (Error& failure)
+            {
+                failure.cleanup = cursor_cleanup_failure();
+                throw;
+            }
+            catch (const std::bad_alloc&)
+            {
+                Error failure(NW_OUT_OF_MEMORY, 8, "out of memory");
+                failure.cleanup = cursor_cleanup_failure();
+                throw failure;
+            }
+            catch (...)
+            {
+                Error failure(NW_NATIVE_PANIC, 8, "cursor failed");
+                failure.cleanup = cursor_cleanup_failure();
+                throw failure;
+            }
+        }
+        std::rethrow_exception(primary);
     }
 }
 Value Session::execute(std::shared_ptr<SqlPlan> plan, std::shared_ptr<Cancel> cancel, std::shared_ptr<CommandGate> gate)
@@ -1953,7 +1987,6 @@ CursorPull::CursorPull(std::shared_ptr<Session> parent, std::shared_ptr<SqlPlan>
                        std::shared_ptr<CommandGate> gate, std::optional<Clock::time_point> admitted)
     : session(std::move(parent)), plan_(std::move(plan)), gate_(std::move(gate)), admitted_(admitted)
 {
-    (void)cursor_cleanup_failure();
     ++pull_count;
 }
 std::shared_ptr<CursorPull> CursorPull::create(std::shared_ptr<Session> session, std::shared_ptr<SqlPlan> plan,

@@ -43,7 +43,7 @@ internal sealed class HostPullController : CoordinatedCallback, IValueTaskSource
     private Exception? _failure, _stopFailure;
 
     internal HostPullController(DataSource source, DatabaseOwner channel, ScopedStreamBatch batch,
-        CloseController close, int rows, CancellationToken token) : base(null)
+        CloseController close, int rows, CancellationToken token) : base(source.TestPullScheduler)
     {
         _source = source; _channel = channel; _batch = batch; _close = close;
         _rows = rows; _token = token;
@@ -160,7 +160,7 @@ internal sealed class HostPullController : CoordinatedCallback, IValueTaskSource
             }
             // A pre-reservation failure has no native/cancellation obligation
             // and needs no scheduler capacity in order to release its root.
-            if (_slot < 0) Process(); else Signal();
+            Resume();
         }
         return new(this, version);
     }
@@ -192,8 +192,21 @@ internal sealed class HostPullController : CoordinatedCallback, IValueTaskSource
         }
         finally
         {
-            lock (_gate) { _controls--; Signal(); }
+            lock (_gate) _controls--;
+            Resume();
         }
+    }
+
+    private void Resume()
+    {
+        bool unreserved;
+        lock (_gate) unreserved = _slot < 0 && _active && _setupReturned && !_published;
+        if (!unreserved) { Signal(); return; }
+        // Setup can fail before it owns a coordinator retry slot. If a stop
+        // was still active then, its last control (or the final close proof)
+        // must finish that local drain without relying on queue acceptance.
+        try { Process(); }
+        catch (Exception error) { SchedulingFault(error); }
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
@@ -350,7 +363,7 @@ internal sealed class HostPullController : CoordinatedCallback, IValueTaskSource
             lock (_gate) _failure ??= error;
             _source.Poison();
         }
-        finally { Signal(); }
+        finally { Resume(); }
     }
 
     internal void Closed()
