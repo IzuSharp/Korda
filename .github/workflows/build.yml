@@ -77,7 +77,7 @@ jobs:
             **/packages*.lock.json
       - name: Restore pinned tool downloads
         if: contains(fromJSON(inputs.resources), 'native')
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           key: linux-x64-tools-${{ hashFiles('native/dependencies.lock.json','eng/ci/sccache.sh') }}
           path: |
@@ -98,7 +98,7 @@ jobs:
           bash eng/ci/sccache.sh install
       - name: Restore compiler objects
         if: contains(fromJSON(inputs.resources), 'native')
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: ~/.cache/sccache
           key: sccache-linux-x64-v017-${{ hashFiles('native/dependencies.lock.json', 'CMakePresets.json') }}-${{ inputs.scope }}-${{ hashFiles('native/**', 'CMakeLists.txt', 'eng/task07_native.py') }}
@@ -110,7 +110,7 @@ jobs:
         run: echo "key=$(python3 eng/postgres-cache-key.py full)" >> "$GITHUB_OUTPUT"
       - name: Restore exact PostgreSQL installation
         if: steps.pg.outputs.key
-        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           key: postgres-full-ubuntu24-x64-${{ steps.pg.outputs.key }}
           path: artifacts/postgres-tools/install
