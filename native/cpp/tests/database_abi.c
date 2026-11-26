@@ -48,6 +48,9 @@ int main(void)
            batch.reserved == 0);
     assert(nw_db_cursor_pull_check_read_v1(NULL, &error) == NW_INVALID_STATE);
     assert(nw_db_cursor_pull_stop_v1(NULL) == NW_INVALID_STATE);
+    assert(nw_db_cursor_pull_close_request_v1(NULL, NULL, &error) == NW_INVALID_STATE);
+    nw_db_buffer* closed = (nw_db_buffer*)(uintptr_t)1;
+    assert(nw_db_cursor_pull_close_take_v1(NULL, &closed, &error) == NW_INVALID_STATE && closed == NULL);
     nw_db_ref pull = (nw_db_ref)(uintptr_t)1;
     assert(nw_db_cursor_pull_create_v1(NULL, NULL, empty, &pull, &error) == NW_INVALID_STATE && pull == NULL);
     nw_db_operation_release_v1(NULL);

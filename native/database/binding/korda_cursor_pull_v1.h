@@ -51,6 +51,10 @@ extern "C"
                                                        nw_error_info_v1* error);
     nw_status NW_CDECL nw_db_cursor_pull_check_read_v1(nw_db_ref channel, nw_error_info_v1* error);
     nw_status NW_CDECL nw_db_cursor_pull_stop_v1(nw_db_ref channel);
+    nw_status NW_CDECL nw_db_cursor_pull_close_request_v1(nw_db_ref channel, const nw_db_cursor_callbacks_v1* callbacks,
+                                                          nw_error_info_v1* error);
+    nw_status NW_CDECL nw_db_cursor_pull_close_take_v1(nw_db_ref channel, nw_db_buffer** result,
+                                                       nw_error_info_v1* error);
 #ifdef __cplusplus
 }
 #endif

@@ -33,6 +33,8 @@ internal sealed unsafe class CursorPullCalls
     internal readonly delegate* unmanaged[Cdecl]<nint, ulong, nint*, NwErrorInfoV1*, uint> TakeError;
     internal readonly delegate* unmanaged[Cdecl]<nint, NwErrorInfoV1*, uint> CheckRead;
     internal readonly delegate* unmanaged[Cdecl]<nint, uint> Stop;
+    internal readonly delegate* unmanaged[Cdecl]<nint, NativePullCallbacks*, NwErrorInfoV1*, uint> CloseRequest;
+    internal readonly delegate* unmanaged[Cdecl]<nint, nint*, NwErrorInfoV1*, uint> CloseTake;
 
     internal CursorPullCalls(Func<string, nint> resolve)
     {
@@ -44,6 +46,8 @@ internal sealed unsafe class CursorPullCalls
         TakeError = (delegate* unmanaged[Cdecl]<nint, ulong, nint*, NwErrorInfoV1*, uint>)resolve("nw_db_cursor_pull_take_error_v1");
         CheckRead = (delegate* unmanaged[Cdecl]<nint, NwErrorInfoV1*, uint>)resolve("nw_db_cursor_pull_check_read_v1");
         Stop = (delegate* unmanaged[Cdecl]<nint, uint>)resolve("nw_db_cursor_pull_stop_v1");
+        CloseRequest = (delegate* unmanaged[Cdecl]<nint, NativePullCallbacks*, NwErrorInfoV1*, uint>)resolve("nw_db_cursor_pull_close_request_v1");
+        CloseTake = (delegate* unmanaged[Cdecl]<nint, nint*, NwErrorInfoV1*, uint>)resolve("nw_db_cursor_pull_close_take_v1");
     }
 
     internal void Require()
@@ -56,5 +60,7 @@ internal sealed unsafe class CursorPullCalls
         BindingChecks.Require((nint)TakeError, "nw_db_cursor_pull_take_error_v1");
         BindingChecks.Require((nint)CheckRead, "nw_db_cursor_pull_check_read_v1");
         BindingChecks.Require((nint)Stop, "nw_db_cursor_pull_stop_v1");
+        BindingChecks.Require((nint)CloseRequest, "nw_db_cursor_pull_close_request_v1");
+        BindingChecks.Require((nint)CloseTake, "nw_db_cursor_pull_close_take_v1");
     }
 }

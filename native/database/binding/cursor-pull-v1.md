@@ -80,12 +80,46 @@ finishing.
 an operation. It is valid while idle or while a request is running. It does not
 revoke an accepted callback obligation or certify retirement.
 
-The returned channel supports the frozen `nw_db_close_create_v1`,
-`nw_db_snapshot_v1` and `nw_db_owner_release_v1` entries. There is at most one
-generic close operation per normal managed cursor. Close first stops admission,
-joins all request tickets, releases unconsumed buffers, and joins the actual
-cursor/provider cleanup. A channel snapshot reports released only when both
-its cursor receipt and independent worker ledger are complete.
+`close_request` accepts one independent final-close request. It uses the same
+24-byte ready-only callback record and reserves generation **0** for that
+notification. Positive fetch generations and their errors remain independent:
+an accepted fetch and final close can coexist without replacing either result.
+The callback record is validated before acceptance. A failed Source control
+reservation, including Source `admission_stop`, rejects without a callback;
+the existing generic close remains available for this cold rejection path.
+An accepted final close owes exactly one ready even when queueing or cleanup
+fails. Repeated final-close requests reject without another notification.
+An accepted queue failure requests cleanup without blocking the caller and
+retains its original error. Any already known cleanup failure is attached and
+poisons the Source; unfinished cleanup still requires an actual later join.
+
+Final close first stops admission, joins every existing fetch ticket, releases
+unconsumed buffers, and joins actual cursor/provider cleanup. Its worker uses
+an independent Source tail ticket, never the channel fence it is joining.
+Before `ready(context, 0)`, it freezes the final result/error, clears its callback
+record, and releases every cursor/channel/Source accessor and Source control
+reservation. After invocation only independent channel-close and Source tickets
+are completed. Source close waits its ticket through notification return. There is no final
+generic operation or generic retirement polling on the normal cursor path.
+
+`close_take` returns `NW_PENDING` before final readiness; success consumes one
+Buffer with the existing cleanup snapshot encoding. A missing, duplicate or
+already consumed result returns `NW_INVALID_STATE`. An error preserves its
+original status/domain/code/correlation without consuming the rich error;
+`take_error(channel, 0, ...)` consumes that separate close error once. An error
+notification is not proof of local safety. The consumer must retain the channel
+until the returned cleanup receipt proves `released=true`; unconfirmed cleanup
+continues to report failure and exclude its connection from reuse.
+
+The returned channel also supports the frozen `nw_db_close_create_v1`,
+`nw_db_snapshot_v1` and `nw_db_owner_release_v1` entries with unchanged generic
+quiet semantics. Public channel join/snapshot also cover the independent final
+notification ticket, so a cold generic fallback cannot release an indeterminate
+callback cookie while its notification is still live. The direct worker joins
+only the earlier fetch/cursor resources and freezes its own result without
+waiting for its own final notification ticket. Its consumer additionally drains
+the locally entered callback. Final notification tails access no channel state
+and remain tracked separately by the Source.
 
 Owner release is nonblocking. Dropping an idle channel releases its admission;
 dropping an active channel requests stop while the worker retains cleanup.
@@ -101,5 +135,9 @@ timing evidence.
 The retained native streaming and actual C ABI tests cover generation rejection,
 one-shot result/error transfer, lazy execution, the second first-fetch admission,
 held-batch ownership, EOF admission, transaction disposal, abandonment and a
-deterministic old-worker tail barrier. Measurements and independent package
+deterministic old-worker tail barrier. Final-close cases also hold an actual
+notification while Source close and generic fallback wait, distinguish direct
+resource snapshots from public notification-quiet snapshots, reject late Source
+admission, and preserve independent fetch/close errors through queue and cleanup
+faults. Measurements and independent package
 acceptance belong to the matching Plan candidate receipts.

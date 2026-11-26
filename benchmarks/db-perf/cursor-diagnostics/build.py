@@ -40,8 +40,11 @@ def generate(source):
         result, name, parameters = re.fullmatch(r'(\w+) NW_CDECL (\w+)\((.*)\);', line).groups()
         args = ', '.join(re.search(r'(\w+)$', item.strip()).group(1) for item in parameters.split(','))
         names.append(name)
-        prefix = '' if result == 'void' else result + ' result = '
-        suffix = '' if result == 'void' else f'if (result == NW_PENDING) atomic_fetch_add(&pending[{index}], 1); return result;'
+        status_name = 'probe_status'
+        while status_name in args.split(', '):
+            status_name += '_'
+        prefix = '' if result == 'void' else result + ' ' + status_name + ' = '
+        suffix = '' if result == 'void' else f'if ({status_name} == NW_PENDING) atomic_fetch_add(&pending[{index}], 1); return {status_name};'
         bodies.append(f'''static {result} NW_CDECL probe_{name}({parameters})
 {{
     atomic_fetch_add(&calls[{index}], 1);

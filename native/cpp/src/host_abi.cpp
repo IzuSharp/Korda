@@ -1048,6 +1048,31 @@ NW_DATABASE_API nw_status NW_CDECL nw_db_cursor_pull_stop_v1(nw_db_ref raw)
 {
     return boundary(nullptr, [&] { typed<std::shared_ptr<CursorPull>>(raw)->request_close(); });
 }
+NW_DATABASE_API nw_status NW_CDECL nw_db_cursor_pull_close_request_v1(nw_db_ref raw,
+                                                                      const nw_db_cursor_callbacks_v1* callbacks,
+                                                                      nw_error_info_v1* error)
+{
+    return boundary(error,
+                    [&]
+                    {
+                        auto pull = typed<std::shared_ptr<CursorPull>>(raw);
+                        if (!callbacks ||
+                            reinterpret_cast<std::uintptr_t>(callbacks) % alignof(nw_db_cursor_callbacks_v1))
+                            throw Error::invalid("cursor close callback record address");
+                        pull->close_request(*callbacks);
+                    });
+}
+NW_DATABASE_API nw_status NW_CDECL nw_db_cursor_pull_close_take_v1(nw_db_ref raw, nw_db_buffer** output,
+                                                                   nw_error_info_v1* error)
+{
+    return boundary(error,
+                    [&]
+                    {
+                        clear(output);
+                        auto result = typed<std::shared_ptr<CursorPull>>(raw)->close_take();
+                        *output = reinterpret_cast<nw_db_buffer*>(publish(std::move(result)));
+                    });
+}
 
 NW_DATABASE_API nw_status NW_CDECL nw_db_tx_begin_create_v1(nw_db_ref raw, nw_bytes_view_v1 bytes, nw_db_ref* output,
                                                             nw_error_info_v1* error)

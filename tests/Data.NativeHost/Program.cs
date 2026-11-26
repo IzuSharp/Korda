@@ -19,8 +19,10 @@ if (await SnapshotProbe.RunIfRequested(args)) return;
 if (await FetchProbe.RunIfRequested(args)) return;
 if (await TransactionDefaultProbe.RunIfRequested(args)) return;
 if (args.Contains("--pull-scheduler-races-only", StringComparer.Ordinal)) { await Suite.RejectedPullSchedulerOnly(); return; }
+if (args.Contains("--cursor-close-only", StringComparer.Ordinal)) { await CursorCloseTests.RunIfRequested(args); return; }
 Console.WriteLine("snapshot parser oracle inputs=" + SnapshotProbe.Verify());
 BatchResultTests.VerifyRecord();
+CursorCloseRecordTests.Verify();
 try { await Suite.Run(); } catch (DatabaseException failure) { Console.Error.WriteLine($"kind={failure.Kind} provider={failure.ProviderCode} correlation={failure.CorrelationId}"); throw; }
 
 internal static class Suite
@@ -146,6 +148,8 @@ internal static class Suite
         await BatchResultTests.VerifyFetches(DatabaseProvider.PostgreSql, pg);
         await BatchResultTests.VerifyParentTransactions(DatabaseProvider.Sqlite, Path.Combine(directory, "batch-parent.db"));
         await BatchResultTests.VerifyParentTransactions(DatabaseProvider.PostgreSql, pg);
+        await CursorCloseTests.Run(DatabaseProvider.Sqlite, Path.Combine(directory, "cursor-close.db"));
+        await CursorCloseTests.Run(DatabaseProvider.PostgreSql, pg);
         await DependencyInjection(Path.Combine(directory, "di.db"));
         await WaitZero(SqliteDataSource.Engine);
         Directory.Delete(directory, true);

@@ -1,16 +1,36 @@
-# DB-Perf-01 Linux campaign controller
+# DB-Perf-01 historical Linux campaign controller
 
-This is the batch's sole active campaign after integrating the parallel
+## Current execution-refactor measurements
+
+All benchmarks, profiling, calibration and high-pressure measurements for the
+current database execution refactor run locally on the same controlled Linux x64
+machine. The final comparison consists of four separate, sequential 1,800-second
+segments: Korda and Dapper.AOT on PostgreSQL and on SQLite. Comparable before
+measurements are required where the existing baseline lacks the same conditions.
+The current source, measurement identities, failures and acceptance remain in
+Plan; this historical controller's eight-cell schedule does not define them.
+
+There is no active `db-perf-campaign.yml` workflow. CI performs the existing
+builds, correctness checks and package publication. The two benchmark directory
+registrations in `eng/ci/modules/` only establish source ownership and select no
+CI actions. Do not add performance workflows, jobs, dispatch buttons or schedules,
+or invoke measurements from ordinary test or release scripts.
+
+## Historical controller profile
+
+The remaining sections document the earlier eight-segment hosted-VM protocol and
+its reproducible inputs, limits and evidence. They do not activate a CI campaign
+or establish current-refactor acceptance. The controller integrated the parallel
 `benchmarks/Database/campaign` implementation. That implementation, its exact old
 workflow and failed observations remain available for historical reproduction;
 its 36-descriptor results cannot be relabeled as this 35-case contract. The
-historical workflow lives outside `.github/workflows`, so a PR title edit cannot
-launch a competing long run. Both implementations now await transaction
-retirement before issuing post-commit fixture DDL.
+historical workflows live outside `.github/workflows`. Both implementations await
+transaction retirement before issuing post-commit fixture DDL.
 
 This directory contains an executable campaign path, not a completed performance
-claim. The checked-in request explicitly enables this task campaign. The batch ledger and accepted evidence
-live in `IzuSharp/Plan`, `ledger/evidence/batches/DB-Perf-01/handoff-linux.md`.
+claim. The checked-in request belongs to this historical controller profile; its
+enabled flag does not activate CI. The historical batch ledger and accepted
+evidence live in `IzuSharp/Plan`, `ledger/evidence/batches/DB-Perf-01/handoff-linux.md`.
 Only observations actually recorded on the admitted VM can receive long-segment
 credit. Eight observed segments do not establish whole-framework zero allocation,
 complete native-memory instrumentation, package publication, or batch completion.
@@ -57,17 +77,16 @@ repository's pinned toolchain/PostgreSQL installation. Preparation completes in
 the campaign's reserved VM before admission and every timing boundary. No
 credential is written to the bundle.
 
-## Dedicated measurement environment
+## Historical dedicated measurement environment
 
-`.github/workflows/db-perf-campaign.yml` has a manual dispatch trigger and a
-task-branch push trigger restricted to `campaign-request.json`; ordinary
-pull-request CI remains short. One job prepares the immutable runtime bundle,
-uploads and downloads it with the original SHA-256 check, then admits that same
-VM and runs all eight sequential long steps. This avoids assigning preparation
-and measurement to different images during a hosted-runner rollout. Both actual
-image guards and the controller's exact preparation/measurement image equality
-remain. The job has a 360-minute timeout. Every long step uploads a distinct
-checkpoint artifact, so a later failure cannot delete an earlier checkpoint.
+The removed `.github/workflows/db-perf-campaign.yml` had a manual dispatch trigger
+and a task-branch push trigger restricted to `campaign-request.json`. Its job
+prepared the immutable runtime bundle, uploaded and downloaded it with the
+original SHA-256 check, then admitted that same VM and ran all eight sequential
+long steps. This avoided assigning preparation and measurement to different
+images during a hosted-runner rollout. The historical profile retains both image
+guards and exact preparation/measurement image equality. The job had a 360-minute
+timeout and uploaded a distinct checkpoint artifact after every long step.
 
 Before admission, SDK build servers are shut down and three process snapshots
 must show no active build tools or unreadable processes owned by the job user.
@@ -247,8 +266,8 @@ The calibration has distinct purposes:
    its comparison load after a regression. Every route validates that rate before
    the distinct retained-owner overload/recovery diagnostic.
 
-Future campaigns omit the redundant fresh-process overload/recovery pair. A new
-process cannot establish recovery of the same saturated pool, and this removal
+This controller profile omits the redundant fresh-process overload/recovery pair.
+A new process cannot establish recovery of the same saturated pool, and this removal
 leaves the historical controller snapshots and prior raw records intact. The
 capacity grid still observes saturation; `same-process-recovery` runs for all
 four routes and both providers. It retains the same source, connections/sessions,
@@ -355,7 +374,7 @@ Resume recomputes these quality checks; another attempt requires the explicit,
 bounded investigation-and-retry flow below, including when the workload itself
 met its SLO. Instrumented diagnostics retain their separate scope.
 
-After unpacking the immutable runtime bundle, the workflow uses:
+After unpacking the immutable runtime bundle, the historical workflow used:
 
 ```bash
 python3 "$DB_PERF_BUNDLE/harness/campaign.py" measure \
@@ -364,7 +383,7 @@ python3 "$DB_PERF_BUNDLE/harness/campaign.py" measure \
   --bundle "$DB_PERF_BUNDLE" --output "$RUNNER_TEMP/db-perf-campaign" --resume --next-segment
 ```
 
-Repeat the second command for the eight segments on the same still-running VM.
+Its protocol repeated the second command for eight segments on the same live VM.
 Resume requires identical request, bundle, source hashes, image and boot/job
 identity. Every reused normalized result rechecks its raw result, stdout, command,
 resource samples, plan and controller hashes. A partial attempt does not silently

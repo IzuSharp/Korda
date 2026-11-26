@@ -28,7 +28,7 @@ internal sealed class HostPullController : CoordinatedCallback, IValueTaskSource
     private readonly DataSource _source;
     private readonly DatabaseOwner _channel;
     private readonly ScopedStreamBatch _batch;
-    private readonly CloseController _close;
+    private readonly HostCursorCloseController _close;
     private readonly CancellationToken _token;
     private readonly int _rows;
     private ManualResetValueTaskSourceCore<ScopedStreamBatch> _completion = new() { RunContinuationsAsynchronously = true };
@@ -43,7 +43,7 @@ internal sealed class HostPullController : CoordinatedCallback, IValueTaskSource
     private Exception? _failure, _stopFailure;
 
     internal HostPullController(DataSource source, DatabaseOwner channel, ScopedStreamBatch batch,
-        CloseController close, int rows, CancellationToken token) : base(source.TestPullScheduler)
+        HostCursorCloseController close, int rows, CancellationToken token) : base(source.TestPullScheduler)
     {
         _source = source; _channel = channel; _batch = batch; _close = close;
         _rows = rows; _token = token;
@@ -355,7 +355,6 @@ internal sealed class HostPullController : CoordinatedCallback, IValueTaskSource
         {
             RequestStop();
             await _close.JoinAsync().ConfigureAwait(false);
-            lock (_gate) { _closed = true; _accepted = false; _indeterminate = false; }
         }
         catch (Exception error)
         {
@@ -363,7 +362,15 @@ internal sealed class HostPullController : CoordinatedCallback, IValueTaskSource
             lock (_gate) _failure ??= error;
             _source.Poison();
         }
-        finally { Resume(); }
+        finally
+        {
+            // A local close observer/setup failure may be preserved after a
+            // successful cold join. Its independent safety receipt still
+            // discharges the original pull's accepted callback obligation.
+            if (_close.Cleanup.LocalResourcesReleased)
+                lock (_gate) { _closed = true; _accepted = false; _indeterminate = false; }
+            Resume();
+        }
     }
 
     internal void Closed()

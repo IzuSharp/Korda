@@ -38,7 +38,7 @@ assert batch['version']==1 and batch['capability']=='db.cursor.pull.v1' and batc
 batch_declarations=re.findall(r'\bnw_status\s+NW_CDECL\s+nw_db_cursor_pull_\w+_v1\([^;]+;', (ROOT/batch['header']).read_text())
 batch_declarations=[re.sub(r'\s+', ' ', value) for value in batch_declarations]
 assert batch_declarations==batch['signatures'],'Additive cursor pull signatures differ from the reviewed extension'
-assert len(batch_declarations)==8 and not set(batch_declarations).intersection(data['signatures'])
+assert len(batch_declarations)==10 and not set(batch_declarations).intersection(data['signatures'])
 assert batch['record']=={'name':'nw_db_batch_result_v1','linux_x64_size':32,
     'offsets':{'owner':0,'bytes':8,'known_end':24,'reserved':28}},'Additive batch record layout differs'
 assert batch['callback_record']=={'name':'nw_db_cursor_callbacks_v1','linux_x64_size':24,

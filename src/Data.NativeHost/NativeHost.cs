@@ -169,6 +169,25 @@ internal static class NativeHost
         }
         finally { if (result.Owner != 0) binding.Calls.nw_db_buffer_release_v1(result.Owner); }
     }
+    internal static unsafe DatabaseCloseResult TakePullClose(SourceBinding binding, nint channel,
+        Action? afterErrorTake = null)
+    {
+        nint pointer = 0; var error = BindingChecks.Error();
+        NativeBuffer? owner = null;
+        try
+        {
+            var status = Pulls(binding).CloseTake(channel, &pointer, &error);
+            if (status != NativeStatus.Ok)
+                throw PullFailure(binding, channel, 0, status, error, default, afterErrorTake);
+            owner = new(binding, pointer); pointer = 0;
+            return owner.ReadSnapshot().Cleanup;
+        }
+        finally
+        {
+            owner?.Dispose();
+            if (pointer != 0) binding.Calls.nw_db_buffer_release_v1(pointer);
+        }
+    }
     private static unsafe Exception PullFailure(SourceBinding binding, nint channel, ulong generation,
         uint status, in NwErrorInfoV1 error, CancellationToken token, Action? afterErrorTake)
     {

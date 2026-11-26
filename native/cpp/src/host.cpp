@@ -1983,6 +1983,161 @@ struct CursorPull::Worker
     }
 };
 
+struct CursorPull::CloseState
+{
+    std::mutex mutex;
+    nw_db_cursor_callbacks_v1 callbacks;
+    std::shared_ptr<Buffer> buffer;
+    std::optional<Error> error;
+    bool ready = false, outstanding = true;
+    explicit CloseState(nw_db_cursor_callbacks_v1 value) : callbacks(value) {}
+    nw_db_cursor_callbacks_v1 publish(std::shared_ptr<Buffer> result, std::optional<Error> failure)
+    {
+        std::lock_guard lock(mutex);
+        if (ready)
+            std::terminate();
+        buffer = std::move(result);
+        error = std::move(failure);
+        const auto callback = callbacks;
+        callbacks = {};
+        ready = true;
+        return callback;
+    }
+};
+
+struct CursorPull::CloseWorker
+{
+    std::shared_ptr<CursorPull> pull;
+    std::shared_ptr<Source> source;
+    std::shared_ptr<CloseState> state;
+    std::shared_ptr<RetirementFence> channel_done, source_done;
+    bool counted = false, channel_ticket = false, source_ticket = false;
+#ifdef NW_HOST_TEST_HOOKS
+    std::function<void()> before_work;
+#endif
+    CloseWorker(std::shared_ptr<CursorPull> value, std::shared_ptr<CloseState> result)
+        : pull(std::move(value)), source(pull->session->source), state(std::move(result)),
+          channel_done(pull->close_completion_), source_done(source->pull_workers)
+    {
+#ifdef NW_HOST_TEST_HOOKS
+        before_work = pull->test_before_close_work;
+#endif
+        // This reservation serializes ticket admission with Source::join's
+        // pending==0 / admission_stop transition. Never append a late ticket
+        // after Source close has already passed the descendant-ledger wait.
+        counted = source->reserve_operation(true);
+        if (!counted)
+            throw Error::closed();
+        try
+        {
+            channel_done->add();
+            channel_ticket = true;
+            source_done->add();
+            source_ticket = true;
+        }
+        catch (...)
+        {
+            if (channel_ticket)
+                channel_done->complete();
+            source->release_operation();
+            throw;
+        }
+    }
+    ~CloseWorker()
+    {
+        if (counted)
+            release_accessors();
+        // Only these detached ledgers are touched after the notification.
+        // Generic fallback and Source close both await actual callback return.
+        if (channel_ticket)
+            channel_done->complete();
+        if (source_ticket)
+            source_done->complete();
+    }
+    void release_accessors()
+    {
+        pull.reset();
+        if (counted)
+        {
+            source->release_operation();
+            counted = false;
+        }
+        source.reset();
+    }
+    void complete(std::shared_ptr<Buffer> buffer, std::optional<Error> error)
+    {
+        // CloseState owns only immutable result storage and callback state.
+        // Drop every channel/provider/Source accessor before it becomes ready.
+        release_accessors();
+        const auto callback = state->publish(std::move(buffer), std::move(error));
+        state.reset();
+        callback.ready(callback.context, 0);
+    }
+    void run()
+    {
+        std::shared_ptr<Buffer> result;
+        std::optional<Error> failure;
+        bool joined = false;
+        try
+        {
+#ifdef NW_HOST_TEST_HOOKS
+            if (before_work)
+                before_work();
+#endif
+            // This private join excludes our own notification ticket.
+            pull->join_resources();
+            joined = true;
+            result = std::make_shared<Buffer>(source, pull->resources_snapshot());
+        }
+        catch (Error& error)
+        {
+            failure = std::move(error);
+        }
+        catch (const std::bad_alloc&)
+        {
+            failure.emplace(NW_OUT_OF_MEMORY, 8, "out of memory");
+        }
+        catch (...)
+        {
+            source->poisoned.store(true);
+            failure.emplace(NW_NATIVE_PANIC, 8, "close failed");
+        }
+        if (failure && !joined)
+        {
+            pull->session->discard.store(true);
+            source->poisoned.store(true);
+            if (!failure->cleanup)
+                failure->cleanup = cursor_cleanup_failure();
+        }
+        complete(std::move(result), std::move(failure));
+    }
+    void fail_submission(Error failure)
+    {
+        bool cleanup_failed = bool(failure.cleanup);
+        try
+        {
+            // Queue failure has no joining worker. Still close admission and
+            // request bounded cleanup, retaining any failure already known at
+            // this publication boundary. A later generic join supplies proof.
+            pull->request_close();
+            std::lock_guard lock(pull->mutex_);
+            cleanup_failed = cleanup_failed || (pull->cursor_ && pull->cursor_->cleanup_unconfirmed.load());
+        }
+        catch (...)
+        {
+            cleanup_failed = true;
+        }
+        if (cleanup_failed)
+        {
+            pull->session->discard.store(true);
+            source->poisoned.store(true);
+            if (!failure.cleanup)
+                failure.cleanup = cursor_cleanup_failure();
+        }
+        complete({}, std::move(failure));
+    }
+};
+
 CursorPull::CursorPull(std::shared_ptr<Session> parent, std::shared_ptr<SqlPlan> plan,
                        std::shared_ptr<CommandGate> gate, std::optional<Clock::time_point> admitted)
     : session(std::move(parent)), plan_(std::move(plan)), gate_(std::move(gate)), admitted_(admitted)
@@ -2246,6 +2401,27 @@ std::shared_ptr<Buffer> CursorPull::take(std::uint64_t generation)
 }
 Error CursorPull::take_error(std::uint64_t generation)
 {
+    if (!generation)
+    {
+        std::shared_ptr<CloseState> state;
+        {
+            std::lock_guard lock(mutex_);
+            state = close_;
+        }
+        if (!state)
+            throw Error::state("cursor final close was not requested");
+        std::lock_guard lock(state->mutex);
+        if (!state->outstanding)
+            throw Error::state("cursor final close result was consumed");
+        if (!state->ready)
+            throw Error(NW_PENDING, 8, "cursor final close is pending");
+        if (!state->error)
+            throw Error::state("cursor final close has no rich error");
+        auto result = std::move(*state->error);
+        state->error.reset();
+        state->outstanding = false;
+        return result;
+    }
     std::lock_guard lock(mutex_);
     if (generation != generation_ || !outstanding_)
         throw Error::state("cursor error generation differs or was consumed");
@@ -2257,6 +2433,63 @@ Error CursorPull::take_error(std::uint64_t generation)
     error_.reset();
     outstanding_ = false;
     return result;
+}
+void CursorPull::close_request(nw_db_cursor_callbacks_v1 callbacks)
+{
+    if (callbacks.struct_size != sizeof(callbacks) || callbacks.reserved || !callbacks.ready)
+        throw Error::invalid("cursor close callback record");
+    auto state = std::make_shared<CloseState>(callbacks);
+    std::shared_ptr<CloseWorker> worker;
+    std::function<void()> action;
+    {
+        std::lock_guard lock(mutex_);
+        if (close_)
+            throw Error::state("cursor final close was already requested");
+        worker = std::make_shared<CloseWorker>(shared_from_this(), state);
+        action = [worker] { worker->run(); };
+        close_ = std::move(state);
+        closing_ = true;
+    }
+    // All allocations/admission above precede acceptance. A failed queue
+    // after acceptance must still settle this independent close exactly once.
+    try
+    {
+        worker->source->controls.post(std::move(action));
+    }
+    catch (Error& error)
+    {
+        worker->fail_submission(std::move(error));
+    }
+    catch (const std::bad_alloc&)
+    {
+        worker->fail_submission(Error(NW_OUT_OF_MEMORY, 8, "out of memory"));
+    }
+    catch (...)
+    {
+        worker->source->poisoned.store(true);
+        worker->fail_submission(Error(NW_NATIVE_PANIC, 8, "queue failed"));
+    }
+}
+std::shared_ptr<Buffer> CursorPull::close_take()
+{
+    std::shared_ptr<CloseState> state;
+    {
+        std::lock_guard lock(mutex_);
+        state = close_;
+    }
+    if (!state)
+        throw Error::state("cursor final close was not requested");
+    std::lock_guard lock(state->mutex);
+    if (!state->outstanding)
+        throw Error::state("cursor final close result was consumed");
+    if (!state->ready)
+        throw Error(NW_PENDING, 8, "cursor final close is pending");
+    if (state->error)
+        throw *state->error;
+    if (!state->buffer)
+        throw Error::state("cursor final close receipt is unavailable");
+    state->outstanding = false;
+    return std::move(state->buffer);
 }
 void CursorPull::check_read_admission()
 {
@@ -2293,6 +2526,23 @@ void CursorPull::request_close()
 }
 void CursorPull::join()
 {
+    // A generic fallback can be proving an indeterminate final callback.
+    // It must join that callback even when resource retirement itself fails.
+    std::exception_ptr failure;
+    try
+    {
+        join_resources();
+    }
+    catch (...)
+    {
+        failure = std::current_exception();
+    }
+    close_completion_->wait();
+    if (failure)
+        std::rethrow_exception(failure);
+}
+void CursorPull::join_resources()
+{
     request_close();
     completion_->wait();
     std::shared_ptr<Cursor> cursor;
@@ -2311,7 +2561,16 @@ void CursorPull::join()
 }
 Bytes CursorPull::snapshot() const
 {
+    // The direct close result excludes its own notification ticket. Public
+    // snapshots must include it, otherwise generic fallback's snapshot shortcut
+    // could free an indeterminate final-close callback cookie too early.
+    return resources_snapshot(true);
+}
+Bytes CursorPull::resources_snapshot(bool include_final_notification) const
+{
     std::lock_guard lock(mutex_);
+    if (include_final_notification && !close_completion_->done())
+        return snapshot_record(0, 0, false, 1, 0, false, false, 0);
     const bool quiet = closing_ && !running_ && !gate_ && completion_->done();
     if (!cursor_)
         return snapshot_record(0, 0, false, quiet ? 2 : closing_ ? 1 : 0, 0, quiet, false, 0);

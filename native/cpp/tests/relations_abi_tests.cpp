@@ -508,6 +508,44 @@ struct PullNotice
         eventually([&] { return generation.load() == next; }, "actual detached ready callback");
     }
 };
+void close_pull(Owner& channel)
+{
+    PullNotice notice;
+    notice.generation.store(UINT64_MAX);
+    auto error = error_slot();
+    nw_db_buffer* result = reinterpret_cast<nw_db_buffer*>(1);
+    check(nw_db_cursor_pull_close_take_v1(channel.value, &result, &error) == NW_INVALID_STATE && !result,
+          "missing close take clears its output without inventing a result");
+    nw_db_cursor_callbacks_v1 callbacks{sizeof(callbacks), 1, &notice, PullNotice::ready};
+    check(nw_db_cursor_pull_close_request_v1(channel.value, &callbacks, &error) == NW_INVALID_ARGUMENT &&
+              notice.calls == 0,
+          "invalid close callback rejects before acceptance");
+    callbacks.reserved = 0;
+    const auto operations = nw_db_diagnostic_count_v1(2);
+    ok(nw_db_cursor_pull_close_request_v1(channel.value, &callbacks, &error), error,
+       "actual one-shot final close accepted");
+    eventually([&] { return notice.generation.load() == 0; }, "actual detached final readiness");
+    ok(nw_db_cursor_pull_close_take_v1(channel.value, &result, &error), error, "actual final snapshot transfer");
+    const auto payload = copy_buffer(result);
+    const auto fields = Fields::parse(payload, 7,
+                                      {{1, 1, true},
+                                       {2, 1, true},
+                                       {3, 1, true},
+                                       {4, 1, true},
+                                       {5, 1, true},
+                                       {6, 1, true},
+                                       {7, 1, true},
+                                       {8, 2, true},
+                                       {9, 4, false}});
+    check(fields.boolean(6) && notice.calls == 1 && nw_db_diagnostic_count_v1(2) == operations,
+          "direct final receipt proves resources with no generic close operation");
+    result = reinterpret_cast<nw_db_buffer*>(1);
+    check(nw_db_cursor_pull_close_take_v1(channel.value, &result, &error) == NW_INVALID_STATE && !result &&
+              nw_db_cursor_pull_close_request_v1(channel.value, &callbacks, &error) == NW_INVALID_STATE &&
+              notice.calls == 1,
+          "actual final request and result are each consumed once");
+    channel.release();
+}
 Bytes take_pull(nw_db_ref channel, std::uint64_t generation = 1)
 {
     nw_db_batch_result_v1 result{};
@@ -573,7 +611,7 @@ void lazy_pull_abi()
         check(nw_db_diagnostic_count_v1(2) == 0 && nw_db_diagnostic_count_v1(6) == executions &&
                   nw_db_diagnostic_count_v1(7) == sends,
               "known EOF admission sends no SQL/protocol and creates no operation");
-        close_owner(channel);
+        close_pull(channel);
         check(nw_db_diagnostic_count_v1(8) == 0, "normal channel close retires the native pull owner");
     }
     // Insert-returning uses the same lazy native reader channel.
@@ -593,7 +631,7 @@ void lazy_pull_abi()
         const auto batch = Batch::parse(output, expected);
         check(batch.rows() == 1 && read_u64(*batch.cell(0, 0), 0) == 2,
               "returning mutation captures values and produces its complete DTO row");
-        close_owner(channel);
+        close_pull(channel);
     }
     // The ordinary SQL creation route shares the same request/take path.
     {
@@ -619,7 +657,7 @@ void lazy_pull_abi()
         const auto batch = Batch::parse(output, expected);
         check(batch.rows() == 2 && read_u64(*batch.cell(1, 0), 0) == 2,
               "ordinary channel retains its plan and observes the prior returning write");
-        close_owner(channel);
+        close_pull(channel);
     }
     fixture.finish();
 }

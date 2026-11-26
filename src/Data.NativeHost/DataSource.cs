@@ -29,6 +29,9 @@ public sealed partial class DataSource : IDisposable, IAsyncDisposable
     internal Action<HostPullBoundary>? TestPullBoundary { get; set; }
     internal Action<HostPullSnapshot>? TestPullSnapshot { get; set; }
     internal ICallbackScheduler? TestPullScheduler { get; set; }
+    internal Action<HostCloseBoundary>? TestCloseBoundary { get; set; }
+    internal Action<HostCloseSnapshot>? TestCloseSnapshot { get; set; }
+    internal ICallbackScheduler? TestCloseScheduler { get; set; }
     internal CallbackCoordinator CallbackCoordinator => _resources.Coordinator;
     private DataSource(SourceBinding binding, DatabaseOwner owner, DatabaseProvider provider, string name, DatabaseLimits limits, EngineInfo info)
     {

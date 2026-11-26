@@ -56,18 +56,18 @@ internal static class SnapshotProbe
         GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect();
         var samples = new Sample[checked(windows * 4)];
         for (var window = 0; window < windows; window++)
-        for (var lane = 0; lane < 4; lane++)
-        {
-            var before = Counter.Read();
-            if (lane == 0) for (var i = 0; i < iterations; i++) _snapshotSink = Empty;
-            else
+            for (var lane = 0; lane < 4; lane++)
             {
-                var payload = lane == 1 ? normal : lane == 2 ? released : provider;
-                for (var i = 0; i < iterations; i++) _snapshotSink = HostEncoding.Snapshot(payload);
+                var before = Counter.Read();
+                if (lane == 0) for (var i = 0; i < iterations; i++) _snapshotSink = Empty;
+                else
+                {
+                    var payload = lane == 1 ? normal : lane == 2 ? released : provider;
+                    for (var i = 0; i < iterations; i++) _snapshotSink = HostEncoding.Snapshot(payload);
+                }
+                var after = Counter.Read();
+                samples[window * 4 + lane] = new(lane switch { 0 => "empty-driver", 1 => "normal-control", 2 => "released-control", _ => "provider-control" }, window, iterations, before, after);
             }
-            var after = Counter.Read();
-            samples[window * 4 + lane] = new(lane switch { 0 => "empty-driver", 1 => "normal-control", 2 => "released-control", _ => "provider-control" }, window, iterations, before, after);
-        }
         if (_snapshotSink.Cleanup.ProviderCode != "40001") throw new InvalidOperationException("Snapshot result was not consumed.");
         Write(output, "parser-only", oracleInputs, samples, null, null, null, normal, released, provider);
         return true;
@@ -149,21 +149,21 @@ internal static class SnapshotProbe
             Test(fixture, "valid");
             for (var length = 0; length < fixture.Length; length++) Test(fixture[..length], "truncated");
             for (var at = 0; at < fixture.Length; at++)
-            foreach (var mask in new byte[] { 1, 128, 255 })
-            { var copy = fixture.ToArray(); copy[at] ^= mask; Test(copy, "byte mutation"); }
+                foreach (var mask in new byte[] { 1, 128, 255 })
+                { var copy = fixture.ToArray(); copy[at] ^= mask; Test(copy, "byte mutation"); }
         }
         for (var missing = 0; missing < 9; missing++)
         { var fields = Standard("x"); fields.RemoveAt(missing); Test(Frame(fields), "missing field"); }
         for (var ordinal = 0; ordinal < 9; ordinal++)
-        for (ushort type = 0; type <= 8; type++)
-        foreach (var length in new[] { 0, 1, 3, 4, 7, 8, 9, 16 })
-        {
-            var fields = Standard("x"); fields[ordinal] = fields[ordinal] with { Type = type, Bytes = new byte[length] };
-            Test(Frame(fields), "type and width");
-        }
+            for (ushort type = 0; type <= 8; type++)
+                foreach (var length in new[] { 0, 1, 3, 4, 7, 8, 9, 16 })
+                {
+                    var fields = Standard("x"); fields[ordinal] = fields[ordinal] with { Type = type, Bytes = new byte[length] };
+                    Test(Frame(fields), "type and width");
+                }
         for (var ordinal = 0; ordinal < 7; ordinal++)
-        foreach (var value in new uint[] { 0, 1, 2, 3, 4, 5, uint.MaxValue })
-        { var fields = Standard(); fields[ordinal] = fields[ordinal] with { Bytes = U32(value) }; Test(Frame(fields), "enum or boolean bounds"); }
+            foreach (var value in new uint[] { 0, 1, 2, 3, 4, 5, uint.MaxValue })
+            { var fields = Standard(); fields[ordinal] = fields[ordinal] with { Bytes = U32(value) }; Test(Frame(fields), "enum or boolean bounds"); }
         foreach (var raw in new byte[][] { [0xc0, 0xaf], [0xed, 0xa0, 0x80], [0xf4, 0x90, 0x80, 0x80], [0xef, 0xbb, 0xbf], [0] })
         {
             var fields = Standard("x"); fields[8] = fields[8] with { Bytes = raw }; Test(Frame(fields), "provider Unicode");
@@ -203,6 +203,14 @@ internal static class SnapshotProbe
         var fields = new List<Field>(); for (ushort id = 1; id <= 7; id++) fields.Add(new(id, 1, U32(0)));
         var correlation = new byte[8]; BinaryPrimitives.WriteUInt64LittleEndian(correlation, 123);
         fields.Add(new(8, 2, correlation)); if (provider is not null) fields.Add(new(9, 4, Encoding.UTF8.GetBytes(provider))); return fields;
+    }
+    internal static byte[] CloseControl(CleanupStatus status, bool released, ConnectionDisposition disposition, string? provider)
+    {
+        var fields = Standard(provider);
+        fields[3] = fields[3] with { Bytes = U32((uint)status) };
+        fields[4] = fields[4] with { Bytes = U32((uint)disposition) };
+        fields[5] = fields[5] with { Bytes = U32(released ? 1u : 0u) };
+        return Frame(fields);
     }
     private static byte[] U32(uint value) { var bytes = new byte[4]; BinaryPrimitives.WriteUInt32LittleEndian(bytes, value); return bytes; }
     private static byte[] Frame(List<Field> fields)

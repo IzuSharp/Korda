@@ -20,7 +20,8 @@ internal static class BatchResultTests
     private static readonly string[] Exports = [
         "nw_db_cursor_pull_create_v1", "nw_db_cursor_pull_mutation_create_v1", "nw_db_cursor_pull_relation_create_v1",
         "nw_db_cursor_pull_request_v1", "nw_db_cursor_pull_take_v1", "nw_db_cursor_pull_take_error_v1",
-        "nw_db_cursor_pull_check_read_v1", "nw_db_cursor_pull_stop_v1"];
+        "nw_db_cursor_pull_check_read_v1", "nw_db_cursor_pull_stop_v1",
+        "nw_db_cursor_pull_close_request_v1", "nw_db_cursor_pull_close_take_v1"];
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe uint Take(nint channel, ulong generation, NativePullBatch* result, NwErrorInfoV1* error)
@@ -48,6 +49,11 @@ internal static class BatchResultTests
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
     private static unsafe uint TakeError(nint channel, ulong generation, nint* owner, NwErrorInfoV1* error)
     { *owner = 0; return NativeStatus.InvalidState; }
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static unsafe uint CloseRequest(nint channel, NativePullCallbacks* callbacks, NwErrorInfoV1* error) => NativeStatus.InvalidState;
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static unsafe uint CloseTake(nint channel, nint* owner, NwErrorInfoV1* error)
+    { *owner = 0; return NativeStatus.InvalidState; }
 
     private static unsafe nint Resolve(string symbol) => symbol switch
     {
@@ -59,6 +65,8 @@ internal static class BatchResultTests
         "nw_db_cursor_pull_take_error_v1" => (nint)(delegate* unmanaged[Cdecl]<nint, ulong, nint*, NwErrorInfoV1*, uint>)&TakeError,
         "nw_db_cursor_pull_check_read_v1" => (nint)(delegate* unmanaged[Cdecl]<nint, NwErrorInfoV1*, uint>)&CheckRead,
         "nw_db_cursor_pull_stop_v1" => (nint)(delegate* unmanaged[Cdecl]<nint, uint>)&Stop,
+        "nw_db_cursor_pull_close_request_v1" => (nint)(delegate* unmanaged[Cdecl]<nint, NativePullCallbacks*, NwErrorInfoV1*, uint>)&CloseRequest,
+        "nw_db_cursor_pull_close_take_v1" => (nint)(delegate* unmanaged[Cdecl]<nint, nint*, NwErrorInfoV1*, uint>)&CloseTake,
         _ => 0
     };
 
@@ -150,7 +158,8 @@ internal static class BatchResultTests
         else builder.UsePostgreSql(connection, options => options.TlsMode = PostgreSqlTlsMode.DisableForLocalDevelopment);
         await using var source = builder.Build();
         await using var session = await source.OpenSessionAsync();
-        var retirements = 0; var requests = 0; var takes = 0; var publications = 0;
+        var retirements = 0; var requests = 0; var ready = 0; var takes = 0; var publications = 0;
+        var closeRequests = 0; var closeReady = 0; var closeTakes = 0; var closePublications = 0;
         ulong lastGeneration = 0;
         source.TestRetirement = snapshot =>
         {
@@ -160,7 +169,24 @@ internal static class BatchResultTests
         source.TestPullBoundary = boundary =>
         {
             if (boundary == HostPullBoundary.RequestReturned) Interlocked.Increment(ref requests);
+            if (boundary == HostPullBoundary.Ready) Interlocked.Increment(ref ready);
             if (boundary == HostPullBoundary.ResultTaken) Interlocked.Increment(ref takes);
+        };
+        source.TestCloseBoundary = boundary =>
+        {
+            if (boundary == HostCloseBoundary.RequestReturned) Interlocked.Increment(ref closeRequests);
+            if (boundary == HostCloseBoundary.Ready) Interlocked.Increment(ref closeReady);
+            if (boundary == HostCloseBoundary.ResultTaken) Interlocked.Increment(ref closeTakes);
+        };
+        source.TestCloseSnapshot = snapshot =>
+        {
+            if (!snapshot.Published) return;
+            Check(snapshot.Generation == 0 && snapshot.SetupReturned && snapshot.RequestEntered && snapshot.RequestReturned
+                && snapshot.Accepted && snapshot.Ready && snapshot.ResultTaken && snapshot.NativeSafe
+                && !snapshot.Rooted && !snapshot.SlotReserved && snapshot.Controls == 0 && snapshot.CallbackEntries == 0
+                && !snapshot.FallbackStarted && !snapshot.Indeterminate,
+                "A normal public cursor close takes its zero-generation receipt and drains setup/control/callback/root/slot before publication");
+            Interlocked.Increment(ref closePublications);
         };
         source.TestPullSnapshot = snapshot =>
         {
@@ -180,7 +206,10 @@ internal static class BatchResultTests
                 new SqlParameters().Add("count", (long)count, Codecs.Int64));
             var before = Volatile.Read(ref retirements);
             var requestsBefore = Volatile.Read(ref requests); var takesBefore = Volatile.Read(ref takes);
+            var readyBefore = Volatile.Read(ref ready);
             var publishedBefore = Volatile.Read(ref publications); var sqlBefore = SqlExecutions(provider);
+            var closeRequestsBefore = Volatile.Read(ref closeRequests); var closeReadyBefore = Volatile.Read(ref closeReady);
+            var closeTakesBefore = Volatile.Read(ref closeTakes); var closePublishedBefore = Volatile.Read(ref closePublications);
             lastGeneration = 0; var rows = 0; long sum = 0;
             await foreach (var item in session.StreamAsync(command, projection))
             {
@@ -190,18 +219,19 @@ internal static class BatchResultTests
             var expectedFetches = count / 32 + 1;
             Check(rows == count && sum == (long)count * (count + 1) / 2, "The public batch stream changed its business result");
             Check(Volatile.Read(ref requests) - requestsBefore == expectedFetches
+                && Volatile.Read(ref ready) - readyBefore == expectedFetches
                 && Volatile.Read(ref takes) - takesBefore == expectedFetches
                 && Volatile.Read(ref publications) - publishedBefore == expectedFetches,
-                "The public stream uses exactly one request, take and publication per required batch; known EOF must not fetch again");
+                "The public stream uses exactly one request, ready, take and publication per required batch; known EOF must not fetch again");
             var finalCloses = Volatile.Read(ref retirements) - before;
-            // Native snapshot reports local safety only after both the channel
-            // worker fence and cursor completion are quiet. Stop can reach that
-            // state before CloseController observes it, requiring no operation;
-            // otherwise one final generic close joins those same obligations.
-            Check(finalCloses is 0 or 1,
-                "A public stream needs at most one final generic close; observed=" + finalCloses);
+            Check(finalCloses == 0, "A normal public cursor close creates no generic operation; observed=" + finalCloses);
+            Check(Volatile.Read(ref closeRequests) - closeRequestsBefore == 1
+                && Volatile.Read(ref closeReady) - closeReadyBefore == 1
+                && Volatile.Read(ref closeTakes) - closeTakesBefore == 1
+                && Volatile.Read(ref closePublications) - closePublishedBefore == 1,
+                "The complete public stream uses exactly one close request, ready, take and publication");
             Check(SqlExecutions(provider) - sqlBefore == 1, "The complete public stream executes its SQL exactly once");
-            Console.WriteLine($"PULL_RESULT_FETCH_PASS provider={provider} rows={count} requests={expectedFetches} takes={expectedFetches} publications={expectedFetches} retiredOperations={Volatile.Read(ref retirements) - before} sqlExecutions=1");
+            Console.WriteLine($"PULL_RESULT_FETCH_PASS provider={provider} rows={count} requests={expectedFetches} ready={expectedFetches} takes={expectedFetches} publications={expectedFetches} closeRequests=1 closeReady=1 closeTakes=1 closePublications=1 retiredOperations=0 sqlExecutions=1");
         }
         Console.WriteLine($"PULL_RESULT_FETCH_PASS provider={provider} assertions={_checks - beforeChecks}; public entry, single SQL execution, partial EOF and exact row boundaries");
     }

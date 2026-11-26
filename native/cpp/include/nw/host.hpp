@@ -347,6 +347,8 @@ struct CursorPull : std::enable_shared_from_this<CursorPull>
     void request(std::uint64_t generation, std::size_t rows, std::size_t bytes, nw_db_cursor_callbacks_v1 callbacks);
     std::shared_ptr<Buffer> take(std::uint64_t generation);
     Error take_error(std::uint64_t generation);
+    void close_request(nw_db_cursor_callbacks_v1 callbacks);
+    std::shared_ptr<Buffer> close_take();
     void check_read_admission();
     void request_close();
     void join();
@@ -357,14 +359,19 @@ struct CursorPull : std::enable_shared_from_this<CursorPull>
     std::function<void()> test_before_work;
     std::function<void()> test_before_first_fetch;
     std::function<void()> test_after_ready;
+    std::function<void()> test_before_close_work;
 #endif
 
   private:
     struct Worker;
+    struct CloseState;
+    struct CloseWorker;
     CursorPull(std::shared_ptr<Session> session, std::shared_ptr<SqlPlan> plan, std::shared_ptr<CommandGate> gate,
                std::optional<Clock::time_point> admitted);
     void run(std::uint64_t generation, std::size_t rows, std::size_t bytes, std::shared_ptr<Cancel> cancel);
     void complete(std::uint64_t generation, std::shared_ptr<Buffer> buffer, std::optional<Error> error);
+    void join_resources();
+    Bytes resources_snapshot(bool include_final_notification = false) const;
     mutable std::mutex mutex_;
     std::shared_ptr<SqlPlan> plan_;
     std::shared_ptr<CommandGate> gate_;
@@ -374,6 +381,8 @@ struct CursorPull : std::enable_shared_from_this<CursorPull>
     std::optional<Error> error_;
     std::optional<Clock::time_point> admitted_;
     std::shared_ptr<RetirementFence> completion_ = std::make_shared<RetirementFence>();
+    std::shared_ptr<RetirementFence> close_completion_ = std::make_shared<RetirementFence>();
+    std::shared_ptr<CloseState> close_;
     std::uint64_t generation_ = 0;
     bool outstanding_ = false, ready_ = false, running_ = false, closing_ = false;
     nw_db_cursor_callbacks_v1 callbacks_{};

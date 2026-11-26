@@ -506,9 +506,270 @@ struct PullReady
     }
     void wait(std::uint64_t value)
     {
-        await([&] { return generation.load() == value; });
+        await([&] { return calls.load() != 0 && generation.load() == value; });
     }
 };
+bool snapshot_released(const Bytes& bytes)
+{
+    return Fields::parse(bytes, 7,
+                         {{1, 1, true},
+                          {2, 1, true},
+                          {3, 1, true},
+                          {4, 1, true},
+                          {5, 1, true},
+                          {6, 1, true},
+                          {7, 1, true},
+                          {8, 2, true},
+                          {9, 4, false}})
+        .boolean(6);
+}
+void pull_final_close_results()
+{
+    for (const auto rows : {0u, 1u, 7u})
+    {
+        Scope scope;
+        auto pull = scope.pull(rows);
+        PullReady fetched, closed;
+        check(reject([&] { (void)pull->close_take(); }).status == NW_INVALID_STATE,
+              "missing final-close result is not synthesized");
+        auto invalid = closed.callbacks();
+        invalid.reserved = 1;
+        check(reject([&] { pull->close_request(invalid); }).status == NW_INVALID_ARGUMENT && closed.calls == 0,
+              "invalid final callback is rejected without admission or notice");
+        if (rows)
+        {
+            pull->request(1, 1, 256, fetched.callbacks());
+            fetched.wait(1);
+            if (rows == 1)
+                pull->take(1).reset();
+            // Seven rows leave the accepted batch unconsumed for close to drop.
+        }
+        auto entered = std::make_shared<std::atomic<bool>>(false);
+        auto proceed = std::make_shared<std::binary_semaphore>(0);
+        pull->test_before_close_work = [entered, proceed]
+        {
+            entered->store(true);
+            proceed->acquire();
+        };
+        pull->close_request(closed.callbacks());
+        await([&] { return entered->load(); });
+        const auto pending = reject([&] { (void)pull->close_take(); }).status;
+        const auto duplicate = reject([&] { pull->close_request(closed.callbacks()); }).status;
+        const auto stopped = reject([&] { pull->request(rows ? 2 : 1, 1, 256, fetched.callbacks()); }).status;
+        proceed->release();
+        closed.wait(0);
+        auto result = pull->close_take();
+        const bool released = snapshot_released(result->bytes);
+        result.reset();
+        check(reject([&] { (void)pull->close_take(); }).status == NW_INVALID_STATE &&
+                  reject([&] { (void)pull->take_error(0); }).status == NW_INVALID_STATE,
+              "final receipt transfers once and cannot turn into an error result");
+        pull->join();
+        check(released && snapshot_released(pull->snapshot()) && closed.calls == 1 && pending == NW_PENDING &&
+                  duplicate == NW_INVALID_STATE && stopped == NW_INVALID_STATE,
+              "one-shot final ready independently stops admission and returns a joined receipt");
+        pull.reset();
+        check(operation_count == 0 && pull_count == 0 && cursor_count == 0 && buffer_count == 0 &&
+                  scope.source->pending == 0 && scope.source->pull_workers->done() && !scope.session->active.load() &&
+                  scope.probe->reads == (rows ? 1u : 0u),
+              "normal final close creates no generic operation, performs no extra read and returns every owner");
+    }
+}
+void pull_close_joins_old_fetch_tail()
+{
+    Scope scope;
+    auto pull = scope.pull(7);
+    auto held = std::make_shared<std::atomic<bool>>(false);
+    auto proceed = std::make_shared<std::binary_semaphore>(0);
+    pull->test_after_ready = [held, proceed]
+    {
+        held->store(true);
+        proceed->acquire();
+    };
+    PullReady fetched, closed;
+    pull->request(1, 1, 256, fetched.callbacks());
+    fetched.wait(1);
+    await([&] { return held->load(); });
+    pull->take(1).reset();
+    pull->close_request(closed.callbacks());
+    const bool pending = reject([&] { (void)pull->close_take(); }).status == NW_PENDING;
+    const bool not_released = !snapshot_released(pull->snapshot());
+    auto fallback = std::async(std::launch::async, [pull] { pull->join(); });
+    const bool waiting = fallback.wait_for(std::chrono::milliseconds(20)) != std::future_status::ready;
+    proceed->release();
+    closed.wait(0);
+    auto result = pull->close_take();
+    const bool released = snapshot_released(result->bytes);
+    result.reset();
+    fallback.get();
+    pull.reset();
+    check(pending && not_released && waiting && released && closed.calls == 1,
+          "final readiness and generic fallback both await the old detached fetch tail");
+    check(pull_count == 0 && cursor_count == 0 && scope.source->pending == 0,
+          "old-tail final close leaves no native accessor or admission");
+}
+void pull_close_notification_tail()
+{
+    Scope scope;
+    auto pull = scope.pull(0);
+    struct Held
+    {
+        std::atomic<bool> entered{false};
+        std::atomic<std::uint64_t> generation{1};
+        std::binary_semaphore proceed{0};
+        static void NW_CDECL notify(void* context, std::uint64_t generation)
+        {
+            auto& held = *static_cast<Held*>(context);
+            held.generation.store(generation);
+            held.entered.store(true);
+            held.proceed.acquire();
+        }
+    } held;
+    pull->close_request({sizeof(nw_db_cursor_callbacks_v1), 0, &held, Held::notify});
+    await([&] { return held.entered.load(); });
+    auto result = pull->close_take();
+    const bool direct_released = snapshot_released(result->bytes);
+    result.reset();
+    const bool public_pending = !snapshot_released(pull->snapshot());
+    scope.session->request_close();
+    auto fallback = std::async(std::launch::async, [pull] { pull->join(); });
+    auto parent = std::async(std::launch::async, [source = scope.source] { source->join(); });
+    const bool fallback_pending = fallback.wait_for(std::chrono::milliseconds(20)) != std::future_status::ready;
+    const bool parent_pending = parent.wait_for(std::chrono::milliseconds(20)) != std::future_status::ready;
+    held.proceed.release();
+    fallback.get();
+    parent.get();
+    check(direct_released && public_pending && fallback_pending && parent_pending && held.generation == 0 &&
+              snapshot_released(pull->snapshot()) && scope.source->pull_workers->done(),
+          "direct receipt excludes its own detached notification while generic snapshot/join and Source wait it");
+    pull.reset();
+    check(pull_count == 0 && cursor_count == 0 && scope.source->pending == 0,
+          "final callback return retires both independent ledgers without a channel access");
+}
+void pull_close_rejection_and_errors()
+{
+    for (const bool allocation : {true, false})
+    {
+        Scope scope;
+        auto pull = scope.pull(3, "SELECT value FROM missing_pull_table");
+        PullReady fetched, closed;
+        pull->request(1, 1, 256, fetched.callbacks());
+        fetched.wait(1);
+        const auto fetch_error = reject([&] { (void)pull->take(1); });
+        scope.source->controls.test_before_post = [allocation]
+        {
+            if (allocation)
+                throw std::bad_alloc();
+            throw std::runtime_error("controlled close queue failure");
+        };
+        pull->close_request(closed.callbacks());
+        closed.wait(0);
+        const auto error = reject([&] { (void)pull->close_take(); });
+        const auto close_rich = pull->take_error(0);
+        const auto fetch_rich = pull->take_error(1);
+        check(error.status == (allocation ? NW_OUT_OF_MEMORY : NW_NATIVE_PANIC) &&
+                  close_rich.correlation == error.correlation && fetch_rich.correlation == fetch_error.correlation &&
+                  fetch_error.code == 1 && fetched.calls == 1 && closed.calls == 1,
+              "accepted close queue failure preserves independent close and positive-generation rich errors");
+        check(reject([&] { (void)pull->take_error(0); }).status == NW_INVALID_STATE &&
+                  reject([&] { (void)pull->close_take(); }).status == NW_INVALID_STATE,
+              "close error is consumed once and never fabricates a successful result");
+        scope.source->controls.test_before_post = {};
+        pull->join();
+        pull.reset();
+        check(scope.source->pending == 0 && scope.source->pull_workers->done() && pull_count == 0 &&
+                  scope.source->poisoned.load() == !allocation,
+              "close queue failure settles its exact notification and reservations");
+    }
+    {
+        Scope scope;
+        auto pull = scope.pull(0);
+        PullReady closed;
+        Error original(NW_DOMAIN_ERROR, 1, "primary close");
+        original.provider = "57P01";
+        original.cleanup = std::make_shared<Error>(NW_NATIVE_PANIC, 8, "driver cleanup");
+        scope.source->controls.test_before_post = [original] { throw original; };
+        pull->close_request(closed.callbacks());
+        closed.wait(0);
+        const auto primary = reject([&] { (void)pull->close_take(); });
+        const auto rich = pull->take_error(0);
+        check(primary.status == original.status && primary.code == original.code &&
+                  primary.correlation == original.correlation && rich.provider == original.provider &&
+                  rich.cleanup == original.cleanup && rich.correlation == original.correlation &&
+                  scope.source->poisoned.load() && scope.session->discard.load(),
+              "original close SQLSTATE/correlation/cleanup identity survives queue failure and its poison evidence");
+        check(reject([&] { (void)pull->take_error(0); }).status == NW_INVALID_STATE && closed.calls == 1,
+              "rich provider close error is consumed once after its single notification");
+        scope.source->controls.test_before_post = {};
+        pull->join();
+        pull.reset();
+    }
+    {
+        Scope scope;
+        auto pull = scope.pull(0);
+        PullReady closed;
+        scope.source->join();
+        check(scope.source->admission_stop &&
+                  reject([&] { pull->close_request(closed.callbacks()); }).status == NW_INVALID_STATE &&
+                  closed.calls == 0 && reject([&] { (void)pull->close_take(); }).status == NW_INVALID_STATE,
+              "Source admission_stop rejects final notification without a late ledger ticket or callback");
+        pull->join();
+        check(snapshot_released(pull->snapshot()) && scope.source->pull_workers->done(),
+              "frozen cold join remains available after final-request admission rejection");
+        pull.reset();
+    }
+}
+void pull_close_cleanup_failure()
+{
+    for (const bool queue_failure : {false, true})
+    {
+        const auto child = fork();
+        check(child >= 0, "final-close quarantine subprocess starts");
+        if (child == 0)
+        {
+            try
+            {
+                auto* scope = new Scope;
+                auto pull = scope->pull(3);
+                PullReady fetched, closed;
+                pull->request(1, 1, 256, fetched.callbacks());
+                fetched.wait(1);
+                auto batch = pull->take(1);
+                if (!queue_failure)
+                    batch->cursor->test_retire_gate = [] { throw Error::state("controlled unconfirmed cleanup"); };
+                batch.reset();
+                if (queue_failure)
+                {
+                    scope->source->controls.test_before_post = [] { throw std::bad_alloc(); };
+                    scope->source->workers.test_before_post = [] { throw std::bad_alloc(); };
+                }
+                pull->close_request(closed.callbacks());
+                closed.wait(0);
+                const auto error = reject([&] { (void)pull->close_take(); });
+                const auto rich = pull->take_error(0);
+                check(error.status == (queue_failure ? NW_OUT_OF_MEMORY : NW_DOMAIN_ERROR) && error.code == 8 &&
+                          rich.correlation == error.correlation && rich.cleanup && closed.calls == 1 &&
+                          scope->source->poisoned.load() && scope->session->discard.load(),
+                      "cleanup failure produces one original rich close error and excludes provider reuse");
+                check(reject([&] { pull->join(); }).code == 8 && !snapshot_released(pull->snapshot()),
+                      "error readiness and frozen generic join never claim unconfirmed retirement is safe");
+                pull.reset();
+                check(scope->source->pending == 0 && scope->source->pull_workers->done() && pull_count == 0 &&
+                          cursor_count == 1 && scope->budget()[0] == 1,
+                      "cleanup failure retains only its bounded quarantine, not a final notification ticket");
+                _exit(0);
+            }
+            catch (const std::exception& error)
+            {
+                std::cerr << "FAIL final close subprocess: " << error.what() << '\n';
+                _exit(1);
+            }
+        }
+        int status = 0;
+        check(waitpid(child, &status, 0) == child && WIFEXITED(status) && WEXITSTATUS(status) == 0,
+              "unconfirmed final-close isolation assertions");
+    }
+}
 void pull_generations_and_tail()
 {
     Scope scope;
@@ -918,6 +1179,7 @@ int main()
         // fork is performed before any persistent test-owned worker exists.
         unknown_and_invalid();
         pull_cleanup_queue_failure();
+        pull_close_cleanup_failure();
         bounded_batches();
         batch_outlives_cursor();
         arena_lookahead_and_end();
@@ -934,6 +1196,10 @@ int main()
         pull_pending_and_active_abandonment();
         pull_queue_failure_completion();
         pull_parent_cleanup_failure();
+        pull_final_close_results();
+        pull_close_joins_old_fetch_tail();
+        pull_close_notification_tail();
+        pull_close_rejection_and_errors();
         await(
             []
             {
