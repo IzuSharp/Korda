@@ -221,13 +221,9 @@ internal sealed class TypedStream<T> : IAsyncEnumerable<T>
                 bool closing; lock (_gate) closing = _closed;
                 if (closing) throw new ObjectDisposedException(nameof(Enumerator));
                 if (_buffered)
-                {
-                    var bytes = _batch.RowBytes(_row);
-                    if (_bufferedRows >= _parent._limits.MaxBufferedRows || bytes > _parent._limits.MaxBufferedBytes - _bufferedBytes)
-                        throw new DatabaseException("Buffered result exceeds its row or charged-byte limit.", DatabaseErrorKind.ResourceLimit);
-                    _bufferedRows++; _bufferedBytes += bytes;
-                }
-                _current = _batch.Materialize(_row++, _parent._projection);
+                    _current = _batch.MaterializeBuffered(ref _row, _parent._projection, in _parent._limits,
+                        ref _bufferedRows, ref _bufferedBytes);
+                else _current = _batch.Materialize(_row++, _parent._projection);
                 return true;
             }
             catch (Exception original)

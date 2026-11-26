@@ -9,7 +9,7 @@
 
 #define SYMBOL_COUNT @COUNT@
 static _Atomic(void*) targets[SYMBOL_COUNT];
-static _Atomic uint64_t calls[SYMBOL_COUNT], pending[SYMBOL_COUNT], waits[4];
+static _Atomic uint64_t calls[SYMBOL_COUNT], pending[SYMBOL_COUNT], ok[SYMBOL_COUNT], waits[4];
 
 @BODIES@
 
@@ -27,6 +27,7 @@ uint64_t db_perf_ffi_count(uint32_t group, uint32_t index)
     if (group == 0 && index < SYMBOL_COUNT) return atomic_load(&calls[index]);
     if (group == 1 && index < SYMBOL_COUNT) return atomic_load(&pending[index]);
     if (group == 2 && index < 4) return atomic_load(&waits[index]);
+    if (group == 3 && index < SYMBOL_COUNT) return atomic_load(&ok[index]);
     return 0;
 }
 

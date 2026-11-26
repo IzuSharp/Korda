@@ -133,10 +133,13 @@ internal static class BorrowedBatchChecks
         var valid = DbWire.Encode(expected, 1, [Codecs.Int64.Encode(42), Codecs.String.Encode("retained"), new byte[] { 1, 2, 255 }]);
         var batch = new BorrowedBatchFixture(valid); batch.Acquire();
         OwnedResult result;
-        using (var lease = new RowBatchLease(batch.Batch, expected, fields, new(2, 4096, 2, 4096)))
+        var limits = new StreamLimits(2, 4096, 2, 4096);
+        using (var lease = new RowBatchLease(batch.Batch, expected, fields, limits))
         {
-            Check(lease.RowBytes(0) == 3 * WireSchema.CellBytes + 8 + 8 + 3, "Borrowed row byte accounting changed.");
-            result = lease.Materialize(0, projection);
+            uint row = 0; var bufferedRows = 0; long bufferedBytes = 0;
+            result = lease.MaterializeBuffered(ref row, projection, in limits, ref bufferedRows, ref bufferedBytes);
+            Check(row == 1 && bufferedRows == 1 && bufferedBytes == 3 * WireSchema.CellBytes + 8 + 8 + 3,
+                "Buffered borrowed row byte accounting changed.");
             Check(batch.NativeReleases == 0 && result.Id == 42, "Materializer did not retain the native batch.");
         }
         Check(batch.Disposals == 1 && batch.NativeReleases == 1, "A successful lease did not release its owner exactly once.");

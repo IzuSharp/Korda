@@ -23,11 +23,17 @@ internal static class BorrowedBatchHostTests
                 foreach (var failMapping in new[] { false, true })
                     await DuringMapping(provider, connection, stop, failMapping, batchRows);
         Console.WriteLine($"BORROWED_HOST_PASS provider={provider} scenarios=16 assertions={_checks - before}; unknown/known EOF buffers survive complete mapper scopes and decoded values own their data");
+        before = _checks;
+        foreach (var batchRows in new[] { 1, 2 })
+            foreach (var stop in new[] { Stop.Cancel, Stop.SourceClose, Stop.SessionClose })
+                foreach (var failMapping in new[] { false, true })
+                    await DuringMapping(provider, connection, stop, failMapping, batchRows, buffered: true);
+        Console.WriteLine($"BUFFERED_BORROWED_HOST_PASS provider={provider} scenarios=12 assertions={_checks - before}; public QueryAsync preserves held mapper storage, cancellation/parent-close priority and owned results");
     }
 
-    private static async Task DuringMapping(DatabaseProvider provider, string connection, Stop stop, bool failMapping, int batchRows)
+    private static async Task DuringMapping(DatabaseProvider provider, string connection, Stop stop, bool failMapping, int batchRows, bool buffered = false)
     {
-        Console.WriteLine($"BORROWED_HOST_CASE provider={provider} stop={stop} mapperFailure={failMapping} batchRows={batchRows}");
+        Console.WriteLine($"BORROWED_HOST_CASE provider={provider} stop={stop} mapperFailure={failMapping} batchRows={batchRows} buffered={buffered}");
         var engine = provider == DatabaseProvider.Sqlite ? SqliteDataSource.Engine : PostgreSqlDataSource.Engine;
         await WaitZero(engine);
         var builder = new DataSourceBuilder().WithName($"borrowed-{provider}-{stop}-{failMapping}")
@@ -73,8 +79,9 @@ internal static class BorrowedBatchHostTests
             : "SELECT CAST(@name AS TEXT) AS name, CAST(@bytes AS BYTEA) AS bytes, CAST(@json AS JSONB) AS json";
         var command = SqlCommand.Create(sql, new SqlParameters().Add("name", inputName, Codecs.String)
             .Add("bytes", inputBytes, Codecs.Bytes).Add("json", inputJson, Json));
-        var reader = session.StreamAsync(command, projection, cancellation.Token).GetAsyncEnumerator();
-        var move = Task.Run(() => reader.MoveNextAsync().AsTask());
+        var reader = buffered ? null : session.StreamAsync(command, projection, cancellation.Token).GetAsyncEnumerator();
+        Task move = buffered ? Task.Run(() => session.QueryAsync(command, projection, cancellation.Token))
+            : Task.Run(() => reader!.MoveNextAsync().AsTask());
         Task? disposing = null, closingSource = null, closingSession = null;
         try
         {
@@ -83,7 +90,7 @@ internal static class BorrowedBatchHostTests
             {
                 // Query/conversion failures before mapping must retain their
                 // original error, rather than appear as a barrier timeout.
-                _ = await move;
+                await move;
                 throw new InvalidOperationException("The result move completed without entering its synchronous mapper.");
             }
             await enteredMapper.Task;
@@ -94,7 +101,7 @@ internal static class BorrowedBatchHostTests
             switch (stop)
             {
                 case Stop.Dispose:
-                    disposing = reader.DisposeAsync().AsTask();
+                    disposing = reader!.DisposeAsync().AsTask();
                     Check(!disposing.IsCompleted, "DisposeAsync waits for the admitted synchronous mapper");
                     break;
                 case Stop.Cancel:
@@ -138,24 +145,27 @@ internal static class BorrowedBatchHostTests
             }
             else
             {
-                Check(await move.WaitAsync(Bound), "an already admitted mapper completes its owned row after stop/close");
-                Check(ReferenceEquals(reader.Current, observed), "the observed row is the public current value");
+                if (!buffered)
+                {
+                    Check(await ((Task<bool>)move).WaitAsync(Bound), "an already admitted mapper completes its owned row after stop/close");
+                    Check(ReferenceEquals(reader!.Current, observed), "the observed row is the public current value");
+                }
                 if (stop == Stop.Cancel)
                 {
-                    var failure = await Failure<OperationCanceledException>(reader.MoveNextAsync().AsTask());
+                    var failure = await Failure<OperationCanceledException>(buffered ? move : reader!.MoveNextAsync().AsTask());
                     Check(failure.CancellationToken == cancellation.Token, "the next move preserves the admitted cancellation token");
                 }
                 else if (stop == Stop.SourceClose)
-                    await Failure<ObjectDisposedException>(reader.MoveNextAsync().AsTask());
+                    await Failure<ObjectDisposedException>(buffered ? move : reader!.MoveNextAsync().AsTask());
                 else if (stop == Stop.SessionClose)
                 {
-                    var failure = await Failure<InvalidOperationException>(reader.MoveNextAsync().AsTask());
+                    var failure = await Failure<InvalidOperationException>(buffered ? move : reader!.MoveNextAsync().AsTask());
                     Check(failure.GetType() == typeof(InvalidOperationException)
                         && failure.Message == "The native operation is not legal in the current state.",
                         "parent session closure keeps native cursor InvalidState mapping at both EOF boundaries");
                 }
             }
-            await reader.DisposeAsync().AsTask().WaitAsync(Bound);
+            if (reader is not null) await reader.DisposeAsync().AsTask().WaitAsync(Bound);
             if (disposing is not null) await disposing.WaitAsync(Bound);
             await session.DisposeAsync().AsTask().WaitAsync(Bound);
             await source.DisposeAsync().AsTask().WaitAsync(Bound);
@@ -170,12 +180,12 @@ internal static class BorrowedBatchHostTests
             inputBytes[1] = 99;
             Check(materialized.Bytes[1] == 1 && materialized.Name == "owned row 🦀" && materialized.Json.Label == "owned JSON 🦀",
                 "retired native/input storage cannot mutate already materialized application values");
-            Console.WriteLine($"BORROWED_HOST_CASE_PASS provider={provider} stop={stop} mapperFailure={failMapping}; native-buffer-held=1; final-owners=0");
+            Console.WriteLine($"BORROWED_HOST_CASE_PASS provider={provider} stop={stop} mapperFailure={failMapping} buffered={buffered}; native-buffer-held=1; final-owners=0");
         }
         finally
         {
             releaseMapper.Set();
-            await reader.DisposeAsync().AsTask().WaitAsync(Bound);
+            if (reader is not null) await reader.DisposeAsync().AsTask().WaitAsync(Bound);
             await session.DisposeAsync().AsTask().WaitAsync(Bound);
             await source.DisposeAsync().AsTask().WaitAsync(Bound);
         }

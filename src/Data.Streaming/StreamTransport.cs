@@ -183,29 +183,41 @@ internal sealed class RowBatchLease : IRowLifetime, IDisposable
             catch { owner.Dispose(); throw; }
         }
     }
-    internal long RowBytes(uint row)
+    internal T MaterializeBuffered<T>(ref uint row, Projection<T> projection, in StreamLimits limits,
+        ref int bufferedRows, ref long bufferedBytes)
     {
         var read = BeginRead(out var layout);
         try
         {
-            long bytes = checked(_fields.Length * (long)WireSchema.CellBytes);
-            for (var i = 0; i < _fields.Length; i++) bytes = checked(bytes + layout.Cell(read.Bytes, row, i, out _).Length);
-            return bytes;
+            var bytes = RowBytes(row, layout, read.Bytes);
+            if (bufferedRows >= limits.MaxBufferedRows || bytes > limits.MaxBufferedBytes - bufferedBytes)
+                throw new DatabaseException("Buffered result exceeds its row or charged-byte limit.", DatabaseErrorKind.ResourceLimit);
+            // Charge before invoking the mapper, preserving the original row
+            // admission order while keeping this exact native generation held.
+            bufferedRows++; bufferedBytes += bytes;
+            return Materialize(row++, projection, layout, read.Bytes);
         }
         finally { read.Dispose(); EndRead(); }
     }
     internal T Materialize<T>(uint row, Projection<T> projection)
     {
         var read = BeginRead(out var layout);
-        try
-        {
-            if (row >= layout.Rows) throw new ArgumentOutOfRangeException(nameof(row));
-            var validated = ReferenceEquals(_validatedProjection, projection) && ReferenceEquals(_validatedExpectation, layout.Expected);
-            if (!validated && projection.MatchesValidatedBatch(_fields, layout.Expected))
-            { _validatedProjection = projection; _validatedExpectation = layout.Expected; validated = true; }
-            return projection.ReadBatch(this, _fields, layout, read.Bytes, row, validated);
-        }
+        try { return Materialize(row, projection, layout, read.Bytes); }
         finally { read.Dispose(); EndRead(); }
+    }
+    private long RowBytes(uint row, WireLayout layout, ReadOnlySpan<byte> data)
+    {
+        long bytes = checked(_fields.Length * (long)WireSchema.CellBytes);
+        for (var i = 0; i < _fields.Length; i++) bytes = checked(bytes + layout.Cell(data, row, i, out _).Length);
+        return bytes;
+    }
+    private T Materialize<T>(uint row, Projection<T> projection, WireLayout layout, ReadOnlySpan<byte> data)
+    {
+        if (row >= layout.Rows) throw new ArgumentOutOfRangeException(nameof(row));
+        var validated = ReferenceEquals(_validatedProjection, projection) && ReferenceEquals(_validatedExpectation, layout.Expected);
+        if (!validated && projection.MatchesValidatedBatch(_fields, layout.Expected))
+        { _validatedProjection = projection; _validatedExpectation = layout.Expected; validated = true; }
+        return projection.ReadBatch(this, _fields, layout, data, row, validated);
     }
     private ScopedBatchRead BeginRead(out WireLayout layout)
     {

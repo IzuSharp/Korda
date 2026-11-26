@@ -23,7 +23,8 @@ internal static class RowLeaseReuseChecks
             await IndependentEnumerators(storage);
             await MalformedLaterBatch(storage);
             await ReentrantMapping(storage);
-            ValidatedLayout(storage);
+            ValidatedLayout(storage, buffered: false);
+            ValidatedLayout(storage, buffered: true);
         }
         Console.WriteLine($"PASS row lease reuse: {s_checks} assertions; inactive checks, ownership compensation, later malformed batches, independent enumerators and reentrant mapper rejection across native storage and independently captured input");
     }
@@ -177,12 +178,20 @@ internal static class RowLeaseReuseChecks
         Throws<ObjectDisposedException>(lease.AssertAlive);
         Throws<ObjectDisposedException>(() => { _ = lease.Rows; });
         Throws<ObjectDisposedException>(() => lease.AssertAlive());
-        Throws<ObjectDisposedException>(() => { _ = lease.RowBytes(0); });
+        uint row = 0; var bufferedRows = 0; long bufferedBytes = 0;
+        Throws<ObjectDisposedException>(() => { _ = lease.MaterializeBuffered(ref row, Shape, in Limits, ref bufferedRows, ref bufferedBytes); });
+        Check(row == 0 && bufferedRows == 0 && bufferedBytes == 0, "A retired lease charged a buffered row before rejecting its read.");
         Throws<ObjectDisposedException>(() => { _ = lease.Materialize(0, Shape); });
     }
 
-    private static void ValidatedLayout(string storage)
+    private static void ValidatedLayout(string storage, bool buffered)
     {
+        long? Read(RowBatchLease lease, uint row, Projection<long?> projection)
+        {
+            if (!buffered) return lease.Materialize(row, projection);
+            var bufferedRows = 0; long bufferedBytes = 0;
+            return lease.MaterializeBuffered(ref row, projection, in Limits, ref bufferedRows, ref bufferedBytes);
+        }
         var maps = 0;
         var equivalent = Codecs.Nullable(Codecs.Int64);
         var foreign = new ResultColumn<long?>(new object(), 0, "id", NullableLong);
@@ -201,25 +210,28 @@ internal static class RowLeaseReuseChecks
         var owner = Owner(storage, Encode(81, null));
         using (var lease = new RowBatchLease(owner.Batch, expected, shape.Fields, Limits))
         {
-            Check(lease.Materialize(0, shape) == 81 && lease.Materialize(1, shape) is null && maps == 2,
+            Check(Read(lease, 0, shape) == 81 && Read(lease, 1, shape) is null && maps == 2,
                 "Validated layout changed equivalent codec reads or nullable values.");
             var wrong = Projection<long?>.Create([ResultField.Create("other", NullableLong)], _ => { maps++; return 0; });
-            Check(Throws<DatabaseException>(() => lease.Materialize(0, wrong)).Kind == DatabaseErrorKind.ShapeMismatch && maps == 2,
+            Check(Throws<DatabaseException>(() => Read(lease, 0, wrong)).Kind == DatabaseErrorKind.ShapeMismatch && maps == 2,
                 "A foreign projection reused another layout's validation proof.");
-            Check(lease.Materialize(0, shape) == 81 && maps == 3, "A rejected projection corrupted the validated layout.");
+            Check(Read(lease, 0, shape) == 81 && maps == 3, "A rejected projection corrupted the validated layout.");
         }
         Released(owner);
 
         RowBatchLease? retiring = null;
+        ITrackedBatch? retiringOwner = null;
         var retiringShape = Projection<long?>.Create(Shape.Fields, row =>
         {
             retiring!.Dispose();
+            Check(retiringOwner!.NativeReleases == 0 && !retiring.IsActive,
+                "Mapper self-disposal must close logical reads while its admitted native scope remains held.");
             try { return row.Read(0, NullableLong); }
             catch (ObjectDisposedException) { s_checks++; return -1; }
         });
-        var retiringOwner = Owner(storage, Encode(91));
+        retiringOwner = Owner(storage, Encode(91));
         retiring = new(retiringOwner.Batch, Expected with { MetadataHash = retiringShape.ShapeBytes }, retiringShape.Fields, Limits);
-        Check(retiring.Materialize(0, retiringShape) == -1, "A validated reader outlived its retired lease.");
+        Check(Read(retiring, 0, retiringShape) == -1, "A validated reader outlived its retired lease.");
         Released(retiringOwner); Inactive(retiring);
     }
     private static void Released(ITrackedBatch owner) => Check(owner.Disposals == 1 && !owner.Active
