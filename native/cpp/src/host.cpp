@@ -3075,13 +3075,15 @@ void CursorPull::close_request(nw_db_cursor_callbacks_v1 callbacks)
             throw Error::state("cursor final close was already requested");
         worker = std::make_shared<CloseWorker>(shared_from_this(), state);
         action = [worker] { worker->run(); };
-        close_ = std::move(state);
-        closing_ = true;
         // Preserve the queued path for outstanding results/errors and held
         // batches. Only an already joined cursor and every prior fetch tail
         // can prove that the existing close worker will not wait or do I/O.
+        // This lock excludes new fetch admission. Evaluate the mutex-protected
+        // proof before acceptance, then close admission before releasing it.
         released = cursor_ && !running_ && !outstanding_ && !gate_ && !buffer_ && !error_ && !cancel_ &&
                    !cursor_->batch_live.load() && completion_->done() && cursor_->resources_released();
+        close_ = std::move(state);
+        closing_ = true;
     }
     // All allocations/admission above precede acceptance. A failed queue
     // after acceptance must still settle this independent close exactly once.
