@@ -112,7 +112,9 @@ internal sealed class HostCommandController<T> : HostCommandCallback
             {
                 NativePullCallbacks callbacks = new()
                 {
-                    StructSize = (uint)sizeof(NativePullCallbacks), Context = GCHandle.ToIntPtr(_root), Ready = &OnReady
+                    StructSize = (uint)sizeof(NativePullCallbacks),
+                    Context = GCHandle.ToIntPtr(_root),
+                    Ready = &OnReady
                 };
                 var error = BindingChecks.Error();
                 lock (_gate) _requestEntered = true;

@@ -25,9 +25,12 @@ internal static unsafe class NativeCommand
         {
             NativeCommandRequest request = new()
             {
-                StructSize = (uint)sizeof(NativeCommandRequest), Kind = kind,
-                Target = targetLease.Pointer, Input = inputLease.Pointer,
-                Payload = BindingChecks.View(bytes, payload.Length), Action = action
+                StructSize = (uint)sizeof(NativeCommandRequest),
+                Kind = kind,
+                Target = targetLease.Pointer,
+                Input = inputLease.Pointer,
+                Payload = BindingChecks.View(bytes, payload.Length),
+                Action = action
             };
             return Calls(binding).Request(&request, callbackPointer, output, failure);
         }
