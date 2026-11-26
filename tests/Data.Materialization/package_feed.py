@@ -20,7 +20,7 @@ REGISTRY = {
     'Korda.Database.Sqlite': ('src/Data.Sqlite', ['Korda.Core', 'Korda.Data', 'Korda.Database', 'Korda.Query.Generator']),
     'Korda.Database.PostgreSql': ('src/Data.Postgres', ['Korda.Core', 'Korda.Data', 'Korda.Database', 'Korda.Query.Generator']),
 }
-CAPABILITIES = ['db.metadata.v1', 'db.query.v1', 'db.transactions.v1', 'db.savepoints.v1', 'db.streaming.v1', 'db.migrations.v1', 'db.schema.read.v1', 'db.returning.v1', 'db.upsert.v1', 'db.cte.v1', 'db.window.v1', 'db.row-lock.v1', 'db.null-safe-equality.v1', 'db.json.v1', 'db.decimal.numeric.v1', 'db.decimal.text.v1', 'db.fixed-money.v1', 'db.relationships.explicit.v1', 'db.prepared-shape.v1', 'db.bulk-batches.v1', 'db.dynamic-fields.v1', 'db.recursive-cte.v1', 'db.set-operations.v1', 'db.scalar-codecs.v1', 'db.sql.expert.v1', 'db.schema.draft.v1', 'db.query.command.v1', 'db.cursor.pull.v1', 'db.command.completion.v1']
+CAPABILITIES = ['db.metadata.v1', 'db.query.v1', 'db.transactions.v1', 'db.savepoints.v1', 'db.streaming.v1', 'db.migrations.v1', 'db.schema.read.v1', 'db.returning.v1', 'db.upsert.v1', 'db.cte.v1', 'db.window.v1', 'db.row-lock.v1', 'db.null-safe-equality.v1', 'db.json.v1', 'db.decimal.numeric.v1', 'db.decimal.text.v1', 'db.fixed-money.v1', 'db.relationships.explicit.v1', 'db.prepared-shape.v1', 'db.bulk-batches.v1', 'db.dynamic-fields.v1', 'db.recursive-cte.v1', 'db.set-operations.v1', 'db.scalar-codecs.v1', 'db.sql.expert.v1', 'db.schema.draft.v1', 'db.query.command.v1', 'db.cursor.pull.v1', 'db.command.completion.v1', 'db.find.shape.v1']
 
 def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()

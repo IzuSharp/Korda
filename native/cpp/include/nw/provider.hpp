@@ -159,6 +159,10 @@ class ProviderConnection : public std::enable_shared_from_this<ProviderConnectio
     void close() noexcept;
     [[nodiscard]] bool healthy() const noexcept;
     [[nodiscard]] bool in_transaction() const noexcept;
+    // Called by the exclusive physical owner. A live, non-pipeline PostgreSQL
+    // connection must already have consumed ReadyForQuery with state INTRANS.
+    // This only inspects libpq state; it sends no SQL or protocol messages.
+    [[nodiscard]] bool postgres_transaction_ready_for_commit() const;
     [[nodiscard]] Profile profile() const noexcept;
     [[nodiscard]] std::uint64_t identity() const noexcept;
     void interrupt() noexcept;

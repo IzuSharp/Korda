@@ -55,6 +55,10 @@ public sealed partial class DataSource : IDisposable, IAsyncDisposable
             throw new DatabaseCapabilityException(CommandCompletionCalls.Capability, provider == DatabaseProvider.Sqlite ? "sqlite.v1" : "postgresql.v1");
         binding.Completions = new(symbol => EngineModuleLoader.ResolveExport(descriptor, symbol));
         binding.Completions.Require();
+        if (!info.Capabilities.Any(capability => capability.Name == FindShapeCalls.Capability))
+            throw new DatabaseCapabilityException(FindShapeCalls.Capability, provider == DatabaseProvider.Sqlite ? "sqlite.v1" : "postgresql.v1");
+        binding.Finds = new(symbol => EngineModuleLoader.ResolveExport(descriptor, symbol));
+        binding.Finds.Require();
         binding.Commands = new(new QueryCommandCalls(symbol => EngineModuleLoader.ResolveExport(descriptor, symbol)),
             limits.MaxQueryNodes, limits.MaxQueryDepth, limits.MaxParameters, checked((int)limits.MaxParameterBytes),
             info.Capabilities.Select(capability => capability.Name));
@@ -177,10 +181,11 @@ public sealed partial class DataSource : IDisposable, IAsyncDisposable
     private void RequestClose()
     {
         lock (_gate) _closing = true;
-        lock (_registrations) { ReleaseRelations(); foreach (var model in _models.Values) model.Dispose(); _models.Clear(); _codecs.Clear(); }
+        lock (_registrations) { ReleaseFindPlans(); ReleaseRelations(); foreach (var model in _models.Values) model.Dispose(); _models.Clear(); _codecs.Clear(); }
         _close.Request();
     }
     partial void ReleaseRelations();
+    partial void ReleaseFindPlans();
     private void FinishClose() { Owner.Dispose(); _resources.Dispose(); }
     /// <summary>Closes admission and requests bounded native cleanup without blocking for I/O.</summary>
     public void Dispose() => RequestClose();

@@ -209,6 +209,13 @@ weaken the generic operation's `NativeQuiet` or retirement contract.
 
 ## Costs and error behavior
 
+Complete-key `FindAsync` uses the private
+[Find shape extension](../../native/database/binding/find-shape-v1.md). The source
+compiles and caches the exact table/mapper shape once within finite entry and byte
+limits. Warm calls submit only the owned key values through the existing cursor
+pull path. Ordinary dynamic Fluent still compiles its complete command, and the
+public prepared query contract remains unchanged.
+
 A direct operation performs one FFI call and bounded metadata validation. Control
 encoding allocates one bounded byte array; projection encoding snapshots the
 field sequence once. Value encoding uses B01 scalar serialization and db-wire.

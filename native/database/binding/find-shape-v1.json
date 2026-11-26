@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "capability": "db.find.shape.v1",
+  "capability_bit": 29,
+  "header": "native/database/binding/korda_find_shape_v1.h",
+  "signatures": [
+    "nw_status NW_CDECL nw_db_find_plan_create_v1(nw_db_ref source, nw_db_ref model, uint32_t table, uint32_t projection, nw_db_ref* result, uint64_t* cache_charge, uint64_t* logical_bytes, nw_error_info_v1* error);"
+  ]
+}

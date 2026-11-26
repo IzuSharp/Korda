@@ -29,7 +29,7 @@ def replace_once(text, old, new):
 def generate(source):
     binding = source / 'native/database/binding'
     records = [binding / 'signatures-v1.json', binding / 'query-command-v1.json']
-    for name in ('cursor-pull-v1.json', 'result-batch-v1.json', 'command-completion-v1.json'):
+    for name in ('cursor-pull-v1.json', 'result-batch-v1.json', 'command-completion-v1.json', 'find-shape-v1.json'):
         if (binding / name).exists():
             records.append(binding / name)
     declarations = [line for path in records for line in json.loads(path.read_text())['signatures']]

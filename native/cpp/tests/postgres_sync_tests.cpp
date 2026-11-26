@@ -103,6 +103,7 @@ class SyncProxy
     std::mutex mutex_;
     std::condition_variable changed_;
     bool armed_ = false, after_commit_ = false, hold_ = false, released_ = false, allow_command_ = false;
+    std::vector<std::string> parsed_sql_;
     ReadyBoundary ready_boundary_ = ReadyBoundary::None;
     bool drop_ready_ = false;
     bool pause_initialization_ = false;
@@ -189,6 +190,7 @@ class SyncProxy
                                 const auto sql = std::string_view(reinterpret_cast<const char*>(body.data() + offset),
                                                                   body.size() - offset);
                                 std::unique_lock lock(mutex_);
+                                parsed_sql_.emplace_back(sql.substr(0, sql.find('\0')));
                                 if (pause_initialization_ && sql.starts_with("SET statement_timeout TO "))
                                 {
                                     pause_initialization_ = false;
@@ -306,6 +308,11 @@ class SyncProxy
     std::atomic<bool> faulted{false}, unexpected_command{false}, initialization_paused{false};
     std::atomic<unsigned> description_groups{0}, execution_groups{0}, standalone_syncs{0}, ready_responses{0};
     std::uint16_t port{};
+    std::vector<std::string> parsed_sql()
+    {
+        std::lock_guard lock(mutex_);
+        return parsed_sql_;
+    }
     explicit SyncProxy(std::uint16_t upstream)
     {
         listener_ = socket(AF_INET, SOCK_STREAM, 0);
@@ -532,6 +539,167 @@ std::string proxy_uri(const std::string& uri, std::uint16_t port)
     const auto slash = uri.find('/', uri.find('@'));
     const auto colon = uri.rfind(':', slash);
     return uri.substr(0, colon + 1) + std::to_string(port) + uri.substr(slash);
+}
+void healthy_commit_dispatch(const std::string& uri, bool after_cursor)
+{
+    SyncProxy proxy(port_of(uri));
+    auto source = Source::create(configuration(proxy_uri(uri, proxy.port)));
+    auto session = open(source);
+    auto observer = ProviderConnection::open(configuration(uri).provider, {});
+    const auto pid = scalar(session->connection, "SELECT pg_backend_pid()");
+    const auto table = "nw_commit_proof_" + std::to_string(pid);
+    (void)observer->execute("CREATE TABLE " + table + "(id bigint primary key)", {}, {});
+    TransactionOptions options{};
+    options.commit_timeout_ns = options.cleanup_timeout_ns = 2'000'000'000;
+    auto tx = Transaction::begin(session, options, std::make_shared<Cancel>(), session->admit(true));
+    (void)execute(session, "INSERT INTO " + table + " VALUES(1)");
+    if (after_cursor)
+    {
+        auto value = execute(session, "SELECT id AS v FROM " + table, true);
+        auto owner = std::get<std::shared_ptr<Owner>>(value);
+        auto cursor = std::get<std::shared_ptr<Cursor>>(owner->data);
+        auto rows = cursor->fetch(std::make_shared<Cancel>(), 8, 65536);
+        rows->mark_taken();
+        check(rows->known_end && Batch::parse(rows->bytes, cursor->expectation).rows() == 1,
+              "commit count fixture consumes the real cursor EOF");
+        cursor->request_close();
+        cursor->join();
+    }
+    const auto dispatch_before = provider_dispatch_count();
+    const auto protocol_before = provider_protocol_count();
+    const auto description_before = proxy.description_groups.load();
+    const auto execution_before = proxy.execution_groups.load();
+    const auto sync_before = proxy.standalone_syncs.load();
+    const auto ready_before = proxy.ready_responses.load();
+    (void)tx->finish(true, std::make_shared<Cancel>(), session->admit(true));
+    tx->join();
+    const auto dispatches = provider_dispatch_count() - dispatch_before;
+    const auto protocols = provider_protocol_count() - protocol_before;
+    const auto descriptions = proxy.description_groups.load() - description_before;
+    const auto executions = proxy.execution_groups.load() - execution_before;
+    const auto syncs = proxy.standalone_syncs.load() - sync_before;
+    const auto ready = proxy.ready_responses.load() - ready_before;
+    const auto result = snapshot(tx->snapshot());
+    check(result.outcome == 1 && result.cleanup == 2 && result.disposition == 0 && result.released,
+          "counted healthy commit has completed its real cleanup and retirement");
+    check(descriptions == dispatches && executions == dispatches && syncs == 2 && ready == 2 * dispatches + 2 &&
+              protocols == 4 * dispatches + 2,
+          "real protocol frames retain COMMIT confirmation and independent recovery Sync");
+    check(scalar(observer, "SELECT count(*) FROM " + table) == 1,
+          "independent connection observes the counted commit's durable write");
+    close(session);
+    auto reused = open(source);
+    check(scalar(reused->connection, "SELECT pg_backend_pid()") == pid,
+          "counted commit returns the same safe physical connection");
+    close(reused);
+    source->join();
+    proxy.verify(false);
+    (void)observer->execute("DROP TABLE " + table, {}, {});
+    observer->close();
+    std::cout << "COMMIT-DISPATCH route=" << (after_cursor ? "cursor-eof" : "nonquery") << " sql=" << dispatches
+              << " descriptions=" << descriptions << " executions=" << executions << " standalone_syncs=" << syncs
+              << " ready=" << ready << " protocol_submissions=" << protocols << '\n'
+              << std::flush;
+    check(dispatches == 1,
+          "healthy outer commit must dispatch only COMMIT; observed SQL dispatches=" + std::to_string(dispatches));
+}
+void commit_ready_states(const std::string& uri)
+{
+    auto connection = ProviderConnection::open(configuration(uri).provider, {});
+    const auto prove = [&](bool expected, std::string_view label)
+    {
+        const auto dispatches = provider_dispatch_count();
+        const auto protocols = provider_protocol_count();
+        check(connection->postgres_transaction_ready_for_commit() == expected, label);
+        check(provider_dispatch_count() == dispatches && provider_protocol_count() == protocols,
+              "commit readiness reads local state without SQL or protocol submission");
+    };
+    prove(false, "an idle connection without a transaction has no commit proof");
+    (void)connection->execute("BEGIN", {}, {});
+    prove(true, "completed BEGIN has an idle confirmed INTRANS state");
+    auto rows = connection->query("SELECT n::bigint FROM generate_series(1,3) AS n", {}, {});
+    prove(false, "a live described statement cannot supply commit proof before Execute");
+    check(rows->next_text({}).has_value(), "active reader produced its first actual row");
+    prove(false, "an active reader before Execute completion cannot supply commit proof");
+    while (rows->next_text({}))
+    {
+    }
+    prove(false, "a live statement still excludes commit proof after its confirmed EOF");
+    rows->close();
+    rows.reset();
+    prove(true, "a closed reader preserves its confirmed INTRANS state");
+    check(rejected([&] { (void)connection->execute("SELECT 1/0", {}, {}); }).provider == "22012",
+          "commit proof failed-state fixture reaches real PostgreSQL division failure");
+    prove(false, "INERROR cannot masquerade as normal INTRANS commit readiness");
+    connection->synchronize_protocol();
+    prove(false, "protocol-only synchronization does not heal failed transaction state");
+    (void)connection->execute("ROLLBACK", {}, {});
+    prove(false, "completed ROLLBACK returns to IDLE without commit proof");
+    connection->close();
+    prove(false, "a physically closed connection has no commit proof");
+    std::cout << "COMMIT-READY idle=false intrans=true live-description=false active-reader=false "
+                 "live-eof=false closed-reader=true failed=false synchronized-failed=false rollback-idle=false "
+                 "closed=false\n"
+              << std::flush;
+}
+void commit_probe_fallback(const std::string& uri, bool with_savepoint, bool failed)
+{
+    SyncProxy proxy(port_of(uri));
+    auto source = Source::create(configuration(proxy_uri(uri, proxy.port)));
+    auto session = open(source);
+    auto observer = ProviderConnection::open(configuration(uri).provider, {});
+    const auto pid = scalar(session->connection, "SELECT pg_backend_pid()");
+    const auto table = "nw_commit_fallback_" + std::to_string(pid);
+    (void)observer->execute("CREATE TABLE " + table + "(id bigint primary key)", {}, {});
+    TransactionOptions options{};
+    options.commit_timeout_ns = options.cleanup_timeout_ns = 2'000'000'000;
+    auto tx = Transaction::begin(session, options, std::make_shared<Cancel>(), session->admit(true));
+    (void)execute(session, "INSERT INTO " + table + " VALUES(1)");
+    std::shared_ptr<Savepoint> point;
+    if (with_savepoint)
+        point = tx->create_savepoint(std::make_shared<Cancel>(), session->admit(true));
+    if (failed)
+        check(rejected([&] { (void)session->connection->execute("SELECT 1/0", {}, {}); }).provider == "22012",
+              "fallback fixture aborts the real provider transaction independently of Host bookkeeping");
+    check(session->connection->postgres_transaction_ready_for_commit() == !failed,
+          "savepoint policy is distinct from the physical INTRANS proof");
+    const auto parsed_before = proxy.parsed_sql().size();
+    const auto dispatch_before = provider_dispatch_count();
+    const auto sync_before = proxy.standalone_syncs.load();
+    const auto error = rejected([&] { (void)tx->finish(true, std::make_shared<Cancel>(), session->admit(true)); });
+    tx->join();
+    const auto dispatches = provider_dispatch_count() - dispatch_before;
+    const auto syncs = proxy.standalone_syncs.load() - sync_before;
+    auto parsed = proxy.parsed_sql();
+    parsed.erase(parsed.begin(), parsed.begin() + static_cast<std::ptrdiff_t>(parsed_before));
+    check(parsed == std::vector<std::string>{"SELECT 1", "ROLLBACK"},
+          "failed state or retained savepoint keeps the actual old probe and rollback sequence");
+    check(dispatches == (failed ? 1U : 2U) && syncs == 2,
+          "failed Parse never counts as Execute and both rollback confirmations remain");
+    const auto result = snapshot(tx->snapshot());
+    check(result.cleanup == 2 && result.disposition == 0 && result.released,
+          "fallback completes cleanup before releasing the transaction's local resources");
+    if (failed)
+        check(error.status == NW_DOMAIN_ERROR && error.code == 1 && error.provider == "25P02" && result.outcome == 2,
+              "25P02 wins over savepoint depth and confirms RolledBack without false commit success");
+    else
+        check(with_savepoint && error.code == 9 && result.outcome == 3,
+              "healthy retained savepoint keeps the existing depth-refusal and Unknown contract");
+    check(scalar(observer, "SELECT count(*) FROM " + table) == 0,
+          "independent connection confirms fallback rolled back the attempted write");
+    close(session);
+    auto reused = open(source);
+    check(scalar(reused->connection, "SELECT pg_backend_pid()") == pid,
+          "confirmed fallback cleanup safely reuses the same backend");
+    close(reused);
+    source->join();
+    proxy.verify(false);
+    (void)observer->execute("DROP TABLE " + table, {}, {});
+    observer->close();
+    std::cout << "COMMIT-FALLBACK savepoint=" << with_savepoint << " failed=" << failed
+              << " parsed=SELECT_1,ROLLBACK executions=" << dispatches << " standalone_syncs=" << syncs
+              << " outcome=" << result.outcome << '\n'
+              << std::flush;
 }
 void protocol_states(const std::string& uri)
 {
@@ -1032,8 +1200,26 @@ int main(int argc, char** argv)
 {
     try
     {
-        check(argc == 2, "postgres Sync tests require isolated PostgreSQL URI");
+        check(argc == 2 || (argc == 3 && std::string_view(argv[2]) == "--commit-count-only"),
+              "postgres Sync tests require isolated PostgreSQL URI and an optional commit count selector");
         const std::string uri = argv[1];
+        std::cout << "CASE healthy commit SQL dispatch\n" << std::flush;
+        healthy_commit_dispatch(uri, false);
+        std::cout << "CASE commit after real cursor EOF\n" << std::flush;
+        healthy_commit_dispatch(uri, true);
+        if (argc == 3)
+        {
+            std::cout << "PASS PostgreSQL commit SQL dispatch: " << checks << " checks\n";
+            return 0;
+        }
+        std::cout << "CASE commit readiness state exclusions\n" << std::flush;
+        commit_ready_states(uri);
+        std::cout << "CASE failed transaction commit probe\n" << std::flush;
+        commit_probe_fallback(uri, false, true);
+        std::cout << "CASE retained savepoint commit probe\n" << std::flush;
+        commit_probe_fallback(uri, true, false);
+        std::cout << "CASE failed savepoint SQLSTATE priority\n" << std::flush;
+        commit_probe_fallback(uri, true, true);
         std::cout << "CASE protocol states\n" << std::flush;
         protocol_states(uri);
         std::cout << "CASE grouped metadata confirmation\n" << std::flush;

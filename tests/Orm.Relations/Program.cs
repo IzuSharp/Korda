@@ -58,6 +58,7 @@ internal static partial class Suite
             }
             await MappingAndClose(provider, connection);
             await SnapshotBudgets(provider, connection);
+            await FindShapes(provider, connection);
             if (provider == DatabaseProvider.PostgreSql) await ActualUnknownAndRollbackFailure(connection);
         }
         foreach (var (path, hash) in nativeHashes) Check(Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path))) == hash, "C# entities/descriptors reuse unchanged native asset");

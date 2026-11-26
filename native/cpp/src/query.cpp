@@ -251,7 +251,7 @@ void QueryLimits::validate() const
 }
 Capabilities Capabilities::from_mask(std::uint64_t mask, Profile profile)
 {
-    if ((mask >> 29) != 0)
+    if ((mask >> 30) != 0)
         invalid("reserved database capability bits");
     auto has = [mask](unsigned bit) { return (mask & (std::uint64_t{1} << bit)) != 0; };
     return {has(0),  has(23), has(17), has(21), has(22),
@@ -1192,6 +1192,8 @@ std::uint64_t NativeQuery::import_model(ModelBinding model)
 }
 std::uint64_t NativeQuery::import_plan(std::shared_ptr<const NativePlan> plan)
 {
+    if (plan && plan->is_find_shape())
+        invalid("private Find slots cannot be imported into public queries");
     impl_->mutable_check(false);
     if (!plan || plan->source != source())
         state_error("imported plan from another source");
@@ -1826,9 +1828,16 @@ struct NativePlan::Impl
     mutable std::once_flag once;
     mutable std::unique_ptr<CompiledPlan> compiled;
     mutable std::exception_ptr compile_error;
+    // Private complete-key shapes have independent execution values and never
+    // enter the public source ParameterRegistry or public Prepare contract.
+    std::size_t find_fixed_bytes = 0;
 };
 NativePlan::NativePlan() : impl_(std::make_unique<Impl>()) {}
 NativePlan::~NativePlan() = default;
+bool NativePlan::is_find_shape() const
+{
+    return impl_->find_fixed_bytes != 0;
+}
 const QueryData& NativePlan::data() const
 {
     return *impl_->data;
@@ -1890,6 +1899,123 @@ std::shared_ptr<NativePlan> NativeQuery::seal(std::uint32_t terminal)
     plan->impl_->command_origins = impl_->command_origins;
     impl_->state = QueryState::Sealed;
     return plan;
+}
+
+std::shared_ptr<NativePlan> NativeQuery::find(ModelBinding root, ProjectionBinding projection, QueryLimits limits,
+                                              Capabilities capabilities, std::uint64_t timeout_ns)
+{
+    if (!root.model || !root.codecs || !projection.projection || projection.source != root.source)
+        invalid("Find model/projection source");
+    const auto& fields = projection.projection->fields();
+    const auto& columns = root.model->projection();
+    const auto keys = root.model->keys();
+    if (keys.empty() || fields.size() != columns.size())
+        invalid("Find requires the complete model projection and nonempty primary key");
+    for (std::size_t i = 0; i < fields.size(); ++i)
+    {
+        const auto& column = root.model->column(columns[i]);
+        if (fields[i].name != column.name || fields[i].codec != column.codec)
+            invalid("Find projection differs from model declaration order");
+    }
+    const auto table = root.model->table_id();
+    auto registry = std::make_shared<ParameterRegistry>(root.source, limits.parameters);
+    NativeQuery query(std::move(root), std::move(registry), table, limits, capabilities, timeout_ns);
+    query.impl_->command_private = true;
+    std::size_t ordinal = 0;
+    for (const auto* key : keys)
+    {
+        if (key->codec.nullable)
+            invalid("Find primary key cannot be nullable");
+        const auto name = "find_key_" + std::to_string(ordinal);
+        const auto parameter = query.parameter(
+            {static_cast<std::uint32_t>(++ordinal), name, key->codec, query.root().codecs->bound(key->codec)});
+        // Keep the original literal Find's logical frame charge (96-byte NWDB
+        // header + descriptor + cell). Changing payload bytes are charged on
+        // every execution; private slot names do not weaken that finite bound.
+        const auto bound = query.root().codecs->bound(key->codec);
+        const Expectation literal{3, query.root().source.profile, {}, 0, 0, {{1, key->codec, bound}}, 1};
+        const std::array<Scalar, 1> empty{{{key->codec, Bytes{}}}};
+        const auto extra = parameter_frame_size(literal, empty) - name.size();
+        if (extra > limits.bytes - query.impl_->data.bytes)
+            capacity("Find logical query byte bound");
+        query.impl_->data.bytes += extra;
+        const auto column = query.column(0, key->id);
+        const auto predicate = query.binary(1, column, parameter);
+        Bytes value(8);
+        put_u64(value, 0, predicate);
+        query.clause(1, encode_control(6, {{1, 2, std::move(value)}}));
+    }
+    Bytes tokens;
+    Bytes sequence(4);
+    put_u32(sequence, 0, static_cast<std::uint32_t>(fields.size()));
+    for (std::size_t i = 0; i < fields.size(); ++i)
+    {
+        const auto token = query.column(0, columns[i]);
+        Bytes expression(8), field_ordinal(4), codec(4), nullable(4);
+        put_u64(expression, 0, token);
+        put_u32(field_ordinal, 0, static_cast<std::uint32_t>(i));
+        put_u32(codec, 0, query.root().codecs->bound(fields[i].codec));
+        put_u32(nullable, 0, fields[i].codec.nullable ? 1 : 0);
+        auto record = encode_control(22, {{1, 1, std::move(field_ordinal)},
+                                          {2, 4, bytes_of(fields[i].name)},
+                                          {3, 1, std::move(codec)},
+                                          {4, 1, std::move(nullable)},
+                                          {5, 2, expression}});
+        const auto position = sequence.size();
+        sequence.resize(position + 4);
+        put_u32(sequence, position, static_cast<std::uint32_t>(record.size()));
+        sequence.insert(sequence.end(), record.begin(), record.end());
+        tokens.insert(tokens.end(), expression.begin(), expression.end());
+    }
+    const auto hash = projection.projection->hash();
+    auto encoded_projection = encode_control(13, {{1, 5, std::move(sequence)}, {2, 5, {hash.begin(), hash.end()}}});
+    query.clause(6, encode_control(6, {{1, 8, std::move(tokens)}, {2, 5, std::move(encoded_projection)}}));
+    // Selection admission has validated the exact schema. Both the arena and
+    // the plan retain the source's registered projection, not a parsed duplicate.
+    query.impl_->data.projection = std::move(projection);
+    auto plan = query.seal(3);
+    plan->impl_->find_fixed_bytes = plan->owned_bytes;
+    (void)plan->compiled_shape();
+    return plan;
+}
+
+std::size_t NativePlan::find_cache_charge() const
+{
+    if (impl_->find_fixed_bytes == 0)
+        state_error("Find cache charge requires a private Find shape");
+    const auto& value = data();
+    const auto& compilation = compiled();
+    // Conservative retained-capacity charge, excluding source-owned model and
+    // projection metadata already charged to their registry. Map/shared owner
+    // bookkeeping receives a fixed 64-byte allowance per allocation.
+    std::size_t result = sizeof(NativePlan) + sizeof(Impl) + sizeof(QueryData) + sizeof(CompiledPlan) + 256;
+    result += value.nodes.capacity() * sizeof(Node) + value.selects.capacity() * sizeof(Selected);
+    result += value.predicates.capacity() * sizeof(ExprPtr);
+    for (const auto& node : value.nodes)
+        if (node.kind == NodeKind::Expression && node.expression.ast)
+        {
+            const auto& expression = *node.expression.ast;
+            result += sizeof(Expr) + 64 + expression.text.capacity() + expression.qualifier.capacity() + 2;
+            result += expression.children.capacity() * sizeof(ExprPtr);
+            result += node.expression.type.codec.configuration.value_or("").size();
+        }
+    for (const auto& selected : value.selects)
+        result += selected.name.capacity() + 1;
+    for (const auto& [id, parameter] : parameters)
+    {
+        (void)id;
+        result += 2 * (sizeof(std::pair<const std::uint32_t, ParameterIdentity>) + 64 + parameter.name.capacity() + 1 +
+                       parameter.codec.configuration.value_or("").size());
+    }
+    result += value.slots.size() * (sizeof(std::pair<const std::uint64_t, SlotPtr>) + 64);
+    result += compilation.arguments.capacity() * sizeof(SlotPtr);
+    result += compilation.parameter_ordinals.capacity() * sizeof(std::optional<std::size_t>);
+    result += compilation.parameter_expectation.descriptors.capacity() * sizeof(Descriptor);
+    for (const auto& slot : compilation.arguments)
+        result += sizeof(Slot) + 64 + slot->codec.configuration.value_or("").size() +
+                  (slot->literal ? slot->literal->capacity() : 0);
+    result += 2 * compilation.shape->charge;
+    return result;
 }
 
 namespace
@@ -2958,7 +3084,9 @@ RenderedQuery NativePlan::render(SourceIdentity session, ByteView values, ShapeC
 try
 {
     const auto& compilation = compiled();
-    auto shape = cache ? cache->acquire(*this) : compilation.shape;
+    // Private Find already retains this immutable compilation in its bounded
+    // source cache. Repeating the general shape hash/LRU lookup adds no reuse.
+    auto shape = cache && !is_find_shape() ? cache->acquire(*this) : compilation.shape;
     if (terminal == 8 && !prepared_supported)
         unsupported("prepared-shape capability");
     if (source != session)
@@ -2968,7 +3096,22 @@ try
     // The schema, hash and descriptors belong to the immutable compiled plan.
     // Only the caller's value frame is parsed and validated on each execution.
     auto batch = BatchView::parse(values, compilation.parameter_expectation);
-    if (terminal != 8)
+    if (impl_->find_fixed_bytes != 0)
+    {
+        std::size_t payload = 0;
+        for (std::size_t i = 0; i < parameters.size(); ++i)
+        {
+            const auto value = batch.cell(0, i);
+            if (!value)
+                invalid("complete Find key cannot contain NULL");
+            if (value->size() > impl_->limits.bytes - payload)
+                capacity("Find key byte bound");
+            payload += value->size();
+        }
+        if (impl_->find_fixed_bytes > impl_->limits.bytes - payload)
+            capacity("Find logical query byte bound");
+    }
+    else if (terminal != 8)
     {
         bool expected = false;
         if (!impl_->submitted->compare_exchange_strong(expected, true, std::memory_order_acq_rel))

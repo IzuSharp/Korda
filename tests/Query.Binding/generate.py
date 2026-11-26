@@ -54,4 +54,10 @@ assert completion['request_record']=={'name':'nw_db_command_request_args_v1','li
 assert completion['result_record']=={'name':'nw_db_command_result_v1','linux_x64_size':32,
     'offsets':{'struct_size':0,'kind':4,'count':8,'owner':16,'buffer':24}},'Command result layout differs'
 assert completion['callback_record']=='nw_db_cursor_callbacks_v1' and completion['callback_generation']==0
-print(f'PASS exact frozen signatures={len(data["signatures"])}; outputs={len(outputs)}; additive query command signatures={len(declarations)}; additive batch signatures={len(batch_declarations)}; additive completion signatures={len(completion_declarations)}')
+find_shape=json.loads((ROOT/'native/database/binding/find-shape-v1.json').read_text())
+assert find_shape['version']==1 and find_shape['capability']=='db.find.shape.v1' and find_shape['capability_bit']==29
+find_declarations=re.findall(r'\bnw_status\s+NW_CDECL\s+nw_db_find_\w+_v1\([^;]+;', (ROOT/find_shape['header']).read_text())
+find_declarations=[re.sub(r'\s+', ' ', value) for value in find_declarations]
+assert find_declarations==find_shape['signatures'],'Additive Find shape signatures differ from the reviewed extension'
+assert len(find_declarations)==1 and not set(find_declarations).intersection(data['signatures'])
+print(f'PASS exact frozen signatures={len(data["signatures"])}; outputs={len(outputs)}; additive query command signatures={len(declarations)}; additive batch signatures={len(batch_declarations)}; additive completion signatures={len(completion_declarations)}; additive Find shape signatures={len(find_declarations)}')

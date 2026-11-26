@@ -6,6 +6,7 @@
 // the normative declarations; applications still consume the original C ABI.
 #include "../../database/binding/korda_command_completion_v1.h"
 #include "../../database/binding/korda_cursor_pull_v1.h"
+#include "../../database/binding/korda_find_shape_v1.h"
 #include "../../database/binding/korda_query_command_v1.h"
 #include "nw_database_declarations.hpp"
 
@@ -974,6 +975,34 @@ NW_DATABASE_API nw_status NW_CDECL nw_db_cte_create_v1(nw_db_ref declared, std::
                                            throw Error::state("mixed CTE source");
                                        output_owner(output, source, NativeCte::create(model, table, query, recursive));
                                    });
+                    });
+}
+
+NW_DATABASE_API nw_status NW_CDECL nw_db_find_plan_create_v1(nw_db_ref raw, nw_db_ref model_raw, std::uint32_t table,
+                                                             std::uint32_t projection, nw_db_ref* output,
+                                                             std::uint64_t* charge, std::uint64_t* logical_bytes,
+                                                             nw_error_info_v1* error)
+{
+    return boundary(error,
+                    [&]
+                    {
+                        clear(output);
+                        clear(charge);
+                        clear(logical_bytes);
+                        auto source = source_owner(raw);
+                        source->admit();
+                        auto model = typed<ModelBinding>(model_raw);
+                        model.ensure_source(source->identity);
+                        if (model.model->table_id() != table)
+                            throw Error::invalid("Find root table identity differs");
+                        auto context = command_context(source);
+                        auto plan = NativeQuery::find(std::move(model), source->projection(projection), context.limits,
+                                                      context.capabilities, context.timeout_ns);
+                        const auto bytes = plan->find_cache_charge();
+                        const auto logical = plan->owned_bytes;
+                        output_owner(output, source, std::move(plan));
+                        *charge = bytes;
+                        *logical_bytes = logical;
                     });
 }
 

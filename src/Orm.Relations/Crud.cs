@@ -1,6 +1,5 @@
 using Korda.Data;
 using Korda.Database.Internal;
-using Korda.Query;
 using Korda.Query.Internal;
 
 namespace Korda.Database;
@@ -20,25 +19,12 @@ public sealed partial class DataSession
     {
         MutationEncoding.CheckKey(table, key); CheckOpen();
         if (cancellationToken.IsCancellationRequested) return Task.FromCanceled<TEntity?>(cancellationToken);
-        var query = From(table);
-        try
-        {
-            query.Context.Run(() =>
-            {
-                foreach (var part in key.Values)
-                {
-                    var codec = part.Column.Definition.Codec; var bound = Source.BindCodec(codec);
-                    var value = DbWire.Encode(new(PayloadKind.ExpressionValues, Source.Binding.SemanticProfile, new byte[32], 0, 0, [new(1, codec, bound)]) { ExactRows = 1 }, 1, [new ReadOnlyMemory<byte>(part.Bytes!)]);
-                    var expression = query.Context.Binding.Binary(1, query.Context.Binding.Column(part.Column.Definition.Id), query.Context.Binding.Value(value));
-                    query.Context.Clause(1, QueryContext.U(1, expression.In(query.Context.Binding)));
-                }
-            });
-            return FindCore(query, query.SelectAll().SingleOrDefaultAsync(cancellationToken));
-        }
-        catch { query.Dispose(); throw; }
+        var plan = Source.AcquireFindPlan(table, key, out var payloadBytes);
+        try { return FindCore(plan, plan.Execute(this, key, cancellationToken, payloadBytes)); }
+        catch { plan.Dispose(); throw; }
     }
-    private static async Task<TEntity?> FindCore<TEntity>(Query<TEntity> query, Task<TEntity?> task) where TEntity : class
-    { using (query) return await task.ConfigureAwait(false); }
+    private static async Task<TEntity?> FindCore<TEntity>(FindPlan<TEntity> plan, Task<TEntity?> task) where TEntity : class
+    { using (plan) return await task.ConfigureAwait(false); }
 
     /// <summary>Snapshots one entity, omits generated columns and executes one native insert.</summary>
     /// <typeparam name="TEntity">The entity class with its direct writer.</typeparam>

@@ -62,6 +62,10 @@ arrays are zero for void-returning functions. Inspect at least:
 - `nw_db_command_request_v1`, `nw_db_command_take_v1`,
   `nw_db_command_take_error_v1` and `nw_db_command_cancel_v1` for the private
   one-shot path when the bound ABI inventory declares that extension.
+- `nw_db_find_plan_create_v1` when the bound inventory declares private fixed-key
+  shapes. Preserve its cold factory count separately; a warmed stable Table
+  should not reconstruct the shape. Check ordinary query compile counts and
+  plan-pull calls to prove which public Find route actually ran.
 
 `TryRetire` returning `NW_OK` proves its generic quiet contract; a ready callback
 alone does not. A non-Pending return is not necessarily OK. A Pending count is a

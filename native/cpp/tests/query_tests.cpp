@@ -87,7 +87,7 @@ Codec scalar(std::uint32_t id, bool nullable = false)
 }
 Capabilities all_caps(Profile profile)
 {
-    return Capabilities::from_mask((1ULL << 29) - 1, profile);
+    return Capabilities::from_mask((1ULL << 30) - 1, profile);
 }
 Bytes cells(Profile profile, Codec codec, const std::vector<std::optional<Bytes>>& values)
 {
@@ -1073,7 +1073,7 @@ void binding_and_safety()
           "cursor pull capability does not authorize query composition");
     check(!Capabilities::from_mask(1ULL << 28, Profile::Sqlite).query,
           "one-shot command completion does not authorize query composition");
-    rejects(NW_INVALID_ARGUMENT, [] { (void)Capabilities::from_mask(1ULL << 29, Profile::Sqlite); });
+    rejects(NW_INVALID_ARGUMENT, [] { (void)Capabilities::from_mask(1ULL << 30, Profile::Sqlite); });
     rejects(NW_INVALID_ARGUMENT, [] { (void)Capabilities::from_mask(1ULL << 63, Profile::PostgreSql); });
     Context c(Profile::Sqlite);
     auto q = c.query();
@@ -1379,6 +1379,113 @@ ProjectionBinding model_projection(const ModelBinding& model, const std::vector<
     return {model.source, 1, std::make_shared<Projection>(Projection::parse(bytes(json.dump()), model.source.profile)),
             model.codecs};
 }
+void fixed_find_shapes()
+{
+    for (const auto profile : {Profile::Sqlite, Profile::PostgreSql})
+    {
+        Context context(profile);
+        auto capabilities = all_caps(profile);
+        capabilities.prepared = false;
+        auto projection = model_projection(context.root, {"Id", "Name"});
+        auto fixed = NativeQuery::find(context.root, projection, {}, capabilities, 1000);
+        check(fixed->terminal == 3 && fixed->is_find_shape(),
+              "private Find retains cardinality terminal without Prepare");
+        check(fixed->projection->projection == projection.projection && fixed->projection->id == projection.id,
+              "Find retains the registered source projection");
+        auto ordinary = context.query();
+        const auto column_token = ordinary.column(0, column(context.root, "Id"));
+        where(ordinary, ordinary.binary(1, column_token, context.value(ordinary, 7)));
+        // Public Fluent includes field5 expression tokens in every selection
+        // record; use that exact former Find encoding for logical byte parity.
+        ordinary.clause(6, selection_record({{ordinary.column(0, column(context.root, "Id")), "Id", scalar(3)},
+                                             {ordinary.column(0, column(context.root, "Name")), "Name", scalar(5)}},
+                                            true));
+        auto old = ordinary.seal(3);
+        Hash abi;
+        abi.fill(11);
+        ShapeCache cache(4, 1 << 20, abi);
+        const auto first = execute(fixed, {u64(7)}, &cache);
+        const auto second = execute(fixed, {u64(8)}, &cache);
+        check(cache.counts() == std::pair<std::size_t, std::size_t>{0, 0},
+              "Find directly reuses its retained compilation without general shape-cache admission");
+        const auto before = execute(old, {}, &cache);
+        check(cache.counts().first == 1, "ordinary execution still admits its general compiled shape");
+        auto public_query = context.query();
+        context.select_all(public_query);
+        (void)execute(public_query.seal(8), {}, &cache);
+        check(cache.counts().first == 2, "public Prepare still admits its general compiled shape");
+        check(first.sql == before.sql && first.arguments.size() == before.arguments.size(),
+              "Find SQL and LIMIT2 exactly retain old terminal");
+        check(first.arguments.size() == 2 && first.arguments[0].value == u64(7) &&
+                  second.arguments[0].value == u64(8) && first.arguments[1].value == u64(2) &&
+                  first.arguments[1].codec.id == 3,
+              "Find execution changes only key values and preserves Int64 LIMIT2");
+        check(fixed->nodes == old->nodes && fixed->expanded_nodes() == old->expanded_nodes() &&
+                  fixed->owned_bytes + 8 == old->owned_bytes,
+              "Find private slots retain original logical node and value frame charges");
+        check(fixed->find_cache_charge() > fixed->compiled_shape()->charge,
+              "Find cache charge includes retained arena and parameter layout");
+        rejects(NW_INVALID_STATE, [&] { (void)execute(old); });
+        rejects(NW_INVALID_ARGUMENT, [&] { (void)execute(fixed, {{}}); });
+        rejects(NW_INVALID_ARGUMENT, [&] { (void)context.query().import_plan(fixed); });
+        auto other_source = context.source;
+        ++other_source.source;
+        auto values = Batch::encode(fixed->parameter_expectation(), 1, {u64(9)});
+        rejects(NW_INVALID_STATE, [&] { (void)fixed->render(other_source, values); });
+        QueryLimits small;
+        small.nodes = fixed->expanded_nodes() - 1;
+        rejects(NW_DOMAIN_ERROR, [&] { (void)NativeQuery::find(context.root, projection, small, capabilities, 1000); });
+        small.nodes = fixed->expanded_nodes();
+        check(NativeQuery::find(context.root, projection, small, capabilities, 1000)->expanded_nodes() ==
+                  old->expanded_nodes(),
+              "Find accepts the exact original expanded-node threshold");
+        small = {};
+        small.bytes = fixed->owned_bytes + 7;
+        auto bounded = NativeQuery::find(context.root, projection, small, capabilities, 1000);
+        rejects(NW_DOMAIN_ERROR, [&] { (void)execute(bounded, {u64(7)}); });
+        small.bytes = old->owned_bytes;
+        auto exact = NativeQuery::find(context.root, projection, small, capabilities, 1000);
+        check(execute(exact, {u64(7)}).sql == before.sql,
+              "Find accepts the exact original literal query byte threshold");
+        small = {};
+        small.parameters = 1;
+        rejects(NW_DOMAIN_ERROR, [&] { (void)NativeQuery::find(context.root, projection, small, capabilities, 1000); });
+        // Variable key payloads are charged again on a warm shape. The frame
+        // fits its wire budget; rejection comes from the old logical query cost.
+        auto text_json = nlohmann::ordered_json::parse(fixture("parent-model.json"));
+        for (auto& col : text_json["columns"])
+            col["key_ordinal"] = col["name"] == "Name" ? nlohmann::ordered_json(0) : nlohmann::ordered_json(nullptr);
+        ModelBinding text_root{context.source, std::make_shared<Model>(Model::parse(bytes(text_json.dump()), profile)),
+                               context.codecs};
+        auto text_projection = model_projection(text_root, {"Id", "Name"});
+        auto unbounded = NativeQuery::find(text_root, text_projection, {}, capabilities, 1000);
+        small = {};
+        small.bytes = unbounded->owned_bytes + 3;
+        auto text_find = NativeQuery::find(text_root, text_projection, small, capabilities, 1000);
+        const auto text_first = execute(text_find, {bytes("abc")});
+        check(Batch::encode(text_find->parameter_expectation(), 1, {bytes("abcd")}).size() < small.bytes,
+              "warm Find oversized logical fixture fits the incoming wire limit");
+        rejects(NW_DOMAIN_ERROR, [&] { (void)execute(text_find, {bytes("abcd")}); });
+        check(execute(text_find, {bytes("xy")}).sql == text_first.sql,
+              "warm key byte rejection does not consume a private Find shape");
+        rejects(NW_INVALID_ARGUMENT,
+                [&]
+                {
+                    (void)NativeQuery::find(context.root, model_projection(context.root, {"Name", "Id"}), {},
+                                            capabilities, 1000);
+                });
+        // A private plan does not register its ordinal IDs in the caller's public
+        // registry. Repeated cold constructions cannot consume its finite space.
+        context.registry = std::make_shared<ParameterRegistry>(context.source, 1);
+        for (int i = 0; i < 32; ++i)
+            (void)NativeQuery::find(context.root, projection, {}, capabilities, 1000);
+        context.registry->register_identity({1, "caller", scalar(3), 3});
+        check(true, "repeated private Find slots leave the public registry untouched");
+    }
+    check(!Capabilities::from_mask(1ULL << 29, Profile::Sqlite).query,
+          "private Find bit alone does not authorize ordinary queries");
+}
+
 std::vector<ControlField> mutation_fields(const ModelBinding& model, std::uint32_t kind)
 {
     auto insert = model_values(model, {"Tenant", "Id", "Name", "Version"}, {u64(7), u64(1), bytes("insert"), u64(4)});
@@ -1578,6 +1685,7 @@ int main(int argc, char** argv)
         complete_query_commands();
         sql_lexer();
         mutations_and_relations();
+        fixed_find_shapes();
         std::cout << "query: " << checks << " checks passed; 52 SQL/ordered-argument goldens\n";
         return 0;
     }

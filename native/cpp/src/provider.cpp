@@ -1416,6 +1416,20 @@ bool ProviderConnection::in_transaction() const noexcept
 {
     return impl_->transaction.load();
 }
+bool ProviderConnection::postgres_transaction_ready_for_commit() const
+{
+#if NW_ENABLE_POSTGRES
+    if (impl_->options.profile != Profile::PostgreSql)
+        return false;
+    // Session admission excludes a competing statement. The lifetime lock
+    // excludes physical destruction while reading libpq's confirmed state.
+    std::lock_guard lock(impl_->lifetime);
+    return !impl_->statement_live && impl_->usable.load() && postgres_state_is_idle(impl_->postgres) &&
+           PQtransactionStatus(impl_->postgres) == PQTRANS_INTRANS;
+#else
+    return false;
+#endif
+}
 Profile ProviderConnection::profile() const noexcept
 {
     return impl_->options.profile;

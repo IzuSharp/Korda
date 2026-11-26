@@ -182,6 +182,8 @@ class NativeQuery
     std::uint64_t import_cte(std::shared_ptr<const NativeCte> cte);
     std::uint64_t clause(std::uint32_t opcode, ByteView operands);
     std::shared_ptr<NativePlan> seal(std::uint32_t terminal);
+    static std::shared_ptr<NativePlan> find(ModelBinding root, ProjectionBinding projection, QueryLimits limits,
+                                            Capabilities capabilities, std::uint64_t timeout_ns);
 
   private:
     friend struct NativeCte;
@@ -230,6 +232,8 @@ class NativePlan
     std::shared_ptr<const CompiledShape> compiled_shape() const;
     std::size_t retained_literal_bytes() const;
     std::size_t expanded_nodes() const;
+    std::size_t find_cache_charge() const;
+    bool is_find_shape() const;
     const query_detail::QueryData& data() const;
 
   private:

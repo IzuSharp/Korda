@@ -143,7 +143,7 @@ Bytes snapshot_record(std::uint32_t state, std::uint32_t outcome, bool attempted
 }
 std::uint64_t capability_mask()
 {
-    std::uint64_t result = (1ULL << 29) - 1;
+    std::uint64_t result = (1ULL << 30) - 1;
 #if !NW_ENABLE_POSTGRES
     result &= ~((1ULL << 11) | (1ULL << 14));
 #endif
@@ -3536,18 +3536,25 @@ void Transaction::finish_worker(bool commit, std::shared_ptr<CommandGate> gate)
         {
             if (commit && session->source->config.provider.profile == Profile::PostgreSql)
             {
-                try
+                // A completed reader already supplies this physical
+                // connection's ReadyForQuery. Only a confirmed normal outer
+                // transaction may reuse it; all ambiguous/failed/depth cases
+                // retain the original probe and its SQLSTATE precedence.
+                if (!savepoints.empty() || !session->connection->postgres_transaction_ready_for_commit())
                 {
-                    (void)session->connection->execute("SELECT 1", {}, {{}, deadline, false});
-                }
-                catch (const Error& error)
-                {
-                    if (error.provider != std::optional<std::string>("25P02"))
-                        throw;
-                    (void)session->connection->execute("ROLLBACK", {}, {{}, deadline, false});
-                    session->connection->synchronize_protocol();
-                    failure = error;
-                    known_rollback = true;
+                    try
+                    {
+                        (void)session->connection->execute("SELECT 1", {}, {{}, deadline, false});
+                    }
+                    catch (const Error& error)
+                    {
+                        if (error.provider != std::optional<std::string>("25P02"))
+                            throw;
+                        (void)session->connection->execute("ROLLBACK", {}, {{}, deadline, false});
+                        session->connection->synchronize_protocol();
+                        failure = error;
+                        known_rollback = true;
+                    }
                 }
                 if (!known_rollback && !savepoints.empty())
                     throw Error(NW_DOMAIN_ERROR, 1, "transaction depth is not one");

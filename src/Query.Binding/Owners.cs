@@ -15,6 +15,7 @@ internal sealed class SourceBinding(NativeCalls calls, uint semanticProfile)
     internal QueryCommandEnvironment? Commands { get; set; }
     internal CursorPullCalls? Pulls { get; set; }
     internal CommandCompletionCalls? Completions { get; set; }
+    internal FindShapeCalls? Finds { get; set; }
 }
 
 /// <summary>One creating-module owner reference. Native close/retirement remains B04's obligation before final release.</summary>

@@ -4,6 +4,7 @@
  */
 #include "../../database/binding/korda_cursor_pull_v1.h"
 #include "../../database/binding/korda_database_binding_v1.h"
+#include "../../database/binding/korda_find_shape_v1.h"
 #include "../../database/binding/korda_query_command_v1.h"
 #include <assert.h>
 #include <stddef.h>
@@ -36,6 +37,11 @@ int main(void)
     nw_db_ref plan = (nw_db_ref)(uintptr_t)1;
     assert(nw_db_query_command_compile_v1(NULL, empty, NULL, 0, 8, &plan, &error) == NW_INVALID_STATE);
     assert(plan == NULL);
+    plan = (nw_db_ref)(uintptr_t)1;
+    uint64_t charge = 42;
+    uint64_t logical_bytes = 42;
+    assert(nw_db_find_plan_create_v1(NULL, NULL, 0, 0, &plan, &charge, &logical_bytes, &error) == NW_INVALID_STATE);
+    assert(plan == NULL && charge == 0 && logical_bytes == 0);
     nw_db_buffer* sql = (nw_db_buffer*)(uintptr_t)1;
     assert(nw_db_query_command_render_v1(NULL, empty, NULL, 0, &sql, &error) == NW_INVALID_STATE);
     assert(sql == NULL);

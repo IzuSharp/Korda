@@ -252,11 +252,20 @@ internal sealed class PreparedParameterLayout
     {
         _source = source;
         _definitions = definitions.OrderBy(parameter => parameter.Id).ToArray();
-        var descriptors = new WireDescriptor[_definitions.Length];
+        _wire = CreateWireLayout(source, _definitions);
+        // The ABI accepts a read-only input view and owns its rendered parameter
+        // bytes before returning from execute_create. No caller can mutate this
+        // array, so independent lazy executions can safely share the empty frame.
+        if (_definitions.Length == 0) _parameterlessPayload = _wire.CreateFrame(0);
+    }
+
+    internal static DbWire.ParameterLayout CreateWireLayout(DataSource source, ReadOnlySpan<ParameterDefinition> definitions)
+    {
+        var descriptors = new WireDescriptor[definitions.Length];
         var json = new StringBuilder("{\"version\":1,\"parameters\":[");
-        for (var i = 0; i < _definitions.Length; i++)
+        for (var i = 0; i < definitions.Length; i++)
         {
-            var parameter = _definitions[i];
+            var parameter = definitions[i];
             if (!ReferenceEquals(source, parameter.Source)) throw new ArgumentException("Parameter source differs from the prepared shape.", nameof(definitions));
             descriptors[i] = new(parameter.Id, parameter.Codec, parameter.BoundCodec);
             if (i != 0) json.Append(',');
@@ -265,11 +274,7 @@ internal sealed class PreparedParameterLayout
         }
         json.Append("]}");
         var expectation = new WireExpectation(PayloadKind.Parameters, source.Binding.SemanticProfile, SHA256.HashData(Encoding.UTF8.GetBytes(json.ToString())), 0, 0, descriptors) { ExactRows = 1 };
-        _wire = new(expectation);
-        // The ABI accepts a read-only input view and owns its rendered parameter
-        // bytes before returning from execute_create. No caller can mutate this
-        // array, so independent lazy executions can safely share the empty frame.
-        if (_definitions.Length == 0) _parameterlessPayload = _wire.CreateFrame(0);
+        return new(expectation);
     }
 
     internal byte[] Encode(DataSource source, QueryParameters? supplied)
