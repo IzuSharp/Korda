@@ -1,0 +1,30 @@
+--- a/src/Data.NativeHost/DataSession.cs
++++ b/src/Data.NativeHost/DataSession.cs
+@@ -103,7 +103,12 @@
+     /// <returns>The native transaction owner.</returns>
+     /// <exception cref="ObjectDisposedException">Admission is closed.</exception>
+     /// <exception cref="DatabaseException">The provider or single-command admission rejects BEGIN.</exception>
+-    public Task<DataTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default) => BeginTransactionAsync(new TransactionOptions(), cancellationToken);
++    public Task<DataTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default)
++    {
++        var record = DefaultTransactionRecord.Bytes; CheckOpen(); Source.Capabilities.Require("db.transactions.v1");
++        if (cancellationToken.IsCancellationRequested) return Task.FromCanceled<DataTransaction>(cancellationToken);
++        return BeginCore(record, null, cancellationToken);
++    }
+     /// <summary>Begins an exact native transaction without weakening unsupported isolation or read-only policy.</summary>
+     /// <param name="options">Immutable isolation, effect and independent commit/cleanup deadline settings.</param>
+     /// <param name="cancellationToken">Controls admission before BEGIN dispatch.</param>
+@@ -116,6 +121,13 @@
+         var record = HostEncoding.Transaction(options); CheckOpen(); Source.Capabilities.Require("db.transactions.v1");
+         if (cancellationToken.IsCancellationRequested) return Task.FromCanceled<DataTransaction>(cancellationToken);
+         return BeginCore(record, options.RecoveryKey, cancellationToken);
++    }
++    private static class DefaultTransactionRecord
++    {
++        internal static readonly byte[] Bytes;
++        // Explicit initialization keeps the one default frame lazy and shared.
++        // The native BEGIN factory reads it synchronously and captures values.
++        static DefaultTransactionRecord() => Bytes = HostEncoding.Transaction(new TransactionOptions());
+     }
+     private async Task<DataTransaction> BeginCore(byte[] record, string? recovery, CancellationToken token, BulkSessionLease? bulk = null)
+     {

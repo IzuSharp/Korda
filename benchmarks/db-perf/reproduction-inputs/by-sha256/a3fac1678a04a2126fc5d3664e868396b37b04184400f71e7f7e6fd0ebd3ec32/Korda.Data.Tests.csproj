@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>Korda.Data.Tests</AssemblyName>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <IsAotCompatible>true</IsAotCompatible>
+    <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifiers)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifiers).aot.lock.json</NuGetLockFilePath>
+    <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifier)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifier).aot.lock.json</NuGetLockFilePath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="AllocationProbe.cs" />
+    <Compile Include="BatchAllocationProbe.cs" />
+    <Compile Include="WireValidationTests.cs" />
+    <ProjectReference Include="../../src/Data.Abstractions/Korda.Data.csproj" />
+  </ItemGroup>
+</Project>

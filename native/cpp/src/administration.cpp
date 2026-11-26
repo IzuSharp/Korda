@@ -96,25 +96,84 @@ std::unique_ptr<ProviderStatement> query(ProviderConnection& connection, std::st
     return provider([&] { return connection.query(sql, parameters, context); });
 }
 
-std::optional<Row> next(ProviderStatement& statement, const std::vector<Codec>& codecs, const CallContext& context)
+// Administrative rows are local typed results, not externally transferred NWDB
+// frames. Keep their original per-field MAX_BYTES limit without subtracting a
+// wire header from it or imposing the Host batch's aggregate frame allowance.
+struct AdministrativeRow
 {
-    return provider([&] { return statement.next(codecs, MAX_BYTES, context); });
+    struct Cell
+    {
+        std::size_t offset, length;
+        bool present;
+    };
+    Bytes payload;
+    std::vector<Cell> cells;
+    [[nodiscard]] std::size_t size() const noexcept
+    {
+        return cells.size();
+    }
+    [[nodiscard]] std::optional<ByteView> operator[](std::size_t ordinal) const
+    {
+        const auto& cell = cells[ordinal];
+        if (!cell.present)
+            return std::nullopt;
+        return ByteView(payload).subspan(cell.offset, cell.length);
+    }
+};
+
+std::optional<AdministrativeRow> next(ProviderStatement& statement, const std::vector<Codec>& codecs,
+                                      const CallContext& context)
+{
+    struct Builder
+    {
+        AdministrativeRow row;
+        std::size_t columns;
+    } builder{{}, codecs.size()};
+    const RowSink output{&builder, std::numeric_limits<std::size_t>::max(),
+                         [](void* state)
+                         {
+                             auto& builder = *static_cast<Builder*>(state);
+                             builder.row.cells.reserve(builder.columns);
+                         },
+                         [](void* state, std::optional<ByteView> value)
+                         {
+                             auto& row = static_cast<Builder*>(state)->row;
+                             const auto offset = row.payload.size();
+                             if (value)
+                                 row.payload.insert(row.payload.end(), value->begin(), value->end());
+                             row.cells.push_back({offset, value ? value->size() : 0, value.has_value()});
+                         },
+                         [](void* state)
+                         {
+                             const auto& builder = *static_cast<Builder*>(state);
+                             if (builder.row.size() != builder.columns)
+                                 throw Error::state("incomplete administrative row");
+                             return true;
+                         }};
+    return provider(
+        [&]() -> std::optional<AdministrativeRow>
+        {
+            const auto result = statement.append_next(output, codecs, MAX_BYTES, context);
+            if (result.state == RowAppendState::End)
+                return std::nullopt;
+            return std::move(builder.row);
+        });
 }
 
-const Bytes& cell(const Row& row, std::size_t ordinal)
+ByteView cell(const AdministrativeRow& row, std::size_t ordinal)
 {
     if (ordinal >= row.size() || !row[ordinal])
         throw Error(NW_DOMAIN_ERROR, 1, "administrative provider returned an invalid row");
     return *row[ordinal];
 }
 
-std::string text(const Row& row, std::size_t ordinal)
+std::string text(const AdministrativeRow& row, std::size_t ordinal)
 {
     const auto& value = cell(row, ordinal);
     return {value.begin(), value.end()};
 }
 
-std::int64_t number(const Row& row, std::size_t ordinal)
+std::int64_t number(const AdministrativeRow& row, std::size_t ordinal)
 {
     const auto& value = cell(row, ordinal);
     if (value.size() == 8)
@@ -126,8 +185,8 @@ std::int64_t number(const Row& row, std::size_t ordinal)
     throw Error(NW_DOMAIN_ERROR, 1, "administrative provider returned an invalid integer");
 }
 
-Row one(ProviderConnection& connection, std::string_view sql, const std::vector<Scalar>& parameters,
-        const std::vector<Codec>& codecs, const CallContext& context)
+AdministrativeRow one(ProviderConnection& connection, std::string_view sql, const std::vector<Scalar>& parameters,
+                      const std::vector<Codec>& codecs, const CallContext& context)
 {
     auto statement = query(connection, sql, parameters, context);
     auto row = next(*statement, codecs, context);
@@ -420,7 +479,8 @@ Applied ledger(ProviderConnection& connection, const AdministrationLimits& limit
             dirty_error("SQLx ledger contains an unsuccessful migration");
         const auto version = number(*row, 0);
         const auto& checksum = cell(*row, 1);
-        if (version <= 0 || checksum.size() != 48 || !result.emplace(version, checksum).second)
+        if (version <= 0 || checksum.size() != 48 ||
+            !result.emplace(version, Bytes(checksum.begin(), checksum.end())).second)
             checksum_error("invalid SQLx migration ledger");
     }
     statement->close();

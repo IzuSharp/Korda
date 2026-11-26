@@ -4,7 +4,7 @@ using Korda.Interop.Abi;
 namespace Korda.Query.Internal;
 
 /// <summary>Distinct native owner kinds; these values are managed tags, except the documented take-owner kinds.</summary>
-internal enum DatabaseOwnerKind { Source, Model, Session, Query, Plan, Relation, Cte, Cursor }
+internal enum DatabaseOwnerKind { Source, Model, Session, Query, Plan, Relation, Cte, Cursor, Transaction, Savepoint, CommandCompletion }
 
 /// <summary>A source-generation identity retained by every related managed wrapper.</summary>
 /// <remarks>Created only by the source adapter after A02 negotiation. Identity uses reference equality; it is never serialized.</remarks>
@@ -12,6 +12,10 @@ internal sealed class SourceBinding(NativeCalls calls, uint semanticProfile)
 {
     internal NativeCalls Calls { get; } = calls;
     internal uint SemanticProfile { get; } = semanticProfile is 1 or 2 ? semanticProfile : throw new ArgumentOutOfRangeException(nameof(semanticProfile));
+    internal QueryCommandEnvironment? Commands { get; set; }
+    internal CursorPullCalls? Pulls { get; set; }
+    internal CommandCompletionCalls? Completions { get; set; }
+    internal FindShapeCalls? Finds { get; set; }
 }
 
 /// <summary>One creating-module owner reference. Native close/retirement remains B04's obligation before final release.</summary>
@@ -30,6 +34,9 @@ internal sealed unsafe class DatabaseOwner : SafeHandle
     }
     internal SourceBinding Source { get; }
     internal DatabaseOwnerKind Kind { get; }
+    internal QueryModelMetadata? QueryModel { get; init; }
+    internal QueryPlanMetadata? QueryPlan { get; init; }
+    internal QueryCteMetadata? QueryCte { get; init; }
     public override bool IsInvalid => handle == 0;
     protected override bool ReleaseHandle() { Source.Calls.nw_db_owner_release_v1(handle); return true; }
     internal OwnerLease Borrow(DatabaseOwnerKind expected)

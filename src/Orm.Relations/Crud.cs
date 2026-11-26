@@ -1,6 +1,5 @@
 using Korda.Data;
 using Korda.Database.Internal;
-using Korda.Query;
 using Korda.Query.Internal;
 
 namespace Korda.Database;
@@ -20,25 +19,12 @@ public sealed partial class DataSession
     {
         MutationEncoding.CheckKey(table, key); CheckOpen();
         if (cancellationToken.IsCancellationRequested) return Task.FromCanceled<TEntity?>(cancellationToken);
-        var query = From(table);
-        try
-        {
-            query.Context.Run(() =>
-            {
-                foreach (var part in key.Values)
-                {
-                    var codec = part.Column.Definition.Codec; var bound = Source.BindCodec(codec);
-                    var value = DbWire.Encode(new(PayloadKind.ExpressionValues, Source.Binding.SemanticProfile, new byte[32], 0, 0, [new(1, codec, bound)]) { ExactRows = 1 }, 1, [new ReadOnlyMemory<byte>(part.Bytes!)]);
-                    var expression = query.Context.Binding.Binary(1, query.Context.Binding.Column(part.Column.Definition.Id), query.Context.Binding.Value(value));
-                    query.Context.Clause(1, QueryContext.U(1, expression.In(query.Context.Binding)));
-                }
-            });
-            return FindCore(query, query.SelectAll().SingleOrDefaultAsync(cancellationToken));
-        }
-        catch { query.Dispose(); throw; }
+        var plan = Source.AcquireFindPlan(table, key, out var payloadBytes);
+        try { return FindCore(plan, plan.Execute(this, key, cancellationToken, payloadBytes)); }
+        catch { plan.Dispose(); throw; }
     }
-    private static async Task<TEntity?> FindCore<TEntity>(Query<TEntity> query, Task<TEntity?> task) where TEntity : class
-    { using (query) return await task.ConfigureAwait(false); }
+    private static async Task<TEntity?> FindCore<TEntity>(FindPlan<TEntity> plan, Task<TEntity?> task) where TEntity : class
+    { using (plan) return await task.ConfigureAwait(false); }
 
     /// <summary>Snapshots one entity, omits generated columns and executes one native insert.</summary>
     /// <typeparam name="TEntity">The entity class with its direct writer.</typeparam>
@@ -73,11 +59,15 @@ public sealed partial class DataSession
         var projection = Source.RegisterProjection(returning); var codecs = returning.Fields.Select(f => Source.BindCodec(f.Descriptor)).ToArray();
         var payload = MutationEncoding.Record(Source, table, MutationEncoding.Bytes(2, values), new(7, 1, ControlRecord.U32(projection)));
         var model = Source.RegisterModel(table);
-        var stream = new TypedStream<T>(async (rows, token) =>
+        var stream = new TypedStream<T>((rows, token) =>
         {
-            CheckOpen();
-            var cursor = await Source.Start(() => AdmitOperation(() => MutationEncoding.Create(this, model, 1, payload)), operation => NativeHost.TakeOwner(Source.Binding, operation, 2, DatabaseOwnerKind.Cursor), token).ConfigureAwait(false);
-            try { return new HostStreamTransport(Source, cursor, rows, token); } catch { cursor.Dispose(); throw; }
+            lock (_compoundGate)
+            {
+                CheckOpen(); token.ThrowIfCancellationRequested();
+                var channel = NativeHost.CreateMutationPull(this, model, 1, payload);
+                try { return new ValueTask<IStreamTransport>(new HostStreamTransport(Source, channel, rows, token)); }
+                catch { channel.Dispose(); throw; }
+            }
         }, returning, Source.Binding.SemanticProfile, projection, codecs, StreamingLimits, cancellationToken);
         return stream.SingleAsync();
     }
@@ -158,5 +148,5 @@ public sealed partial class DataSession
         return Mutate(table, 6, MutationEncoding.Record(Source, table, MutationEncoding.Bytes(2, MutationEncoding.Values(Source, table, [insert])), target, MutationEncoding.Bytes(8, assignments)), cancellationToken);
     }
     private Task<long> Mutate<TEntity>(Table<TEntity> table, uint kind, byte[] payload, CancellationToken token, BulkSessionLease? bulk = null) where TEntity : class
-    { var model = Source.RegisterModel(table); return Source.Start(() => AdmitOperation(() => MutationEncoding.Create(this, model, kind, payload), bulk), operation => NativeHost.TakeCount(Source.Binding, operation), token); }
+    { var model = Source.RegisterModel(table); return SubmitCommand(NativeCommandKind.Mutation, model, payload, kind, 100, NativeCommand.Count, token, bulk); }
 }

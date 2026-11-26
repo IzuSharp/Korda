@@ -1,0 +1,918 @@
+diff --git a/docs/guides/data-nativehost.md b/docs/guides/data-nativehost.md
+index eaa32db..3ec4df1 100644
+--- a/docs/guides/data-nativehost.md
++++ b/docs/guides/data-nativehost.md
+@@ -97,10 +97,12 @@ as a count command. `ScalarAsync` requires exactly one column and one row; zero
+ multiple rows reject. `QueryAsync` enforces both the buffered row and encoded-byte
+ budgets. Setting either buffered budget to zero prohibits buffered demand.
+ `StreamAsync` is one-shot and starts the native query at the first `MoveNextAsync`.
+-A bounded native batch is copied into managed owned bytes; the complete ordered
+-aliases/codecs are validated before user construction. The materializer runs
+-synchronously and returns owned CLR data. Early exit or an exception joins cursor
+-cleanup before the failed public operation completes.
++A bounded native batch retains its immutable native storage while the complete
++ordered aliases/codecs are validated before user construction. Validation and
++the complete synchronous materializer call hold a temporary SafeHandle reference.
++The materializer returns owned CLR data; no native span escapes the call. Early
++exit or an exception joins cursor cleanup before the failed public operation
++completes.
+ 
+ ## Transactions and truthful cleanup
+ 
+@@ -169,9 +171,13 @@ managed callback root. Registration and cancellation controls participate in
+ retirement separately from native worker completion. A transferred cursor retains
+ its own session/source parent after the producing operation is released. Only one
+ unreleased batch is admitted per cursor. SQL/configuration use explicit bounded
+-UTF-8 copies; db-wire results have a native batch and a managed byte copy. These
+-facts are not throughput or memory-performance claims; comparative benchmarks
+-remain with their assigned tasks.
++UTF-8 copies. The streaming host reads validated db-wire results directly from
++the retained native batch; codecs still create the owned strings, byte arrays or
++objects required by the result type. Ordinary internal batches without native
++ownership or an exclusive managed-array handoff retain defensive copying. This
++does not remove driver-to-wire serialization, operation/lease objects or business
++result allocations, and is not a claim of an allocation-free query. Comparative
++benchmarks remain with their assigned tasks.
+ 
+ ## Examples and verification
+ 
+diff --git a/src/Data.Abstractions/DbWire.cs b/src/Data.Abstractions/DbWire.cs
+index a95dfe6..1245ac3 100644
+--- a/src/Data.Abstractions/DbWire.cs
++++ b/src/Data.Abstractions/DbWire.cs
+@@ -10,13 +10,14 @@ internal sealed record WireExpectation(PayloadKind Kind, uint Profile, byte[] Me
+     internal uint? ExactRows { get; init; }
+ }
+ 
+-// One field serialization contract, not a CLR/native struct ABI. Only owned bytes escape parsing.
++// One field serialization contract, not a CLR/native struct ABI. Borrowed storage
++// is restricted to an internal batch whose owner protects every synchronous read.
+ internal readonly struct DbWire
+ {
+     internal const int MaxEncodedBytes = 4 * 1024 * 1024;
+     internal const int MaxDescriptors = 4096;
+-    private DbWire(byte[] bytes, WireExpectation expected, uint rows) { Bytes = bytes; Expected = expected; Rows = rows; }
+-    internal byte[] Bytes { get; }
++    private DbWire(ReadOnlyMemory<byte> bytes, WireExpectation expected, uint rows) { Bytes = bytes; Expected = expected; Rows = rows; }
++    internal ReadOnlyMemory<byte> Bytes { get; }
+     internal WireExpectation Expected { get; }
+     internal uint Rows { get; }
+     internal static byte[] Encode(WireExpectation expected, uint rows, IReadOnlyList<ReadOnlyMemory<byte>?> cells)
+@@ -63,7 +64,11 @@ internal static DbWire ParseOwned(byte[] bytes, WireExpectation expected)
+         ArgumentNullException.ThrowIfNull(bytes);
+         return ParseCore(bytes, expected, bytes);
+     }
+-    private static DbWire ParseCore(ReadOnlySpan<byte> bytes, WireExpectation expected, byte[]? owned)
++    // The caller retains the immutable native storage through validation and all
++    // later cell consumption. Ordinary callers still use the defensive Parse.
++    internal static DbWire ParseBorrowed(ReadOnlyMemory<byte> bytes, WireExpectation expected)
++        => ParseCore(bytes.Span, expected, bytes);
++    private static DbWire ParseCore(ReadOnlySpan<byte> bytes, WireExpectation expected, ReadOnlyMemory<byte>? retained)
+     {
+         try
+         {
+@@ -121,7 +126,7 @@ private static DbWire ParseCore(ReadOnlySpan<byte> bytes, WireExpectation expect
+                 ranges.Sort((x, y) => x.Start.CompareTo(y.Start));
+                 for (var i = 1; i < ranges.Count; i++) if (ranges[i].Start < ranges[i - 1].End) Bad("Nonempty cell ranges overlap.");
+             }
+-            return new(owned ?? bytes.ToArray(), expected, rows);
++            return new(retained ?? bytes.ToArray(), expected, rows);
+         }
+         catch (Exception e) when (e is OverflowException or ArgumentOutOfRangeException or JsonException)
+         { throw new ArgumentException("Malformed bounded db-wire payload.", nameof(bytes), e); }
+@@ -138,8 +143,9 @@ internal static WireExpectation KeyExpectation<TEntity>(EntityKey<TEntity> key,
+     {
+         if (row >= Rows || (uint)column >= Expected.Descriptors.Length) throw new ArgumentOutOfRangeException(nameof(row));
+         var o = checked(WireSchema.HeaderBytes + Expected.Descriptors.Length * WireSchema.DescriptorBytes + ((int)row * Expected.Descriptors.Length + column) * WireSchema.CellBytes);
+-        if (R16(Bytes, o + 2) == 1) return null;
+-        return new ReadOnlyMemory<byte>(Bytes, checked((int)R64(Bytes, o + 8)), checked((int)R64(Bytes, o + 16)));
++        var bytes = Bytes.Span;
++        if (R16(bytes, o + 2) == 1) return null;
++        return Bytes.Slice(checked((int)R64(bytes, o + 8)), checked((int)R64(bytes, o + 16)));
+     }
+     private static void CheckExpectation(WireExpectation expected, uint rows)
+     {
+diff --git a/src/Data.NativeHost/HostStreamTransport.cs b/src/Data.NativeHost/HostStreamTransport.cs
+index 8a598bd..634252c 100644
+--- a/src/Data.NativeHost/HostStreamTransport.cs
++++ b/src/Data.NativeHost/HostStreamTransport.cs
+@@ -1,4 +1,6 @@
++using System.Buffers;
+ using System.Buffers.Binary;
++using System.Runtime.InteropServices;
+ using Korda.Database.Internal;
+ using Korda.Query.Internal;
+ 
+@@ -30,18 +32,31 @@ private IStreamBatch TakeBatch(nint operation)
+     public async Task<StreamRetirement> JoinAsync()
+     { _close.Request(); await _close.JoinAsync().ConfigureAwait(false); var snapshot = _close.Snapshot; return new(snapshot.LocalResourcesReleased, snapshot.ConnectionDisposition == ConnectionDisposition.Usable, 0); }
+ }
+-internal sealed class HostStreamBatch : IOwnedStreamBatch
++internal sealed class HostStreamBatch : MemoryManager<byte>, IBorrowedStreamBatch
+ {
+     private NativeBuffer? _owner;
+-    private byte[]? _bytes;
+-    internal HostStreamBatch(NativeBuffer owner, int maximum)
++    private readonly nint _address;
++    private readonly int _length;
++    internal unsafe HostStreamBatch(NativeBuffer owner, int maximum)
+     {
+-        _bytes = owner.Copy(maximum); _owner = owner;
+-        if (_bytes.Length < 96) throw new Korda.Data.DatabaseException("Native batch header is incomplete.", Korda.Data.DatabaseErrorKind.ShapeMismatch);
+-        End = BinaryPrimitives.ReadUInt32LittleEndian(_bytes.AsSpan(56)) == 0;
++        using var read = new BatchReadScope(owner);
++        owner.ViewWhileRetained(maximum, out _address, out _length);
++        if (_length < 96) throw new Korda.Data.DatabaseException("Native batch header is incomplete.", Korda.Data.DatabaseErrorKind.ShapeMismatch);
++        End = BinaryPrimitives.ReadUInt32LittleEndian(new ReadOnlySpan<byte>((void*)_address, _length)[56..]) == 0;
++        _owner = owner;
+     }
+-    public ReadOnlyMemory<byte> Bytes => _bytes ?? throw new ObjectDisposedException(nameof(HostStreamBatch));
+-    public byte[] TakeBytes() => Interlocked.Exchange(ref _bytes, null) ?? throw new ObjectDisposedException(nameof(HostStreamBatch));
++    public SafeHandle ReadOwner => Volatile.Read(ref _owner) ?? throw new ObjectDisposedException(nameof(HostStreamBatch));
++    public ReadOnlyMemory<byte> Bytes { get { _ = ReadOwner; return CreateMemory(_length); } }
++    // Every caller of this internal memory manager holds a BatchReadScope over
++    // the complete synchronous consumption, not just over this GetSpan call.
++    public override unsafe Span<byte> GetSpan()
++    {
++        ObjectDisposedException.ThrowIf(ReadOwner.IsClosed, this);
++        return new Span<byte>((void*)_address, _length);
++    }
++    public override MemoryHandle Pin(int elementIndex = 0) => throw new NotSupportedException("Native batch memory cannot escape its synchronous read scope.");
++    public override void Unpin() { }
+     public bool End { get; }
+-    public void Dispose() { Interlocked.Exchange(ref _bytes, null); Interlocked.Exchange(ref _owner, null)?.Dispose(); }
++    public void Dispose() => Dispose(true);
++    protected override void Dispose(bool disposing) => Interlocked.Exchange(ref _owner, null)?.Dispose();
+ }
+diff --git a/src/Data.NativeHost/NativeHost.cs b/src/Data.NativeHost/NativeHost.cs
+index b0dcc41..7999c6d 100644
+--- a/src/Data.NativeHost/NativeHost.cs
++++ b/src/Data.NativeHost/NativeHost.cs
+@@ -34,6 +34,16 @@ internal NativeBuffer(SourceBinding binding, nint pointer) : base(0, true)
+     { if (pointer == 0) throw new InvalidOperationException("Native buffer owner is zero."); _binding = binding; SetHandle(pointer); }
+     public override bool IsInvalid => handle == 0;
+     protected override unsafe bool ReleaseHandle() { _binding.Calls.nw_db_buffer_release_v1(handle); return true; }
++    // Only callers holding a synchronous BatchReadScope may consume this view.
++    // The buffer's immutable native storage remains owned by this SafeHandle.
++    internal unsafe void ViewWhileRetained(int maximum, out nint address, out int length)
++    {
++        var view = new NwBytesViewV1(); var error = BindingChecks.Error();
++        var status = _binding.Calls.nw_db_buffer_view_v1(DangerousGetHandle(), &view, &error); HostFailure.Check(_binding, status, error);
++        if (view.Length > (ulong)maximum || view.Length != 0 && view.Data is null)
++            throw new DatabaseException("Native buffer exceeds the admitted range.", DatabaseErrorKind.ResourceLimit);
++        address = (nint)view.Data; length = checked((int)view.Length);
++    }
+     internal unsafe byte[] Copy(int maximum = DbWire.MaxEncodedBytes)
+     {
+         var retained = false;
+diff --git a/src/Data.Streaming/StreamTransport.cs b/src/Data.Streaming/StreamTransport.cs
+index c046015..d3d8fb6 100644
+--- a/src/Data.Streaming/StreamTransport.cs
++++ b/src/Data.Streaming/StreamTransport.cs
+@@ -1,10 +1,11 @@
++using System.Runtime.InteropServices;
+ using Korda.Data;
+ 
+ namespace Korda.Database.Internal;
+ 
+-/// <summary>Internal host seam for one independently owned native batch and its bounded managed copy.</summary>
+-/// <remarks>Bytes are managed-owned, immutable, and valid until disposal or an explicit owned handoff. The creating transport retains
+-/// the native owner and its byte permit until Dispose; a raw pointer or native borrow never crosses await.</remarks>
++/// <summary>Internal host seam for one independently owned, bounded batch.</summary>
++/// <remarks>Bytes are immutable and valid until disposal or an explicit owned handoff. The creating transport retains
++/// the native owner and its byte permit until Dispose. Native spans are consumed only within a synchronous read scope.</remarks>
+ internal interface IStreamBatch : IDisposable
+ {
+     ReadOnlyMemory<byte> Bytes { get; }
+@@ -21,6 +22,34 @@ internal interface IOwnedStreamBatch : IStreamBatch
+     byte[] TakeBytes();
+ }
+ 
++/// <summary>Trusted immutable native storage whose reads require a temporary SafeHandle reference.</summary>
++/// <remarks>The batch holds the ordinary SafeHandle owner; it never holds an extra reference across await.
++/// Parsing, row sizing and the complete synchronous projection call retain ReadOwner until consumption ends.
++/// Returned application values must own their data; borrowed memory never escapes a public row reader.</remarks>
++internal interface IBorrowedStreamBatch : IStreamBatch
++{
++    SafeHandle ReadOwner { get; }
++}
++
++/// <summary>A nonallocating native read lifetime; no scope may cross await.</summary>
++internal ref struct BatchReadScope
++{
++    private SafeHandle? _owner;
++    internal BatchReadScope(SafeHandle? owner)
++    {
++        _owner = null;
++        if (owner is null) return;
++        var retained = false;
++        try { owner.DangerousAddRef(ref retained); _owner = owner; }
++        catch { if (retained) owner.DangerousRelease(); throw; }
++    }
++    public void Dispose()
++    {
++        var owner = _owner; _owner = null;
++        owner?.DangerousRelease();
++    }
++}
++
+ /// <summary>Provider-confirmed native retirement, distinct from physical protocol reuse and managed disposal.</summary>
+ internal readonly record struct StreamRetirement(bool NativeRetired, bool ConnectionReusable, long ProviderRowsPeak);
+ 
+@@ -47,7 +76,7 @@ internal void Validate()
+     }
+ }
+ 
+-/// <summary>A synchronous B01 row lease over one validated, copied batch.</summary>
++/// <summary>A synchronous B01 row lease over one validated, retained batch.</summary>
+ /// <remarks>Complete wire identity and all cell ranges/types are checked before materialization. Disposing
+ /// invalidates every reader and releases the creating transport's native owner exactly once.</remarks>
+ internal sealed class RowBatchLease : IRowLease, IDisposable
+@@ -61,6 +90,7 @@ internal RowBatchLease(IStreamBatch owner, WireExpectation expected, ResultField
+         _fields = fields;
+         try
+         {
++            using var read = new BatchReadScope((owner as IBorrowedStreamBatch)?.ReadOwner);
+             byte[]? ownedBytes = null;
+             ReadOnlyMemory<byte> bytes;
+             if (owner is IOwnedStreamBatch owned)
+@@ -70,7 +100,8 @@ internal RowBatchLease(IStreamBatch owner, WireExpectation expected, ResultField
+             }
+             else bytes = owner.Bytes;
+             if (bytes.Length > limits.MaxBatchBytes) throw new DatabaseException("Native batch exceeds its admitted byte limit.", DatabaseErrorKind.ResourceLimit);
+-            var wire = ownedBytes is null ? DbWire.Parse(bytes.Span, expected) : DbWire.ParseOwned(ownedBytes, expected);
++            var wire = ownedBytes is not null ? DbWire.ParseOwned(ownedBytes, expected)
++                : owner is IBorrowedStreamBatch ? DbWire.ParseBorrowed(bytes, expected) : DbWire.Parse(bytes.Span, expected);
+             _wire = wire;
+             if (wire.Rows > limits.MaxBatchRows || wire.Rows == 0 && !owner.End)
+                 throw new DatabaseException("Native batch row count or end marker is invalid.", DatabaseErrorKind.ShapeMismatch);
+@@ -88,6 +119,7 @@ internal RowBatchLease(IStreamBatch owner, WireExpectation expected, ResultField
+     internal bool End { get; }
+     internal long RowBytes(uint row)
+     {
++        using var read = new BatchReadScope((_owner as IBorrowedStreamBatch)?.ReadOwner);
+         var wire = Wire;
+         long bytes = checked(_fields.Length * (long)WireSchema.CellBytes);
+         for (var i = 0; i < _fields.Length; i++) bytes = checked(bytes + (wire.Cell(row, i)?.Length ?? 0));
+@@ -95,6 +127,7 @@ internal long RowBytes(uint row)
+     }
+     internal T Materialize<T>(uint row, Projection<T> projection)
+     {
++        using var read = new BatchReadScope((_owner as IBorrowedStreamBatch)?.ReadOwner);
+         if (row >= Rows) throw new ArgumentOutOfRangeException(nameof(row));
+         _row = row;
+         return projection.Read(this);
+diff --git a/tests/Data.Abstractions/Program.cs b/tests/Data.Abstractions/Program.cs
+index a665e9e..23ad5f4 100644
+--- a/tests/Data.Abstractions/Program.cs
++++ b/tests/Data.Abstractions/Program.cs
+@@ -492,6 +492,7 @@ void Mutation(Action<byte[]> mutate)
+         var copy = (byte[])wire.Clone(); mutate(copy);
+         Reject<ArgumentException>(() => DbWire.Parse(copy, expectation));
+         Reject<ArgumentException>(() => DbWire.ParseOwned(copy, expectation));
++        Reject<ArgumentException>(() => DbWire.ParseBorrowed(copy, expectation));
+     }
+     Mutation(b => b[4] = 2); Mutation(b => b[12] = 1); Mutation(b => b[76] = 9); Mutation(b => b[68] = 1);
+     Mutation(b => BinaryPrimitives.WriteUInt32LittleEndian(b.AsSpan(56), uint.MaxValue));
+@@ -523,7 +524,7 @@ void Mutation(Action<byte[]> mutate)
+         permutations++;
+         var input = (byte[])original.Clone();
+         for (var i = 0; i < 4; i++) DbWire.U64(input, cellsOffset + i * WireSchema.CellBytes + 8, offsets[order[i]]);
+-        foreach (var parsed in new[] { DbWire.Parse(input, shape), DbWire.ParseOwned((byte[])input.Clone(), shape) })
++        foreach (var parsed in new[] { DbWire.Parse(input, shape), DbWire.ParseOwned((byte[])input.Clone(), shape), DbWire.ParseBorrowed(input, shape) })
+             for (uint row = 0; row < 4; row++)
+                 Check(BinaryPrimitives.ReadInt64LittleEndian(parsed.Cell(row, 0)!.Value.Span) == 11L * (order[row] + 1), "Disordered non-overlapping row changed.");
+         for (var first = 0; first < 4; first++) for (var second = 0; second < 4; second++)
+@@ -533,6 +534,7 @@ void Mutation(Action<byte[]> mutate)
+             DbWire.U64(overlap, cellsOffset + second * WireSchema.CellBytes + 8, offsets[order[first]]);
+             Reject<ArgumentException>(() => DbWire.Parse(overlap, shape));
+             Reject<ArgumentException>(() => DbWire.ParseOwned(overlap, shape));
++            Reject<ArgumentException>(() => DbWire.ParseBorrowed(overlap, shape));
+         }
+     }
+     Check(permutations == 24, "The complete range-order permutation matrix was not exercised.");
+@@ -540,28 +542,33 @@ void Mutation(Action<byte[]> mutate)
+     DbWire.U64(partial, cellsOffset + 3 * WireSchema.CellBytes + 8, offsets[0] + 1);
+     Reject<ArgumentException>(() => DbWire.Parse(partial, shape));
+     Reject<ArgumentException>(() => DbWire.ParseOwned(partial, shape));
++    Reject<ArgumentException>(() => DbWire.ParseBorrowed(partial, shape));
+ });
+ Test("db_wire_defensive_copy_and_exclusive_owned_handoff", () =>
+ {
+     var borrowed = (byte[])wire.Clone();
+     var defensive = DbWire.Parse(borrowed, expectation);
+     Array.Clear(borrowed);
+-    Check(defensive.Bytes.AsSpan().SequenceEqual(wire), "Borrowed input mutation changed a parsed wire snapshot.");
+-    Check(!ReferenceEquals(defensive.Bytes, borrowed), "The borrowed parse entry point lost its defensive copy.");
++    Check(defensive.Bytes.Span.SequenceEqual(wire), "Borrowed input mutation changed a parsed wire snapshot.");
++    Check(!System.Runtime.InteropServices.MemoryMarshal.TryGetArray(defensive.Bytes, out var defensiveArray) || !ReferenceEquals(defensiveArray.Array, borrowed), "The borrowed parse entry point lost its defensive copy.");
+     var exclusive = (byte[])wire.Clone();
+     var owned = DbWire.ParseOwned(exclusive, expectation);
+-    Check(ReferenceEquals(owned.Bytes, exclusive), "The exclusive owned parse allocated a second payload copy.");
++    Check(System.Runtime.InteropServices.MemoryMarshal.TryGetArray(owned.Bytes, out var ownedArray) && ReferenceEquals(ownedArray.Array, exclusive), "The exclusive owned parse allocated a second payload copy.");
++    var nativeContract = DbWire.ParseBorrowed(exclusive, expectation);
++    Check(System.Runtime.InteropServices.MemoryMarshal.TryGetArray(nativeContract.Bytes, out var borrowedArray) && ReferenceEquals(borrowedArray.Array, exclusive), "Trusted borrowed parse cloned its storage.");
+     Check(owned.Cell(0, 17) is null && owned.Cell(0, 18) is { Length: 0 }, "Owned parsing changed NULL/empty semantics.");
+     Reject<ArgumentNullException>(() => DbWire.ParseOwned(null!, expectation));
+     Reject<ArgumentException>(() => DbWire.ParseOwned((byte[])wire.Clone(), expectation with { MetadataHash = Enumerable.Repeat((byte)1, 32).ToArray() }));
++    Reject<ArgumentException>(() => DbWire.ParseBorrowed((byte[])wire.Clone(), expectation with { MetadataHash = Enumerable.Repeat((byte)1, 32).ToArray() }));
+     Reject<ArgumentException>(() => DbWire.ParseOwned(wire.AsSpan(0, 95).ToArray(), expectation));
++    Reject<ArgumentException>(() => DbWire.ParseBorrowed(wire.AsSpan(0, 95).ToArray(), expectation));
+ });
+ Test("wire_owned_storage_is_explicit_and_default_parse_still_snapshots", () =>
+ {
+     var input = (byte[])wire.Clone();
+     var copied = DbWire.Parse(input, expectation);
+     var retained = DbWire.ParseOwned(input, expectation);
+-    Check(!ReferenceEquals(copied.Bytes, input) && ReferenceEquals(retained.Bytes, input), "Wire storage ownership changed.");
++    Check(System.Runtime.InteropServices.MemoryMarshal.TryGetArray(copied.Bytes, out var copiedArray) && !ReferenceEquals(copiedArray.Array, input) && System.Runtime.InteropServices.MemoryMarshal.TryGetArray(retained.Bytes, out var retainedArray) && ReferenceEquals(retainedArray.Array, input), "Wire storage ownership changed.");
+     var first = retained.Cell(0, 0)!.Value;
+     Check(first.Span.SequenceEqual(copied.Cell(0, 0)!.Value.Span), "Owned parse changed decoded bytes.");
+     Array.Clear(input);
+diff --git a/tests/Data.Abstractions/WireValidationTests.cs b/tests/Data.Abstractions/WireValidationTests.cs
+index 213ddb2..9a84ffa 100644
+--- a/tests/Data.Abstractions/WireValidationTests.cs
++++ b/tests/Data.Abstractions/WireValidationTests.cs
+@@ -17,10 +17,10 @@ void Check(bool condition, string message)
+         { assertions++; if (!condition) throw new InvalidOperationException(message); }
+         void Reject(byte[] input, WireExpectation expected)
+         {
+-            foreach (var owned in new[] { false, true })
++            foreach (var storage in new[] { 0, 1, 2 })
+             {
+                 var rejected = false;
+-                try { _ = owned ? DbWire.ParseOwned(input, expected) : DbWire.Parse(input, expected); }
++                try { _ = storage == 0 ? DbWire.Parse(input, expected) : storage == 1 ? DbWire.ParseOwned(input, expected) : DbWire.ParseBorrowed(input, expected); }
+                 catch (ArgumentException) { rejected = true; }
+                 Check(rejected, "Overlapping or out-of-bounds cell ranges were accepted.");
+             }
+@@ -44,9 +44,9 @@ void Reject(byte[] input, WireExpectation expected)
+                 var input = (byte[])original.Clone();
+                 for (var i = 0; i < cellCount; i++)
+                     BinaryPrimitives.WriteUInt64LittleEndian(input.AsSpan(cellsOffset + i * WireSchema.CellBytes + 8), (ulong)(payloadOffset + order[i] * 8));
+-                foreach (var owned in new[] { false, true })
++                foreach (var storage in new[] { 0, 1, 2 })
+                 {
+-                    var parsed = owned ? DbWire.ParseOwned(input, expected) : DbWire.Parse(input, expected);
++                    var parsed = storage == 0 ? DbWire.Parse(input, expected) : storage == 1 ? DbWire.ParseOwned(input, expected) : DbWire.ParseBorrowed(input, expected);
+                     Check(parsed.Rows == 4, "Unordered valid payload changed its row count.");
+                     for (var i = 0; i < cellCount; i++)
+                         Check(BinaryPrimitives.ReadInt64LittleEndian(parsed.Cell((uint)(i / ids.Length), i % ids.Length)!.Value.Span) == order[i],
+diff --git a/tests/Data.NativeHost/BorrowedBatchHostTests.cs b/tests/Data.NativeHost/BorrowedBatchHostTests.cs
+new file mode 100644
+index 0000000..cee0de9
+--- /dev/null
++++ b/tests/Data.NativeHost/BorrowedBatchHostTests.cs
+@@ -0,0 +1,183 @@
++using System.Text.Json.Serialization;
++using Korda.Data;
++using Korda.Database;
++using Korda.Database.PostgreSql;
++using Korda.Database.Sqlite;
++using Korda.Interop;
++
++// Real provider integration for the borrowed native batch path. The separate
++// Streaming fixture checks the SafeHandle seam under forced release; these
++// tests keep the complete public StreamAsync -> synchronous mapper boundary.
++internal static class BorrowedBatchHostTests
++{
++    private static readonly TimeSpan Bound = TimeSpan.FromSeconds(10);
++    private static readonly ValueCodec<BorrowedHostPayload> Json = Codecs.Json(BorrowedHostJson.Default.BorrowedHostPayload);
++    private static int _checks;
++    private enum Stop { Dispose, Cancel, SourceClose }
++
++    internal static async Task Run(DatabaseProvider provider, string connection)
++    {
++        var before = _checks;
++        foreach (var stop in new[] { Stop.Dispose, Stop.Cancel, Stop.SourceClose })
++            foreach (var failMapping in new[] { false, true })
++                await DuringMapping(provider, connection, stop, failMapping);
++        Console.WriteLine($"BORROWED_HOST_PASS provider={provider} scenarios=6 assertions={_checks - before}; real native buffers survive complete mapper scopes and decoded values own their data");
++    }
++
++    private static async Task DuringMapping(DatabaseProvider provider, string connection, Stop stop, bool failMapping)
++    {
++        Console.WriteLine($"BORROWED_HOST_CASE provider={provider} stop={stop} mapperFailure={failMapping}");
++        var engine = provider == DatabaseProvider.Sqlite ? SqliteDataSource.Engine : PostgreSqlDataSource.Engine;
++        await WaitZero(engine);
++        var builder = new DataSourceBuilder().WithName($"borrowed-{provider}-{stop}-{failMapping}")
++            .ConfigureLimits(new DatabaseLimits { MaxConnections = 1, MaxBatchRows = 1, MaxBatchBytes = 4096, MaxFieldBytes = 1024 });
++        if (provider == DatabaseProvider.Sqlite) builder.UseSqlite(connection);
++        else builder.UsePostgreSql(connection, options => options.TlsMode = PostgreSqlTlsMode.DisableForLocalDevelopment);
++        var source = builder.Build();
++        var retired = 0;
++        source.TestRetirement = snapshot =>
++        {
++            Check(snapshot.Released && !snapshot.RootLive && snapshot.Controls == 0 && snapshot.CallbackEntries == 0 && snapshot.RetainedInputBytes == 0,
++                "a real provider operation retires its managed bridge owners");
++            Interlocked.Increment(ref retired);
++        };
++        var session = await source.OpenSessionAsync();
++        using var cancellation = new CancellationTokenSource();
++        using var releaseMapper = new ManualResetEventSlim();
++        var enteredMapper = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
++        var mappingFailure = new InvalidDataException("Borrowed native mapper fixture failure.");
++        const string inputName = "owned row 🦀";
++        byte[] inputBytes = [0, 1, 127, 255];
++        var inputJson = new BorrowedHostPayload(42, "owned JSON 🦀");
++        BorrowedHostValues? observed = null;
++        var projection = Projection<BorrowedHostValues>.Create(
++            [ResultField.Create("name", Codecs.String), ResultField.Create("bytes", Codecs.Bytes), ResultField.Create("json", Json)], row =>
++            {
++                // Read both before and after the barrier, inside one synchronous
++                // materializer. A GetSpan-only pin would not protect this scope.
++                var name = row.Read(0, Codecs.String);
++                enteredMapper.TrySetResult();
++                if (!releaseMapper.Wait(Bound)) throw new TimeoutException("The real provider mapper barrier was not released.");
++                var result = new BorrowedHostValues(name, row.Read(1, Codecs.Bytes), row.Read(2, Json));
++                observed = result;
++                if (failMapping) throw mappingFailure;
++                return result;
++            });
++        var sql = provider == DatabaseProvider.Sqlite
++            ? "SELECT CAST(@name AS TEXT) AS name, CAST(@bytes AS BLOB) AS bytes, CAST(@json AS TEXT) AS json"
++            : "SELECT CAST(@name AS TEXT) AS name, CAST(@bytes AS BYTEA) AS bytes, CAST(@json AS JSONB) AS json";
++        var command = SqlCommand.Create(sql, new SqlParameters().Add("name", inputName, Codecs.String)
++            .Add("bytes", inputBytes, Codecs.Bytes).Add("json", inputJson, Json));
++        var reader = session.StreamAsync(command, projection, cancellation.Token).GetAsyncEnumerator();
++        var move = Task.Run(() => reader.MoveNextAsync().AsTask());
++        Task? disposing = null, closingSource = null;
++        try
++        {
++            await enteredMapper.Task.WaitAsync(Bound);
++            Check(Counts(engine)[4] == 1, "the paused public mapper owns one real native result buffer");
++            var beforeStop = Volatile.Read(ref retired);
++            switch (stop)
++            {
++                case Stop.Dispose:
++                    disposing = reader.DisposeAsync().AsTask();
++                    Check(!disposing.IsCompleted, "DisposeAsync waits for the admitted synchronous mapper");
++                    break;
++                case Stop.Cancel:
++                    cancellation.Cancel();
++                    break;
++                case Stop.SourceClose:
++                    closingSource = source.DisposeAsync().AsTask();
++                    break;
++            }
++            // Confirm that the stop/close control really retired, instead of
++            // checking the buffer before a queued native action had run.
++            await Until(() => Volatile.Read(ref retired) > beforeStop,
++                "The real stop/close operation did not retire while its result batch was held.");
++            if (closingSource is not null)
++            {
++                await closingSource.WaitAsync(Bound);
++                Check(source.Cleanup.LocalResourcesReleased, "source shutdown joins native safety independently of a held result buffer");
++            }
++            Check(!move.IsCompleted, "control completion cannot finish an executing synchronous mapper");
++            Check(Counts(engine)[4] == 1, "the real native result buffer survives completed stop/close control while the mapper is paused");
++            if (disposing is not null) Check(!disposing.IsCompleted, "concurrent enumerator disposal still joins the mapper after native stop");
++            releaseMapper.Set();
++            if (failMapping)
++            {
++                var failure = await Failure<InvalidDataException>(move);
++                Check(ReferenceEquals(failure, mappingFailure), "the original mapper exception survives stop/close and cleanup");
++            }
++            else
++            {
++                Check(await move.WaitAsync(Bound), "an already admitted mapper completes its owned row after stop/close");
++                Check(ReferenceEquals(reader.Current, observed), "the observed row is the public current value");
++                if (stop == Stop.Cancel)
++                {
++                    var failure = await Failure<OperationCanceledException>(reader.MoveNextAsync().AsTask());
++                    Check(failure.CancellationToken == cancellation.Token, "the next move preserves the admitted cancellation token");
++                }
++                else if (stop == Stop.SourceClose)
++                    await Failure<ObjectDisposedException>(reader.MoveNextAsync().AsTask());
++            }
++            await reader.DisposeAsync().AsTask().WaitAsync(Bound);
++            if (disposing is not null) await disposing.WaitAsync(Bound);
++            await session.DisposeAsync().AsTask().WaitAsync(Bound);
++            await source.DisposeAsync().AsTask().WaitAsync(Bound);
++            Check(session.Cleanup.LocalResourcesReleased && source.Cleanup.LocalResourcesReleased,
++                "the real public session and source report local retirement");
++            await WaitZero(engine);
++            var materialized = observed ?? throw new InvalidOperationException("The paused mapper did not read the held native result.");
++            Check(materialized.Name == inputName && materialized.Json == inputJson
++                && materialized.Bytes.AsSpan().SequenceEqual(inputBytes), "string, bytes and typed JSON remain valid after every native owner retires");
++            Check(!ReferenceEquals(materialized.Bytes, inputBytes) && !ReferenceEquals(materialized.Json, inputJson),
++                "decoded bytes and typed JSON are independent application-owned values");
++            inputBytes[1] = 99;
++            Check(materialized.Bytes[1] == 1 && materialized.Name == "owned row 🦀" && materialized.Json.Label == "owned JSON 🦀",
++                "retired native/input storage cannot mutate already materialized application values");
++            Console.WriteLine($"BORROWED_HOST_CASE_PASS provider={provider} stop={stop} mapperFailure={failMapping}; native-buffer-held=1; final-owners=0");
++        }
++        finally
++        {
++            releaseMapper.Set();
++            await reader.DisposeAsync().AsTask().WaitAsync(Bound);
++            await session.DisposeAsync().AsTask().WaitAsync(Bound);
++            await source.DisposeAsync().AsTask().WaitAsync(Bound);
++        }
++    }
++
++    private static async Task Until(Func<bool> condition, string message)
++    {
++        var started = System.Diagnostics.Stopwatch.GetTimestamp();
++        while (!condition())
++        {
++            if (System.Diagnostics.Stopwatch.GetElapsedTime(started) > Bound) throw new TimeoutException(message);
++            await Task.Delay(1);
++        }
++    }
++    private static async Task WaitZero(EngineDescriptor engine)
++    {
++        await Until(() => Counts(engine).All(value => value == 0), "Native borrowed batch fixture did not drain: " + string.Join(',', Counts(engine)));
++        Check(true, "all real source/session/operation/cursor/buffer/handle owners drain to zero");
++    }
++    private static unsafe ulong[] Counts(EngineDescriptor engine)
++    {
++        var count = (delegate* unmanaged[Cdecl]<uint, ulong>)EngineModuleLoader.ResolveExport(engine, "nw_db_diagnostic_count_v1");
++        return Enumerable.Range(0, 6).Select(index => count((uint)index)).ToArray();
++    }
++    private static async Task<TException> Failure<TException>(Task task) where TException : Exception
++    {
++        try { await task.WaitAsync(Bound); }
++        catch (TException error) { Check(true, "observed expected " + typeof(TException).Name); return error; }
++        throw new InvalidOperationException("Expected " + typeof(TException).Name);
++    }
++    private static void Check(bool condition, string message)
++    {
++        Interlocked.Increment(ref _checks);
++        if (!condition) throw new InvalidOperationException(message);
++    }
++}
++
++internal sealed record BorrowedHostValues(string Name, byte[] Bytes, BorrowedHostPayload Json);
++internal sealed record BorrowedHostPayload(int Value, string Label);
++[JsonSerializable(typeof(BorrowedHostPayload))]
++internal partial class BorrowedHostJson : JsonSerializerContext;
+diff --git a/tests/Data.NativeHost/Program.cs b/tests/Data.NativeHost/Program.cs
+index cd5bd40..49b0b36 100644
+--- a/tests/Data.NativeHost/Program.cs
++++ b/tests/Data.NativeHost/Program.cs
+@@ -128,6 +128,8 @@ internal static async Task Run()
+             await source.DisposeAsync();
+             await WaitZero(source.Provider == DatabaseProvider.Sqlite ? SqliteDataSource.Engine : PostgreSqlDataSource.Engine);
+         }
++        await BorrowedBatchHostTests.Run(DatabaseProvider.Sqlite, Path.Combine(directory, "borrowed.db"));
++        await BorrowedBatchHostTests.Run(DatabaseProvider.PostgreSql, pg);
+         await DependencyInjection(Path.Combine(directory, "di.db"));
+         await WaitZero(SqliteDataSource.Engine);
+         Directory.Delete(directory, true);
+@@ -155,6 +157,8 @@ private static async Task NativeBatches(DataSource source, DataSession session,
+         using var plan = SqlSubmission.Create(session, SqlCommand.Create("SELECT id,name FROM " + table + " ORDER BY id"), 3, id);
+         using var cursor = await session.ExecutePlanAsync(plan, ReadOnlyMemory<byte>.Empty, default);
+         var close = new CloseController(source, cursor, cursor.Dispose);
++        var engine = source.Provider == DatabaseProvider.Sqlite ? SqliteDataSource.Engine : PostgreSqlDataSource.Engine;
++        var buffersBefore = Counts(engine)[4];
+         Task<Korda.Database.NativeBuffer> Fetch(int rows) => source.Start(() => NativeHost.Fetch(cursor, rows, source.Limits.MaxBatchBytes), operation => NativeHost.TakeBuffer(source.Binding, operation));
+         try
+         {
+@@ -162,23 +166,42 @@ private static async Task NativeBatches(DataSource source, DataSession session,
+             {
+                 using var batch = new HostStreamBatch(first, checked((int)source.Limits.MaxBatchBytes));
+                 var borrowed = batch.Bytes;
+-                var transferred = batch.TakeBytes();
+-                Check(System.Runtime.InteropServices.MemoryMarshal.TryGetArray(borrowed, out var segment)
+-                    && ReferenceEquals(segment.Array, transferred), "host transfers its existing managed copy without cloning");
+-                Check(BinaryPrimitives.ReadUInt32LittleEndian(transferred.AsSpan(56)) == 1, "native per-fetch one-row demand");
+-                await Throws<ObjectDisposedException>(() => { _ = batch.Bytes; return Task.CompletedTask; });
+-                await Throws<ObjectDisposedException>(() => { _ = batch.TakeBytes(); return Task.CompletedTask; });
++                Check(!System.Runtime.InteropServices.MemoryMarshal.TryGetArray(borrowed, out _),
++                    "host batch exposes native storage without an intermediate managed array");
++                Check(ReferenceEquals(batch.ReadOwner, first), "the native batch exposes its creating SafeHandle read owner");
++                InspectNativeBatch(batch, first, engine, buffersBefore + 1, dispose: false);
++                await Throws<NotSupportedException>(() => { using var pin = borrowed.Pin(); return Task.CompletedTask; });
+                 await Throws<InvalidOperationException>(async () => { using var blocked = await Fetch(1); });
+-                Check(!first.IsClosed, "managed transfer retains the native byte permit until batch disposal");
+-                batch.Dispose(); batch.Dispose();
+-                Check(first.IsClosed && BinaryPrimitives.ReadUInt32LittleEndian(transferred.AsSpan(56)) == 1,
+-                    "host batch disposal releases native owner once while transferred managed bytes survive");
++                Check(!first.IsClosed, "the batch retains the native byte permit before disposal");
++                InspectNativeBatch(batch, first, engine, buffersBefore + 1, dispose: true);
++                Check(first.IsClosed && Counts(engine)[4] == buffersBefore,
++                    "the last synchronous read reference releases the disposed native batch once");
++                await Throws<ObjectDisposedException>(() => { _ = batch.Bytes; return Task.CompletedTask; });
++                await Throws<ObjectDisposedException>(() => { _ = borrowed.Span.Length; return Task.CompletedTask; });
+             }
+             using var second = await Fetch(2);
+             Check(BinaryPrimitives.ReadUInt32LittleEndian(second.Copy().AsSpan(56)) == 2, "native per-fetch two-row demand after prior buffer release");
+         }
+         finally { close.Request(); await close.JoinAsync(); }
+     }
++    private static void InspectNativeBatch(HostStreamBatch batch, Korda.Database.NativeBuffer owner,
++        EngineDescriptor engine, ulong expectedBuffers, bool dispose)
++    {
++        var retained = false;
++        try
++        {
++            owner.DangerousAddRef(ref retained);
++            var span = batch.Bytes.Span;
++            Check(BinaryPrimitives.ReadUInt32LittleEndian(span[56..]) == 1, "native per-fetch one-row demand within a complete read scope");
++            if (dispose)
++            {
++                batch.Dispose(); batch.Dispose();
++                Check(Counts(engine)[4] == expectedBuffers, "disposing a batch cannot free storage retained by an active read scope");
++                Check(BinaryPrimitives.ReadUInt32LittleEndian(span[56..]) == 1, "an already acquired span remains valid until its read scope ends");
++            }
++        }
++        finally { if (retained) owner.DangerousRelease(); }
++    }
+     private static async Task DependencyInjection(string path)
+     {
+         var services = new ServiceCollection(); var configurations = 0;
+diff --git a/tests/Data.Streaming/AllocationProbeRaces.cs b/tests/Data.Streaming/AllocationProbeRaces.cs
+index 784ca98..5e5a111 100644
+--- a/tests/Data.Streaming/AllocationProbeRaces.cs
++++ b/tests/Data.Streaming/AllocationProbeRaces.cs
+@@ -9,17 +9,23 @@ internal static class AllocationProbeRaces
+ {
+     private static readonly TimeSpan Bound = TimeSpan.FromSeconds(10);
+     private static int s_checks;
++    private static bool s_borrowNative;
+ 
+     internal static async Task RunAsync()
+     {
+         s_checks = 0;
+-        await DisposeDuringStart();
+-        await DisposeDuringFetch();
+-        await DisposeDuringMapping(failMapping: false, failCleanup: false);
+-        await DisposeDuringMapping(failMapping: true, failCleanup: false);
+-        await DisposeDuringMapping(failMapping: true, failCleanup: true);
+-        await CancellationDuringFetch();
+-        Console.WriteLine($"PASS lazy stream join races: {s_checks} assertions; pending start/fetch, shared disposers, active mapper, primary/cleanup failures and cancellation");
++        foreach (var borrowed in new[] { false, true })
++        {
++            s_borrowNative = borrowed;
++            await DisposeDuringStart();
++            await DisposeDuringFetch();
++            await DisposeDuringMapping(failMapping: false, failCleanup: false);
++            await DisposeDuringMapping(failMapping: true, failCleanup: false);
++            await DisposeDuringMapping(failMapping: true, failCleanup: true);
++            await CancellationDuringFetch();
++        }
++        BorrowedBatchChecks.Run();
++        Console.WriteLine($"PASS lazy stream join races: {s_checks} assertions; managed-owned and native-borrowed pending start/fetch, shared disposers, active mapper, primary/cleanup failures and cancellation");
+     }
+ 
+     private static async Task DisposeDuringStart()
+@@ -98,6 +104,11 @@ private static async Task DisposeDuringMapping(bool failMapping, bool failCleanu
+             Task first = reader.DisposeAsync().AsTask(), second = reader.DisposeAsync().AsTask();
+             Check(!first.IsCompleted && !second.IsCompleted, "disposal joins a synchronously executing mapper");
+             Check(transport.Batch.Disposals == 0 && transport.Joins == 0, "the mapper retains its batch until it exits");
++            if (s_borrowNative)
++            {
++                GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect();
++                Check(transport.Batch.NativeReleases == 0, "active mapper retains native memory across forced GC");
++            }
+             releaseMapper.Set();
+             await transport.JoinEntered.Task.WaitAsync(Bound);
+             Check(transport.Batch.Disposals == 1 && !first.IsCompleted && !second.IsCompleted, "mapper exit releases the batch and still awaits retirement");
+@@ -120,6 +131,7 @@ private static async Task DisposeDuringMapping(bool failMapping, bool failCleanu
+                 await Task.WhenAll(first, second).WaitAsync(Bound);
+             }
+             Check(transport.Joins == 1 && transport.Batch.Disposals == 1, "mapper race retirement is once-only");
++            if (s_borrowNative) Check(transport.Batch.NativeReleases == 1, "native mapper buffer releases exactly once after the full synchronous read");
+         }
+         finally { releaseMapper.Set(); transport.ReleaseJoin(); }
+     }
+@@ -171,14 +183,15 @@ private sealed class ControlledTransport : IStreamTransport
+         private readonly TaskCompletionSource<StreamRetirement> _retirement = new(TaskCreationOptions.RunContinuationsAsynchronously);
+         internal readonly TaskCompletionSource FetchEntered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+         internal readonly TaskCompletionSource JoinEntered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+-        internal readonly OwnedBatch Batch;
++        internal readonly ITrackedBatch Batch;
+         internal int Fetches, Stops, Joins;
+         internal ControlledTransport(Projection<long> projection, bool pendingFetch)
+         {
+             byte[] scalar = new byte[8]; BinaryPrimitives.WriteInt64LittleEndian(scalar, 42);
+             var expectation = new WireExpectation(PayloadKind.Rows, 2, Convert.FromHexString(projection.ShapeHash), 0, 71,
+                 [new(0, Codecs.Int64.Descriptor, 3)]);
+-            Batch = new(DbWire.Encode(expectation, 1, [new ReadOnlyMemory<byte>(scalar)]));
++            var bytes = DbWire.Encode(expectation, 1, [new ReadOnlyMemory<byte>(scalar)]);
++            Batch = s_borrowNative ? new BorrowedBatchFixture(bytes) : new OwnedBatch(bytes);
+             _start = Task.FromResult<IStreamTransport>(this); _ready = Task.FromResult<IStreamBatch>(Batch);
+             if (pendingFetch) _fetch = new(TaskCreationOptions.RunContinuationsAsynchronously);
+         }
+@@ -205,13 +218,15 @@ internal void ReleaseJoin(Exception? failure = null)
+             else _retirement.TrySetException(failure);
+         }
+     }
+-    private sealed class OwnedBatch(byte[] bytes) : IOwnedStreamBatch
++    private sealed class OwnedBatch(byte[] bytes) : IOwnedStreamBatch, ITrackedBatch
+     {
+         private byte[]? _bytes = bytes;
+         private int _active;
+-        internal int Disposals;
+-        internal bool Active => Volatile.Read(ref _active) != 0;
+-        internal void Acquire() => Volatile.Write(ref _active, 1);
++        private int _disposals;
++        public int Disposals => _disposals;
++        public int NativeReleases => 0;
++        public bool Active => Volatile.Read(ref _active) != 0;
++        public void Acquire() => Volatile.Write(ref _active, 1);
+         public ReadOnlyMemory<byte> Bytes => Active && _bytes is { } value ? value : throw new ObjectDisposedException(nameof(OwnedBatch));
+         public byte[] TakeBytes()
+         {
+@@ -223,7 +238,7 @@ public void Dispose()
+         {
+             if (Interlocked.Exchange(ref _active, 0) == 0) throw new InvalidOperationException("Race fixture batch was released twice.");
+             Interlocked.Exchange(ref _bytes, null);
+-            Interlocked.Increment(ref Disposals);
++            Interlocked.Increment(ref _disposals);
+         }
+     }
+ }
+diff --git a/tests/Data.Streaming/BorrowedBatchFixture.cs b/tests/Data.Streaming/BorrowedBatchFixture.cs
+new file mode 100644
+index 0000000..a8d1a45
+--- /dev/null
++++ b/tests/Data.Streaming/BorrowedBatchFixture.cs
+@@ -0,0 +1,186 @@
++using System.Buffers;
++using System.Runtime.CompilerServices;
++using System.Runtime.InteropServices;
++using System.Text.Json;
++using System.Text.Json.Serialization;
++using Korda.Data;
++using Korda.Database.Internal;
++
++internal interface ITrackedBatch : IStreamBatch
++{
++    int Disposals { get; }
++    int NativeReleases { get; }
++    bool Active { get; }
++    void Acquire();
++}
++
++// This fixture uses actual unmanaged storage and SafeHandle finalization. It
++// exercises the same borrowed-memory seam without making a provider race depend
++// on the database worker's scheduling.
++internal sealed class BorrowedBatchFixture(byte[] input, bool end = false, BorrowedReleaseCounter? counter = null)
++    : MemoryManager<byte>, IBorrowedStreamBatch, ITrackedBatch
++{
++    private NativeOwner? _owner;
++    private int _active, _disposals;
++    private readonly BorrowedReleaseCounter _counter = counter ?? new();
++    public int Disposals => _disposals;
++    public int NativeReleases => Volatile.Read(ref _counter.Releases);
++    public bool Active => Volatile.Read(ref _active) != 0;
++    public void Acquire()
++    {
++        if (Interlocked.Exchange(ref _active, 1) != 0 || _owner is not null) throw new InvalidOperationException("Fixture may be acquired only once.");
++        _owner = new(input, _counter);
++    }
++    public SafeHandle ReadOwner => Active && _owner is { } owner ? owner : throw new ObjectDisposedException(nameof(BorrowedBatchFixture));
++    public ReadOnlyMemory<byte> Bytes { get { _ = ReadOwner; return CreateMemory(input.Length); } }
++    public bool End => end;
++    public override unsafe Span<byte> GetSpan()
++    {
++        var owner = ReadOwner;
++        ObjectDisposedException.ThrowIf(owner.IsClosed, this);
++        return new Span<byte>((void*)owner.DangerousGetHandle(), input.Length);
++    }
++    public override MemoryHandle Pin(int elementIndex = 0) => throw new NotSupportedException();
++    public override void Unpin() { }
++    public void Dispose() => Dispose(true);
++    protected override void Dispose(bool disposing)
++    {
++        if (Interlocked.Exchange(ref _active, 0) == 0) throw new InvalidOperationException("Fixture batch was released twice.");
++        _owner!.Dispose();
++        Interlocked.Increment(ref _disposals);
++    }
++    private sealed class NativeOwner : SafeHandle
++    {
++        private readonly BorrowedReleaseCounter _counter;
++        internal unsafe NativeOwner(byte[] input, BorrowedReleaseCounter counter) : base(0, true)
++        {
++            _counter = counter;
++            SetHandle((nint)NativeMemory.Alloc((nuint)Math.Max(1, input.Length)));
++            if (handle == 0) throw new OutOfMemoryException();
++            input.CopyTo(new Span<byte>((void*)handle, input.Length));
++        }
++        public override bool IsInvalid => handle == 0;
++        protected override unsafe bool ReleaseHandle()
++        {
++            NativeMemory.Free((void*)handle);
++            Interlocked.Increment(ref _counter.Releases);
++            return true;
++        }
++    }
++}
++
++internal sealed class BorrowedReleaseCounter
++{
++    internal int Releases;
++}
++
++internal static class BorrowedBatchChecks
++{
++    private static int s_checks;
++    private static void Check(bool condition, string message)
++    { if (!condition) throw new InvalidOperationException(message); s_checks++; }
++    internal static void Run()
++    {
++        s_checks = 0;
++        ScopeAndAbandonment();
++        ValidationAndOwnedResults();
++        TypedJsonOwnership();
++        Console.WriteLine($"PASS borrowed native batch lifetime and validation: {s_checks} assertions; bounded native ownership, complete synchronous reads, finalizer fallback and independent decoded values");
++    }
++    private static void ScopeAndAbandonment()
++    {
++        var batch = new BorrowedBatchFixture([42]); batch.Acquire();
++        var memory = batch.Bytes;
++        using (var read = new BatchReadScope(batch.ReadOwner))
++        {
++            var bytes = memory.Span;
++            Check(!MemoryMarshal.TryGetArray(memory, out _), "Borrowed fixture unexpectedly owns a managed copy.");
++            batch.Dispose();
++            GC.Collect(); GC.WaitForPendingFinalizers();
++            Check(batch.NativeReleases == 0 && bytes[0] == 42, "The complete synchronous span read lost its SafeHandle reference.");
++        }
++        Check(batch.NativeReleases == 1, "The last synchronous read did not release native memory exactly once.");
++        var rejected = false;
++        try { _ = memory.Span.Length; } catch (ObjectDisposedException) { rejected = true; }
++        Check(rejected, "A stale borrowed memory value remained readable after disposal.");
++        var counter = new BorrowedReleaseCounter();
++        var orphan = Abandon(counter);
++        for (var i = 0; i < 10 && counter.Releases == 0; i++) { GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect(); }
++        Check(!orphan.IsAlive && counter.Releases == 1, "An abandoned native batch leaked a persistent SafeHandle reference.");
++    }
++    [MethodImpl(MethodImplOptions.NoInlining)]
++    private static WeakReference Abandon(BorrowedReleaseCounter counter)
++    {
++        var batch = new BorrowedBatchFixture([1, 2, 3], counter: counter); batch.Acquire();
++        using (var read = new BatchReadScope(batch.ReadOwner)) Check(batch.Bytes.Span[2] == 3, "Abandonment fixture read failed.");
++        return new WeakReference(batch);
++    }
++    private static void ValidationAndOwnedResults()
++    {
++        var projection = Projection<OwnedResult>.Create(
++            [ResultField.Create("id", Codecs.Int64), ResultField.Create("name", Codecs.String), ResultField.Create("bytes", Codecs.Bytes)],
++            static row => new(row.Read(0, Codecs.Int64), row.Read(1, Codecs.String), row.Read(2, Codecs.Bytes)));
++        var fields = projection.Fields.ToArray();
++        var expected = new WireExpectation(PayloadKind.Rows, 2, Convert.FromHexString(projection.ShapeHash), 0, 71,
++            [new(0, Codecs.Int64.Descriptor, 3), new(1, Codecs.String.Descriptor, 5), new(2, Codecs.Bytes.Descriptor, 6)]);
++        var valid = DbWire.Encode(expected, 1, [Codecs.Int64.Encode(42), Codecs.String.Encode("retained"), new byte[] { 1, 2, 255 }]);
++        var batch = new BorrowedBatchFixture(valid); batch.Acquire();
++        OwnedResult result;
++        using (var lease = new RowBatchLease(batch, expected, fields, new(2, 4096, 2, 4096)))
++        {
++            Check(lease.RowBytes(0) == 3 * WireSchema.CellBytes + 8 + 8 + 3, "Borrowed row byte accounting changed.");
++            result = lease.Materialize(0, projection);
++            Check(batch.NativeReleases == 0 && result.Id == 42, "Materializer did not retain the native batch.");
++        }
++        Check(batch.Disposals == 1 && batch.NativeReleases == 1, "A successful lease did not release its owner exactly once.");
++        GC.Collect(); GC.WaitForPendingFinalizers();
++        Check(result.Name == "retained" && result.Bytes.AsSpan().SequenceEqual(new byte[] { 1, 2, 255 }), "Decoded application values retained borrowed storage.");
++        Reject(valid[..95], expected, fields, new(2, 4096, 2, 4096), false, DatabaseErrorKind.ShapeMismatch);
++        var malformed = (byte[])valid.Clone(); malformed[0] = 0;
++        Reject(malformed, expected, fields, new(2, 4096, 2, 4096), false, DatabaseErrorKind.ShapeMismatch);
++        Reject(valid, expected, fields, new(2, valid.Length - 1, 2, 4096), false, DatabaseErrorKind.ResourceLimit);
++        var empty = DbWire.Encode(expected, 0, []);
++        Reject(empty, expected, fields, new(2, 4096, 2, 4096), false, DatabaseErrorKind.ShapeMismatch);
++        var tooMany = DbWire.Encode(expected, 2, [Codecs.Int64.Encode(1), Codecs.String.Encode("a"), new byte[] { 1 }, Codecs.Int64.Encode(2), Codecs.String.Encode("b"), new byte[] { 2 }]);
++        Reject(tooMany, expected, fields, new(1, 4096, 2, 4096), false, DatabaseErrorKind.ShapeMismatch);
++        var eos = new BorrowedBatchFixture(empty, end: true); eos.Acquire();
++        using (var lease = new RowBatchLease(eos, expected, fields, new(2, 4096, 2, 4096)))
++            Check(lease.End && lease.Rows == 0, "Borrowed empty EOS was rejected.");
++        Check(eos.NativeReleases == 1, "EOS native owner leaked.");
++    }
++    private static void Reject(byte[] input, WireExpectation expected, ResultField[] fields, StreamLimits limits, bool end, DatabaseErrorKind kind)
++    {
++        var batch = new BorrowedBatchFixture(input, end); batch.Acquire();
++        var rejected = false;
++        try { using var lease = new RowBatchLease(batch, expected, fields, limits); }
++        catch (DatabaseException error) when (error.Kind == kind) { rejected = true; }
++        Check(rejected && batch.Disposals == 1 && batch.NativeReleases == 1, "Borrowed constructor failure did not compensate its owner exactly once.");
++    }
++    private static void TypedJsonOwnership()
++    {
++        var codec = Codecs.Json(BorrowedBatchJson.Default.BorrowedJsonValue);
++        var projection = Projection<BorrowedJsonValue>.Create([ResultField.Create("json", codec)], row => row.Read(0, codec));
++        var expected = new WireExpectation(PayloadKind.Rows, 2, Convert.FromHexString(projection.ShapeHash), 0, 72, [new(0, codec.Descriptor, 16)]);
++        var input = DbWire.Encode(expected, 1, [codec.Encode(new(42, ["owned", "values"]))]);
++        var batch = new BorrowedBatchFixture(input); batch.Acquire();
++        BorrowedJsonValue value;
++        using (var lease = new RowBatchLease(batch, expected, projection.Fields, new(1, 4096, 1, 4096)))
++            value = lease.Materialize(0, projection);
++        GC.Collect(); GC.WaitForPendingFinalizers();
++        Check(batch.NativeReleases == 1 && value.Id == 42 && value.Labels.SequenceEqual(new[] { "owned", "values" }), "Typed JSON retained borrowed native storage after deserialization.");
++        var wrongShape = new BorrowedBatchFixture(DbWire.Encode(expected, 1, ["[]"u8.ToArray()])); wrongShape.Acquire();
++        var failed = false;
++        try
++        {
++            using var lease = new RowBatchLease(wrongShape, expected, projection.Fields, new(1, 4096, 1, 4096));
++            _ = lease.Materialize(0, projection);
++        }
++        catch (Exception error) when (error is JsonException or DatabaseException) { failed = true; }
++        Check(failed && wrongShape.NativeReleases == 1 && wrongShape.Disposals == 1, "A typed JSON mapping failure leaked the borrowed owner.");
++    }
++    private sealed record OwnedResult(long Id, string Name, byte[] Bytes);
++}
++
++internal sealed record BorrowedJsonValue(long Id, string[] Labels);
++[JsonSerializable(typeof(BorrowedJsonValue))]
++internal partial class BorrowedBatchJson : JsonSerializerContext { }

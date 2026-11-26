@@ -4,9 +4,10 @@ using Korda.Data;
 
 namespace Korda.Query.Internal;
 
-/// <summary>Exact immediate kind6/kind13/kind22 fields over B01 encoders; no query tree is accumulated.</summary>
+/// <summary>Exact kind6/kind13/kind22 fields shared by direct calls and bounded query commands.</summary>
 internal static class OperandEncoding
 {
+    internal const int StackScratchBytes = 4096;
     private static readonly UTF8Encoding Utf8 = new(false, true);
     internal static ControlField U32(ushort id, uint value) => new(id, 1, ControlRecord.U32(value));
     internal static ControlField U64(ushort id, ulong value, ushort type = 2)
@@ -25,6 +26,123 @@ internal static class OperandEncoding
     {
         var projectionFields = projection.Fields;
         if (!expressions.IsEmpty && expressions.Length != projectionFields.Length) throw new ArgumentException("Projection expression count differs.", nameof(expressions));
+        // Public projections own immutable, Unicode-validated field metadata.
+        // Size the bounded frame without binding codecs, then write directly to
+        // its single owned output. Oversized/noncanonical inputs retain the old
+        // encoder, including binding order and its eventual validation errors.
+        if (projection.ShapeHash is not { Length: 64 } || !TryProjectionSize(projectionFields, !expressions.IsEmpty, out var size))
+            return ProjectionFallback(projection, bindCodec, expressions);
+
+        var bytes = new byte[size];
+        WriteProjection(projection, bindCodec, expressions, bytes);
+        return bytes;
+    }
+    // The returned view borrows caller scratch only for the immediate synchronous
+    // binding call. Large frames retain the independently owned array fallback.
+    internal static ReadOnlySpan<byte> ProjectionInto<T>(Projection<T> projection, Func<CodecDescriptor, uint> bindCodec,
+        Span<byte> scratch, ReadOnlySpan<ulong> expressions = default)
+    {
+        var fields = projection.Fields;
+        if (!expressions.IsEmpty && expressions.Length != fields.Length) throw new ArgumentException("Projection expression count differs.", nameof(expressions));
+        if (projection.ShapeHash is not { Length: 64 } || !TryProjectionSize(fields, !expressions.IsEmpty, out var size))
+            return ProjectionFallback(projection, bindCodec, expressions);
+        Span<byte> bytes = size <= scratch.Length ? scratch[..size] : new byte[size];
+        WriteProjection(projection, bindCodec, expressions, bytes);
+        return bytes;
+    }
+    // Select has two expression-validation passes in the existing path. Preserve
+    // both, including their order before codec binding, while bounding stack use.
+    internal static bool TrySelectionInto<T>(QueryBinding query, Projection<T> projection, Func<CodecDescriptor, uint> bindCodec,
+        ReadOnlySpan<ExpressionReference> expressions, Span<byte> scratch, out int length)
+    {
+        length = 0;
+        if (expressions.IsEmpty || expressions.Length > 32 || expressions.Length > DbWire.MaxDescriptors
+            || expressions.Length != projection.Fields.Length || projection.ShapeHash is not { Length: 64 }
+            || !TryProjectionSize(projection.Fields, true, out var projectionSize)) return false;
+        var total = 48L + expressions.Length * 8L + projectionSize;
+        if (total > scratch.Length || total > DbWire.MaxEncodedBytes) return false;
+        var tokenBytes = expressions.Length * 8;
+        var bytes = scratch[..(int)total];
+        WriteHeader(bytes, 6, bytes.Length, 2);
+        WriteField(bytes, 0, 1, 8, tokenBytes, 48);
+        WriteField(bytes, 1, 2, 5, projectionSize, 48 + tokenBytes);
+        for (var i = 0; i < expressions.Length; i++) DbWire.U64(bytes, 48 + i * 8, expressions[i].In(query));
+        Span<ulong> handles = stackalloc ulong[expressions.Length];
+        for (var i = 0; i < expressions.Length; i++) handles[i] = expressions[i].In(query);
+        WriteProjection(projection, bindCodec, handles, bytes[(48 + tokenBytes)..]);
+        length = bytes.Length;
+        return true;
+    }
+    private static void WriteProjection<T>(Projection<T> projection, Func<CodecDescriptor, uint> bindCodec,
+        ReadOnlySpan<ulong> expressions, Span<byte> bytes)
+    {
+        var projectionFields = projection.Fields;
+        var size = bytes.Length;
+        var vectorSize = size - 80; // outer header/table and the 32-byte shape digest
+        WriteHeader(bytes, 13, size, 2);
+        WriteField(bytes, 0, 1, 5, vectorSize, 48);
+        WriteField(bytes, 1, 2, 5, 32, 48 + vectorSize);
+        DbWire.U32(bytes, 48, (uint)projectionFields.Length);
+        var position = 52;
+        var fieldCount = expressions.IsEmpty ? 4 : 5;
+        for (var i = 0; i < projectionFields.Length; i++)
+        {
+            var field = projectionFields[i];
+            var frame = bytes[(position + 4)..];
+            var payload = 16 + fieldCount * 16;
+            WriteField(frame, 0, 1, 1, 4, payload);
+            DbWire.U32(frame, payload, (uint)i); payload += 4;
+            var nameLength = Utf8.GetBytes(field.Name, frame[payload..]);
+            WriteField(frame, 1, 2, 4, nameLength, payload); payload += nameLength;
+            // Keep exactly one binding call per field, after its UTF-8 name.
+            var codec = bindCodec(field.Descriptor);
+            WriteField(frame, 2, 3, 1, 4, payload);
+            DbWire.U32(frame, payload, codec); payload += 4;
+            WriteField(frame, 3, 4, 1, 4, payload);
+            DbWire.U32(frame, payload, field.IsNullable ? 1u : 0u); payload += 4;
+            if (!expressions.IsEmpty)
+            {
+                WriteField(frame, 4, 5, 2, 8, payload);
+                DbWire.U64(frame, payload, expressions[i]); payload += 8;
+            }
+            WriteHeader(frame, 22, payload, fieldCount);
+            DbWire.U32(bytes, position, (uint)payload); position += 4 + payload;
+        }
+        var status = Convert.FromHexString(projection.ShapeHash, bytes.Slice(position, 32), out var consumed, out var written);
+        if (status != System.Buffers.OperationStatus.Done || consumed != 64 || written != 32)
+            Convert.FromHexString(projection.ShapeHash).AsSpan().CopyTo(bytes[position..]);
+    }
+    private static bool TryProjectionSize(ResultField[] fields, bool expressions, out int size)
+    {
+        size = 0;
+        long total = 84; // outer header/table, vector count and shape digest
+        try
+        {
+            foreach (var field in fields)
+            {
+                total += 4L + (expressions ? 116 : 92) + Utf8.GetByteCount(field.Name);
+                if (total > DbWire.MaxEncodedBytes) return false;
+            }
+        }
+        catch (ArgumentException) { return false; }
+        catch (NullReferenceException) { return false; }
+        size = (int)total;
+        return true;
+    }
+    private static void WriteHeader(Span<byte> bytes, ushort kind, int size, int fields)
+    {
+        DbWire.U16(bytes, 0, 1); DbWire.U16(bytes, 2, kind);
+        DbWire.U32(bytes, 4, (uint)size); DbWire.U32(bytes, 8, (uint)fields); DbWire.U32(bytes, 12, 0);
+    }
+    private static void WriteField(Span<byte> bytes, int index, ushort id, ushort type, int length, int start)
+    {
+        var offset = 16 + index * 16;
+        DbWire.U16(bytes, offset, id); DbWire.U16(bytes, offset + 2, type);
+        DbWire.U32(bytes, offset + 4, (uint)length); DbWire.U64(bytes, offset + 8, (ulong)start);
+    }
+    private static byte[] ProjectionFallback<T>(Projection<T> projection, Func<CodecDescriptor, uint> bindCodec, ReadOnlySpan<ulong> expressions)
+    {
+        var projectionFields = projection.Fields;
         using var stream = new MemoryStream(); using var writer = new BinaryWriter(stream, Encoding.UTF8, true);
         writer.Write(checked((uint)projectionFields.Length));
         for (var i = 0; i < projectionFields.Length; i++)

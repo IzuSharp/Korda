@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Runtime.CompilerServices;
 using Microsoft.Win32.SafeHandles;
 using Korda.Data;
 using Korda.Database.Internal;
@@ -33,7 +34,7 @@ internal sealed class NativeFixtureTransport : IStreamTransport
             }
             catch { handle.Dispose(); throw; }
         }, CancellationToken.None);
-    public Task<IStreamBatch> FetchAsync() => Run<IStreamBatch>(() =>
+    public ValueTask<ScopedStreamBatch> FetchAsync() => new(Run<ScopedStreamBatch>(() =>
     {
         Fetches++;
         Throw(Native.Fetch(_handle), _token);
@@ -44,10 +45,10 @@ internal sealed class NativeFixtureTransport : IStreamTransport
             var duplicate = Native.Take(_handle, out var forbidden);
             if (duplicate != 1 || forbidden != 0) throw new InvalidOperationException("Native transfer was not once-only.");
             DuplicateTakeRejections++;
-            return new NativeBatch(owner);
+            return new NativeBatch(owner).Batch;
         }
         catch { owner.Dispose(); throw; }
-    });
+    }));
     public void RequestStop() { lock (_gate) { if (!_handle.IsClosed) Native.Stop(_handle); } }
     public Task<StreamRetirement> JoinAsync() { lock (_gate) return _join ??= JoinCoreAsync(); }
     private async Task<StreamRetirement> JoinCoreAsync()
@@ -88,36 +89,50 @@ internal sealed class NativeFixtureTransport : IStreamTransport
         };
     }
 }
-internal sealed class NativeBatch : IStreamBatch
+// The retained native fixture ABI exposes a copy operation, not a borrowed
+// view. Copy directly into test-owned native storage and retain the original
+// byte permit until scoped release. This fixture cost is not product timing.
+internal sealed class NativeBatch
 {
-    private BatchHandle? _handle;
-    private byte[]? _bytes;
+    internal ScopedStreamBatch Batch { get; }
     internal static long LiveBytes;
     internal static long PeakBytes;
     internal static long CopiedBytes;
     internal unsafe NativeBatch(BatchHandle handle)
     {
-        _handle = handle;
         ulong* info = stackalloc ulong[3]; Native.BatchInfo(handle, info);
         if (info[0] > DbWire.MaxEncodedBytes) throw new InvalidOperationException("Fixture returned an oversized batch.");
-        var copy = new byte[checked((int)info[0])];
-        fixed (byte* data = copy) NativeFixtureTransport.Throw(Native.BatchCopy(handle, data, (nuint)copy.Length));
-        _bytes = copy; End = info[2] != 0;
-        var live = Interlocked.Add(ref LiveBytes, copy.Length);
-        Interlocked.Add(ref CopiedBytes, copy.Length);
+        var length = checked((int)info[0]);
+        var bytes = (byte*)NativeMemory.Alloc((nuint)Math.Max(1, length));
+        if (bytes == null) throw new OutOfMemoryException();
+        GCHandle root = default;
+        try
+        {
+            NativeFixtureTransport.Throw(Native.BatchCopy(handle, bytes, (nuint)length));
+            root = GCHandle.Alloc(new Storage(handle, (nint)bytes, length));
+            Batch = new(&Release, typeof(NativeBatch));
+            Batch.Attach(GCHandle.ToIntPtr(root), (nint)bytes, length, info[2] != 0);
+        }
+        catch
+        {
+            if (root.IsAllocated) root.Free();
+            NativeMemory.Free(bytes);
+            throw;
+        }
+        var live = Interlocked.Add(ref LiveBytes, length);
+        Interlocked.Add(ref CopiedBytes, length);
         long peak;
-        do { peak = Interlocked.Read(ref PeakBytes); if (live <= peak) break; } while (Interlocked.CompareExchange(ref PeakBytes, live, peak) != peak);
+        do { peak = Interlocked.Read(ref PeakBytes); if (live <= peak) break; }
+        while (Interlocked.CompareExchange(ref PeakBytes, live, peak) != peak);
     }
-    public ReadOnlyMemory<byte> Bytes => _bytes ?? throw new ObjectDisposedException(nameof(NativeBatch));
-    public bool End { get; }
-    public void Dispose()
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static unsafe void Release(nint owner)
     {
-        var bytes = Interlocked.Exchange(ref _bytes, null);
-        if (bytes is not null) Interlocked.Add(ref LiveBytes, -bytes.Length);
-        Interlocked.Exchange(ref _handle, null)?.Dispose();
-        GC.SuppressFinalize(this);
+        var root = GCHandle.FromIntPtr(owner); var storage = (Storage)root.Target!;
+        NativeMemory.Free((void*)storage.Bytes); storage.Original.Dispose(); root.Free();
+        Interlocked.Add(ref LiveBytes, -storage.Length);
     }
-    ~NativeBatch() => Dispose();
+    private sealed record Storage(BatchHandle Original, nint Bytes, int Length);
 }
 internal sealed class FixtureHandle : SafeHandleZeroOrMinusOneIsInvalid
 {

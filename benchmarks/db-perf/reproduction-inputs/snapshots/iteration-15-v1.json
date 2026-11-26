@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "task": "DB-Perf-01",
+  "purpose": "Exact iteration15 build/run/analyze helpers, candidate patch and independent verifier. Historical reproduction only, excluded from active product/consumer builds. Before is explicitly reused iteration14 AFTER with original producer/phase, never duplicated as a new measurement.",
+  "originEvidenceIndex": "ledger/evidence/batches/DB-Perf-01/checkpoints/iteration-15-v1/files.json",
+  "inputs": [
+    {
+      "sourcePath": "measurements/pooled-move-v1/build.py",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/af049ef820452d92d16f5bdfed427d522354a92184df6d5543b57053eff30f1e/build.py",
+      "sha256": "af049ef820452d92d16f5bdfed427d522354a92184df6d5543b57053eff30f1e",
+      "bytes": 5428,
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sourcePath": "measurements/pooled-move-v1/candidate.patch",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/6deaef55efdce583aef56fd5b3faedf0ae5d89d1eb6731f6b81ab54f483951bf/candidate.patch",
+      "sha256": "6deaef55efdce583aef56fd5b3faedf0ae5d89d1eb6731f6b81ab54f483951bf",
+      "bytes": 694,
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sourcePath": "measurements/pooled-move-v1/compare.py",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/8f97a6749138f2dff444f0783c46fdce7dec0bbd8eb54607b1a0a4d0442a2503/compare.py",
+      "sha256": "8f97a6749138f2dff444f0783c46fdce7dec0bbd8eb54607b1a0a4d0442a2503",
+      "bytes": 4743,
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sourcePath": "measurements/pooled-move-v1/host-build-v1/source.patch",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/1017c3b8c08a3652dbc6504a860900d450f84515778546159a29b98c05f67e84/source.patch",
+      "sha256": "1017c3b8c08a3652dbc6504a860900d450f84515778546159a29b98c05f67e84",
+      "bytes": 5020,
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sourcePath": "measurements/pooled-move-v1/make_report.py",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/4f500c08045cc4e887fe3f76ce62d9e91f6435edf3661f53b67e9f1231ace014/make_report.py",
+      "sha256": "4f500c08045cc4e887fe3f76ce62d9e91f6435edf3661f53b67e9f1231ace014",
+      "bytes": 12240,
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sourcePath": "measurements/pooled-move-v1/modules-build-v1/source.patch",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/1017c3b8c08a3652dbc6504a860900d450f84515778546159a29b98c05f67e84/source.patch",
+      "sha256": "1017c3b8c08a3652dbc6504a860900d450f84515778546159a29b98c05f67e84",
+      "bytes": 5020,
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sourcePath": "measurements/pooled-move-v1/run_database_suite.py",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/581115cb0cf2b06e51071eb0087f7fa7aa12d8b50451d5e2cab468c4418943cc/run_database_suite.py",
+      "sha256": "581115cb0cf2b06e51071eb0087f7fa7aa12d8b50451d5e2cab468c4418943cc",
+      "bytes": 4788,
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sourcePath": "measurements/pooled-move-v1/run_probe.py",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/b578328507bbab38758c01c293278c708856a16c5b92fe5d27dae1d11e46e3df/run_probe.py",
+      "sha256": "b578328507bbab38758c01c293278c708856a16c5b92fe5d27dae1d11e46e3df",
+      "bytes": 5699,
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sourcePath": "measurements/pooled-move-v1/streaming-build-v1/source.patch",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/1017c3b8c08a3652dbc6504a860900d450f84515778546159a29b98c05f67e84/source.patch",
+      "sha256": "1017c3b8c08a3652dbc6504a860900d450f84515778546159a29b98c05f67e84",
+      "bytes": 5020,
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sourcePath": "measurements/pooled-move-v1/validate.py",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/798258fe0a560e6c44707e2d30ea667971ca765712845b36d66986ad9cfb01d9/validate.py",
+      "sha256": "798258fe0a560e6c44707e2d30ea667971ca765712845b36d66986ad9cfb01d9",
+      "bytes": 7144,
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sourcePath": "measurements/pooled-move-independent-v1/verify.py",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/321d6d240c9211669cb99c2dab87c29d77bdbb4a68a94ee4c8ef8507bfd33f96/verify.py",
+      "sha256": "321d6d240c9211669cb99c2dab87c29d77bdbb4a68a94ee4c8ef8507bfd33f96",
+      "bytes": 11137,
+      "bindingStatus": "pending_harness_commit"
+    }
+  ]
+}

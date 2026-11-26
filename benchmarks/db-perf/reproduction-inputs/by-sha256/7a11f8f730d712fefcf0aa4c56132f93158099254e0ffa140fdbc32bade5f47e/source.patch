@@ -1,0 +1,44 @@
+diff --git a/src/Data.NativeHost/DataSession.cs b/src/Data.NativeHost/DataSession.cs
+index 30b3f35..3d1994f 100644
+--- a/src/Data.NativeHost/DataSession.cs
++++ b/src/Data.NativeHost/DataSession.cs
+@@ -103,7 +103,12 @@ internal async Task<IStreamTransport> OpenPlanStreamAsync(DatabaseOwner plan, Re
+     /// <returns>The native transaction owner.</returns>
+     /// <exception cref="ObjectDisposedException">Admission is closed.</exception>
+     /// <exception cref="DatabaseException">The provider or single-command admission rejects BEGIN.</exception>
+-    public Task<DataTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default) => BeginTransactionAsync(new TransactionOptions(), cancellationToken);
++    public Task<DataTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default)
++    {
++        var record = DefaultTransactionRecord.Bytes; CheckOpen(); Source.Capabilities.Require("db.transactions.v1");
++        if (cancellationToken.IsCancellationRequested) return Task.FromCanceled<DataTransaction>(cancellationToken);
++        return BeginCore(record, null, cancellationToken);
++    }
+     /// <summary>Begins an exact native transaction without weakening unsupported isolation or read-only policy.</summary>
+     /// <param name="options">Immutable isolation, effect and independent commit/cleanup deadline settings.</param>
+     /// <param name="cancellationToken">Controls admission before BEGIN dispatch.</param>
+@@ -117,6 +122,13 @@ public Task<DataTransaction> BeginTransactionAsync(TransactionOptions options, C
+         if (cancellationToken.IsCancellationRequested) return Task.FromCanceled<DataTransaction>(cancellationToken);
+         return BeginCore(record, options.RecoveryKey, cancellationToken);
+     }
++    private static class DefaultTransactionRecord
++    {
++        internal static readonly byte[] Bytes;
++        // Explicit initialization keeps the one default frame lazy and shared.
++        // The native BEGIN factory reads it synchronously and captures values.
++        static DefaultTransactionRecord() => Bytes = HostEncoding.Transaction(new TransactionOptions());
++    }
+     private async Task<DataTransaction> BeginCore(byte[] record, string? recovery, CancellationToken token, BulkSessionLease? bulk = null)
+     {
+         var owner = await Source.Start(() => AdmitOperation(() => HostTransactionTransport.Begin(Owner, record), bulk), operation => NativeHost.TakeOwner(Source.Binding, operation, 3, HostTransactionTransport.TransactionKind), token).ConfigureAwait(false);
+diff --git a/tests/Data.NativeHost/Program.cs b/tests/Data.NativeHost/Program.cs
+index cd5bd40..bc3d64a 100644
+--- a/tests/Data.NativeHost/Program.cs
++++ b/tests/Data.NativeHost/Program.cs
+@@ -12,6 +12,7 @@
+ 
+ if (await SnapshotProbe.RunIfRequested(args)) return;
+ if (await FetchProbe.RunIfRequested(args)) return;
++if (await TransactionDefaultProbe.RunIfRequested(args)) return;
+ Console.WriteLine("snapshot parser oracle inputs=" + SnapshotProbe.Verify());
+ SnapshotProbe.VerifyAllocationBudget();
+ try { await Suite.Run(); } catch (DatabaseException failure) { Console.Error.WriteLine($"kind={failure.Kind} provider={failure.ProviderCode} correlation={failure.CorrelationId}"); throw; }

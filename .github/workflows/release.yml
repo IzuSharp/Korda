@@ -85,13 +85,13 @@ jobs:
         if: steps.current.outputs.verify == 'true'
         run: |
           PYTHONPATH=src/Packaging.Release python3 - <<'PY'
-          import os, time
+          import json, os, time
           from pathlib import Path
           from urllib.error import HTTPError
           from urllib.request import urlopen
           from release import compat, verify_registry
           candidate = Path(os.environ["CANDIDATE"])
-          work = Path(os.environ["RUNNER_TEMP"]) / "registry"
+          work = candidate / "registry-readback"
           work.mkdir()
           policy = compat.read_json("tests/Verification.Compatibility/signature-policy.json")
           pending = list(compat.read_json(candidate / "release.json")["packages"])
@@ -108,7 +108,12 @@ jobs:
                       if error.code == 404:
                           continue
                       raise
-                  verify_registry(candidate / "feed" / filename, work / filename, item, policy, work / name)
+                  verification = verify_registry(candidate / "feed" / filename, work / filename, item, policy, work / name)
+                  (work / (name + ".verification.json")).write_text(json.dumps({
+                      "package": name, "version": version, "download_url": url,
+                      "source_commit": compat.read_json(candidate / "release.json")["source_commit"],
+                      **verification,
+                  }, indent=2) + "\n")
                   print(f"Verified {name} {version}", flush=True)
                   pending.remove(item)
               if pending:
@@ -125,3 +130,15 @@ jobs:
         env:
           VERSION: ${{ inputs.version }}
         run: python3 eng/ci/module_job.py public "$MODULE" artifacts/plan.json "$VERSION"
+      - name: Preserve actual registry bytes and public consumption receipts
+        if: always() && steps.current.outputs.verify == 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: public-consumption-${{ inputs.module }}-${{ inputs.version }}
+          path: |
+            artifacts/publication/release.json
+            artifacts/plan.json
+            artifacts/publication/registry-readback/**
+            artifacts/publication/consumer-evidence/public/**
+          retention-days: 30
+          if-no-files-found: error

@@ -1,0 +1,21 @@
+--- a/src/Data.Streaming/TypedStream.cs
++++ b/src/Data.Streaming/TypedStream.cs
+@@ -1,3 +1,4 @@
++using System.Runtime.CompilerServices;
+ using Korda.Data;
+ 
+ namespace Korda.Database.Internal;
+@@ -177,9 +178,10 @@
+                 if (_moving) throw new DatabaseException("Another MoveNext is active.", DatabaseErrorKind.ConcurrentUse);
+                 _moving = true;
+             }
+-            return new(MoveAsync());
+-        }
+-        private async Task<bool> MoveAsync()
++            return MoveAsync();
++        }
++        [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
++        private async ValueTask<bool> MoveAsync()
+         {
+             try
+             {

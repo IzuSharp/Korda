@@ -1,0 +1,267 @@
+{
+  "schemaVersion": 1,
+  "task": "DB-Perf-01",
+  "enabled": true,
+  "harnessCommit": "9bd6a581f80020521ff342fa2462d47b9edf250f",
+  "before": {
+    "sourceCommit": "771bc77cbd68d3f932b99ed2497c0697bbba5f02",
+    "runId": 45356659607,
+    "providers": {
+      "postgresql": {
+        "version": "0.1.0-preview.3",
+        "artifactId": 14903585207,
+        "artifactZipSha256": "f24a34a23122401816083a53113b6b416d11e6a7c73db6d46bc3c385d5227990",
+        "nupkgSha256": "458c115e12d65ca0719f542ea262aeb3347f5bc3269f99d5ba14f3e36c038e0f",
+        "nativeSha256": "73f725104fb1bee5fc86a9bc371e556ea8358ac3a2d774c4823185e6da8984c6"
+      },
+      "sqlite": {
+        "version": "0.1.0-preview.3",
+        "artifactId": 14902997132,
+        "artifactZipSha256": "c49c4a971f8562383319323cd28e02c4aed38471bce877831e9dc26fbb54b8a5",
+        "nupkgSha256": "584d46aa5b08b1e0af46a454ac9f41704c28fe502884017e856ad1b66ca53ef5",
+        "nativeSha256": "970a8868290cec37c353bbd8e48bb7bf4ef18cfa1da9e495fc06d7eb08d71d40"
+      }
+    }
+  },
+  "after": {
+    "sourceCommit": "7f67b43c0e4ab08d1552c3b5a522e2669d73a604",
+    "runId": 45564003099,
+    "providers": {
+      "postgresql": {
+        "version": "0.1.0-ci.1",
+        "artifactId": 14999585949,
+        "artifactZipSha256": "030beb427f04ec9c948b1d5a8815b162b88a0ab4922f6ad79ab427f8d47da908",
+        "nupkgSha256": "5dba9b52245de69d3765fa8ea5a5a025e0420d76160db5d526726689690ef7f4",
+        "nativeSha256": "73f725104fb1bee5fc86a9bc371e556ea8358ac3a2d774c4823185e6da8984c6"
+      },
+      "sqlite": {
+        "version": "0.1.0-ci.1",
+        "artifactId": 14999156844,
+        "artifactZipSha256": "888ac32556d0860aaa6b5874aacd24baf6ac33ac4f250f7dec57c166e1d19643",
+        "nupkgSha256": "8c8083fcf7324a4a02277c63d10066505d6e67c9ac4827de3f5a26d1674bbe75",
+        "nativeSha256": "970a8868290cec37c353bbd8e48bb7bf4ef18cfa1da9e495fc06d7eb08d71d40"
+      }
+    }
+  },
+  "workload": {
+    "path": "benchmarks/db-perf/workload/queries-v3.json",
+    "sha256": "76443b1c88bf011f57b3c9819dc85a8bedb5376121d3ef2670304f96b6d2aae2",
+    "cases": [
+      "numeric",
+      "text",
+      "money",
+      "json",
+      "wide",
+      "optional-filter",
+      "range",
+      "left-join",
+      "inner-join",
+      "null-notes",
+      "literal-note",
+      "customer-totals",
+      "product-totals",
+      "empty-sum",
+      "cursor",
+      "offset",
+      "exists",
+      "in-subquery",
+      "cte",
+      "window",
+      "union-all",
+      "union",
+      "intersect",
+      "except",
+      "running-total",
+      "three-join",
+      "anti-association",
+      "nullable-order",
+      "raw-sql",
+      "related",
+      "tx-commit",
+      "tx-rollback",
+      "partial-update",
+      "stale-conflict",
+      "early-stop"
+    ],
+    "mixedWriteCaseIds": [
+      "tx-commit",
+      "tx-rollback",
+      "partial-update",
+      "stale-conflict"
+    ]
+  },
+  "shortQueries": {
+    "cases": [
+      "numeric",
+      "text",
+      "money",
+      "json",
+      "wide"
+    ],
+    "constructionModes": [
+      "prepared",
+      "dynamic"
+    ],
+    "concurrency": 1,
+    "seconds": 15
+  },
+  "heavyWorkload": {
+    "id": "wide8192",
+    "path": "benchmarks/db-perf/workload/large-stream-8192-v1.json",
+    "sha256": "75d5643394edae57df822a40b7baa27165f2dde920b3284e3a80711d32743fb2",
+    "cases": [
+      "wide"
+    ],
+    "seconds": 15,
+    "concurrency": [
+      1,
+      4
+    ],
+    "warmupOperations": 8
+  },
+  "diagnostics": {
+    "sameProcessRecovery": {
+      "seconds": 5,
+      "overloadSeconds": 2,
+      "overloadRate": 1000000
+    },
+    "nativeAllocation": {
+      "seconds": 3,
+      "concurrency": [
+        1,
+        4
+      ],
+      "tableCapacity": 1048576,
+      "routes": [
+        "direct_cpp",
+        "korda_before",
+        "korda_after",
+        "independent_csharp_orm"
+      ]
+    },
+    "queryPlans": {
+      "warmupOperations": 350,
+      "operations": 35,
+      "maximumCommandSeconds": 30,
+      "constructionMode": "prepared"
+    }
+  },
+  "admission": {
+    "postgresCpuAccounting": "task-owned-cgroup-v2",
+    "clientCpus": [
+      0,
+      1
+    ],
+    "serverCpus": [
+      2
+    ],
+    "observerCpus": [
+      3
+    ],
+    "idleSeconds": 10,
+    "maximumStealFraction": 0.005,
+    "maximumIdleBusyFraction": 0.15,
+    "maximumBeforeCv": 0.1,
+    "minimumFreeDiskBytes": 2147483648,
+    "maximumIntervalStealFraction": 0.05
+  },
+  "timeBudget": {
+    "preflightStepMinutes": 85,
+    "controllerMinutes": 340,
+    "jobMinutes": 360
+  },
+  "measurement": {
+    "secondsPerSegment": 1800,
+    "order": [
+      "sqlite/direct_cpp",
+      "sqlite/korda_before",
+      "sqlite/independent_csharp_orm",
+      "sqlite/korda_after",
+      "postgresql/direct_cpp",
+      "postgresql/korda_before",
+      "postgresql/independent_csharp_orm",
+      "postgresql/korda_after"
+    ],
+    "constructionMode": "prepared",
+    "concurrency": 4,
+    "capacityConcurrency": [
+      1,
+      2,
+      4,
+      8,
+      16
+    ],
+    "queuePerWorker": 4,
+    "warmupOperations": 64,
+    "idleSeconds": 5,
+    "sampleSeconds": 0.5,
+    "noiseReplicates": 3,
+    "calibrationSeconds": 10,
+    "capacitySeconds": 15,
+    "fixedValidationSeconds": 15,
+    "sustainableFraction": 0.6,
+    "maximumErrorAndRejectionRate": 0.001,
+    "maximumP99Microseconds": 100000,
+    "scheduledRateFractions": [
+      0.5,
+      0.75,
+      1.0,
+      1.25
+    ],
+    "scheduledCapacitySeconds": 10,
+    "capacityRefinementSteps": 3,
+    "capacityRefinementSeconds": 5,
+    "capacityRefinementMaximumRelativeGap": 0.05,
+    "maximumAttemptsPerStep": 2
+  },
+  "providerExtraArguments": {
+    "sqlite": {
+      "independent_csharp_orm": [
+        "--native-library",
+        "{sqliteLibrary}"
+      ]
+    }
+  },
+  "activationNote": "Start a separate complete final-candidate matrix for the reviewed production including the dynamic empty-parameter frame cache, using unchanged campaign harness 9bd6a581f80020521ff342fa2462d47b9edf250f and the exact successful normal-CI package producer 7f67b43c0e4ab08d1552c3b5a522e2669d73a604 from run 45564003099. That successful CI head is 1cacd91d8f200e608deee1a658b04e1c5c3bf067; its only change after 9bd is two invalid test fixture parameter names, with no production or benchmark change. Failed run 45562204270 and its package producer d1c3985 remain separately recorded and are not campaign inputs. The original completed campaign 45461269267 remains bound to its original after producer 3d5ba3f and is not relabeled or mixed into this matrix. Fixed main 771bc77, both original before packages, all 35 cases, query/result contracts, native preparation layers, CPU partitions, durability, noise and admission thresholds, capacity/SLO gates, finite time budgets, and all eight sequential 1800-second segments remain unchanged. Before/native/independent-ORM-only calibration freezes this new VM common offered rates; the after route cannot lower them. A single campaign job now prepares, verifies, becomes quiescent, admits and measures on the same VM with exact ubuntu24 image 20261116.376.1. The pre-build failures in run 45553940210 and the prepare/measure image mismatch in run 45555341689 retain zero measurement credit. No admission guard or eight-segment requirement is relaxed. The historical completed matrix on 20261116.376.1 remains separate. The first same-VM activation 45567634038 (head 0e8b591) received actual image 20261116.376.1 and failed its first 133.1 guard before checkout, preparation or measurement. This new activation pins that actually observed 376.1 image; both exact guards, same-boot checks and all other admission requirements remain unchanged. The failed activation retains zero measurement credit.",
+  "nativeBaseline": {
+    "physicalPrepare": "reuse",
+    "protocolConfirmation": "drain-only"
+  },
+  "nativeLayers": [
+    {
+      "physicalPrepare": "per-operation",
+      "protocolConfirmation": "drain-only"
+    },
+    {
+      "physicalPrepare": "per-operation",
+      "protocolConfirmation": "product"
+    },
+    {
+      "physicalPrepare": "reuse",
+      "protocolConfirmation": "product"
+    }
+  ],
+  "timeBudgetEstimate": {
+    "configuredPreflightSecondsByLayer": {
+      "idleAdmission": 10,
+      "noise": 390,
+      "nativeLayers": 120,
+      "closedLoopRamp": 850,
+      "scheduledGrid": 1040,
+      "boundedMidpointRefinement": 540,
+      "fixedRateValidation": 170,
+      "shortProjections": 340,
+      "heavyStream": 340,
+      "sameProcessRecovery": 136,
+      "nativeAllocationProfiles": 148,
+      "queryPlanCommandTimeouts": 240
+    },
+    "maximumConfiguredPreflightSeconds": 4324,
+    "configuredLongAndIdleSeconds": 14450,
+    "configuredTotalSeconds": 18774,
+    "preflightOverheadAllowanceSeconds": 776,
+    "controllerOverheadAllowanceSeconds": 1626,
+    "jobBeyondControllerSeconds": 1200,
+    "scope": "one attempt per step, up to two distinct scheduled concurrencies and every bounded refinement executes; reviewed retries consume the remaining finite budget and may prevent completion; timing lanes include configured measurement and idle; separate query-plan diagnostics include their complete consumer-command caps, including consumer warmup; other initialization, warmup, startup, drain, hashing and artifact transfer remain additional observed time"
+  }
+}

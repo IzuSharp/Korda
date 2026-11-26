@@ -8,6 +8,7 @@
 #include <iostream>
 #include <semaphore>
 #include <stdexcept>
+#include <system_error>
 
 namespace nw
 {
@@ -117,9 +118,13 @@ struct Scope
         probe->proceed.release(4);
         if (tx)
             tx->join();
-        session->request_close();
-        session->join();
-        source->join();
+        if (session)
+        {
+            session->request_close();
+            session->join();
+        }
+        if (source)
+            source->join();
     }
     void finish(bool commit, std::shared_ptr<Cancel> cancel = std::make_shared<Cancel>())
     {
@@ -452,6 +457,229 @@ void final_owner()
     await([&] { return weak.expired(); });
     check(weak.expired(), "cleanup eventually releases final transaction owner");
 }
+
+struct EpilogueGate
+{
+    std::binary_semaphore entered{0}, proceed{0};
+    std::atomic<bool> released{false}, timed_out{false};
+    void enter()
+    {
+        entered.release();
+        if (!proceed.try_acquire_for(std::chrono::seconds(3)))
+            timed_out.store(true);
+    }
+    void wait()
+    {
+        check(entered.try_acquire_for(std::chrono::seconds(3)), "transaction reached its exact worker epilogue");
+    }
+    void release()
+    {
+        if (!released.exchange(true))
+            proceed.release();
+    }
+};
+struct ReleaseEpilogue
+{
+    std::shared_ptr<EpilogueGate> gate;
+    ~ReleaseEpilogue()
+    {
+        gate->release();
+    }
+};
+bool released_receipt(const std::shared_ptr<Transaction>& tx)
+{
+    const auto bytes = tx->snapshot();
+    return Fields::parse(bytes, 7,
+                         {{1, 1, true},
+                          {2, 1, true},
+                          {3, 1, true},
+                          {4, 1, true},
+                          {5, 1, true},
+                          {6, 1, true},
+                          {7, 1, true},
+                          {8, 2, true},
+                          {9, 4, false}})
+        .boolean(6);
+}
+void hold_epilogue(const std::shared_ptr<Transaction>& tx, const std::shared_ptr<EpilogueGate>& gate, bool deadline)
+{
+    auto hook = [gate] { gate->enter(); };
+    if (deadline)
+        tx->test_after_deadline_worker = std::move(hook);
+    else
+        tx->test_after_finish_worker = std::move(hook);
+}
+void transaction_epilogue_join()
+{
+    for (const bool deadline : {false, true})
+    {
+        Scope scope;
+        auto gate = std::make_shared<EpilogueGate>();
+        ReleaseEpilogue release{gate};
+        hold_epilogue(scope.tx, gate, deadline);
+        scope.finish(true);
+        gate->wait();
+        {
+            std::lock_guard lock(scope.tx->mutex);
+            check(scope.tx->retired && scope.tx->outcome == 1 && scope.tx->cleanup == 2,
+                  "worker epilogue changed confirmed transaction cleanup");
+        }
+        check(!released_receipt(scope.tx), "transaction receipt released a retained worker accessor");
+        (void)scope.tx->wait_close(0);
+        check(!released_receipt(scope.tx), "bounded close inferred release from provider cleanup alone");
+        std::atomic<bool> waiting{false};
+        scope.tx->test_before_join_wait = [&] { waiting.store(true); };
+        auto joined = std::async(std::launch::async, [tx = scope.tx] { tx->join(); });
+        await([&] { return waiting.load(); });
+        check(joined.wait_for(std::chrono::milliseconds(20)) != std::future_status::ready,
+              "transaction join returned while its exact worker epilogue was held");
+        gate->release();
+        check(joined.wait_for(std::chrono::seconds(3)) == std::future_status::ready,
+              "transaction worker ticket lost completion");
+        joined.get();
+        check(!gate->timed_out && released_receipt(scope.tx), "transaction ticket did not publish final release");
+        scope.tx->test_before_join_wait = {};
+    }
+}
+void parent_epilogue_join()
+{
+    for (const bool deadline : {false, true})
+    {
+        Scope scope;
+        auto gate = std::make_shared<EpilogueGate>();
+        ReleaseEpilogue release{gate};
+        hold_epilogue(scope.tx, gate, deadline);
+        scope.finish(true);
+        gate->wait();
+        auto source = std::move(scope.source);
+        auto session = std::move(scope.session);
+        auto tx = std::move(scope.tx);
+        std::weak_ptr<Transaction> weak_tx = tx;
+        std::weak_ptr<Session> weak_session = session;
+        std::weak_ptr<Source> weak_source = source;
+        tx.reset();
+        session->request_close();
+        session->join();
+        session.reset();
+        std::atomic<bool> waiting{false};
+        source->test_before_transaction_wait = [&] { waiting.store(true); };
+        // The explicit join caller itself owns Source throughout its wait.
+        auto joined = std::async(std::launch::async, [source] { source->join(); });
+        await([&] { return waiting.load(); });
+        check(!source->retired && !weak_tx.expired() && !weak_session.expired(),
+              "source join dropped a retained transaction descendant");
+        check(joined.wait_for(std::chrono::milliseconds(20)) != std::future_status::ready,
+              "source join ignored a detached transaction worker");
+        source.reset();
+        gate->release();
+        check(joined.wait_for(std::chrono::seconds(3)) == std::future_status::ready,
+              "source descendant fence lost completion");
+        joined.get();
+        joined = {};
+        check(!gate->timed_out && weak_tx.expired() && weak_session.expired() && weak_source.expired(),
+              "parent join left transaction or parent references after returning");
+        check(source_count == 0 && session_count == 0, "parent join did not release actual native owners");
+    }
+}
+void last_source_destruction()
+{
+    for (const bool deadline : {false, true})
+    {
+        Scope scope;
+        auto gate = std::make_shared<EpilogueGate>();
+        ReleaseEpilogue release{gate};
+        hold_epilogue(scope.tx, gate, deadline);
+        scope.finish(true);
+        gate->wait();
+        auto source = std::move(scope.source);
+        auto session = std::move(scope.session);
+        auto tx = std::move(scope.tx);
+        auto parent_ticket = source->transaction_workers;
+        source->request_close();
+        session->join();
+        source->admission_thread.join();
+        source->workers.stop();
+        source->controls.stop();
+        tx.reset();
+        session.reset();
+        source.reset();
+        check(source_count == 1 && session_count == 1 && !parent_ticket->done(),
+              "test did not retain exactly the epilogue's last parent chain");
+        gate->release();
+        await([&] { return parent_ticket->done(); });
+        check(!gate->timed_out && source_count == 0 && session_count == 0,
+              "last worker reference self-waited in Source destruction");
+    }
+}
+void worker_launch_compensation()
+{
+    for (const std::uint32_t failed_index : {0u, 1u})
+        for (const bool implicit_close : {false, true})
+        {
+            Scope scope;
+            scope.tx->test_before_worker_start = [failed_index](std::uint32_t index)
+            {
+                if (index == failed_index)
+                    throw std::system_error(std::make_error_code(std::errc::resource_unavailable_try_again));
+            };
+            bool failed = false;
+            try
+            {
+                if (implicit_close)
+                    scope.tx->request_close();
+                else
+                    scope.finish(true);
+            }
+            catch (const std::system_error&)
+            {
+                failed = true;
+            }
+            check(failed, "controlled thread creation failure was not propagated");
+            await([&] { return scope.source->transaction_workers->done(); });
+            {
+                std::lock_guard lock(scope.tx->mutex);
+                check(!scope.tx->finishing && !scope.tx->driver_active && !scope.tx->attempted && scope.tx->state == 0,
+                      "failed worker launch published transaction finish state");
+            }
+            check(!scope.session->active && scope.probe->commits == 0 && scope.probe->rollbacks == 0,
+                  "failed worker launch retained admission or executed provider SQL");
+            scope.tx->test_before_worker_start = {};
+            if (!implicit_close)
+                scope.finish(true);
+            scope.tx->join();
+            check(released_receipt(scope.tx) && scope.tx->outcome == (implicit_close ? 2u : 1u),
+                  "transaction could not recover from a compensated worker launch");
+        }
+}
+void deadline_waits_for_dispatch()
+{
+    Scope scope(1'000);
+    scope.probe->block_commit = true;
+    auto before_dispatch = std::make_shared<EpilogueGate>();
+    std::future<void> work;
+    ReleaseEpilogue release{before_dispatch};
+    scope.tx->test_before_finish_dispatch = [before_dispatch] { before_dispatch->enter(); };
+    auto command = scope.session->admit(true);
+    work = std::async(std::launch::async,
+                      [tx = scope.tx, command] { (void)tx->finish(true, std::make_shared<Cancel>(), command); });
+    before_dispatch->wait();
+    check(work.wait_for(std::chrono::milliseconds(20)) != std::future_status::ready,
+          "deadline completed primary result before the original dispatch boundary");
+    {
+        std::lock_guard lock(scope.tx->mutex);
+        check(Clock::now() >= scope.tx->phase_deadline && !scope.tx->primary_ready && scope.tx->outcome == 0 &&
+                  !scope.tx->deadline_exceeded && !command->dispatched,
+              "undispatched finish published deadline Unknown");
+    }
+    before_dispatch->release();
+    check(work.wait_for(std::chrono::seconds(3)) == std::future_status::ready,
+          "deadline did not start after its dispatch permission");
+    check(reject([&] { work.get(); }).code == 9, "dispatched blocked commit did not report deadline Unknown");
+    scope.probe->proceed.release();
+    scope.tx->join();
+    check(!before_dispatch->timed_out && scope.tx->outcome == 3 && scope.tx->retired,
+          "late commit changed the published Unknown outcome");
+}
 } // namespace
 int main()
 {
@@ -473,6 +701,11 @@ int main()
         stale_owner();
         capability_preflight();
         final_owner();
+        transaction_epilogue_join();
+        parent_epilogue_join();
+        last_source_destruction();
+        worker_launch_compensation();
+        deadline_waits_for_dispatch();
         await([] { return source_count == 0 && session_count == 0; });
         check(source_count == 0 && session_count == 0, "all transaction parent owner counters returned");
         std::cout << "PASS transaction lifecycle: 13 retained families, " << checks << " checks\n";

@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 // B03's retained fourteen scenario groups, using the real C++ provider and Host.
 // This synchronous test bridge and its SQLite fault hooks are never packaged.
+#include "../parameter_test_support.hpp"
+#include "../provider_test_support.hpp"
 #include "nw/host.hpp"
 #include "support.hpp"
 
@@ -27,6 +29,7 @@ std::uint64_t module_identity()
 namespace
 {
 using namespace nw;
+using test::decode_parameters;
 using namespace std::chrono_literals;
 std::atomic<std::uint32_t> runtimes{0};
 std::atomic<std::size_t> assertions{0};
@@ -148,7 +151,7 @@ std::shared_ptr<SqlPlan> plan(const std::shared_ptr<Source>& source, std::string
     value->result_kind = rows ? 3 : 0;
     value->timeout_ns = WAIT_NS;
     value->expectation = {1, Profile::Sqlite, {}, 0, 0, {}, 1};
-    value->parameters = Batch::encode(value->expectation, 1, {});
+    value->capture_parameters(Batch::encode(value->expectation, 1, {}));
     if (rows)
     {
         auto projection = std::make_shared<Projection>(
@@ -285,12 +288,12 @@ void codecs(const std::filesystem::path& file)
     const auto encoded = Batch::encode(expected, 1, {value, std::nullopt});
     auto parameters = decode_parameters(encoded, expected, 4096, MAX_BYTES, 65536);
     auto rows = session->connection->query("SELECT ?1 AS number, ?2 AS optional", parameters, call());
-    auto row = rows->next({{3, {}, false}, {5, {}, true}}, 1024, call());
+    auto row = test::next_row(*rows, Profile::Sqlite, {{3, {}, false}, {5, {}, true}}, 1024, call());
     check(row && (*row)[0] == std::optional<Bytes>(value) && !(*row)[1], "int64 precision and nullable text");
-    check(!rows->next({{3, {}, false}, {5, {}, true}}, 1024, call()), "typed query EOF");
+    check(!test::next_row(*rows, Profile::Sqlite, {{3, {}, false}, {5, {}, true}}, 1024, call()), "typed query EOF");
     rows->close();
     auto null_row = session->connection->query("SELECT NULL", {}, call());
-    check(rejects([&] { (void)null_row->next({{3, {}, false}}, 1024, call()); }).code == 3,
+    check(rejects([&] { (void)test::next_row(*null_row, Profile::Sqlite, {{3, {}, false}}, 1024, call()); }).code == 3,
           "NULL cannot materialize a nonnullable scalar");
     null_row->close();
     auto wrong = expected;
@@ -298,7 +301,8 @@ void codecs(const std::filesystem::path& file)
     (void)rejects([&] { (void)decode_parameters(encoded, wrong, 4096, MAX_BYTES, 65536); });
     check(!session->active.load(), "no admitted command retained after codecs");
 }
-void savepoints(const std::filesystem::path& file)
+void savepoints(const std::filesystem::path& file,
+                const std::function<void(const std::shared_ptr<Transaction>&)>& configure = {})
 {
     Scope scope(configuration(file.string()));
     auto session = scope.open();
@@ -306,6 +310,8 @@ void savepoints(const std::filesystem::path& file)
     execute(session, "CREATE TABLE parent(id INTEGER PRIMARY KEY)");
     execute(session, "CREATE TABLE child(id INTEGER REFERENCES parent(id))");
     auto tx = begin(session);
+    if (configure)
+        configure(tx);
     auto point = tx->create_savepoint(token(), session->admit(true));
     (void)rejects([&] { execute(session, "INSERT INTO child VALUES (9)"); });
     check(!tx->active(), "constraint failure closes ordinary transaction admission");
@@ -361,6 +367,37 @@ struct ReleaseGate
         gate->release();
     }
 };
+void savepoint_worker_epilogues(const std::filesystem::path& root)
+{
+    for (const bool deadline : {false, true})
+    {
+        auto gate = std::make_shared<Gate>();
+        std::future<void> work;
+        ReleaseGate release{gate};
+        const auto file = root / (deadline ? "case-4-deadline-epilogue.db" : "case-4-finish-epilogue.db");
+        work = std::async(std::launch::async,
+                          [file, gate, deadline]
+                          {
+                              savepoints(file,
+                                         [gate, deadline](const auto& tx)
+                                         {
+                                             auto hook = [gate] { gate->enter(); };
+                                             if (deadline)
+                                                 tx->test_after_deadline_worker = std::move(hook);
+                                             else
+                                                 tx->test_after_finish_worker = std::move(hook);
+                                         });
+                          });
+        gate->wait();
+        check(work.wait_for(20ms) != std::future_status::ready,
+              "case 4 returned before its transaction worker released the last references");
+        gate->release();
+        joined(work);
+        check(!gate->timed_out && source_count == 0 && session_count == 0 && cursor_count == 0 && buffer_count == 0 &&
+                  operation_count == 0,
+              "case 4 worker completion did not release every native owner");
+    }
+}
 sqlite3* handle(const std::shared_ptr<Session>& session)
 {
     auto* result = static_cast<sqlite3*>(session->connection->test_sqlite_handle());
@@ -409,18 +446,19 @@ void cancellation(const std::filesystem::path& file)
         delete comparison;
     check(status == SQLITE_OK, "actual SQLite collation installed");
     auto canceled = token();
-    auto worker =
-        std::async(std::launch::async,
-                   [&]
-                   {
-                       auto rows = session->connection->query(
-                           "WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM n WHERE "
-                           "x<100000000 AND CAST(x AS TEXT) COLLATE b03_worker_gate != '') SELECT sum(x) FROM n",
-                           {}, call(canceled));
-                       auto error = rejects([&] { (void)rows->next({{3, {}, false}}, 1024, call(canceled)); });
-                       rows->close();
-                       return error;
-                   });
+    auto worker = std::async(
+        std::launch::async,
+        [&]
+        {
+            auto rows = session->connection->query(
+                "WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x+1 FROM n WHERE "
+                "x<100000000 AND CAST(x AS TEXT) COLLATE b03_worker_gate != '') SELECT sum(x) FROM n",
+                {}, call(canceled));
+            auto error =
+                rejects([&] { (void)test::next_row(*rows, Profile::Sqlite, {{3, {}, false}}, 1024, call(canceled)); });
+            rows->close();
+            return error;
+        });
     ReleaseGate release{gate};
     gate->wait();
     canceled->request();
@@ -787,6 +825,7 @@ void run_suite(const std::filesystem::path& root)
                 break;
             case 4:
                 savepoints(file);
+                savepoint_worker_epilogues(root);
                 break;
             case 5:
                 cancellation(file);

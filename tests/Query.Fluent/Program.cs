@@ -1,5 +1,5 @@
 using System.Runtime.CompilerServices;
-using System.Diagnostics;
+using System.Buffers.Binary;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -16,7 +16,6 @@ internal static class Suite
 {
     private static int _assertions, _retirements;
     private static readonly List<string> Completed = [];
-    private static readonly List<CompositionCost> Costs = [];
     internal static void Check(bool value, string message) { _assertions++; if (!value) throw new InvalidOperationException(message); }
     internal static T Throws<T>(Action action) where T : Exception
     { try { action(); } catch (T error) { _assertions++; return error; } throw new InvalidOperationException("Expected " + typeof(T).Name); }
@@ -45,7 +44,7 @@ internal static class Suite
         }
         File.Delete(sqliteFile);
         Check(hashes.SequenceEqual(nativeFiles.Select(f => Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(f))))), "New C# DTOs and ordinary expressions reuse unchanged native assets");
-        Directory.CreateDirectory(args[0]); File.WriteAllText(Path.Combine(args[0], "result.json"), JsonSerializer.Serialize(new Receipt(!RuntimeFeature.IsDynamicCodeSupported, _assertions, _retirements, Completed, hashes, Costs), ReceiptJson.Default.Receipt));
+        Directory.CreateDirectory(args[0]); File.WriteAllText(Path.Combine(args[0], "result.json"), JsonSerializer.Serialize(new Receipt(!RuntimeFeature.IsDynamicCodeSupported, _assertions, _retirements, Completed, hashes), ReceiptJson.Default.Receipt));
         Console.WriteLine($"PASS B13 actual two-provider Fluent: {_assertions} assertions; AOT={!RuntimeFeature.IsDynamicCodeSupported}");
     }
     private static async Task Provider(DataSession session, Diagnostic diagnostic)
@@ -96,6 +95,18 @@ internal static class Suite
             Throws<InvalidOperationException>(() => expiredCallback.Left(Models.Id));
             Throws<InvalidOperationException>(() => expiredCallback.Right(Models.ParentId));
             Check((await q.Select(q.Column(alias, Models.ChildId)).ToListAsync()).SequenceEqual([10L]), "JOIN abort leaves query usable");
+        }
+        using (var subquery = Q())
+        using (var outer = Q())
+        {
+            Throws<MappingFailure>(() => subquery.LeftJoin(Models.Children, "deep_abort", on =>
+            {
+                var predicate = on.Right(Models.ParentId).IsNull();
+                for (var depth = 2; depth < session.Source.Limits.MaxQueryDepth; depth++) predicate = predicate.Not();
+                throw new MappingFailure();
+            }));
+            var selected = subquery.SelectAll();
+            Check(await outer.Where(outer.Exists(selected)).CountAsync() == 3, "Aborted deep JOIN tokens do not inflate the imported snapshot depth");
         }
         await Done("joins-nullability-abort");
         using (var q = Q())
@@ -188,7 +199,93 @@ internal static class Suite
                 Check(parallel[0].Count == 3 && parallel[1].Single().Id == 2, "Concurrent immutable plan executions use independent sessions and values");
             }
             Throws<ArgumentException>(() => prepared.ToListAsync(session));
-            using var second = Q(); var extra = second.Parameter("extra", Codecs.Int64); Throws<ArgumentException>(() => prepared.ToListAsync(session, values.Set(extra, 0L)));
+            using var second = Q(); var extra = second.Parameter("extra", Codecs.Int64);
+            Throws<ArgumentException>(() => prepared.AsAsyncEnumerable(session, new QueryParameters().Set(extra, 0L)));
+            Throws<ArgumentException>(() => prepared.ToListAsync(session, values.Set(extra, 0L)));
+            var foreignFile = Path.Combine(Path.GetTempPath(), "nw-b13-foreign-" + Guid.NewGuid().ToString("N") + ".db");
+            try
+            {
+                await using var foreignSource = SqliteDataSource.Create(foreignFile);
+                await using var foreignSession = await foreignSource.OpenSessionAsync();
+                using var foreignQuery = foreignSession.From(Models.People);
+                var foreign = foreignQuery.Parameter("minimum", Codecs.Int64);
+                Throws<ArgumentException>(() => prepared.AsAsyncEnumerable(session, new QueryParameters().Set(foreign, 1L)));
+                Throws<ArgumentException>(() => prepared.AsAsyncEnumerable(foreignSession, new QueryParameters().Set(minimum, 1L)));
+            }
+            finally { File.Delete(foreignFile); }
+        }
+        using (var query = Q())
+        {
+            var nullable = query.Parameter("nullable", Codecs.Nullable(Codecs.Int64));
+            using var prepared = query.OrderBy(Models.Id).Take(1).Select(query.ParameterValue(nullable)).Prepare();
+            var values = new QueryParameters().Set(nullable, (long?)null);
+            var captured = prepared.AsAsyncEnumerable(session, values); values.Set(nullable, 7L);
+            var rows = new List<long?>(); await foreach (var row in captured) rows.Add(row);
+            Check(rows.Count == 1 && rows[0] is null && (await prepared.ToListAsync(session, values)).Single() == 7L,
+                "Prepared nullable values snapshot before enumeration and preserve SQL NULL");
+        }
+        using (var query = Q())
+        {
+            var number = query.Parameter("number", Codecs.Int64);
+            var initialValues = new QueryParameters().Set(number, 11L);
+            _ = query.Context.Values(initialValues);
+            var text = query.Parameter("text", Codecs.NullableReference(Codecs.String));
+            var bytes = query.Parameter("bytes", Codecs.Bytes);
+            Throws<ArgumentException>(() => query.Context.Values(initialValues));
+
+            var builder = query.Projection<ParameterRow>();
+            var numberColumn = builder.Add(query.ParameterValue(number), "number");
+            var textColumn = builder.Add(query.ParameterValue(text), "text");
+            var bytesColumn = builder.Add(query.ParameterValue(bytes), "bytes");
+            var projection = builder.Build(row => new(row.Get(numberColumn), row.Get(textColumn), row.Get(bytesColumn)));
+            using var prepared = query.OrderBy(Models.Id).Take(1).Select(projection).Prepare();
+            byte[] input = [1, 2, 3];
+            var values = new QueryParameters().Set(bytes, input).Set(text, (string?)null).Set(number, 21L);
+            input[0] = 99;
+            var captured = prepared.AsAsyncEnumerable(session, values);
+            values.Set(number, 22L).Set(text, "changed 🦀").Set(bytes, []);
+            var before = new List<ParameterRow>(); await foreach (var row in captured) before.Add(row);
+            var after = (await prepared.ToListAsync(session, values)).Single();
+            Check(before.Count == 1 && before[0].Number == 21 && before[0].Text is null && before[0].Bytes.SequenceEqual(new byte[] { 1, 2, 3 }),
+                "Compiled parameter ordinals preserve reverse insertion, Set ownership and the complete admission snapshot");
+            Check(after.Number == 22 && after.Text == "changed 🦀" && after.Bytes.Length == 0,
+                "A later execution sees new parameter values without collapsing empty bytes to SQL NULL");
+        }
+        using (var query = Q())
+        {
+            using var prepared = query.OrderBy(Models.Id).Select(query.Column(Models.Id)).Prepare();
+            query.Dispose();
+            await using (var a = await session.Source.OpenSessionAsync())
+            await using (var b = await session.Source.OpenSessionAsync())
+            {
+                using var rendezvous = new Barrier(3);
+                var first = Task.Factory.StartNew(() => { rendezvous.SignalAndWait(); return prepared.AsAsyncEnumerable(a); },
+                    CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+                var second = Task.Factory.StartNew(() => { rendezvous.SignalAndWait(); return prepared.AsAsyncEnumerable(b, new QueryParameters()); },
+                    CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+                rendezvous.SignalAndWait(); var streams = await Task.WhenAll(first, second);
+                static async Task<List<long>> Consume(IAsyncEnumerable<long> stream)
+                { var result = new List<long>(); await foreach (var item in stream) result.Add(item); return result; }
+                var parallel = await Task.WhenAll(Consume(streams[0]), Consume(streams[1]));
+                Check(parallel.All(rows => rows.SequenceEqual([0L, 1L, 2L])), "Concurrent parameterless executions retain independent cursors");
+            }
+            using var parameterQuery = Q(); var extra = parameterQuery.Parameter("extra", Codecs.Int64);
+            var supplied = new QueryParameters(); var emptySnapshot = prepared.AsAsyncEnumerable(session, supplied);
+            supplied.Set(extra, 1L);
+            Throws<ArgumentException>(() => prepared.AsAsyncEnumerable(session, supplied));
+            var emptyRows = new List<long>(); await foreach (var row in emptySnapshot) emptyRows.Add(row);
+            Check(emptyRows.SequenceEqual([0L, 1L, 2L]), "Later extra parameters do not mutate an already captured empty execution");
+            var unstarted = prepared.AsAsyncEnumerable(session);
+            await using (var accepted = prepared.AsAsyncEnumerable(session).GetAsyncEnumerator())
+            {
+                Check(await accepted.MoveNextAsync() && accepted.Current == 0L, "Prepared execution admitted before plan disposal");
+                prepared.Dispose();
+                var remaining = new List<long>(); while (await accepted.MoveNextAsync()) remaining.Add(accepted.Current);
+                Check(remaining.SequenceEqual([1L, 2L]), "Disposing a prepared plan preserves its accepted cursor");
+            }
+            Throws<ObjectDisposedException>(() => prepared.AsAsyncEnumerable(session));
+            await ThrowsAsync<ObjectDisposedException>(async () =>
+            { await using var reader = unstarted.GetAsyncEnumerator(); await reader.MoveNextAsync(); });
         }
         using (var q = Q())
         using (var other = Q())
@@ -198,6 +295,10 @@ internal static class Suite
             Throws<ArgumentException>(() => q.Select(q.ParameterValue(one)).Combine(right));
         }
         await Done("prepared-isolation");
+        await CheckPreparedStreamFailureTiming(session, diagnostic);
+        await Done("prepared-stream-validation-timing");
+        CheckPreparedConstruction(session, diagnostic);
+        await Done("prepared-construction-lazy-admission");
         using (var q = Q())
         using (var other = Q())
         {
@@ -231,8 +332,20 @@ internal static class Suite
         }
         using (var q = Q())
         {
-            await using var stream = q.SelectAll().AsAsyncEnumerable().GetAsyncEnumerator();
+            await using var stream = q.OrderBy(Models.Id).Take(1).SelectAll().AsAsyncEnumerable().GetAsyncEnumerator();
             Check(await stream.MoveNextAsync(), "Active query row before query disposal"); q.Dispose();
+            await ThrowsAsync<OperationCanceledException>(() => stream.MoveNextAsync().AsTask());
+        }
+        await using (var parent = await session.Source.OpenSessionAsync())
+        using (var q = parent.From(Models.People))
+        {
+            await using var stream = q.OrderBy(Models.Id).Take(1).SelectAll().AsAsyncEnumerable().GetAsyncEnumerator();
+            Check(await stream.MoveNextAsync(), "Fluent last row before parent session closure");
+            await parent.DisposeAsync();
+            var failure = await ThrowsAsync<InvalidOperationException>(() => stream.MoveNextAsync().AsTask());
+            Check(failure.GetType() == typeof(InvalidOperationException)
+                && failure.Message == "The native operation is not legal in the current state.",
+                "Fluent known EOF preserves the closed native cursor error instead of silently completing");
         }
         // Deterministic interleavings of actual native plan publication and Dispose.
         // No fake executor or timing-sensitive thread race supplies these owners.
@@ -248,8 +361,10 @@ internal static class Suite
             Check(plan.IsClosed, "Seal/Publish/Dispose releases published native plan");
         }
         await Done("owners-streaming-cardinality");
-        MeasureComposition(session);
-        await Done("direct-composition-cost-input");
+        CheckEmptyParameters(session, diagnostic);
+        await Done("dynamic-empty-parameter-encoding");
+        CheckComposition(session, diagnostic);
+        await Done("composition-render-no-dispatch");
         if (session.Source.Provider == DatabaseProvider.Sqlite)
         { using var q = Q(); Throws<DatabaseCapabilityException>(() => q.ForUpdate()); }
         else
@@ -268,23 +383,98 @@ internal static class Suite
         await session.ExecuteAsync(SqlCommand.Create("DROP TABLE \"Children\"", kind: SqlCommandKind.Mutation));
         await session.ExecuteAsync(SqlCommand.Create("DROP TABLE \"Parents\"", kind: SqlCommandKind.Mutation));
     }
-    private static void MeasureComposition(DataSession session)
+    private static void CheckEmptyParameters(DataSession session, Diagnostic diagnostic)
     {
-        void Compose(long value)
+        using var query = session.From(Models.People);
+        var profile = session.Source.Provider == DatabaseProvider.Sqlite ? 1u : 2u;
+        // Construct every byte independently of ParameterDefinition/DbWire.Encode.
+        var expected = new byte[96]; "NWDB"u8.CopyTo(expected);
+        BinaryPrimitives.WriteUInt16LittleEndian(expected.AsSpan(4), 1);
+        BinaryPrimitives.WriteUInt16LittleEndian(expected.AsSpan(6), 1);
+        BinaryPrimitives.WriteUInt32LittleEndian(expected.AsSpan(8), 96);
+        BinaryPrimitives.WriteUInt64LittleEndian(expected.AsSpan(16), 96);
+        SHA256.HashData("{\"version\":1,\"parameters\":[]}"u8).CopyTo(expected, 24);
+        BinaryPrimitives.WriteUInt32LittleEndian(expected.AsSpan(56), 1);
+        BinaryPrimitives.WriteUInt32LittleEndian(expected.AsSpan(76), profile);
+        BinaryPrimitives.WriteUInt64LittleEndian(expected.AsSpan(80), 96);
+        BinaryPrimitives.WriteUInt64LittleEndian(expected.AsSpan(88), 96);
+        var sql = diagnostic.Count(6); var owners = diagnostic.Counts();
+        Check(query.Context.Values(null).AsSpan().SequenceEqual(expected), "Complete empty-parameter frame matches the independent wire golden");
+        Check(query.Context.Values(null).AsSpan().SequenceEqual(expected), "Repeated empty encoding preserves every byte");
+        Check(diagnostic.Count(6) == sql && diagnostic.Counts().SequenceEqual(owners), "Encoding does not dispatch SQL or change native ownership");
+
+        // Explicit empty, parameterized and invalid inputs keep the complete
+        // snapshot and identity checks; allocation sampling lives in db-perf.
+        var explicitEmpty = new QueryParameters();
+        Check(query.Context.Values(explicitEmpty).AsSpan().SequenceEqual(expected), "Explicit empty parameter frame keeps the same complete bytes");
+        using var declared = session.From(Models.People);
+        var parameter = declared.Parameter("empty_frame_control", Codecs.Int64);
+        var values = new QueryParameters().Set(parameter, 17L);
+        var encoded = declared.Context.ParameterLayout().Encode(session.Source, values);
+        Check(declared.Context.Values(values).AsSpan().SequenceEqual(encoded), "Declared value preserves original encoding");
+        Check(Throws<ArgumentException>(() => declared.Context.Values(null)).ParamName == "supplied", "Missing null parameter set still rejects");
+        Check(Throws<ArgumentException>(() => declared.Context.Values(explicitEmpty)).ParamName == "supplied", "Missing explicit parameter set still rejects");
+        Check(Throws<ArgumentException>(() => query.Context.Values(values)).ParamName == "supplied", "Extra parameters cannot enter the empty fast path");
+        using var other = session.From(Models.People);
+        var otherValues = new QueryParameters().Set(other.Parameter("foreign_identity", Codecs.Int64), 17L);
+        Check(Throws<ArgumentException>(() => declared.Context.Values(otherValues)).ParamName == "supplied", "A different declared identity still rejects");
+        Check(query.Context.Values(null).AsSpan().SequenceEqual(expected), "Fallback calls do not mutate the shared frame");
+    }
+    private static void CheckComposition(DataSession session, Diagnostic diagnostic)
+    {
+        var sql = diagnostic.Count(6); var owners = diagnostic.Counts();
+        using (var query = session.From(Models.People))
         {
-            using var query = session.From(Models.People);
-            _ = query.WhereEqual(Models.Id, value).Take(1).SelectAll().ToSql();
+            var selection = query.WhereEqual(Models.Id, 0L).Take(1).SelectAll();
+            var first = selection.ToSql();
+            Check(first.Length != 0 && selection.ToSql() == first, "Repeated rendering preserves the complete SQL snapshot");
         }
-        Compose(0);
-        const int iterations = 64;
-        var before = GC.GetAllocatedBytesForCurrentThread(); var started = Stopwatch.GetTimestamp();
-        for (var i = 0; i < iterations; i++) Compose(i % 3);
-        var elapsed = Stopwatch.GetTimestamp() - started; var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
         int encoded = Korda.Query.Internal.OperandEncoding.Value(session.Source.Binding.SemanticProfile, Codecs.Int64, 3, 1L).Length;
-        Check(encoded > sizeof(long) && allocated > 0, "Direct boundary allocations and encoded copies are explicit");
-        Costs.Add(new(session.Source.Provider.ToString(), iterations, allocated, elapsed, Stopwatch.Frequency, encoded, 15));
+        Check(encoded > sizeof(long), "An Int64 literal retains its complete typed wire representation");
+        Check(diagnostic.Count(6) == sql && diagnostic.Counts().SequenceEqual(owners), "Composition and rendering do not dispatch SQL or retain native owners");
+    }
+    private static void CheckPreparedConstruction(DataSession session, Diagnostic diagnostic)
+    {
+        using var zeroQuery = session.From(Models.People);
+        using var zero = zeroQuery.Select(zeroQuery.Column(Models.Id)).Prepare();
+        using var oneQuery = session.From(Models.People);
+        var parameter = oneQuery.Parameter("minimum", Codecs.Int64);
+        using var one = oneQuery.Where(oneQuery.Column(Models.Id).GreaterThanOrEqual(oneQuery.ParameterValue(parameter)))
+            .Select(oneQuery.Column(Models.Id)).Prepare();
+        var values = new QueryParameters().Set(parameter, 1L);
+        // Check first and repeated construction without an allocation or timing
+        // window. The public methods remain lazy and retain no execution owner.
+        for (var repeat = 0; repeat < 2; repeat++)
+        {
+            var sql = diagnostic.Count(6); var owners = diagnostic.Counts();
+            GC.KeepAlive(zero.AsAsyncEnumerable(session));
+            GC.KeepAlive(one.AsAsyncEnumerable(session, values));
+            Check(diagnostic.Count(6) == sql && diagnostic.Counts().SequenceEqual(owners), "Lazy construction performs no SQL or native ownership change");
+        }
+    }
+    private static async Task CheckPreparedStreamFailureTiming(DataSession session, Diagnostic diagnostic)
+    {
+        var file = Path.Combine(Path.GetTempPath(), "nw-b13-limits-" + Guid.NewGuid().ToString("N") + ".db");
+        try
+        {
+            var builder = new DataSourceBuilder().ConfigureLimits(new DatabaseLimits { MaxBatchBytes = 128 });
+            if (session.Source.Provider == DatabaseProvider.Sqlite) builder.UseSqlite(file);
+            else builder.UsePostgreSql(Environment.GetEnvironmentVariable("NW_TEST_POSTGRES")!, options => options.TlsMode = PostgreSqlTlsMode.DisableForLocalDevelopment);
+            await using var source = builder.Build(); await using var limited = await source.OpenSessionAsync();
+            using var query = limited.From(Models.People);
+            using var prepared = query.Select(query.Column(Models.Id)).Prepare();
+            using var extraQuery = limited.From(Models.People); var extra = extraQuery.Parameter("extra", Codecs.Int64);
+            var before = diagnostic.Count(6);
+            Throws<ArgumentException>(() => prepared.AsAsyncEnumerable(limited, new QueryParameters().Set(extra, 1L)));
+            var error = Throws<DatabaseException>(() => prepared.AsAsyncEnumerable(limited));
+            Check(error.Kind == DatabaseErrorKind.ResourceLimit && error.ProviderCode == "LargeValueRequiresStreaming",
+                "Prepare retains lazy row-capacity validation after execution parameter checks");
+            Check(diagnostic.Count(6) == before, "Invalid prepared stream never dispatches SQL");
+        }
+        finally { File.Delete(file); }
     }
     private sealed class MappingFailure : Exception;
+    private sealed record ParameterRow(long Number, string? Text, byte[] Bytes);
     private sealed record Joined(long Id, long? Child, bool Matched);
     private sealed record Aggregates(long Count, long? Sum, double? Average, long? Min, long? Max);
 }
@@ -312,7 +502,6 @@ internal static class Models
         var cte = new TableBuilder<IdRow>("ChosenParents"); CteId = cte.Column("Id", Codecs.Int64); Cte = cte.Build(r => new(r.Get(CteId)), (r, v) => r.Set(CteId, v.Id));
     }
 }
-internal sealed record CompositionCost(string Provider, int Iterations, long ManagedAllocatedBytes, long StopwatchTicks, long StopwatchFrequency, int OneInt64WireBytes, int InspectedDirectAbiCallsPerIteration);
-internal sealed record Receipt(bool NativeAot, int Assertions, int ManagedRetirements, List<string> Cases, string[] NativeSha256, List<CompositionCost> CompositionCosts);
+internal sealed record Receipt(bool NativeAot, int Assertions, int ManagedRetirements, List<string> Cases, string[] NativeSha256);
 [JsonSerializable(typeof(Receipt))]
 internal partial class ReceiptJson : JsonSerializerContext { }

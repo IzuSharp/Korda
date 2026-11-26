@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "task": "DB-Perf-01",
+  "kind": "offline-cpu-report-recovery",
+  "enabled": true,
+  "artifact": {
+    "repository": "IzuSharp/Korda",
+    "runId": 45473095059,
+    "artifactId": 14959730098,
+    "headCommit": "9acdc6a8cef25d6f51feaf69e553b36027ab3975",
+    "zipSha256": "9f23034ed6784fab5f8ae59ede4a8c1ed1085d44e57e47b858adb802cf304595",
+    "zipBytes": 65082845,
+    "memberCount": 526,
+    "expandedBytes": 251618976
+  },
+  "helper": {
+    "commit": "9acdc6a8cef25d6f51feaf69e553b36027ab3975",
+    "path": "benchmarks/db-perf/cpu_profile.py",
+    "sha256": "77398b0a0c0781f336e47ee0c0cff4edcdc69808e43195ce8feb13b0c585126c"
+  },
+  "originalProfileRequestSha256": "f5096e9f07058549652d6c66b4a6b1c0defbd6194d253be2ab57f7faf83f720c",
+  "perfSha256": "d5dcdbc7c08235061ad8686e60f91d2db7bc1ecd2eb025f96a1d0dd586c8e7db",
+  "cells": ["after", "before", "native-product", "native-reuse", "dapper"],
+  "reportSort": "comm,pid,dso,symbol",
+  "maximumCommandSeconds": 120,
+  "recordNewSamples": false,
+  "executeApplications": false,
+  "acceptedLongSegments": 0,
+  "wholeBatchAcceptance": false,
+  "activationNote": "Recover only reports for the original five successful sampling windows. Preserve each original zero-exit Unknown --sort key: tid error; do not rerun any workload or modify the original profile receipt."
+}

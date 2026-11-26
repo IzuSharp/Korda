@@ -10,13 +10,33 @@ internal sealed record WireExpectation(PayloadKind Kind, uint Profile, byte[] Me
     internal uint? ExactRows { get; init; }
 }
 
-// One field serialization contract, not a CLR/native struct ABI. Only owned bytes escape parsing.
-internal sealed class DbWire
+// The validated layout contains no bytes or native pointer. A caller supplies a
+// live synchronous span for every cell access; validation never publishes a
+// borrowed Memory value that could outlive its native owner.
+internal readonly struct WireLayout(WireExpectation expected, uint rows, int length)
+{
+    internal WireExpectation Expected { get; } = expected;
+    internal uint Rows { get; } = rows;
+    internal int Length { get; } = length;
+    internal ReadOnlySpan<byte> Cell(ReadOnlySpan<byte> bytes, uint row, int column, out bool isNull)
+    {
+        if (bytes.Length != Length) throw new ArgumentException("The span differs from the validated batch extent.", nameof(bytes));
+        if (row >= Rows || (uint)column >= (uint)Expected.Descriptors.Length) throw new ArgumentOutOfRangeException(nameof(row));
+        var at = checked(WireSchema.HeaderBytes + Expected.Descriptors.Length * WireSchema.DescriptorBytes
+            + ((int)row * Expected.Descriptors.Length + column) * WireSchema.CellBytes);
+        isNull = DbWire.R16(bytes, at + 2) == 1;
+        return isNull ? default : bytes.Slice(checked((int)DbWire.R64(bytes, at + 8)), checked((int)DbWire.R64(bytes, at + 16)));
+    }
+}
+
+// One field serialization contract, not a CLR/native struct ABI. Borrowed storage
+// is restricted to an internal batch whose owner protects every synchronous read.
+internal readonly struct DbWire
 {
     internal const int MaxEncodedBytes = 4 * 1024 * 1024;
     internal const int MaxDescriptors = 4096;
-    private DbWire(byte[] bytes, WireExpectation expected, uint rows) { Bytes = bytes; Expected = expected; Rows = rows; }
-    internal byte[] Bytes { get; }
+    private DbWire(ReadOnlyMemory<byte> bytes, WireExpectation expected, uint rows) { Bytes = bytes; Expected = expected; Rows = rows; }
+    internal ReadOnlyMemory<byte> Bytes { get; }
     internal WireExpectation Expected { get; }
     internal uint Rows { get; }
     internal static byte[] Encode(WireExpectation expected, uint rows, IReadOnlyList<ReadOnlyMemory<byte>?> cells)
@@ -43,7 +63,7 @@ internal sealed class DbWire
         {
             var d = expected.Descriptors[i % expected.Descriptors.Length]; var cell = cells[i];
             if (cell is null && !d.Codec.Nullable) throw new ArgumentException("SQL NULL requires a nullable descriptor.");
-            if (cell is { } value) ValidateScalar(d.Codec, value.Span);
+            if (cell is { } value) ValidateScalarPayload(d.Codec, value.Span);
             var offset = WireSchema.HeaderBytes + expected.Descriptors.Length * WireSchema.DescriptorBytes + i * WireSchema.CellBytes;
             U16(result, offset, (ushort)d.Codec.Id); U16(result, offset + 2, cell is null ? (ushort)1 : (ushort)0); U32(result, offset + 4, d.BoundCodecId);
             if (cell is { } bytes)
@@ -54,7 +74,84 @@ internal sealed class DbWire
         }
         return result;
     }
+    // The immutable parameter layout owns all shape validation and fixed wire
+    // bytes. An execution validates its values once, then fills one owned frame;
+    // no row/cell collection or second metadata encoding is required.
+    internal sealed class ParameterLayout
+    {
+        private readonly WireDescriptor[] _descriptors;
+        private readonly byte[] _prefix;
+        private readonly int _cellsOffset;
+        internal int PayloadOffset => _prefix.Length;
+
+        internal ParameterLayout(WireExpectation expected)
+        {
+            if (expected.Kind != PayloadKind.Parameters) throw new ArgumentException("A parameter layout requires a parameter shape.", nameof(expected));
+            CheckExpectation(expected, 1);
+            _descriptors = expected.Descriptors;
+            _cellsOffset = checked(WireSchema.HeaderBytes + _descriptors.Length * WireSchema.DescriptorBytes);
+            _prefix = new byte[checked(_cellsOffset + _descriptors.Length * WireSchema.CellBytes)];
+            "NWDB"u8.CopyTo(_prefix);
+            U16(_prefix, 4, 1); U16(_prefix, 6, (ushort)PayloadKind.Parameters); U32(_prefix, 8, WireSchema.HeaderBytes);
+            expected.MetadataHash.CopyTo(_prefix, 24); U32(_prefix, 56, 1); U32(_prefix, 60, (uint)_descriptors.Length);
+            U32(_prefix, 76, expected.Profile); U64(_prefix, 80, WireSchema.HeaderBytes); U64(_prefix, 88, (ulong)_prefix.Length);
+            for (var i = 0; i < _descriptors.Length; i++)
+            {
+                var descriptor = _descriptors[i]; var at = WireSchema.HeaderBytes + i * WireSchema.DescriptorBytes;
+                U32(_prefix, at, descriptor.Id); U16(_prefix, at + 4, (ushort)descriptor.Codec.Id);
+                U16(_prefix, at + 6, descriptor.Codec.Nullable ? (ushort)1 : (ushort)0); U32(_prefix, at + 8, descriptor.BoundCodecId);
+                at = _cellsOffset + i * WireSchema.CellBytes;
+                U16(_prefix, at, (ushort)descriptor.Codec.Id); U32(_prefix, at + 4, descriptor.BoundCodecId);
+            }
+        }
+
+        internal int ValidateValue(int ordinal, byte[]? value)
+        {
+            var codec = _descriptors[ordinal].Codec;
+            if (value is null)
+            {
+                if (!codec.Nullable) throw new ArgumentException("SQL NULL requires a nullable descriptor.");
+                return 0;
+            }
+            ValidateScalarPayload(codec, value);
+            return value.Length;
+        }
+
+        internal byte[] CreateFrame(int payloadBytes)
+        {
+            if ((uint)payloadBytes > (uint)(MaxEncodedBytes - _prefix.Length))
+                throw new ArgumentException("Payload exceeds the configured wire byte limit.");
+            var frame = new byte[_prefix.Length + payloadBytes];
+            _prefix.CopyTo(frame, 0); U64(frame, 16, (ulong)frame.Length);
+            return frame;
+        }
+
+        // Only an execution which owns the value snapshot and the frame calls
+        // this after ValidateValue. No mutable parameter set escapes its lock.
+        internal void WriteValue(Span<byte> frame, int ordinal, byte[]? value, ref int position)
+        {
+            var at = _cellsOffset + ordinal * WireSchema.CellBytes;
+            if (value is null) { U16(frame, at + 2, 1); return; }
+            U64(frame, at + 8, (ulong)(value.Length == 0 ? _prefix.Length : position));
+            U64(frame, at + 16, (ulong)value.Length);
+            value.CopyTo(frame[position..]); position += value.Length;
+        }
+    }
     internal static DbWire Parse(ReadOnlySpan<byte> bytes, WireExpectation expected)
+        => ParseCore(bytes, expected, null);
+    // Only the internal host's independently allocated, immutable managed batch
+    // may transfer this storage. The caller must never clear or pool the array.
+    internal static DbWire ParseOwned(byte[] bytes, WireExpectation expected)
+    {
+        ArgumentNullException.ThrowIfNull(bytes);
+        return ParseCore(bytes, expected, bytes);
+    }
+    private static DbWire ParseCore(ReadOnlySpan<byte> bytes, WireExpectation expected, ReadOnlyMemory<byte>? retained)
+    {
+        var layout = Validate(bytes, expected);
+        return new(retained ?? bytes.ToArray(), expected, layout.Rows);
+    }
+    internal static WireLayout Validate(ReadOnlySpan<byte> bytes, WireExpectation expected)
     {
         try
         {
@@ -75,7 +172,8 @@ internal sealed class DbWire
                 if (R32(bytes, o) != d.Id || R16(bytes, o + 4) != d.Codec.Id || R16(bytes, o + 6) != (d.Codec.Nullable ? 1 : 0) || R32(bytes, o + 8) != d.BoundCodecId || R32(bytes, o + 12) != 0)
                     Bad("Descriptor count, order, ID, codec, nullability or reserved bits differ.");
             }
-            var ranges = new List<(int Start, int End)>();
+            var needsRangeSort = false;
+            var previousEnd = (ulong)payloadOffset;
             for (var i = 0; i < count; i++)
             {
                 var d = expected.Descriptors[i % expected.Descriptors.Length]; var o = cellsOffset + i * WireSchema.CellBytes;
@@ -84,12 +182,34 @@ internal sealed class DbWire
                 if (flags == 1)
                 { if (!d.Codec.Nullable || dataOffset != 0 || length != 0) Bad("Invalid SQL NULL cell."); continue; }
                 if (dataOffset < (ulong)payloadOffset || dataOffset > (ulong)bytes.Length || length > (ulong)bytes.Length - dataOffset || (length == 0 && dataOffset != (ulong)payloadOffset)) Bad("Invalid cell range.");
-                if (length > 0) ranges.Add(((int)dataOffset, (int)(dataOffset + length)));
-                ValidateScalar(d.Codec, bytes.Slice((int)dataOffset, (int)length));
+                if (length > 0)
+                {
+                    if (dataOffset < previousEnd) needsRangeSort = true;
+                    previousEnd = dataOffset + length;
+                }
+                ValidateScalarPayload(d.Codec, bytes.Slice((int)dataOffset, (int)length));
             }
-            ranges.Sort((x, y) => x.Start.CompareTo(y.Start));
-            for (var i = 1; i < ranges.Count; i++) if (ranges[i].Start < ranges[i - 1].End) Bad("Nonempty cell ranges overlap.");
-            return new(bytes.ToArray(), expected, rows);
+            // Product encoders append nonempty cells in row-major order. That
+            // layout proves non-overlap in one pass without a temporary list.
+            // The wire contract also allows other non-overlapping orders: retain
+            // the complete previous sort/check path for every such input.
+            if (needsRangeSort)
+            {
+                var ranges = new List<(int Start, int End)>();
+                for (var i = 0; i < count; i++)
+                {
+                    var o = cellsOffset + i * WireSchema.CellBytes;
+                    var length = R64(bytes, o + 16);
+                    if (R16(bytes, o + 2) == 0 && length > 0)
+                    {
+                        var start = R64(bytes, o + 8);
+                        ranges.Add(((int)start, (int)(start + length)));
+                    }
+                }
+                ranges.Sort((x, y) => x.Start.CompareTo(y.Start));
+                for (var i = 1; i < ranges.Count; i++) if (ranges[i].Start < ranges[i - 1].End) Bad("Nonempty cell ranges overlap.");
+            }
+            return new(expected, rows, bytes.Length);
         }
         catch (Exception e) when (e is OverflowException or ArgumentOutOfRangeException or JsonException)
         { throw new ArgumentException("Malformed bounded db-wire payload.", nameof(bytes), e); }
@@ -106,8 +226,9 @@ internal sealed class DbWire
     {
         if (row >= Rows || (uint)column >= Expected.Descriptors.Length) throw new ArgumentOutOfRangeException(nameof(row));
         var o = checked(WireSchema.HeaderBytes + Expected.Descriptors.Length * WireSchema.DescriptorBytes + ((int)row * Expected.Descriptors.Length + column) * WireSchema.CellBytes);
-        if (R16(Bytes, o + 2) == 1) return null;
-        return new ReadOnlyMemory<byte>(Bytes, checked((int)R64(Bytes, o + 8)), checked((int)R64(Bytes, o + 16)));
+        var bytes = Bytes.Span;
+        if (R16(bytes, o + 2) == 1) return null;
+        return Bytes.Slice(checked((int)R64(bytes, o + 8)), checked((int)R64(bytes, o + 16)));
     }
     private static void CheckExpectation(WireExpectation expected, uint rows)
     {
@@ -117,24 +238,38 @@ internal sealed class DbWire
         if (expected.Kind == PayloadKind.Parameters && rows != 1 || expected.Kind == PayloadKind.MutationValues && (rows == 0 || expected.EntityId == 0)
             || expected.Kind == PayloadKind.ExpressionValues && (expected.Descriptors.Length != 1 || expected.Descriptors[0].Id != 1 || expected.MetadataHash.Any(b => b != 0))
             || expected.Kind != PayloadKind.MutationValues && expected.EntityId != 0 || (expected.Kind == PayloadKind.Rows) != (expected.ProjectionId > 0)) Bad("Invalid kind-specific identity/count.");
-        var ids = new HashSet<uint>();
-        foreach (var d in expected.Descriptors)
+        HashSet<uint>? ids = null;
+        uint previousId = 0;
+        for (var i = 0; i < expected.Descriptors.Length; i++)
         {
+            var d = expected.Descriptors[i];
             CodecRegistry.Validate(d.Codec);
-            if (!ids.Add(d.Id) || (expected.Kind != PayloadKind.Rows && d.Id == 0)) Bad("Duplicate/reserved descriptor ID.");
+            if (ids is null && i != 0 && d.Id <= previousId)
+            {
+                // The prefix is strictly increasing. Populate it before the
+                // original per-descriptor duplicate check, preserving its order.
+                ids = new HashSet<uint>();
+                for (var j = 0; j < i; j++) ids.Add(expected.Descriptors[j].Id);
+            }
+            if (ids is not null && !ids.Add(d.Id) || (expected.Kind != PayloadKind.Rows && d.Id == 0)) Bad("Duplicate/reserved descriptor ID.");
             if (d.Codec.Configuration is null ? d.BoundCodecId != d.Codec.Id : d.BoundCodecId < 1024) Bad("Invalid source-bound codec ID.");
+            previousId = d.Id;
         }
     }
     internal static void ValidateScalar(CodecDescriptor codec, ReadOnlySpan<byte> bytes)
     {
         CodecRegistry.Validate(codec);
+        ValidateScalarPayload(codec, bytes);
+    }
+    private static void ValidateScalarPayload(CodecDescriptor codec, ReadOnlySpan<byte> bytes)
+    {
         switch (codec.Id)
         {
             case 1: if (bytes.Length != 2) Bad("Int16 width."); break;
             case 2: case 17: if (bytes.Length != 4) Bad("Int32 width."); break;
             case 3: case 15: if (bytes.Length != 8) Bad("Int64 width."); break;
             case 4: if (bytes.Length != 1 || bytes[0] > 1) Bad("Boolean value."); break;
-            case 5: _ = Validation.Utf8.GetString(bytes); break;
+            case 5: _ = Validation.Utf8.GetCharCount(bytes); break;
             case 6: break;
             case 7: if (bytes.Length != 16) Bad("UUID width."); break;
             case 8: if (bytes.Length != 4 || RInt32(bytes) is < -719162 or > 2932896) Bad("Date range."); break;
@@ -143,12 +278,22 @@ internal sealed class DbWire
             case 11: if (bytes.Length != 8 || !double.IsFinite(BinaryPrimitives.ReadDoubleLittleEndian(bytes))) Bad("Double value."); break;
             case 12: if (bytes.Length != 4 || !float.IsFinite(BinaryPrimitives.ReadSingleLittleEndian(bytes))) Bad("Single value."); break;
             case 13:
-                var v = DecimalBytes.Decode(bytes); using (var config = JsonDocument.Parse(codec.Configuration!)) DecimalBytes.CheckFit(v, config.RootElement.GetProperty("precision").GetByte(), config.RootElement.GetProperty("scale").GetByte()); break;
+                var v = DecimalBytes.Decode(bytes);
+                if (CodecRegistry.TryDecimalConfiguration(codec.Configuration, out var precision, out var scale))
+                    DecimalBytes.CheckFit(v, precision, scale);
+                else
+                    using (var config = JsonDocument.Parse(codec.Configuration!)) DecimalBytes.CheckFit(v, config.RootElement.GetProperty("precision").GetByte(), config.RootElement.GetProperty("scale").GetByte());
+                break;
             case 14: _ = DecimalBytes.Decode(bytes); break;
             case 16:
-                _ = Validation.Utf8.GetString(bytes);
+                _ = Validation.Utf8.GetCharCount(bytes);
                 if (bytes.StartsWith(new byte[] { 0xef, 0xbb, 0xbf })) Bad("JSON BOM.");
-                using (JsonDocument.Parse(bytes.ToArray(), new JsonDocumentOptions { MaxDepth = 64 })) { }
+                // Validate the complete value without owning a copy or materializing
+                // a document. The default reader options reject comments, trailing
+                // commas and multiple root values, as the document parser did.
+                var reader = new Utf8JsonReader(bytes, new JsonReaderOptions { MaxDepth = 64 });
+                if (!reader.Read()) throw new JsonException("JSON requires a value.");
+                while (reader.Read()) { }
                 break;
         }
     }
@@ -170,6 +315,9 @@ internal static class CodecRegistry
         if (codec.Id is 13 or 15)
         {
             if (codec.Configuration is null) throw new ArgumentException("Configured codec requires configuration.");
+            if (codec.Id == 13 ? TryDecimalConfiguration(codec.Configuration, out _, out _) : TryFixedScaleConfiguration(codec.Configuration, out _)) return;
+            // Keep the original parser and validation for every noncanonical
+            // input, including its exception type and validation order.
             using var json = JsonDocument.Parse(codec.Configuration); var value = json.RootElement;
             string canonical;
             if (codec.Id == 13)
@@ -179,6 +327,43 @@ internal static class CodecRegistry
         }
         else if (codec.Configuration is not null) throw new ArgumentException("This codec has no configuration.");
     }
+
+    internal static bool TryDecimalConfiguration(string? configuration, out byte precision, out byte scale)
+    {
+        const string prefix = "{\"precision\":";
+        const string separator = ",\"scale\":";
+        precision = scale = 0;
+        var text = configuration.AsSpan();
+        if (!text.StartsWith(prefix, StringComparison.Ordinal)) return false;
+        text = text[prefix.Length..];
+        if (!TryCanonicalByte(ref text, out precision) || !text.StartsWith(separator, StringComparison.Ordinal)) return false;
+        text = text[separator.Length..];
+        return TryCanonicalByte(ref text, out scale) && text.Length == 1 && text[0] == '}'
+            && precision is >= 1 and <= 29 && scale <= 28 && scale <= precision;
+    }
+
+    private static bool TryFixedScaleConfiguration(string? configuration, out byte scale)
+    {
+        const string prefix = "{\"scale\":";
+        scale = 0;
+        var text = configuration.AsSpan();
+        if (!text.StartsWith(prefix, StringComparison.Ordinal)) return false;
+        text = text[prefix.Length..];
+        return TryCanonicalByte(ref text, out scale) && text.Length == 1 && text[0] == '}' && scale <= 18;
+    }
+
+    private static bool TryCanonicalByte(ref ReadOnlySpan<char> text, out byte value)
+    {
+        value = 0;
+        if (text.IsEmpty || text[0] is < '0' or > '9') return false;
+        value = (byte)(text[0] - '0'); text = text[1..];
+        if (!text.IsEmpty && text[0] is >= '0' and <= '9')
+        {
+            if (value == 0) return false;
+            value = (byte)(value * 10 + text[0] - '0'); text = text[1..];
+        }
+        return true;
+    }
 }
 
 internal sealed record ControlField(ushort Id, ushort Type, byte[] Bytes);
@@ -186,13 +371,33 @@ internal static class ControlRecord
 {
     internal static byte[] Encode(ushort kind, params ControlField[] fields)
     {
-        if (fields.Select(f => f.Id).Distinct().Count() != fields.Length || fields.Any(f => f.Id == 0)) throw new ArgumentException("Invalid control field IDs.");
-        fields = fields.OrderBy(f => f.Id).ToArray(); var start = checked(16 + fields.Length * 16); var size = checked(start + fields.Sum(f => f.Bytes.Length));
+        // Most library records already declare positive IDs in wire order.
+        // Keep that caller-owned array unchanged and avoid temporary set/sort state.
+        // The fallback retains validation and error ordering for all other inputs.
+        if (!StrictlyOrdered(fields))
+        {
+            if (fields.Select(f => f.Id).Distinct().Count() != fields.Length || fields.Any(f => f.Id == 0)) throw new ArgumentException("Invalid control field IDs.");
+            fields = fields.OrderBy(f => f.Id).ToArray();
+        }
+        var start = checked(16 + fields.Length * 16); var payload = 0;
+        foreach (var field in fields) payload = checked(payload + field.Bytes.Length);
+        var size = checked(start + payload);
         if (size > DbWire.MaxEncodedBytes) throw new ArgumentException("Control record exceeds limit.");
         var bytes = new byte[size]; DbWire.U16(bytes, 0, 1); DbWire.U16(bytes, 2, kind); DbWire.U32(bytes, 4, (uint)size); DbWire.U32(bytes, 8, (uint)fields.Length);
         for (var i = 0; i < fields.Length; i++)
         { var f = fields[i]; var o = 16 + i * 16; DbWire.U16(bytes, o, f.Id); DbWire.U16(bytes, o + 2, f.Type); DbWire.U32(bytes, o + 4, (uint)f.Bytes.Length); DbWire.U64(bytes, o + 8, (ulong)start); f.Bytes.CopyTo(bytes, start); start += f.Bytes.Length; }
         return bytes;
+    }
+    private static bool StrictlyOrdered(ControlField[]? fields)
+    {
+        if (fields is null) return false;
+        ushort previous = 0;
+        foreach (var field in fields)
+        {
+            if (field.Id <= previous) return false;
+            previous = field.Id;
+        }
+        return true;
     }
     internal static byte[] U32(uint value) { var bytes = new byte[4]; DbWire.U32(bytes, 0, value); return bytes; }
     internal static byte[] Vector(IEnumerable<uint> values)

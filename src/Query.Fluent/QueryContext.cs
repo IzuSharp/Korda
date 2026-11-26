@@ -7,8 +7,8 @@ using Korda.Query.Internal;
 
 namespace Korda.Query;
 
-// Owner/metadata orchestration only. Expressions are immediately forwarded to
-// B09/B11; this class contains no managed SQL tree or provider SQL rendering.
+// Owner/metadata orchestration. Binding records a bounded complete command;
+// the C++ compiler retains dialect rendering and authoritative validation.
 internal sealed class QueryContext : IDisposable
 {
     internal DataSession Session { get; }
@@ -22,6 +22,7 @@ internal sealed class QueryContext : IDisposable
     private object? _selection;
     private readonly CancellationTokenSource _stop = new();
     private DatabaseOwner? _plan;
+    private PreparedParameterLayout? _parameterLayout;
     internal bool HasOrder;
     internal bool UniqueOrder;
     internal uint? SingleAscendingKey;
@@ -73,6 +74,19 @@ internal sealed class QueryContext : IDisposable
     internal ExpressionReference Binary(uint operation, ExpressionReference a, ExpressionReference b) => Run(() => Binding.Binary(operation, a, b));
     internal ExpressionReference Unary(uint operation, ExpressionReference a) => Run(() => Binding.Unary(operation, a));
     internal ulong Clause(uint operation, params ControlField[] fields) => Run(() => Binding.Clause(operation, OperandEncoding.Clause(fields)));
+    // Keep the same nested admission and failure translation without capturing a
+    // borrowed span in a delegate or extending its lifetime beyond the binding call.
+    private ulong Clause(uint operation, ReadOnlySpan<byte> operands)
+    {
+        using var admission = Enter();
+        try { return Binding.Clause(operation, operands); }
+        catch (BindingFailure failure)
+        {
+            if (failure.Status == Korda.Interop.Abi.NativeStatus.NotSupported)
+                throw new DatabaseException("The native query operation is unavailable for this provider, codec or shape.", DatabaseErrorKind.UnsupportedCapability, correlationId: failure.Correlation);
+            throw HostFailure.Binding(Source.Binding, failure);
+        }
+    }
     internal static ControlField U(ushort id, ulong value, ushort type = 2) => OperandEncoding.U64(id, value, type);
     internal static ControlField N(ushort id, uint value) => OperandEncoding.U32(id, value);
     internal static ControlField B(ushort id, byte[] value, ushort type = 5) => OperandEncoding.Bytes(id, value, type);
@@ -87,7 +101,12 @@ internal sealed class QueryContext : IDisposable
     {
         ArgumentNullException.ThrowIfNull(projection);
         if (expressions is null && !_projections.TryGetValue(projection, out expressions)) throw new ArgumentException("The projection was not built by this query.", nameof(projection));
-        Clause(6, B(1, OperandEncoding.Tokens(Binding, expressions), 8), B(2, OperandEncoding.Projection(projection, Source.BindCodec, expressions.Select(e => e.In(Binding)).ToArray())));
+        Span<byte> scratch = stackalloc byte[OperandEncoding.StackScratchBytes];
+        Func<CodecDescriptor, uint> bindCodec = Source.BindCodec;
+        if (OperandEncoding.TrySelectionInto(Binding, projection, bindCodec, expressions, scratch, out var length))
+            Clause(6, scratch[..length]);
+        else
+            Clause(6, B(1, OperandEncoding.Tokens(Binding, expressions), 8), B(2, OperandEncoding.Projection(projection, bindCodec, expressions.Select(e => e.In(Binding)).ToArray())));
         _selection = projection; return new QuerySelection<T>(this, projection);
     });
     internal void Selection<T>(Projection<T> projection)
@@ -110,7 +129,40 @@ internal sealed class QueryContext : IDisposable
         if (HasOffset && !UniqueOrder) throw new InvalidOperationException("Offset paging lost its unique ordering.");
         var plan = Binding.Seal(terminal); _sealed = true; return plan;
     });
-    internal byte[] Values(QueryParameters? supplied) => ParameterDefinition.Encode(Source, Parameters.Values, supplied);
+    internal byte[] Values(QueryParameters? supplied)
+    {
+        if (supplied is null && Parameters.Count == 0)
+        {
+            var profile = Source.Binding.SemanticProfile;
+            if (profile == 1) return SqliteEmptyParameters.Bytes;
+            if (profile == 2) return PostgreSqlEmptyParameters.Bytes;
+        }
+        return ParameterLayout().Encode(Source, supplied);
+    }
+    internal PreparedParameterLayout ParameterLayout()
+    {
+        // Definitions are append-only during composition. A later declaration or
+        // import invalidates this shape; execution itself never sorts it again.
+        if (_parameterLayout is not { } layout || layout.Count != Parameters.Count)
+            _parameterLayout = layout = new(Source, Parameters.Values);
+        return layout;
+    }
+    // Only this private empty shape is shared. Explicit parameter sets retain
+    // their original snapshot and identity validation, including empty sets.
+    // Lazy streams hold a read-only view; execute_create owns rendered bytes
+    // before returning, and no public API exposes either cached mutable array.
+    private static byte[] EmptyParameterFrame(uint profile) => DbWire.Encode(
+        new(PayloadKind.Parameters, profile, SHA256.HashData("{\"version\":1,\"parameters\":[]}"u8), 0, 0, []) { ExactRows = 1 }, 1, []);
+    private static class SqliteEmptyParameters
+    {
+        internal static readonly byte[] Bytes = EmptyParameterFrame(1);
+        static SqliteEmptyParameters() { }
+    }
+    private static class PostgreSqlEmptyParameters
+    {
+        internal static readonly byte[] Bytes = EmptyParameterFrame(2);
+        static PostgreSqlEmptyParameters() { }
+    }
     internal void PublishPlan(DatabaseOwner plan)
     {
         Interlocked.Exchange(ref _plan, plan)?.Dispose();
@@ -158,8 +210,7 @@ internal sealed class QueryContext : IDisposable
     });
     internal unsafe string Render<T>(Projection<T> projection) => Run(() =>
     {
-        Selection(projection); using var query = Binding.Enter(); nint output = 0; var error = BindingChecks.Error();
-        HostFailure.Check(Source.Binding, Binding.Calls.nw_db_query_render_v1(query.Pointer, &output, &error), error);
+        Selection(projection); var output = Binding.Render();
         using var buffer = new NativeBuffer(Source.Binding, output); return HostEncoding.Utf8.GetString(buffer.Copy());
     });
     public void Dispose()
@@ -176,34 +227,91 @@ internal sealed class QueryContext : IDisposable
         private readonly CancellationTokenRegistration _registration;
         internal QueryTransport(IStreamTransport inner, CancellationTokenSource linked)
         { _inner = inner; _linked = linked; _registration = linked.Token.Register(static o => ((IStreamTransport)o!).RequestStop(), inner); }
-        public Task<IStreamBatch> FetchAsync() => _inner.FetchAsync();
+        public ValueTask<ScopedStreamBatch> FetchAsync() => _inner.FetchAsync();
+        public void CheckReadAdmission() => _inner.CheckReadAdmission();
         public void RequestStop() => _inner.RequestStop();
         public async Task<StreamRetirement> JoinAsync()
         { try { return await _inner.JoinAsync().ConfigureAwait(false); } finally { _registration.Dispose(); _linked.Dispose(); } }
     }
 }
 
-internal sealed record ParameterDefinition(DataSource Source, uint Id, string Name, CodecDescriptor Codec, uint BoundCodec)
+internal sealed record ParameterDefinition(DataSource Source, uint Id, string Name, CodecDescriptor Codec, uint BoundCodec);
+internal readonly record struct ParameterSnapshot(ParameterDefinition Parameter, byte[]? Bytes);
+
+// One immutable layout belongs to one prepared plan. Execution still snapshots
+// values and validates their exact source/identity; only shape metadata is reused.
+internal sealed class PreparedParameterLayout
 {
-    internal static byte[] Encode(DataSource source, IEnumerable<ParameterDefinition> definitions, QueryParameters? supplied)
+    private readonly ParameterDefinition[] _definitions;
+    private readonly DataSource _source;
+    private readonly DbWire.ParameterLayout _wire;
+    private readonly byte[]? _parameterlessPayload;
+    internal int Count => _definitions.Length;
+
+    internal PreparedParameterLayout(DataSource source, IEnumerable<ParameterDefinition> definitions)
     {
-        var ordered = definitions.OrderBy(p => p.Id).ToArray();
-        var values = supplied?.Snapshot() ?? [];
-        if (values.Length != ordered.Length) throw new ArgumentException("Execution requires every declared parameter exactly once and no extra parameters.", nameof(supplied));
-        var cells = new ReadOnlyMemory<byte>?[ordered.Length]; var descriptors = new WireDescriptor[ordered.Length];
+        _source = source;
+        _definitions = definitions.OrderBy(parameter => parameter.Id).ToArray();
+        _wire = CreateWireLayout(source, _definitions);
+        // The ABI accepts a read-only input view and owns its rendered parameter
+        // bytes before returning from execute_create. No caller can mutate this
+        // array, so independent lazy executions can safely share the empty frame.
+        if (_definitions.Length == 0) _parameterlessPayload = _wire.CreateFrame(0);
+    }
+
+    internal static DbWire.ParameterLayout CreateWireLayout(DataSource source, ReadOnlySpan<ParameterDefinition> definitions)
+    {
+        var descriptors = new WireDescriptor[definitions.Length];
         var json = new StringBuilder("{\"version\":1,\"parameters\":[");
-        for (var i = 0; i < ordered.Length; i++)
+        for (var i = 0; i < definitions.Length; i++)
         {
-            var parameter = ordered[i]; var value = values[i];
-            if (!ReferenceEquals(source, parameter.Source) || value.Parameter != parameter) throw new ArgumentException("Parameter source, identity or codec differs from the sealed shape.", nameof(supplied));
-            cells[i] = value.Bytes is null ? (ReadOnlyMemory<byte>?)null : new ReadOnlyMemory<byte>(value.Bytes);
+            var parameter = definitions[i];
+            if (!ReferenceEquals(source, parameter.Source)) throw new ArgumentException("Parameter source differs from the prepared shape.", nameof(definitions));
             descriptors[i] = new(parameter.Id, parameter.Codec, parameter.BoundCodec);
             if (i != 0) json.Append(',');
             json.Append("{\"id\":").Append(parameter.Id).Append(",\"name\":").Append(Canonical.Quote(parameter.Name)).Append(",\"codec\":").Append(parameter.Codec.Id)
                 .Append(",\"codec_config\":").Append(parameter.Codec.Configuration ?? "null").Append(",\"nullable\":").Append(parameter.Codec.Nullable ? "true" : "false").Append('}');
         }
         json.Append("]}");
-        return DbWire.Encode(new(PayloadKind.Parameters, source.Binding.SemanticProfile, SHA256.HashData(Encoding.UTF8.GetBytes(json.ToString())), 0, 0, descriptors) { ExactRows = 1 }, 1, cells);
+        var expectation = new WireExpectation(PayloadKind.Parameters, source.Binding.SemanticProfile, SHA256.HashData(Encoding.UTF8.GetBytes(json.ToString())), 0, 0, descriptors) { ExactRows = 1 };
+        return new(expectation);
     }
+
+    internal byte[] Encode(DataSource source, QueryParameters? supplied)
+    {
+        if (supplied is not null) return supplied.Encode(this, source);
+        if (_definitions.Length != 0) throw MissingParameters();
+        return _parameterlessPayload!;
+    }
+
+    // The caller holds QueryParameters' gate for the whole validation and copy.
+    // Values are looked up in the immutable compiled ordinal order. This owns
+    // exactly one result frame before any await, without a sorted snapshot or
+    // temporary cell array; concurrent Set cannot change half an execution.
+    internal byte[] EncodeLocked(DataSource source, Dictionary<uint, ParameterSnapshot> values)
+    {
+        if (values.Count != _definitions.Length) throw MissingParameters();
+        if (_parameterlessPayload is { } empty) return empty;
+        if (!ReferenceEquals(source, _source)) throw InvalidIdentity();
+        long payloadBytes = 0;
+        for (var i = 0; i < _definitions.Length; i++)
+        {
+            var parameter = _definitions[i];
+            if (!values.TryGetValue(parameter.Id, out var value) || value.Parameter != parameter) throw InvalidIdentity();
+            payloadBytes += value.Bytes?.Length ?? 0;
+        }
+        if (payloadBytes > DbWire.MaxEncodedBytes - _wire.PayloadOffset)
+            throw new ArgumentException("Payload exceeds the configured wire byte limit.");
+        var result = _wire.CreateFrame((int)payloadBytes); var position = _wire.PayloadOffset;
+        for (var i = 0; i < _definitions.Length; i++)
+        {
+            var value = values[_definitions[i].Id].Bytes;
+            _wire.ValidateValue(i, value);
+            _wire.WriteValue(result, i, value, ref position);
+        }
+        return result;
+    }
+
+    private static ArgumentException MissingParameters() => new("Execution requires every declared parameter exactly once and no extra parameters.", "supplied");
+    private static ArgumentException InvalidIdentity() => new("Parameter source, identity or codec differs from the sealed shape.", "supplied");
 }
-internal sealed record ParameterSnapshot(ParameterDefinition Parameter, byte[]? Bytes);

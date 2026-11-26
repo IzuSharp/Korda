@@ -12,5 +12,6 @@
     <ProjectReference Include="../Data.Abstractions/Korda.Data.csproj" />
     <InternalsVisibleTo Include="Korda.Database" />
     <InternalsVisibleTo Include="Korda.Data.Transactions.Tests" />
+    <InternalsVisibleTo Include="Korda.Data.NativeHost.Tests" />
   </ItemGroup>
 </Project>

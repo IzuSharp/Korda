@@ -20,7 +20,7 @@ public readonly struct QuerySelection<T>
     /// <inheritdoc cref="QuerySelection{T}"/>
     /// <param name="other">The compatible same-source selection or same-query expression required by this operation.</param>
     /// <param name="operation">The native SQL set operation with exact compatible row shapes.</param>
-    /// <returns>The borrowed current-selection view; its owning query retains the native arena.</returns>
+    /// <returns>The borrowed current-selection view; its owning query retains the command and its dependencies.</returns>
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
@@ -118,7 +118,13 @@ public readonly struct QuerySelection<T>
     {
         var owner = Owner; var projection = Projection;
         return owner.Run(() =>
-        { owner.Selection(projection); var id = owner.Source.RegisterProjection(projection); var bound = projection.Fields.Select(f => owner.Source.BindCodec(f.Descriptor)).ToArray(); var parameters = owner.Parameters.Values.OrderBy(p => p.Id).ToArray(); return new PreparedQuery<T>(owner.Source, owner.Seal(8), projection, id, bound, parameters); });
+        {
+            owner.Selection(projection); var id = owner.Source.RegisterProjection(projection);
+            var bound = projection.Fields.Select(f => owner.Source.BindCodec(f.Descriptor)).ToArray();
+            // Finish managed layout construction before acquiring the native plan.
+            var parameters = owner.ParameterLayout();
+            return new PreparedQuery<T>(owner.Source, owner.Seal(8), projection, id, bound, parameters);
+        });
     }
     /// <summary>Renders a bounded native clone with placeholders and no parameter values; does not execute or seal.</summary>
     /// <inheritdoc cref="QuerySelection{T}"/>
@@ -140,20 +146,40 @@ public sealed class PreparedQuery<T> : IDisposable
     private readonly Projection<T> _projection;
     private readonly uint _projectionId;
     private readonly uint[] _codecs;
-    private readonly ParameterDefinition[] _parameters;
+    private PreparedParameterLayout? _parameters;
+    private StreamProjectionLayout? _streamLayout;
     private int _disposed;
-    internal PreparedQuery(DataSource source, DatabaseOwner plan, Projection<T> projection, uint projectionId, uint[] codecs, ParameterDefinition[] parameters)
+    internal PreparedQuery(DataSource source, DatabaseOwner plan, Projection<T> projection, uint projectionId, uint[] codecs, PreparedParameterLayout parameters)
     { _source = source; _plan = plan; _projection = projection; _projectionId = projectionId; _codecs = codecs; _parameters = parameters; }
     private TypedStream<T> Stream(DataSession session, QueryParameters? parameters, CancellationToken token)
     {
         ArgumentNullException.ThrowIfNull(session); ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this); session.CheckOpen();
         if (!ReferenceEquals(_source, session.Source)) throw new ArgumentException("A prepared plan requires a session from its exact source.", nameof(session));
-        var values = ParameterDefinition.Encode(_source, _parameters, parameters);
+        var layout = Volatile.Read(ref _parameters);
+        ObjectDisposedException.ThrowIf(layout is null, this);
+        var values = layout.Encode(_source, parameters);
+        var limits = session.StreamingLimits;
+        var streamLayout = Volatile.Read(ref _streamLayout);
+        if (streamLayout is null)
+        {
+            // Preserve lazy error timing: validate row capability and capacity
+            // only after this execution's parameter snapshot, never at Prepare.
+            var created = TypedStream<T>.CreateProjectionLayout(_projection, _source.Binding.SemanticProfile, _projectionId, _codecs, limits);
+            streamLayout = Interlocked.CompareExchange(ref _streamLayout, created, null) ?? created;
+            if (Volatile.Read(ref _disposed) != 0)
+            {
+                // Dispose may have cleared the field before our late CAS. Do not
+                // republish a cache into a closed wrapper; concurrent local users
+                // retain safe immutable references independently.
+                Interlocked.CompareExchange(ref _streamLayout, null, streamLayout);
+                throw new ObjectDisposedException(GetType().FullName);
+            }
+        }
         return new(async (rows, cancellation) =>
         {
             ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
             return await session.OpenPlanStreamAsync(_plan, values, rows, cancellation).ConfigureAwait(false);
-        }, _projection, _source.Binding.SemanticProfile, _projectionId, _codecs, session.StreamingLimits, token);
+        }, _projection, streamLayout, limits, token);
     }
     /// <summary>Snapshots the exact declared parameter set before await and executes a bounded owned list.</summary>
     /// <inheritdoc cref="PreparedQuery{T}"/>
@@ -187,7 +213,15 @@ public sealed class PreparedQuery<T> : IDisposable
     public IAsyncEnumerable<T> AsAsyncEnumerable(DataSession session, QueryParameters? parameters = null, CancellationToken cancellationToken = default) => Stream(session, parameters, cancellationToken);
     /// <summary>Prevents new execution and releases this plan reference without cancelling accepted operations.</summary>
     /// <inheritdoc cref="PreparedQuery{T}"/>
-    public void Dispose() { if (Interlocked.Exchange(ref _disposed, 1) == 0) _plan.Dispose(); }
+    public void Dispose()
+    {
+        if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+        // In-flight construction holds its own immutable layout reference. New
+        // dispatch is already closed, and the disposed wrapper retains no cache.
+        Interlocked.Exchange(ref _parameters, null);
+        Interlocked.Exchange(ref _streamLayout, null);
+        _plan.Dispose();
+    }
 }
 /// <summary>A frozen native CTE with an explicit declared row shape and source identity.</summary>
 /// <typeparam name="T">The declared CTE row class.</typeparam>
@@ -213,9 +247,8 @@ public sealed class CommonTable<T> : IDisposable where T : class
         return owner.Run(() =>
         {
             owner.Selection(body.Projection); var model = owner.Source.RegisterModel(declaredShape);
-            using var m = model.Borrow(DatabaseOwnerKind.Model); using var q = owner.Binding.Enter(); nint result = 0; var error = BindingChecks.Error();
-            HostFailure.Check(owner.Source.Binding, owner.Binding.Calls.nw_db_cte_create_v1(m.Pointer, declaredShape.Identity.Id, q.Pointer, recursive ? 1u : 0u, &result, &error), error);
-            return new CommonTable<T>(new(owner.Source.Binding, DatabaseOwnerKind.Cte, result), owner.Parameters.Values.ToArray());
+            var handle = owner.Binding.CreateCte(model, declaredShape.Identity.Id, recursive);
+            return new CommonTable<T>(handle, owner.Parameters.Values.ToArray());
         });
     }
     /// <summary>Prevents new CTE imports and releases this native snapshot reference.</summary>
@@ -223,7 +256,7 @@ public sealed class CommonTable<T> : IDisposable where T : class
     public void Dispose() => Handle.Dispose();
 }
 /// <summary>Finite mutable native window state; each Over/rank call snapshots its current definition.</summary>
-/// <remarks>The owning query bounds lifetime and concurrent access. Rank, RowNumber and Over snapshot native window state immediately; subsequent mutation cannot change existing expressions. Defaults and limits follow the provider capability contract.</remarks>
+/// <remarks>The owning query bounds lifetime and concurrent access. Rank, RowNumber and Over snapshot the current window specification immediately; subsequent mutation cannot change existing expressions. Defaults and limits follow the provider capability contract.</remarks>
 public sealed class WindowDefinition
 {
     internal QueryContext Owner { get; }

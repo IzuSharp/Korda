@@ -254,6 +254,36 @@ class RoutingTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "Unregistered"):
                     plan_tree(self.tree, bad)
 
+    def test_local_benchmarks_skip_jobs_and_product_trees_keep_package_routing(self):
+        cases = (
+            ("benchmarks/Database/check.py", set(), set()),
+            ("benchmarks/db-perf/check.py", set(), set()),
+            ("src/Data.Sqlite/SqliteOptions.cs", {"sqlite"}, {"sqlite"}),
+            ("src/Data.Codecs/ParameterSnapshot.cs", {"linux", "postgresql", "sqlite"}, {"postgresql", "sqlite"}),
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            for path, scopes, packages in cases:
+                with self.subTest(path=path), patch.dict(os.environ, {"GIT_INDEX_FILE": str(Path(tmp) / "index")}):
+                    git("read-tree", self.tree)
+                    content = git("show", self.tree + ":" + path)
+                    changed = Path(tmp) / "changed-source"
+                    changed.write_bytes(content + (b"\n// Routing fixture.\n" if path.endswith(".cs") else b"\n# Routing fixture.\n"))
+                    blob = git("hash-object", "-w", str(changed)).decode().strip()
+                    git("update-index", "--cacheinfo", "100644", blob, path)
+                    tree = git("write-tree").decode().strip()
+                    result = plan_tree(self.tree, tree)
+                    self.assertEqual(set(result["build_scopes"]), scopes)
+                    self.assertEqual(set(result["public_checks"]), packages)
+                    self.assertEqual(set(result["packages"]), packages)
+                    self.assertEqual(result["modules"], [])
+                    self.assertEqual(result["module_packages"], [])
+                    self.assertEqual(result["releases"], [])
+                    self.assertFalse(any(a.startswith(("image.", "weekly.", "manual.")) for a in self.actions(result)))
+                    for provider in packages:
+                        self.assertIn("public.consume-aot", result["actions"][provider])
+                    if scopes == {"sqlite"}:
+                        self.assertNotIn("pg-server", result["resources"]["sqlite"])
+
     def test_verify_requires_every_selected_package(self):
         plan = self.plan("src/Data.Codecs/ParameterSnapshot.cs")
         results = {n: {"result": "success"} for n in ("plan", "build", "security")}

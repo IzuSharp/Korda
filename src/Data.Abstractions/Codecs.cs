@@ -72,13 +72,15 @@ public sealed class ValueCodec<T>
     internal static DatabaseException Capacity() => new("The value exceeds the finite snapshot byte budget.", DatabaseErrorKind.ResourceLimit);
     internal T DecodeScalar(ReadOnlySpan<byte> bytes) => _decode(bytes);
     internal T Decode(ReadOnlyMemory<byte>? value)
+        => Decode(value.GetValueOrDefault().Span, value is null);
+    internal T Decode(ReadOnlySpan<byte> value, bool isNull)
     {
-        if (value is null)
+        if (isNull)
         {
             if (!Descriptor.Nullable) throw new DatabaseException("SQL NULL is not allowed by this codec.", DatabaseErrorKind.Conversion);
             return default!;
         }
-        try { return _decode(value.Value.Span); }
+        try { return _decode(value); }
         catch (Exception e) when (e is ArgumentException or OverflowException or FormatException or JsonException)
         { throw new DatabaseException("The wire value does not match its declared codec.", DatabaseErrorKind.Conversion, innerException: e); }
     }
@@ -254,9 +256,15 @@ internal static class DecimalBytes
     internal static decimal Decode(ReadOnlySpan<byte> bytes)
     {
         if (bytes.Length != 16 || bytes[12] > 28 || bytes[13] > 1 || bytes[14] != 0 || bytes[15] != 0) throw new ArgumentException("Invalid decimal encoding.");
-        var value = new decimal(BinaryPrimitives.ReadInt32LittleEndian(bytes), BinaryPrimitives.ReadInt32LittleEndian(bytes[4..]), BinaryPrimitives.ReadInt32LittleEndian(bytes[8..]), bytes[13] == 1, bytes[12]);
-        if (!Encode(value).AsSpan().SequenceEqual(bytes)) throw new ArgumentException("Noncanonical decimal encoding.");
-        return value;
+        var low = BinaryPrimitives.ReadUInt32LittleEndian(bytes);
+        var middle = BinaryPrimitives.ReadUInt32LittleEndian(bytes[4..]);
+        var high = BinaryPrimitives.ReadUInt32LittleEndian(bytes[8..]);
+        // The wire coefficient is only 96 bits. Checking its canonical form does
+        // not require materializing and re-encoding a decimal through BigInteger.
+        var coefficient = (UInt128)low | (UInt128)middle << 32 | (UInt128)high << 64;
+        if (coefficient == 0 ? bytes[12] != 0 || bytes[13] != 0 : bytes[12] != 0 && coefficient % 10 == 0)
+            throw new ArgumentException("Noncanonical decimal encoding.");
+        return new decimal(unchecked((int)low), unchecked((int)middle), unchecked((int)high), bytes[13] == 1, bytes[12]);
     }
     internal static BigInteger Scaled(decimal value, byte targetScale)
     {
@@ -266,7 +274,26 @@ internal static class DecimalBytes
         return negative ? -scaled : scaled;
     }
     internal static void CheckFit(decimal value, byte precision, byte scale)
-    { if (BigInteger.Abs(Scaled(value, scale)) >= BigInteger.Pow(10, precision)) throw new OverflowException("Decimal exceeds configured precision."); }
+    {
+        if (precision is < 1 or > 29 || scale > 28 || scale > precision)
+        {
+            // Public configured codecs reject these bounds before this call.
+            // Retain the prior behavior for any other internal caller.
+            if (BigInteger.Abs(Scaled(value, scale)) >= BigInteger.Pow(10, precision)) throw new OverflowException("Decimal exceeds configured precision.");
+            return;
+        }
+        Span<int> bits = stackalloc int[4]; decimal.GetBits(value, bits);
+        var coefficient = (UInt128)(uint)bits[0] | (UInt128)(uint)bits[1] << 32 | (UInt128)(uint)bits[2] << 64;
+        if (coefficient == 0) return;
+        var valueScale = (bits[3] >> 16) & 255;
+        while (valueScale > 0 && coefficient % 10 == 0) { coefficient /= 10; valueScale--; }
+        if (valueScale > scale) throw new ArgumentException("Conversion would round the value.");
+        // coefficient * 10^(scale-valueScale) < 10^precision is equivalent
+        // to this bounded comparison; both powers fit in UInt128.
+        UInt128 limit = 1;
+        for (var i = 0; i < precision - (scale - valueScale); i++) limit *= 10;
+        if (coefficient >= limit) throw new OverflowException("Decimal exceeds configured precision.");
+    }
     internal static decimal Power10(byte scale) { decimal result = 1; for (var i = 0; i < scale; i++) result *= 10; return result; }
 }
 

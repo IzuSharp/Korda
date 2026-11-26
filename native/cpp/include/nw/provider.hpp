@@ -23,6 +23,8 @@ using Clock = std::chrono::steady_clock;
 class Cancel
 {
   public:
+    // Publish intent under an owner's state lock without invoking provider code.
+    void mark_requested() noexcept;
     void request();
     void install(std::function<void()> hook);
     void detach();
@@ -60,12 +62,6 @@ struct ProviderOptions
     bool sqlite_foreign_keys = true;
 };
 
-struct Scalar
-{
-    Codec codec;
-    std::optional<Bytes> value;
-};
-using Row = std::vector<std::optional<Bytes>>;
 using TextRow = std::vector<std::optional<std::string>>;
 
 struct ProviderColumn
@@ -77,8 +73,32 @@ struct ProviderColumn
 
 class ProviderConnection;
 
+enum class RowAppendState
+{
+    End,
+    Appended,
+    Full
+};
+struct RowAppendResult
+{
+    RowAppendState state;
+    bool advanced;
+};
+
+// A synchronous row destination. Host batches and internal administration use
+// the same provider preflight/conversion loop with their own existing budgets.
+// append_validated receives only borrowed data and must retain its own bytes.
+struct RowSink
+{
+    void* state;
+    std::size_t payload_limit;
+    void (*begin)(void*);
+    void (*append_validated)(void*, std::optional<ByteView>);
+    bool (*commit)(void*);
+};
+
 // One live statement owns a physical connection through its last drain/finalize.
-// next() holds at most the current provider row; the Host owns bounded batching.
+// append_next holds at most the current provider row; the Host owns batching.
 class ProviderStatement
 {
   public:
@@ -86,19 +106,22 @@ class ProviderStatement
     ProviderStatement(const ProviderStatement&) = delete;
     ProviderStatement& operator=(const ProviderStatement&) = delete;
     [[nodiscard]] const std::vector<ProviderColumn>& columns() const noexcept;
-    [[nodiscard]] std::optional<Row> next(const std::vector<Codec>& codecs, std::size_t field_bytes,
-                                          const CallContext& context,
-                                          std::size_t row_payload_bytes = std::numeric_limits<std::size_t>::max());
+    [[nodiscard]] RowAppendResult append_next(BatchWriter& writer, const std::vector<Codec>& codecs,
+                                              std::size_t field_bytes, const CallContext& context);
+    [[nodiscard]] RowAppendResult append_next(RowSink sink, const std::vector<Codec>& codecs, std::size_t field_bytes,
+                                              const CallContext& context);
     [[nodiscard]] std::optional<TextRow> next_text(const CallContext& context);
     [[nodiscard]] std::int64_t affected() const noexcept;
-    // The Host's PostgreSQL description and stream-retirement boundaries each
-    // require their own protocol confirmation. Ordinary low-level statements do
-    // not implicitly add confirmations to transaction/admin commands.
-    void confirm_description();
+    // SQLite preparation owns the statement before parameter admission. Binding
+    // never steps it and cannot replace values after execution has started.
+    void bind_parameters(const std::vector<Scalar>& parameters);
+    // Stream retirement reuses its own complete Execute confirmation, or
+    // performs a bounded drain/confirmation when the reader did not reach EOF.
     void close(bool confirm_protocol = false);
 
   private:
     friend class ProviderConnection;
+    void preflight_row(const std::vector<Codec>& codecs) const;
     struct Impl;
     explicit ProviderStatement(std::unique_ptr<Impl> impl);
     std::unique_ptr<Impl> impl_;
@@ -112,9 +135,9 @@ class ProviderConnection : public std::enable_shared_from_this<ProviderConnectio
     ~ProviderConnection();
     [[nodiscard]] std::unique_ptr<ProviderStatement> query(std::string_view sql, const std::vector<Scalar>& parameters,
                                                            const CallContext& context);
-    // SQLite's retained query path describes SQL before parameter admission.
-    // This prepares/finalizes metadata without binding values or stepping SQL.
-    [[nodiscard]] std::vector<ProviderColumn> describe_sqlite(std::string_view sql, const CallContext& context);
+    // SQLite describes and later binds the same statement, preserving SQL
+    // failure precedence before parameter admission without preparing twice.
+    [[nodiscard]] std::unique_ptr<ProviderStatement> prepare_unbound(std::string_view sql, const CallContext& context);
     [[nodiscard]] std::int64_t execute(std::string_view sql, const std::vector<Scalar>& parameters,
                                        const CallContext& context);
     void execute_script(std::string_view sql, const CallContext& context);
@@ -136,6 +159,10 @@ class ProviderConnection : public std::enable_shared_from_this<ProviderConnectio
     void close() noexcept;
     [[nodiscard]] bool healthy() const noexcept;
     [[nodiscard]] bool in_transaction() const noexcept;
+    // Called by the exclusive physical owner. A live, non-pipeline PostgreSQL
+    // connection must already have consumed ReadyForQuery with state INTRANS.
+    // This only inspects libpq state; it sends no SQL or protocol messages.
+    [[nodiscard]] bool postgres_transaction_ready_for_commit() const;
     [[nodiscard]] Profile profile() const noexcept;
     [[nodiscard]] std::uint64_t identity() const noexcept;
     void interrupt() noexcept;
@@ -155,8 +182,8 @@ class ProviderConnection : public std::enable_shared_from_this<ProviderConnectio
 };
 
 [[nodiscard]] bool type_matches(Profile profile, std::uint32_t codec, std::optional<std::string_view> type);
-[[nodiscard]] std::vector<Scalar> decode_parameters(ByteView bytes, const Expectation& expected,
-                                                    std::size_t maximum_parameters, std::size_t maximum_bytes,
-                                                    std::size_t maximum_field_bytes);
+// Quota and provider representation checks over already accepted typed values.
+void validate_parameters(std::span<const Scalar> parameters, const Expectation& expected, std::size_t wire_bytes,
+                         std::size_t maximum_parameters, std::size_t maximum_bytes, std::size_t maximum_field_bytes);
 
 } // namespace nw

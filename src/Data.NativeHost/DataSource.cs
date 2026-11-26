@@ -2,6 +2,7 @@ using Korda.Data;
 using Korda.Interop;
 using Korda.Interop.Abi;
 using Korda.Interop.Async;
+using Korda.Interop.Callbacks;
 using Korda.Interop.Lifetime;
 using Korda.Query.Internal;
 
@@ -25,6 +26,16 @@ public sealed partial class DataSource : IDisposable, IAsyncDisposable
     internal Action? TestAfterErrorTake { get; set; }
     internal Action? TestAfterOwnerTake { get; set; }
     internal Action<AsyncSnapshot>? TestRetirement { get; set; }
+    internal Action<HostPullBoundary>? TestPullBoundary { get; set; }
+    internal Action<HostPullSnapshot>? TestPullSnapshot { get; set; }
+    internal ICallbackScheduler? TestPullScheduler { get; set; }
+    internal Action<HostCloseBoundary>? TestCloseBoundary { get; set; }
+    internal Action<HostCloseSnapshot>? TestCloseSnapshot { get; set; }
+    internal ICallbackScheduler? TestCloseScheduler { get; set; }
+    internal Action<HostCommandBoundary>? TestCommandBoundary { get; set; }
+    internal Action<HostCommandSnapshot>? TestCommandSnapshot { get; set; }
+    internal ICallbackScheduler? TestCommandScheduler { get; set; }
+    internal CallbackCoordinator CallbackCoordinator => _resources.Coordinator;
     private DataSource(SourceBinding binding, DatabaseOwner owner, DatabaseProvider provider, string name, DatabaseLimits limits, EngineInfo info)
     {
         Binding = binding; Owner = owner; Provider = provider; Name = name; Limits = limits; Capabilities = new(provider, info);
@@ -36,6 +47,21 @@ public sealed partial class DataSource : IDisposable, IAsyncDisposable
         var info = descriptor.Inspect();
         var calls = new NativeCalls(descriptor.EngineId, symbol => EngineModuleLoader.ResolveExport(descriptor, symbol));
         var binding = new SourceBinding(calls, provider == DatabaseProvider.Sqlite ? 1u : 2u);
+        if (!info.Capabilities.Any(capability => capability.Name == CursorPullCalls.Capability))
+            throw new DatabaseCapabilityException(CursorPullCalls.Capability, provider == DatabaseProvider.Sqlite ? "sqlite.v1" : "postgresql.v1");
+        binding.Pulls = new(symbol => EngineModuleLoader.ResolveExport(descriptor, symbol));
+        binding.Pulls.Require();
+        if (!info.Capabilities.Any(capability => capability.Name == CommandCompletionCalls.Capability))
+            throw new DatabaseCapabilityException(CommandCompletionCalls.Capability, provider == DatabaseProvider.Sqlite ? "sqlite.v1" : "postgresql.v1");
+        binding.Completions = new(symbol => EngineModuleLoader.ResolveExport(descriptor, symbol));
+        binding.Completions.Require();
+        if (!info.Capabilities.Any(capability => capability.Name == FindShapeCalls.Capability))
+            throw new DatabaseCapabilityException(FindShapeCalls.Capability, provider == DatabaseProvider.Sqlite ? "sqlite.v1" : "postgresql.v1");
+        binding.Finds = new(symbol => EngineModuleLoader.ResolveExport(descriptor, symbol));
+        binding.Finds.Require();
+        binding.Commands = new(new QueryCommandCalls(symbol => EngineModuleLoader.ResolveExport(descriptor, symbol)),
+            limits.MaxQueryNodes, limits.MaxQueryDepth, limits.MaxParameters, checked((int)limits.MaxParameterBytes),
+            info.Capabilities.Select(capability => capability.Name));
         BindingChecks.Require((nint)calls.nw_db_source_create_v1, "source_create");
         nint pointer = 0; var error = BindingChecks.Error(); fixed (byte* bytes = config)
             HostFailure.Check(binding, calls.nw_db_source_create_v1(BindingChecks.View(bytes, config.Length), &pointer, &error), error);
@@ -62,6 +88,36 @@ public sealed partial class DataSource : IDisposable, IAsyncDisposable
         }
     }
     internal void Poison() { lock (_gate) _poisoned = true; }
+    internal Task<T> SubmitCommand<T>(NativeCommandKind kind, DatabaseOwner target, DatabaseOwner? input,
+        ReadOnlyMemory<byte> payload, uint action, uint expectedKind, CommandResultReader<T> read,
+        CancellationToken token = default)
+    {
+        CheckOpen();
+        if (token.IsCancellationRequested) return Task.FromCanceled<T>(token);
+        BindingChecks.SameSource(Binding, target);
+        return new HostCommandController<T>(this, kind, expectedKind, read, token).Request(target, input, payload, action);
+    }
+    internal Task<TransactionSnapshot> CloseOwner(DatabaseOwner owner)
+    {
+        bool cold;
+        lock (_gate) cold = _closing || _poisoned;
+        if (cold || owner.Kind is not (DatabaseOwnerKind.Session or DatabaseOwnerKind.Transaction or DatabaseOwnerKind.Savepoint))
+            return CloseGeneric(owner);
+        var command = new HostCommandController<TransactionSnapshot>(this, NativeCommandKind.CloseChild, 101, NativeCommand.Snapshot, default);
+        return CloseChild(command, owner);
+    }
+    private async Task<TransactionSnapshot> CloseChild(HostCommandController<TransactionSnapshot> command, DatabaseOwner owner)
+    {
+        try { return await command.Request(owner, null, default, 0).ConfigureAwait(false); }
+        catch when (command.DefinitelyRejected)
+        {
+            // Source close can stop native control admission after the managed
+            // check. A definitely rejected child close retains the existing join.
+            return await CloseGeneric(owner).ConfigureAwait(false);
+        }
+    }
+    private Task<TransactionSnapshot> CloseGeneric(DatabaseOwner owner) => Start(() => NativeHost.Close(owner),
+        operation => { using var buffer = NativeHost.TakeBuffer(Binding, operation); return buffer.ReadSnapshot(); }, control: true);
     internal Task<T> Start<T>(Func<nint> create, Func<nint, T> take, CancellationToken token = default, bool control = false)
     {
         if (!control) { CheckOpen(); if (token.IsCancellationRequested) return Task.FromCanceled<T>(token); }
@@ -125,10 +181,11 @@ public sealed partial class DataSource : IDisposable, IAsyncDisposable
     private void RequestClose()
     {
         lock (_gate) _closing = true;
-        lock (_registrations) { ReleaseRelations(); foreach (var model in _models.Values) model.Dispose(); _models.Clear(); _codecs.Clear(); }
+        lock (_registrations) { ReleaseFindPlans(); ReleaseRelations(); foreach (var model in _models.Values) model.Dispose(); _models.Clear(); _codecs.Clear(); }
         _close.Request();
     }
     partial void ReleaseRelations();
+    partial void ReleaseFindPlans();
     private void FinishClose() { Owner.Dispose(); _resources.Dispose(); }
     /// <summary>Closes admission and requests bounded native cleanup without blocking for I/O.</summary>
     public void Dispose() => RequestClose();
@@ -143,7 +200,8 @@ public sealed partial class DataSource : IDisposable, IAsyncDisposable
             using var lease = Owner.Borrow(DatabaseOwnerKind.Source); var bytes = codec.Configuration is { } config ? HostEncoding.Utf8.GetBytes(config) : [];
             uint result = 0; var error = BindingChecks.Error(); fixed (byte* input = bytes)
                 HostFailure.Check(Binding, Binding.Calls.nw_db_codec_register_v1(lease.Pointer, codec.Id, BindingChecks.View(input, bytes.Length), &result, &error), error);
-            if (result == 0) throw new NativeEngineException("The native codec binding is zero."); _codecs.Add(codec, result); return result;
+            if (result == 0) throw new NativeEngineException("The native codec binding is zero.");
+            Binding.Commands?.RegisterCodec(result, codec); _codecs.Add(codec, result); return result;
         }
     }
     internal DatabaseOwner RegisterModel<TEntity>(Table<TEntity> table) where TEntity : class
@@ -190,15 +248,15 @@ internal sealed class CloseController(DataSource source, DatabaseOwner owner, Ac
             var observed = NativeHost.Snapshot(owner).Cleanup;
             if (observed.LocalResourcesReleased) { _last = observed; _task = Task.FromResult(observed); release(); return; }
             _last = _last with { Status = CleanupStatus.Pending };
-            try { _task = Finish(source.Start(() => NativeHost.Close(owner), operation => { using var buffer = NativeHost.TakeBuffer(source.Binding, operation); return HostEncoding.Snapshot(buffer.Copy()).Cleanup; }, control: true)); }
+            try { _task = Finish(source.CloseOwner(owner)); }
             catch (Exception failure) { _task = Task.FromException<DatabaseCloseResult>(failure); _last = _last with { Status = CleanupStatus.Failed }; }
         }
     }
-    private async Task<DatabaseCloseResult> Finish(Task<DatabaseCloseResult> completion)
+    private async Task<DatabaseCloseResult> Finish(Task<TransactionSnapshot> completion)
     {
         try
         {
-            var result = await completion.ConfigureAwait(false);
+            var result = (await completion.ConfigureAwait(false)).Cleanup;
             lock (_gate) _last = result;
             if (result.LocalResourcesReleased) release();
             return result;

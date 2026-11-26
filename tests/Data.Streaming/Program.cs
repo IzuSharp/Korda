@@ -7,9 +7,48 @@ using Korda.Database.Internal;
 if (args.Length == 0) throw new ArgumentException("Usage: Data.Streaming.Tests <report-directory> [--require-aot]");
 if (args.Contains("--require-aot", StringComparer.Ordinal) && RuntimeFeature.IsDynamicCodeSupported) throw new InvalidOperationException("Actual NativeAOT execution required.");
 Directory.CreateDirectory(args[0]);
+if (args.Contains("--allocation-probe", StringComparer.Ordinal))
+{
+    await AllocationProbe.RunAsync(args[0], args);
+    return;
+}
+if (args.Contains("--allocation-probe-races", StringComparer.Ordinal))
+{
+    await AllocationProbeRaces.RunAsync();
+    return;
+}
+if (args.Contains("--owned-batch-probe-only", StringComparer.Ordinal))
+{
+    OwnedBatchProbe.Run(args[0]);
+    return;
+}
+if (args.Contains("--stable-batch-only", StringComparer.Ordinal))
+{
+    StableBatchTests.Run();
+    return;
+}
+if (args.Contains("--row-lease-reuse-probe-only", StringComparer.Ordinal))
+{
+    RowLeaseReuseProbe.Run(args[0]);
+    return;
+}
+if (args.Contains("--row-lease-reuse-checks-only", StringComparer.Ordinal))
+{
+    await RowLeaseReuseChecks.RunAsync();
+    return;
+}
+if (args.Contains("--allocation-gate-only", StringComparer.Ordinal))
+{
+    await AllocationProbeGate.RunAsync(args[0]);
+    return;
+}
+// The default and --correctness-only paths execute the same behavior checks.
+// Allocation probes remain explicit local diagnostic entry points above.
+await AllocationProbeRaces.RunAsync();
+OwnedBatchProbe.RunCorrectness();
+StableBatchTests.Run();
+await RowLeaseReuseChecks.RunAsync();
 var cases = new List<Observation>();
-var allocatedBefore = GC.GetTotalAllocatedBytes(true);
-var workingSetBefore = Process.GetCurrentProcess().WorkingSet64;
 var assertions = 0;
 var ordinary = Projection<Item>.Create([ResultField.Create("id", Codecs.Int64), ResultField.Create("label", Codecs.NullableReference(Codecs.String))], row => new(row.Read(0, Codecs.Int64), row.Read(1, Codecs.NullableReference(Codecs.String))));
 var limits = new StreamLimits(3, 256, 100, 64 * 1024);
@@ -48,7 +87,7 @@ void Clean(string name, uint provider, NativeFixtureTransport? transport, int ro
     Check(values[5] <= 256 && values[2] <= 64 * 1024, name + ": wire and conservative reserved byte bounds");
     Check(values[17] == 0, name + ": provider active operations returned");
     if (provider == 1) Check(values[15] == 1 && values[16] == 0, name + ": worker shutdown acknowledged; OS thread join not claimed");
-    Check(transport.ActiveCalls == 0 && NativeBatch.LiveBytes == 0 && Native.Owners() == 0, name + ": managed calls/copies/native wrapper owners retired");
+    Check(transport.ActiveCalls == 0 && NativeBatch.LiveBytes == 0 && Native.Owners() == 0, name + ": managed calls/fixture native scratch/native wrapper owners retired");
     cases.Add(new(name, provider, rows, transport.Fetches, transport.DuplicateTakeRejections, values));
     Console.WriteLine($"PASS {name} provider={provider} rows={rows} fetches={transport.Fetches} native-retired={values[8]} lease-released={values[12]} reusable-probe={values[14]}");
 }
@@ -137,7 +176,7 @@ foreach (var provider in new uint[] { 1, 2 })
     var lease = new RowBatchLease(raw, expected, ordinary.Fields, limits);
     var copied = lease.Materialize(0, ordinary);
     lease.Dispose(); lease.Dispose();
-    await Expect<ObjectDisposedException>(() => { ((IRowLease)lease).AssertAlive(); return Task.CompletedTask; });
+    await Expect<ObjectDisposedException>(() => { ((IRowLifetime)lease).AssertAlive(); return Task.CompletedTask; });
     await transport.JoinAsync(); Check(copied.Label == "row-1", "DTO owns its data after lease disposal"); Clean("lease-dispose", provider, transport, 1);
 
     foreach (var scenario in new uint[] { 4, 5, 6 })
@@ -230,10 +269,9 @@ using (var json = new Utf8JsonWriter(output, new JsonWriterOptions { Indented = 
 {
     json.WriteStartObject(); json.WriteString("task", "B06"); json.WriteString("status", "passed"); json.WriteString("platform", "linux-x64");
     json.WriteBoolean("dynamicCodeSupported", RuntimeFeature.IsDynamicCodeSupported); json.WriteNumber("assertions", assertions);
-    json.WriteNumber("nativeToManagedCopyBytes", NativeBatch.CopiedBytes); json.WriteNumber("peakTransportManagedBytes", NativeBatch.PeakBytes);
-    json.WriteNumber("managedAllocatedBytes", GC.GetTotalAllocatedBytes(true) - allocatedBefore); json.WriteNumber("workingSetBefore", workingSetBefore);
-    using var process = Process.GetCurrentProcess(); json.WriteNumber("workingSetAfter", process.WorkingSet64); json.WriteNumber("peakWorkingSet", process.PeakWorkingSet64);
-    json.WriteString("memoryScope", "Owned reservation and wire/copy counters are bounded; measured CLR allocations and process RSS include SQLx/SQLite/Tokio/allocator/GC effects and are not asserted as hard bounds.");
+    json.WriteNumber("fixtureNativeCopyBytes", NativeBatch.CopiedBytes); json.WriteNumber("peakFixtureNativeBytes", NativeBatch.PeakBytes);
+    json.WriteNumber("schemaVersion", 2);
+    json.WriteString("memoryScope", "Correctness records owned reservation and the retained fixture ABI copy into test-owned native storage. The product scoped path has no fixture copy. Process allocation, GC and RSS sampling belong to explicit local diagnostics.");
     json.WriteStartArray("cases");
     foreach (var item in cases)
     {
@@ -242,13 +280,13 @@ using (var json = new Utf8JsonWriter(output, new JsonWriterOptions { Indented = 
     }
     json.WriteEndArray(); json.WriteEndObject();
 }
-Console.WriteLine($"PASS B06 assertions={assertions} cases={cases.Count} jit={RuntimeFeature.IsDynamicCodeSupported} managed-live-bytes={NativeBatch.LiveBytes} native-wrappers={Native.Owners()}");
+Console.WriteLine($"PASS B06 assertions={assertions} cases={cases.Count} jit={RuntimeFeature.IsDynamicCodeSupported} fixture-native-live-bytes={NativeBatch.LiveBytes} native-wrappers={Native.Owners()}");
 
 internal sealed record Item(long Id, string? Label);
 internal sealed record Observation(string Name, uint Provider, int Rows, int Fetches, int DuplicateTakes, ulong[] Stats);
 internal sealed class FailingCleanupTransport(IStreamTransport inner) : IStreamTransport
 {
-    public Task<IStreamBatch> FetchAsync() => inner.FetchAsync();
+    public ValueTask<ScopedStreamBatch> FetchAsync() => inner.FetchAsync();
     public void RequestStop() => inner.RequestStop();
     public async Task<StreamRetirement> JoinAsync()
     {
@@ -258,10 +296,11 @@ internal sealed class FailingCleanupTransport(IStreamTransport inner) : IStreamT
 }
 internal sealed class CorruptTransport(IStreamTransport inner, int mutation) : IStreamTransport
 {
-    public async Task<IStreamBatch> FetchAsync()
+    public async ValueTask<ScopedStreamBatch> FetchAsync()
     {
         var owner = await inner.FetchAsync();
-        var bytes = owner.Bytes.ToArray();
+        byte[] bytes;
+        using (var read = owner.AcquireRead()) bytes = read.Bytes.ToArray();
         switch (mutation)
         {
             case 0: bytes[24] ^= 1; break;
@@ -270,14 +309,10 @@ internal sealed class CorruptTransport(IStreamTransport inner, int mutation) : I
             case 3: bytes[checked((int)DbWire.R64(bytes, 160))] = 0xff; break;
             case 4: DbWire.U64(bytes, 160, DbWire.R64(bytes, 136)); break;
         }
-        return new CorruptBatch(owner, bytes);
+        var corrupt = new ScopedBatchFixture(bytes, owner.End, afterRelease: owner.Dispose);
+        corrupt.Acquire();
+        return corrupt.Batch;
     }
     public void RequestStop() => inner.RequestStop();
     public Task<StreamRetirement> JoinAsync() => inner.JoinAsync();
-}
-internal sealed class CorruptBatch(IStreamBatch owner, byte[] bytes) : IStreamBatch
-{
-    public ReadOnlyMemory<byte> Bytes => bytes;
-    public bool End => owner.End;
-    public void Dispose() => owner.Dispose();
 }

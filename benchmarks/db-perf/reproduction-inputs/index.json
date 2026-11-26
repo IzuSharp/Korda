@@ -1,0 +1,495 @@
+{
+  "schemaVersion": 1,
+  "task": "DB-Perf-01",
+  "frozenLocalPlanCommit": "b279f42674eb3e8db48b423482f38c6b955c4d82",
+  "scope": "Immutable historical reproduction inputs moved to Korda to respect repository ownership; not current compilation inputs.",
+  "inputs": [
+    {
+      "sha256": "0cc8b2488de94ac18935d0b6a29504926022b633d2667917ee4a76b26552bc89",
+      "git_blob": "c4f123c05d827e40fa97be61ef3c6b3b1f86e617",
+      "bytes": 19379,
+      "path": "benchmarks/db-perf/reproduction-inputs/by-sha256/0cc8b2488de94ac18935d0b6a29504926022b633d2667917ee4a76b26552bc89/Program.before.cs",
+      "original_plan_paths": [
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/before-internal/build/Program.before.cs"
+      ],
+      "purpose": "Exact historical reproduction input; excluded from current product and consumer builds."
+    },
+    {
+      "sha256": "1c437cad79b71abfbd8239b4590af741b9f233bcedcfdd4a634e3be7b437be91",
+      "git_blob": "7fe5075b3da494cdebfde2d43c0700fb10c473b0",
+      "bytes": 53830,
+      "path": "benchmarks/db-perf/reproduction-inputs/by-sha256/1c437cad79b71abfbd8239b4590af741b9f233bcedcfdd4a634e3be7b437be91/campaign.py",
+      "original_plan_paths": [
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/controller-review-v1/source/benchmarks/db-perf/campaign.py"
+      ],
+      "purpose": "Exact historical reproduction input; excluded from current product and consumer builds."
+    },
+    {
+      "sha256": "fa27a854b9cfcd3bc51ee528136aea71049531bc633797b31426cc8421ab0a09",
+      "git_blob": "f2b9c62ab1aa49c5aaae5e59aaf726505922ff93",
+      "bytes": 16227,
+      "path": "benchmarks/db-perf/reproduction-inputs/by-sha256/fa27a854b9cfcd3bc51ee528136aea71049531bc633797b31426cc8421ab0a09/campaign_build.py",
+      "original_plan_paths": [
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/controller-review-v1/source/benchmarks/db-perf/campaign_build.py"
+      ],
+      "purpose": "Exact historical reproduction input; excluded from current product and consumer builds."
+    },
+    {
+      "sha256": "1d352f52c2f42f4b011b950f3ce92dee8e6c40ebee31ca43170de1e704d43d49",
+      "git_blob": "962b5b0d0c324ee4808ef61147a593c5c36b3709",
+      "bytes": 20968,
+      "path": "benchmarks/db-perf/reproduction-inputs/by-sha256/1d352f52c2f42f4b011b950f3ce92dee8e6c40ebee31ca43170de1e704d43d49/run.py",
+      "original_plan_paths": [
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/controller-review-v1/source/benchmarks/db-perf/run.py"
+      ],
+      "purpose": "Exact historical reproduction input; excluded from current product and consumer builds."
+    },
+    {
+      "sha256": "3f0acc936bbd7995cc75832e7120b09509fc915067815b606f431f336817af1d",
+      "git_blob": "38a0da7c043451c087323356cefd637239f6069c",
+      "bytes": 11933,
+      "path": "benchmarks/db-perf/reproduction-inputs/by-sha256/3f0acc936bbd7995cc75832e7120b09509fc915067815b606f431f336817af1d/test_controller.py",
+      "original_plan_paths": [
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/controller-review-v1/source/benchmarks/db-perf/test_controller.py"
+      ],
+      "purpose": "Exact historical reproduction input; excluded from current product and consumer builds."
+    },
+    {
+      "sha256": "01854453f87735a584f3d4b53892912929d959b37215b82c02eb514cf8884d6f",
+      "git_blob": "0b554e25f38547afbc9c25a97b6cae36563c26d5",
+      "bytes": 1350,
+      "path": "benchmarks/db-perf/reproduction-inputs/by-sha256/01854453f87735a584f3d4b53892912929d959b37215b82c02eb514cf8884d6f/DapperProbe.csproj",
+      "original_plan_paths": [
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/dapper-postgresql-minimal/consumer/DapperProbe.csproj",
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/dapper-sqlite-minimal/DapperProbe.csproj"
+      ],
+      "purpose": "Exact historical reproduction input; excluded from current product and consumer builds."
+    },
+    {
+      "sha256": "adcfbb328ea83d4be70323fef860b6dca198af1feff8ab165db9d08dd245add7",
+      "git_blob": "90f27ff62d4cdd88988f461161125f4ec881a2a0",
+      "bytes": 134,
+      "path": "benchmarks/db-perf/reproduction-inputs/by-sha256/adcfbb328ea83d4be70323fef860b6dca198af1feff8ab165db9d08dd245add7/NuGet.Config",
+      "original_plan_paths": [
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/dapper-postgresql-minimal/consumer/NuGet.Config",
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/dapper-sqlite-minimal/NuGet.Config",
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/dapper-postgresql/NuGet.Config",
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/dapper-sqlite/NuGet.Config"
+      ],
+      "purpose": "Exact historical reproduction input; excluded from current product and consumer builds."
+    },
+    {
+      "sha256": "bdcf89e1fc9f3448435296a09b525a63fa33de7400b5283a7eb96467ba8699a6",
+      "git_blob": "68780b55b15420ef78b24ff63fcc76084cea5118",
+      "bytes": 4151,
+      "path": "benchmarks/db-perf/reproduction-inputs/by-sha256/bdcf89e1fc9f3448435296a09b525a63fa33de7400b5283a7eb96467ba8699a6/Program.cs",
+      "original_plan_paths": [
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/dapper-postgresql-minimal/consumer/Program.cs"
+      ],
+      "purpose": "Exact historical reproduction input; excluded from current product and consumer builds."
+    },
+    {
+      "sha256": "68f543694dcbd45dd419451f054bc1d38a95c41a54ad8594873dd4d0f31199db",
+      "git_blob": "bc1037256a15b36e2e07c41ea438c2a082b37cea",
+      "bytes": 2921,
+      "path": "benchmarks/db-perf/reproduction-inputs/by-sha256/68f543694dcbd45dd419451f054bc1d38a95c41a54ad8594873dd4d0f31199db/Program.cs",
+      "original_plan_paths": [
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/dapper-sqlite-minimal/Program.cs"
+      ],
+      "purpose": "Exact historical reproduction input; excluded from current product and consumer builds."
+    },
+    {
+      "sha256": "9f996925ea274dd03dc57dae3c34f6c925f75104b172c0c8f942961a2720c6dd",
+      "git_blob": "e851ae6a1ac510bac8c513c35f50b2641a016cbd",
+      "bytes": 58130,
+      "path": "benchmarks/db-perf/reproduction-inputs/by-sha256/9f996925ea274dd03dc57dae3c34f6c925f75104b172c0c8f942961a2720c6dd/Contracts.generated.cs",
+      "original_plan_paths": [
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/dapper-postgresql/Contracts.generated.cs",
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/dapper-sqlite/Contracts.generated.cs"
+      ],
+      "purpose": "Exact historical reproduction input; excluded from current product and consumer builds."
+    },
+    {
+      "sha256": "afdc154e7531110f51e239b52438ed08ffad2120b244ff8b992be3924acef077",
+      "git_blob": "0d13ed27db182dfa27982417a9fff83da4ebae2c",
+      "bytes": 1016,
+      "path": "benchmarks/db-perf/reproduction-inputs/by-sha256/afdc154e7531110f51e239b52438ed08ffad2120b244ff8b992be3924acef077/Dataset.cs",
+      "original_plan_paths": [
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/dapper-postgresql/Dataset.cs",
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/dapper-sqlite/Dataset.cs"
+      ],
+      "purpose": "Exact historical reproduction input; excluded from current product and consumer builds."
+    },
+    {
+      "sha256": "594e439d768abb36d9439eeafee86d510b199356670e38c59b90a24ccc05bc43",
+      "git_blob": "603ae94c6560e58bf9e723c7a45ea1f7bcb3847b",
+      "bytes": 1345,
+      "path": "benchmarks/db-perf/reproduction-inputs/by-sha256/594e439d768abb36d9439eeafee86d510b199356670e38c59b90a24ccc05bc43/DbPerf.Dapper.csproj",
+      "original_plan_paths": [
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/dapper-postgresql/DbPerf.Dapper.csproj",
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/dapper-sqlite/DbPerf.Dapper.csproj"
+      ],
+      "purpose": "Exact historical reproduction input; excluded from current product and consumer builds."
+    },
+    {
+      "sha256": "fe47ba23ed9f7c7cbcbdd2f202793625d1cc528db7e835c6a06c093bd8c8ae00",
+      "git_blob": "dae4b0e1fc4a28eed4cfbaf01a944def7a3ad726",
+      "bytes": 1436,
+      "path": "benchmarks/db-perf/reproduction-inputs/by-sha256/fe47ba23ed9f7c7cbcbdd2f202793625d1cc528db7e835c6a06c093bd8c8ae00/Digest.cs",
+      "original_plan_paths": [
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/dapper-postgresql/Digest.cs",
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/dapper-sqlite/Digest.cs",
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/korda-postgresql/Digest.cs",
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/korda-sqlite/Digest.cs",
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/sqlite-before-public-v2/Digest.cs"
+      ],
+      "purpose": "Exact historical reproduction input; excluded from current product and consumer builds."
+    },
+    {
+      "sha256": "6af8e9bba339ea8fb1ec4c2d8b52a3e61cbbfc6e3a9580118f2424a873ef7dcc",
+      "git_blob": "ba871ea44c74832d025106628646bee2a6826766",
+      "bytes": 4716,
+      "path": "benchmarks/db-perf/reproduction-inputs/by-sha256/6af8e9bba339ea8fb1ec4c2d8b52a3e61cbbfc6e3a9580118f2424a873ef7dcc/Driver.cs",
+      "original_plan_paths": [
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/dapper-postgresql/Driver.cs",
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/dapper-sqlite/Driver.cs"
+      ],
+      "purpose": "Exact historical reproduction input; excluded from current product and consumer builds."
+    },
+    {
+      "sha256": "dae0d9c9e9bed142dabb38317f105328f273a0db430e0659ef36138336adb480",
+      "git_blob": "5f51ca991ad185749768d607e7807987658b126e",
+      "bytes": 7112,
+      "path": "benchmarks/db-perf/reproduction-inputs/by-sha256/dae0d9c9e9bed142dabb38317f105328f273a0db430e0659ef36138336adb480/LifecycleCases.cs",
+      "original_plan_paths": [
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/dapper-postgresql/LifecycleCases.cs",
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/dapper-sqlite/LifecycleCases.cs"
+      ],
+      "purpose": "Exact historical reproduction input; excluded from current product and consumer builds."
+    },
+    {
+      "sha256": "0cd4a7696f114ee37b5da5a739eed8ee6696d0435283113b3bcac581147acfc9",
+      "git_blob": "f58d15d620e0cbece16cfc991c2dc33f027ca535",
+      "bytes": 7768,
+      "path": "benchmarks/db-perf/reproduction-inputs/by-sha256/0cd4a7696f114ee37b5da5a739eed8ee6696d0435283113b3bcac581147acfc9/LifecycleVerification.cs",
+      "original_plan_paths": [
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/dapper-postgresql/LifecycleVerification.cs",
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/dapper-sqlite/LifecycleVerification.cs"
+      ],
+      "purpose": "Exact historical reproduction input; excluded from current product and consumer builds."
+    },
+    {
+      "sha256": "6038aad3fcc54622b44bea24a283823d938765643d9bc3473f25b5ec11d9fcd1",
+      "git_blob": "7ad9afdd1692eeaa2405164dbbaa6b90887e6838",
+      "bytes": 19248,
+      "path": "benchmarks/db-perf/reproduction-inputs/by-sha256/6038aad3fcc54622b44bea24a283823d938765643d9bc3473f25b5ec11d9fcd1/Measurement.cs",
+      "original_plan_paths": [
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/dapper-postgresql/Measurement.cs",
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/dapper-sqlite/Measurement.cs"
+      ],
+      "purpose": "Exact historical reproduction input; excluded from current product and consumer builds."
+    },
+    {
+      "sha256": "26b189bdaba3acc05a7b2a046481f1571cb14f376eecf96e169a6b9d07ebadee",
+      "git_blob": "9b06f76ea5e19c3992b95903cd229666b17926a9",
+      "bytes": 3648,
+      "path": "benchmarks/db-perf/reproduction-inputs/by-sha256/26b189bdaba3acc05a7b2a046481f1571cb14f376eecf96e169a6b9d07ebadee/Models.cs",
+      "original_plan_paths": [
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/dapper-postgresql/Models.cs",
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/dapper-sqlite/Models.cs"
+      ],
+      "purpose": "Exact historical reproduction input; excluded from current product and consumer builds."
+    },
+    {
+      "sha256": "78fb693baae4c04e8611a0fb19e73ddcfb644cf0d824c3a22c93a28477148957",
+      "git_blob": "4352d55da3a197f92beeb5e7fefd0329e888a318",
+      "bytes": 12177,
+      "path": "benchmarks/db-perf/reproduction-inputs/by-sha256/78fb693baae4c04e8611a0fb19e73ddcfb644cf0d824c3a22c93a28477148957/OfferedLoad.cs",
+      "original_plan_paths": [
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/dapper-postgresql/OfferedLoad.cs",
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/dapper-sqlite/OfferedLoad.cs",
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/korda-postgresql/OfferedLoad.cs",
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/korda-sqlite/OfferedLoad.cs"
+      ],
+      "purpose": "Exact historical reproduction input; excluded from current product and consumer builds."
+    },
+    {
+      "sha256": "8c82642e970730900ac55481281354c9a4d8d94e5bc9b3c206e35d758c18269a",
+      "git_blob": "e279284927985d4fb2ae99ac91678f4ba694ab6e",
+      "bytes": 4610,
+      "path": "benchmarks/db-perf/reproduction-inputs/by-sha256/8c82642e970730900ac55481281354c9a4d8d94e5bc9b3c206e35d758c18269a/Options.cs",
+      "original_plan_paths": [
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/dapper-postgresql/Options.cs",
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/dapper-sqlite/Options.cs"
+      ],
+      "purpose": "Exact historical reproduction input; excluded from current product and consumer builds."
+    },
+    {
+      "sha256": "b75223c36c96093491cd5f6bed40a6dacb0ebdd213533187af55a8bef7e97b05",
+      "git_blob": "455185839d98c202a462845d62d64945f54c1887",
+      "bytes": 8161,
+      "path": "benchmarks/db-perf/reproduction-inputs/by-sha256/b75223c36c96093491cd5f6bed40a6dacb0ebdd213533187af55a8bef7e97b05/Oracles.cs",
+      "original_plan_paths": [
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/dapper-postgresql/Oracles.cs",
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/dapper-sqlite/Oracles.cs"
+      ],
+      "purpose": "Exact historical reproduction input; excluded from current product and consumer builds."
+    },
+    {
+      "sha256": "c7120ac15e6ad008b3d78624fed34e32470166e849d2f220f8443f87d1ca87a3",
+      "git_blob": "dbdd600643ffb4fc8af10e8bc35ee47b5d5e7e8b",
+      "bytes": 1039,
+      "path": "benchmarks/db-perf/reproduction-inputs/by-sha256/c7120ac15e6ad008b3d78624fed34e32470166e849d2f220f8443f87d1ca87a3/Program.cs",
+      "original_plan_paths": [
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/dapper-postgresql/Program.cs",
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/dapper-sqlite/Program.cs"
+      ],
+      "purpose": "Exact historical reproduction input; excluded from current product and consumer builds."
+    },
+    {
+      "sha256": "3fc7d27fae4716010d5b63908756d74b00adc611c8e18ac354e80b5e4bdc6a9c",
+      "git_blob": "5be7032905396ba09cafb4c6d7c8a8e701261e83",
+      "bytes": 5677,
+      "path": "benchmarks/db-perf/reproduction-inputs/by-sha256/3fc7d27fae4716010d5b63908756d74b00adc611c8e18ac354e80b5e4bdc6a9c/Workload.cs",
+      "original_plan_paths": [
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/dapper-postgresql/Workload.cs",
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/dapper-sqlite/Workload.cs"
+      ],
+      "purpose": "Exact historical reproduction input; excluded from current product and consumer builds."
+    },
+    {
+      "sha256": "f3fce12d1ee9be60efcb9a5e9645d08fe833e373dd43dd14c592e7ab07cb7811",
+      "git_blob": "f21e8e0ba19efe300242ebd0d4e37884cd7d3aa4",
+      "bytes": 21972,
+      "path": "benchmarks/db-perf/reproduction-inputs/by-sha256/f3fce12d1ee9be60efcb9a5e9645d08fe833e373dd43dd14c592e7ab07cb7811/AdvancedCases.cs",
+      "original_plan_paths": [
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/korda-postgresql/AdvancedCases.cs",
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/korda-sqlite/AdvancedCases.cs"
+      ],
+      "purpose": "Exact historical reproduction input; excluded from current product and consumer builds."
+    },
+    {
+      "sha256": "211083033651ce526a88bee130ab8f817a41b72dcc0b211dbcf287e190cc3f0a",
+      "git_blob": "4009140098fa61ed2ceacfb08cac93e993e57354",
+      "bytes": 6275,
+      "path": "benchmarks/db-perf/reproduction-inputs/by-sha256/211083033651ce526a88bee130ab8f817a41b72dcc0b211dbcf287e190cc3f0a/Dataset.cs",
+      "original_plan_paths": [
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/korda-postgresql/Dataset.cs",
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/korda-sqlite/Dataset.cs",
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/sqlite-before-public-v2/Dataset.cs"
+      ],
+      "purpose": "Exact historical reproduction input; excluded from current product and consumer builds."
+    },
+    {
+      "sha256": "7e25c6492169eb87e1c62af7fb42ad08cb3e6f6b7c79d4ebd1f1e12fc499ff8b",
+      "git_blob": "2c32ee69e746a0286a04dafb756dcc9c487b5f01",
+      "bytes": 1016,
+      "path": "benchmarks/db-perf/reproduction-inputs/by-sha256/7e25c6492169eb87e1c62af7fb42ad08cb3e6f6b7c79d4ebd1f1e12fc499ff8b/DbPerf.Korda.csproj",
+      "original_plan_paths": [
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/korda-postgresql/DbPerf.Korda.csproj",
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/korda-sqlite/DbPerf.Korda.csproj"
+      ],
+      "purpose": "Exact historical reproduction input; excluded from current product and consumer builds."
+    },
+    {
+      "sha256": "fa6c1b60f35b7bab3d85f8c30444f39e65e7deb3d6b448adcc134911bcafe660",
+      "git_blob": "1c1dfffa8c55e31a9bae4f6fe9665ab93abdc648",
+      "bytes": 7463,
+      "path": "benchmarks/db-perf/reproduction-inputs/by-sha256/fa6c1b60f35b7bab3d85f8c30444f39e65e7deb3d6b448adcc134911bcafe660/LifecycleCases.cs",
+      "original_plan_paths": [
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/korda-postgresql/LifecycleCases.cs",
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/korda-sqlite/LifecycleCases.cs"
+      ],
+      "purpose": "Exact historical reproduction input; excluded from current product and consumer builds."
+    },
+    {
+      "sha256": "7efccee5a3ab96010efb101d1f8bebe6061a55e2d64f789ec16ad8b1b85a87a8",
+      "git_blob": "ec4cfabd82ffbc71e1830c54bfe8d2358b9759cf",
+      "bytes": 7671,
+      "path": "benchmarks/db-perf/reproduction-inputs/by-sha256/7efccee5a3ab96010efb101d1f8bebe6061a55e2d64f789ec16ad8b1b85a87a8/LifecycleVerification.cs",
+      "original_plan_paths": [
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/korda-postgresql/LifecycleVerification.cs",
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/korda-sqlite/LifecycleVerification.cs",
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/earlier-sqlite-lifecycle-v5/LifecycleVerification.cs"
+      ],
+      "purpose": "Exact historical reproduction input; excluded from current product and consumer builds."
+    },
+    {
+      "sha256": "74ce79252a7ada3396872aa52222a7de8d788e18b547da22b458a667e8e73683",
+      "git_blob": "a915736225ccf04b21fabc39fcd63925f2000c01",
+      "bytes": 20395,
+      "path": "benchmarks/db-perf/reproduction-inputs/by-sha256/74ce79252a7ada3396872aa52222a7de8d788e18b547da22b458a667e8e73683/Measurement.cs",
+      "original_plan_paths": [
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/korda-postgresql/Measurement.cs",
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/korda-sqlite/Measurement.cs"
+      ],
+      "purpose": "Exact historical reproduction input; excluded from current product and consumer builds."
+    },
+    {
+      "sha256": "a91a1dfa2ed001099a6e7af1c6d1c5393045677ca56dc880cc35caaea4e021d8",
+      "git_blob": "8aec7b176cc05f7b35c70d86a520fa9c978ce72a",
+      "bytes": 2636,
+      "path": "benchmarks/db-perf/reproduction-inputs/by-sha256/a91a1dfa2ed001099a6e7af1c6d1c5393045677ca56dc880cc35caaea4e021d8/Models.cs",
+      "original_plan_paths": [
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/korda-postgresql/Models.cs",
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/korda-sqlite/Models.cs"
+      ],
+      "purpose": "Exact historical reproduction input; excluded from current product and consumer builds."
+    },
+    {
+      "sha256": "c45d3919968cbc3c18cc30aaf6de927de55673b7b52ef5690f9f43ebdc4d0ab5",
+      "git_blob": "51a9c09a057b5b5e41e69ea6bd52a6945c5c24c7",
+      "bytes": 633,
+      "path": "benchmarks/db-perf/reproduction-inputs/by-sha256/c45d3919968cbc3c18cc30aaf6de927de55673b7b52ef5690f9f43ebdc4d0ab5/NuGet.Config",
+      "original_plan_paths": [
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/korda-postgresql/NuGet.Config"
+      ],
+      "purpose": "Exact historical reproduction input; excluded from current product and consumer builds."
+    },
+    {
+      "sha256": "a8446649297c46ce4ac53f55011c1083472a00775a52f609e4b0f441f625a8d3",
+      "git_blob": "f0c4bf2d214312119c79b12f9a1b2140ad0e2105",
+      "bytes": 4486,
+      "path": "benchmarks/db-perf/reproduction-inputs/by-sha256/a8446649297c46ce4ac53f55011c1083472a00775a52f609e4b0f441f625a8d3/Options.cs",
+      "original_plan_paths": [
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/korda-postgresql/Options.cs",
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/korda-sqlite/Options.cs"
+      ],
+      "purpose": "Exact historical reproduction input; excluded from current product and consumer builds."
+    },
+    {
+      "sha256": "06f02b083e8e5fe23eb49e3385b53f995bda8176a560509c89c194fd5a28f816",
+      "git_blob": "c3c05ef3e9ec6471e818f716a00f795a44e7a2d1",
+      "bytes": 2846,
+      "path": "benchmarks/db-perf/reproduction-inputs/by-sha256/06f02b083e8e5fe23eb49e3385b53f995bda8176a560509c89c194fd5a28f816/Program.cs",
+      "original_plan_paths": [
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/korda-postgresql/Program.cs",
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/korda-sqlite/Program.cs"
+      ],
+      "purpose": "Exact historical reproduction input; excluded from current product and consumer builds."
+    },
+    {
+      "sha256": "5f86731798203ea8088d0a175e14dcfe2170022fa076ff57fa11d038efb4106d",
+      "git_blob": "ea783f96984e35b25b5fd033419dd5a2c32323ce",
+      "bytes": 9226,
+      "path": "benchmarks/db-perf/reproduction-inputs/by-sha256/5f86731798203ea8088d0a175e14dcfe2170022fa076ff57fa11d038efb4106d/Workload.cs",
+      "original_plan_paths": [
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/korda-postgresql/Workload.cs",
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/korda-sqlite/Workload.cs"
+      ],
+      "purpose": "Exact historical reproduction input; excluded from current product and consumer builds."
+    },
+    {
+      "sha256": "34b43a3d2299ca94b1a63922167e31dbdbd9fb8aeb6a2026507a030226a5d78a",
+      "git_blob": "eadad393501b73215aadb40c631cb8fdbbde1ba2",
+      "bytes": 621,
+      "path": "benchmarks/db-perf/reproduction-inputs/by-sha256/34b43a3d2299ca94b1a63922167e31dbdbd9fb8aeb6a2026507a030226a5d78a/NuGet.Config",
+      "original_plan_paths": [
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/managed-final-v1/applications/korda-sqlite/NuGet.Config"
+      ],
+      "purpose": "Exact historical reproduction input; excluded from current product and consumer builds."
+    },
+    {
+      "sha256": "36aa36927be1a459f946402d95741a5120ab16731bd6b7261b49fbbf393fdcae",
+      "git_blob": "c8e8bdf58d09bc49d216999255978c99baad12e9",
+      "bytes": 7742,
+      "path": "benchmarks/db-perf/reproduction-inputs/by-sha256/36aa36927be1a459f946402d95741a5120ab16731bd6b7261b49fbbf393fdcae/build.py",
+      "original_plan_paths": [
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/native35-postgresql-v3/build/source/build.py",
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/native35-sqlite-v3/build/source/build.py"
+      ],
+      "purpose": "Exact historical reproduction input; excluded from current product and consumer builds."
+    },
+    {
+      "sha256": "20e1b634a4dd40a6091fddbced842ce91a93a423a766e393a25e386a3b273b4f",
+      "git_blob": "fa8946fa6a2fe13b0eb8e90c3367f25fa6c0dc63",
+      "bytes": 83431,
+      "path": "benchmarks/db-perf/reproduction-inputs/by-sha256/20e1b634a4dd40a6091fddbced842ce91a93a423a766e393a25e386a3b273b4f/main.cpp",
+      "original_plan_paths": [
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/native35-postgresql-v3/build/source/main.cpp",
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/native35-sqlite-v3/build/source/main.cpp"
+      ],
+      "purpose": "Exact historical reproduction input; excluded from current product and consumer builds."
+    },
+    {
+      "sha256": "f26c7634e4cc12b4f14a608272b5dcbc290e406947e4eb0660fd5b67ad16d427",
+      "git_blob": "3ba56cf4e1910915c75bf954b13dac5af5a7bb7e",
+      "bytes": 21467,
+      "path": "benchmarks/db-perf/reproduction-inputs/by-sha256/f26c7634e4cc12b4f14a608272b5dcbc290e406947e4eb0660fd5b67ad16d427/AdvancedCases.cs",
+      "original_plan_paths": [
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/sqlite-before-public-v2/AdvancedCases.cs"
+      ],
+      "purpose": "Exact historical reproduction input; excluded from current product and consumer builds."
+    },
+    {
+      "sha256": "7091f4c0158f34a8b0d31cf322f83b0f89b0f795a87df06eadbf40c481637e96",
+      "git_blob": "e25354c9545373f38312dce8571a3b71a3984e16",
+      "bytes": 950,
+      "path": "benchmarks/db-perf/reproduction-inputs/by-sha256/7091f4c0158f34a8b0d31cf322f83b0f89b0f795a87df06eadbf40c481637e96/DbPerf.Korda.csproj",
+      "original_plan_paths": [
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/sqlite-before-public-v2/DbPerf.Korda.csproj"
+      ],
+      "purpose": "Exact historical reproduction input; excluded from current product and consumer builds."
+    },
+    {
+      "sha256": "0732825bee80ad1a3ec5e3dfc03af22e059a3c888e3d4cf9e1486762f4a9c2dc",
+      "git_blob": "536428790d4ff7a6b77a3ccc1bc91e8af05e0d81",
+      "bytes": 14307,
+      "path": "benchmarks/db-perf/reproduction-inputs/by-sha256/0732825bee80ad1a3ec5e3dfc03af22e059a3c888e3d4cf9e1486762f4a9c2dc/Measurement.cs",
+      "original_plan_paths": [
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/sqlite-before-public-v2/Measurement.cs"
+      ],
+      "purpose": "Exact historical reproduction input; excluded from current product and consumer builds."
+    },
+    {
+      "sha256": "56af58130abffd7b4cc0b7f4f82d4a591ecd66ce248b435f41ef1a910ce099ec",
+      "git_blob": "bf438db61e71e7706099a0b3519aab15bf8d0be7",
+      "bytes": 2591,
+      "path": "benchmarks/db-perf/reproduction-inputs/by-sha256/56af58130abffd7b4cc0b7f4f82d4a591ecd66ce248b435f41ef1a910ce099ec/Models.cs",
+      "original_plan_paths": [
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/sqlite-before-public-v2/Models.cs"
+      ],
+      "purpose": "Exact historical reproduction input; excluded from current product and consumer builds."
+    },
+    {
+      "sha256": "959c61154a65307faa33b5eeeb5e1e555b285b9fbe9cb144c857738085adf1f0",
+      "git_blob": "1e89ccfcc702fecd9f39d405a543f83c05dfbe1c",
+      "bytes": 621,
+      "path": "benchmarks/db-perf/reproduction-inputs/by-sha256/959c61154a65307faa33b5eeeb5e1e555b285b9fbe9cb144c857738085adf1f0/NuGet.Config",
+      "original_plan_paths": [
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/sqlite-before-public-v2/NuGet.Config"
+      ],
+      "purpose": "Exact historical reproduction input; excluded from current product and consumer builds."
+    },
+    {
+      "sha256": "828098643b57cdc04b06890ed108d5d04a5958814bd8a02cd29df628977ebbdc",
+      "git_blob": "e1ab418e2073237cd514b7d49b4f4009fa9118f8",
+      "bytes": 3307,
+      "path": "benchmarks/db-perf/reproduction-inputs/by-sha256/828098643b57cdc04b06890ed108d5d04a5958814bd8a02cd29df628977ebbdc/Options.cs",
+      "original_plan_paths": [
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/sqlite-before-public-v2/Options.cs"
+      ],
+      "purpose": "Exact historical reproduction input; excluded from current product and consumer builds."
+    },
+    {
+      "sha256": "f6c0d2526baf6fe9e274c4288d3b1b5813e0e8fe06c4aa5d42c44e56601c5616",
+      "git_blob": "302a0e9a39511a00f53b582c9e09602aca715650",
+      "bytes": 2299,
+      "path": "benchmarks/db-perf/reproduction-inputs/by-sha256/f6c0d2526baf6fe9e274c4288d3b1b5813e0e8fe06c4aa5d42c44e56601c5616/Program.cs",
+      "original_plan_paths": [
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/sqlite-before-public-v2/Program.cs"
+      ],
+      "purpose": "Exact historical reproduction input; excluded from current product and consumer builds."
+    },
+    {
+      "sha256": "ad455ffd39c89a3b2a978a742f3cf21fbcc013985cfe6c2e5bf493dd0973e6bd",
+      "git_blob": "fade6997672614500d837c5dd8d420da45d30fa9",
+      "bytes": 9039,
+      "path": "benchmarks/db-perf/reproduction-inputs/by-sha256/ad455ffd39c89a3b2a978a742f3cf21fbcc013985cfe6c2e5bf493dd0973e6bd/Workload.cs",
+      "original_plan_paths": [
+        "ledger/evidence/batches/DB-Perf-01/checkpoints/sqlite-before-public-v2/Workload.cs"
+      ],
+      "purpose": "Exact historical reproduction input; excluded from current product and consumer builds."
+    }
+  ]
+}

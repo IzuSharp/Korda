@@ -5,7 +5,7 @@ using static Korda.Query.QueryContext;
 
 namespace Korda.Query;
 
-/// <summary>One mutable, source-bound native query arena with a strongly typed application facade.</summary>
+/// <summary>One mutable, source-bound query command for the native compiler with a strongly typed application facade.</summary>
 /// <typeparam name="TEntity">The explicitly described root entity class.</typeparam>
 /// <remarks>Composition is synchronous and fail-fast on concurrent writers. The first terminal seals the query;
 /// use Clone before a second execution. Keep this owner alive across streaming and dispose after use.</remarks>
@@ -91,7 +91,7 @@ public sealed partial class Query<TEntity> : IDisposable where TEntity : class
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
     /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public Query<TEntity> WhereIsNotNull<T>(Column<TEntity, T> column) => Context.Run(() => Where(Column(column).IsNotNull()));
-    /// <summary>Creates an immediate root-column native scalar token.</summary>
+    /// <summary>Creates a typed root-column scalar token in the bounded query command.</summary>
     /// <inheritdoc cref="Query{TEntity}"/>
     /// <param name="column">The strongly typed column from the declared table; foreign table identities reject.</param>
     /// <typeparam name="T">The statically known CLR value or owned result type with the exact declared codec/nullability.</typeparam>
@@ -374,7 +374,7 @@ public sealed partial class Query<TEntity> : IDisposable where TEntity : class
     /// <exception cref="Korda.Data.DatabaseException">Native capability, finite resource limits or provider execution rejects the operation.</exception>
     public Query<TEntity> ForUpdate(RowLockMode mode = RowLockMode.Update, LockWait wait = LockWait.Wait)
     { Context.Source.Capabilities.Require("db.row-lock.v1"); Context.Clause(12, N(1, (uint)mode), N(2, (uint)wait)); return this; }
-    /// <summary>Immediately snapshots a typed literal into the native arena.</summary>
+    /// <summary>Immediately snapshots a typed literal into the bounded query command.</summary>
     /// <inheritdoc cref="Query{TEntity}"/>
     /// <param name="value">The typed value to snapshot now, or the compatible same-query native expression.</param>
     /// <param name="codec">The statically known codec and exact nullability/configuration for the value.</param>
@@ -457,7 +457,7 @@ public sealed partial class Query<TEntity> : IDisposable where TEntity : class
     /// <inheritdoc cref="Query{TEntity}"/>
     /// <param name="projection">The exact query-built projection or root table row descriptor to select.</param>
     /// <typeparam name="T">The statically known CLR value or owned result type with the exact declared codec/nullability.</typeparam>
-    /// <returns>The borrowed current-selection view; its owning query retains the native arena.</returns>
+    /// <returns>The borrowed current-selection view; its owning query retains the command and its dependencies.</returns>
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
@@ -471,7 +471,7 @@ public sealed partial class Query<TEntity> : IDisposable where TEntity : class
     /// <inheritdoc cref="Query{TEntity}"/>
     /// <param name="expression">The compatible native scalar owned by the same live query.</param>
     /// <typeparam name="T">The statically known CLR value or owned result type with the exact declared codec/nullability.</typeparam>
-    /// <returns>The borrowed current-selection view; its owning query retains the native arena.</returns>
+    /// <returns>The borrowed current-selection view; its owning query retains the command and its dependencies.</returns>
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
@@ -486,7 +486,7 @@ public sealed partial class Query<TEntity> : IDisposable where TEntity : class
     /// <typeparam name="T1">The statically known CLR value or owned result type with the exact declared codec/nullability.</typeparam>
     /// <typeparam name="T2">The statically known CLR value or owned result type with the exact declared codec/nullability.</typeparam>
     /// <typeparam name="TOut">The statically known CLR value or owned result type with the exact declared codec/nullability.</typeparam>
-    /// <returns>The borrowed current-selection view; its owning query retains the native arena.</returns>
+    /// <returns>The borrowed current-selection view; its owning query retains the command and its dependencies.</returns>
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
@@ -500,7 +500,7 @@ public sealed partial class Query<TEntity> : IDisposable where TEntity : class
     private ExpressionReference[] RootExpressions() => Context.Run(() => _table.Columns.Select(c => Context.Binding.Column(c.Definition.Id)).ToArray());
     /// <summary>Selects only root-table columns in the static entity constructor order.</summary>
     /// <inheritdoc cref="Query{TEntity}"/>
-    /// <returns>The borrowed current-selection view; its owning query retains the native arena.</returns>
+    /// <returns>The borrowed current-selection view; its owning query retains the command and its dependencies.</returns>
     /// <exception cref="ArgumentException">An argument, owner association or codec/nullability is incompatible.</exception>
     /// <exception cref="InvalidOperationException">The owner, projection or one-shot terminal is in an invalid state.</exception>
     /// <exception cref="ObjectDisposedException">The required native owner or its parent has closed admission.</exception>
@@ -597,11 +597,11 @@ public sealed partial class Query<TEntity> : IDisposable where TEntity : class
         context.MergeParameters(Context.Parameters.Values); var clone = new Query<TEntity>(context, _table) { _orderCount = _orderCount, _compositeSeek = _compositeSeek };
         clone._orderColumns.UnionWith(_orderColumns); clone._cursorOrder.AddRange(_cursorOrder); return clone;
     });
-    /// <summary>Closes query admission, requests any active cursor stop and releases the native arena reference.</summary>
+    /// <summary>Closes query admission, requests any active cursor stop and releases command and native dependency references.</summary>
     /// <inheritdoc cref="Query{TEntity}"/>
     public void Dispose() => Context.Dispose();
 }
-/// <summary>A callback-scoped typed assignment collector; scalar expressions are built natively immediately.</summary>
+/// <summary>A callback-scoped typed assignment collector; scalar expressions are recorded for the native compiler.</summary>
 /// <typeparam name="TEntity">The root entity class.</typeparam>
 /// <remarks>The owner is valid only during the synchronous update callback. Each scalar is snapshotted immediately; duplicate, generated and primary-key assignments reject. Assignment clauses attach after callback success; no tracked entity or managed SQL expression tree is created.</remarks>
 public sealed class UpdateSetters<TEntity> where TEntity : class

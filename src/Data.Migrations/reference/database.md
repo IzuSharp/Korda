@@ -848,7 +848,7 @@ public System.Threading.Tasks.Task<TEntity?> Korda.Database.DataSession.FindAsyn
 public Korda.Query.Query<TEntity> Korda.Database.DataSession.From<TEntity>(Korda.Data.Table<TEntity> table) where TEntity : class
 ```
 
-**summary:** Creates one mutable native query arena bound to this session and exact static table.
+**summary:** Creates one bounded query command bound to this session and exact static table.
 
 **typeparam TEntity:** The statically described entity class.
 
@@ -862,7 +862,7 @@ public Korda.Query.Query<TEntity> Korda.Database.DataSession.From<TEntity>(Korda
 
 **exception:** The native metadata, capability or capacity rejects construction.
 
-**remarks:** The returned query owns one native arena and borrows this session's admission. Composition copies values immediately; dispose the query after its terminal or stream has retired.
+**remarks:** Composition snapshots values immediately and records a complete command for the C++ compiler. The engine must advertise the command extension. Dispose the query after its terminal or stream has retired.
 
 **Inherited type policy:** A cursor and transaction control retain the same session gate. A session is not a concurrent command queue. Every query maps synchronously into owned CLR values and joins cleanup before its public Task completes.
 
@@ -3174,7 +3174,7 @@ public Korda.Query.QueryRow<TEntity>.QueryRow()
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
-**Inherited type policy:** This borrowed proxy retains its query association. Default, foreign, closed or sealed owners reject. Each operation forwards immediately to a finite native arena; no managed SQL tree or captured callback is retained.
+**Inherited type policy:** This borrowed proxy retains its query association. Default, foreign, closed or sealed owners reject. Each operation records a bounded command with immediate owner and type validation; the complete command is submitted to the native compiler without retaining the callback.
 
 ## `M:Korda.Query.QueryRow`1.Equal``1(Korda.Data.Column{`0,``0},``0)`
 
@@ -3202,7 +3202,7 @@ public Korda.Query.SqlPredicate Korda.Query.QueryRow<TEntity>.Equal<T>(Korda.Dat
 
 **exception:** Native capability, finite resource limits or provider execution rejects the operation.
 
-**Inherited type policy:** This borrowed proxy retains its query association. Default, foreign, closed or sealed owners reject. Each operation forwards immediately to a finite native arena; no managed SQL tree or captured callback is retained.
+**Inherited type policy:** This borrowed proxy retains its query association. Default, foreign, closed or sealed owners reject. Each operation records a bounded command with immediate owner and type validation; the complete command is submitted to the native compiler without retaining the callback.
 
 ## `M:Korda.Query.QueryRow`1.Get``1(Korda.Data.Column{`0,``0})`
 
@@ -3210,7 +3210,7 @@ public Korda.Query.SqlPredicate Korda.Query.QueryRow<TEntity>.Equal<T>(Korda.Dat
 public Korda.Query.SqlExpression<T> Korda.Query.QueryRow<TEntity>.Get<T>(Korda.Data.Column<TEntity, T> column)
 ```
 
-**summary:** Creates an immediate native expression for an exact root-table column.
+**summary:** Creates a typed command expression for an exact root-table column.
 
 **inheritdoc:**
 
@@ -3228,7 +3228,7 @@ public Korda.Query.SqlExpression<T> Korda.Query.QueryRow<TEntity>.Get<T>(Korda.D
 
 **exception:** Native capability, finite resource limits or provider execution rejects the operation.
 
-**Inherited type policy:** This borrowed proxy retains its query association. Default, foreign, closed or sealed owners reject. Each operation forwards immediately to a finite native arena; no managed SQL tree or captured callback is retained.
+**Inherited type policy:** This borrowed proxy retains its query association. Default, foreign, closed or sealed owners reject. Each operation records a bounded command with immediate owner and type validation; the complete command is submitted to the native compiler without retaining the callback.
 
 ## `M:Korda.Query.QueryRow`1.GreaterThanOrEqual``1(Korda.Data.Column{`0,``0},``0)`
 
@@ -3256,7 +3256,7 @@ public Korda.Query.SqlPredicate Korda.Query.QueryRow<TEntity>.GreaterThanOrEqual
 
 **exception:** Native capability, finite resource limits or provider execution rejects the operation.
 
-**Inherited type policy:** This borrowed proxy retains its query association. Default, foreign, closed or sealed owners reject. Each operation forwards immediately to a finite native arena; no managed SQL tree or captured callback is retained.
+**Inherited type policy:** This borrowed proxy retains its query association. Default, foreign, closed or sealed owners reject. Each operation records a bounded command with immediate owner and type validation; the complete command is submitted to the native compiler without retaining the callback.
 
 ## `M:Korda.Query.QueryRow`1.IsNotNull``1(Korda.Data.Column{`0,``0})`
 
@@ -3282,7 +3282,7 @@ public Korda.Query.SqlPredicate Korda.Query.QueryRow<TEntity>.IsNotNull<T>(Korda
 
 **exception:** Native capability, finite resource limits or provider execution rejects the operation.
 
-**Inherited type policy:** This borrowed proxy retains its query association. Default, foreign, closed or sealed owners reject. Each operation forwards immediately to a finite native arena; no managed SQL tree or captured callback is retained.
+**Inherited type policy:** This borrowed proxy retains its query association. Default, foreign, closed or sealed owners reject. Each operation records a bounded command with immediate owner and type validation; the complete command is submitted to the native compiler without retaining the callback.
 
 ## `M:Korda.Query.QueryRow`1.IsNull``1(Korda.Data.Column{`0,``0})`
 
@@ -3308,7 +3308,7 @@ public Korda.Query.SqlPredicate Korda.Query.QueryRow<TEntity>.IsNull<T>(Korda.Da
 
 **exception:** Native capability, finite resource limits or provider execution rejects the operation.
 
-**Inherited type policy:** This borrowed proxy retains its query association. Default, foreign, closed or sealed owners reject. Each operation forwards immediately to a finite native arena; no managed SQL tree or captured callback is retained.
+**Inherited type policy:** This borrowed proxy retains its query association. Default, foreign, closed or sealed owners reject. Each operation records a bounded command with immediate owner and type validation; the complete command is submitted to the native compiler without retaining the callback.
 
 ## `M:Korda.Query.QuerySelection`1.#ctor`
 
@@ -3362,7 +3362,7 @@ public Korda.Query.QuerySelection<T> Korda.Query.QuerySelection<T>.Combine(Korda
 
 **param operation:** The native SQL set operation with exact compatible row shapes.
 
-**returns:** The borrowed current-selection view; its owning query retains the native arena.
+**returns:** The borrowed current-selection view; its owning query retains the command and its dependencies.
 
 **exception:** An argument, owner association or codec/nullability is incompatible.
 
@@ -3642,7 +3642,7 @@ public Korda.Query.Query<TEntity> Korda.Query.Query<TEntity>.Clone()
 public Korda.Query.SqlExpression<T> Korda.Query.Query<TEntity>.Column<T>(Korda.Data.Column<TEntity, T> column)
 ```
 
-**summary:** Creates an immediate root-column native scalar token.
+**summary:** Creates a typed root-column scalar token in the bounded query command.
 
 **inheritdoc:**
 
@@ -3776,7 +3776,7 @@ public System.Threading.Tasks.Task<long> Korda.Query.Query<TEntity>.DeleteAsync(
 public void Korda.Query.Query<TEntity>.Dispose()
 ```
 
-**summary:** Closes query admission, requests any active cursor stop and releases the native arena reference.
+**summary:** Closes query admission, requests any active cursor stop and releases command and native dependency references.
 
 **inheritdoc:**
 
@@ -4284,7 +4284,7 @@ public Korda.Query.QuerySelection<TEntity> Korda.Query.Query<TEntity>.SelectAll(
 
 **inheritdoc:**
 
-**returns:** The borrowed current-selection view; its owning query retains the native arena.
+**returns:** The borrowed current-selection view; its owning query retains the command and its dependencies.
 
 **exception:** An argument, owner association or codec/nullability is incompatible.
 
@@ -4310,7 +4310,7 @@ public Korda.Query.QuerySelection<T> Korda.Query.Query<TEntity>.Select<T>(Korda.
 
 **typeparam T:** The statically known CLR value or owned result type with the exact declared codec/nullability.
 
-**returns:** The borrowed current-selection view; its owning query retains the native arena.
+**returns:** The borrowed current-selection view; its owning query retains the command and its dependencies.
 
 **exception:** An argument, owner association or codec/nullability is incompatible.
 
@@ -4336,7 +4336,7 @@ public Korda.Query.QuerySelection<T> Korda.Query.Query<TEntity>.Select<T>(Korda.
 
 **typeparam T:** The statically known CLR value or owned result type with the exact declared codec/nullability.
 
-**returns:** The borrowed current-selection view; its owning query retains the native arena.
+**returns:** The borrowed current-selection view; its owning query retains the command and its dependencies.
 
 **exception:** An argument, owner association or codec/nullability is incompatible.
 
@@ -4370,7 +4370,7 @@ public Korda.Query.QuerySelection<TOut> Korda.Query.Query<TEntity>.Select<T1, T2
 
 **typeparam TOut:** The statically known CLR value or owned result type with the exact declared codec/nullability.
 
-**returns:** The borrowed current-selection view; its owning query retains the native arena.
+**returns:** The borrowed current-selection view; its owning query retains the command and its dependencies.
 
 **exception:** An argument, owner association or codec/nullability is incompatible.
 
@@ -4556,7 +4556,7 @@ public System.Threading.Tasks.Task<long> Korda.Query.Query<TEntity>.UpdateAsync(
 public Korda.Query.SqlExpression<T> Korda.Query.Query<TEntity>.Value<T>(T value, Korda.Data.ValueCodec<T> codec)
 ```
 
-**summary:** Immediately snapshots a typed literal into the native arena.
+**summary:** Immediately snapshots a typed literal into the bounded query command.
 
 **inheritdoc:**
 
@@ -6724,7 +6724,7 @@ public Korda.Query.SqlPredicate.SqlPredicate()
 
 Compiler-generated record/delegate member; inherits the documented type semantics.
 
-**Inherited type policy:** Boolean composition uses SQL three-valued logic and performs one direct native operation.
+**Inherited type policy:** Boolean composition uses SQL three-valued logic and records one operation in the complete query command.
 
 ## `M:Korda.Query.SqlPredicate.And(Korda.Query.SqlPredicate)`
 
@@ -6748,7 +6748,7 @@ public Korda.Query.SqlPredicate Korda.Query.SqlPredicate.And(Korda.Query.SqlPred
 
 **exception:** Native capability, finite resource limits or provider execution rejects the operation.
 
-**Inherited type policy:** Boolean composition uses SQL three-valued logic and performs one direct native operation.
+**Inherited type policy:** Boolean composition uses SQL three-valued logic and records one operation in the complete query command.
 
 ## `M:Korda.Query.SqlPredicate.Not`
 
@@ -6770,7 +6770,7 @@ public Korda.Query.SqlPredicate Korda.Query.SqlPredicate.Not()
 
 **exception:** Native capability, finite resource limits or provider execution rejects the operation.
 
-**Inherited type policy:** Boolean composition uses SQL three-valued logic and performs one direct native operation.
+**Inherited type policy:** Boolean composition uses SQL three-valued logic and records one operation in the complete query command.
 
 ## `M:Korda.Query.SqlPredicate.Or(Korda.Query.SqlPredicate)`
 
@@ -6794,7 +6794,7 @@ public Korda.Query.SqlPredicate Korda.Query.SqlPredicate.Or(Korda.Query.SqlPredi
 
 **exception:** Native capability, finite resource limits or provider execution rejects the operation.
 
-**Inherited type policy:** Boolean composition uses SQL three-valued logic and performs one direct native operation.
+**Inherited type policy:** Boolean composition uses SQL three-valued logic and records one operation in the complete query command.
 
 ## `M:Korda.Query.SqlStringExtensions.Collate(Korda.Query.SqlExpression{System.String},System.String)`
 
@@ -7066,7 +7066,7 @@ public Korda.Query.WindowDefinition Korda.Query.WindowDefinition.OrderBy<T>(Kord
 
 **exception:** Native capability, finite resource limits or provider execution rejects the operation.
 
-**Inherited type policy:** The owning query bounds lifetime and concurrent access. Rank, RowNumber and Over snapshot native window state immediately; subsequent mutation cannot change existing expressions. Defaults and limits follow the provider capability contract.
+**Inherited type policy:** The owning query bounds lifetime and concurrent access. Rank, RowNumber and Over snapshot the current window specification immediately; subsequent mutation cannot change existing expressions. Defaults and limits follow the provider capability contract.
 
 ## `M:Korda.Query.WindowDefinition.PartitionBy``1(Korda.Query.SqlExpression{``0})`
 
@@ -7092,7 +7092,7 @@ public Korda.Query.WindowDefinition Korda.Query.WindowDefinition.PartitionBy<T>(
 
 **exception:** Native capability, finite resource limits or provider execution rejects the operation.
 
-**Inherited type policy:** The owning query bounds lifetime and concurrent access. Rank, RowNumber and Over snapshot native window state immediately; subsequent mutation cannot change existing expressions. Defaults and limits follow the provider capability contract.
+**Inherited type policy:** The owning query bounds lifetime and concurrent access. Rank, RowNumber and Over snapshot the current window specification immediately; subsequent mutation cannot change existing expressions. Defaults and limits follow the provider capability contract.
 
 ## `M:Korda.Query.WindowDefinition.RowsBetween(Korda.Query.FrameBoundary,Korda.Query.FrameBoundary)`
 
@@ -7118,7 +7118,7 @@ public Korda.Query.WindowDefinition Korda.Query.WindowDefinition.RowsBetween(Kor
 
 **exception:** Native capability, finite resource limits or provider execution rejects the operation.
 
-**Inherited type policy:** The owning query bounds lifetime and concurrent access. Rank, RowNumber and Over snapshot native window state immediately; subsequent mutation cannot change existing expressions. Defaults and limits follow the provider capability contract.
+**Inherited type policy:** The owning query bounds lifetime and concurrent access. Rank, RowNumber and Over snapshot the current window specification immediately; subsequent mutation cannot change existing expressions. Defaults and limits follow the provider capability contract.
 
 ## `P:Korda.Database.BulkOptions.Atomicity`
 
@@ -8508,7 +8508,7 @@ public readonly struct Korda.Query.QueryRow<TEntity> where TEntity : class
 
 **typeparam TEntity:** The declared root entity class.
 
-**remarks:** This borrowed proxy retains its query association. Default, foreign, closed or sealed owners reject. Each operation forwards immediately to a finite native arena; no managed SQL tree or captured callback is retained.
+**remarks:** This borrowed proxy retains its query association. Default, foreign, closed or sealed owners reject. Each operation records a bounded command with immediate owner and type validation; the complete command is submitted to the native compiler without retaining the callback.
 
 ## `T:Korda.Query.QuerySelection`1`
 
@@ -8528,7 +8528,7 @@ public readonly struct Korda.Query.QuerySelection<T>
 public sealed class Korda.Query.Query<TEntity> : System.IDisposable where TEntity : class
 ```
 
-**summary:** One mutable, source-bound native query arena with a strongly typed application facade.
+**summary:** One mutable, source-bound query command for the native compiler with a strongly typed application facade.
 
 **typeparam TEntity:** The explicitly described root entity class.
 
@@ -8614,7 +8614,7 @@ public readonly struct Korda.Query.SqlPredicate
 
 **summary:** An opaque same-query native SQL condition; default predicates reject.
 
-**remarks:** Boolean composition uses SQL three-valued logic and performs one direct native operation.
+**remarks:** Boolean composition uses SQL three-valued logic and records one operation in the complete query command.
 
 ## `T:Korda.Query.SqlStringExtensions`
 
@@ -8632,7 +8632,7 @@ public static class Korda.Query.SqlStringExtensions
 public sealed class Korda.Query.UpdateSetters<TEntity> where TEntity : class
 ```
 
-**summary:** A callback-scoped typed assignment collector; scalar expressions are built natively immediately.
+**summary:** A callback-scoped typed assignment collector; scalar expressions are recorded for the native compiler.
 
 **typeparam TEntity:** The root entity class.
 
@@ -8646,4 +8646,4 @@ public sealed class Korda.Query.WindowDefinition
 
 **summary:** Finite mutable native window state; each Over/rank call snapshots its current definition.
 
-**remarks:** The owning query bounds lifetime and concurrent access. Rank, RowNumber and Over snapshot native window state immediately; subsequent mutation cannot change existing expressions. Defaults and limits follow the provider capability contract.
+**remarks:** The owning query bounds lifetime and concurrent access. Rank, RowNumber and Over snapshot the current window specification immediately; subsequent mutation cannot change existing expressions. Defaults and limits follow the provider capability contract.

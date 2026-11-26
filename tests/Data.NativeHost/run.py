@@ -25,7 +25,7 @@ with tempfile.TemporaryDirectory(prefix='nw-b04-pg-') as temporary:
     def pg(name, *arguments, **options):
         return subprocess.run([str(args.postgres_bin / name), *map(str, arguments)], check=True, **options)
     with (args.output / 'postgres-init.log').open('w') as log:
-        pg('initdb', '-D', directory, '-U', 'postgres', '--no-locale', '-A', 'trust', stdout=log, stderr=subprocess.STDOUT)
+        pg('initdb', '-D', directory, '-U', 'postgres', '--no-locale', '--encoding=UTF8', '-A', 'trust', stdout=log, stderr=subprocess.STDOUT)
     pg('pg_ctl', '-D', directory, '-l', args.output.resolve() / 'postgres.log', '-o', f"-p {port} -h 127.0.0.1 -k ''", '-w', 'start', stdout=subprocess.DEVNULL)
     try:
         environment = os.environ.copy()

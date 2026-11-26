@@ -1,0 +1,218 @@
+name: DB-Perf-01 Linux campaign
+on:
+  pull_request:
+    branches: [main]
+    types: [edited]
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: db-perf-01-linux-measurement
+  queue: max
+  cancel-in-progress: false
+jobs:
+  campaign:
+    if: >-
+      github.repository == 'IzuSharp/Korda' &&
+      github.event.pull_request.head.repo.full_name == 'IzuSharp/Korda' &&
+      github.event.pull_request.head.ref == 'task/DB-Perf-01-linux' &&
+      github.event.changes.title != null &&
+      (contains(github.event.pull_request.title, '[DB-Perf-01:smoke]') ||
+       contains(github.event.pull_request.title, '[DB-Perf-01:run]'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 355
+    env:
+      CI: 'true'
+      DOTNET_NOLOGO: 'true'
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_PROCESSOR_COUNT: '2'
+      CAMPAIGN_MODE: ${{ contains(github.event.pull_request.title, '[DB-Perf-01:run]') && 'run' || 'smoke' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Record job start and verify campaign source
+        run: |
+          echo "DB_PERF_JOB_START=$(date +%s)" >> "$GITHUB_ENV"
+          python3 benchmarks/Database/check.py
+          python3 benchmarks/Database/campaign/build_contract.py --check
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          global-json-file: global.json
+      - name: Restore pinned tool downloads
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25
+        with:
+          key: linux-x64-tools-${{ hashFiles('native/dependencies.lock.json','eng/ci/sccache.sh') }}
+          path: |
+            artifacts/toolchain/downloads
+            artifacts/toolchain/sccache/tool.tar.gz
+            artifacts/dependencies/downloads
+      - name: Install build and measurement prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends zstd libssl-dev zlib1g-dev bison flex python3-cryptography
+      - id: pg
+        run: echo "key=$(python3 eng/postgres-cache-key.py full)" >> "$GITHUB_OUTPUT"
+      - name: Restore exact PostgreSQL installation
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25
+        with:
+          key: postgres-full-ubuntu24-x64-${{ steps.pg.outputs.key }}
+          path: artifacts/postgres-tools/install
+      - name: Build all pinned native and external AOT consumers
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 benchmarks/Database/campaign/bootstrap.py --output artifacts/db-perf-01 --work "$RUNNER_TEMP/db-perf-01-build"
+          git diff --exit-code
+      - name: Preserve exact consumer inputs and build receipts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: db-perf-01-inputs-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            artifacts/db-perf-01/inputs/
+            artifacts/db-perf-01/build-logs/
+            artifacts/db-perf-01/bootstrap.json
+            artifacts/db-perf-01/config.json
+            artifacts/db-perf-01/allocations/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Prepare fixed data, plans and environment receipt
+        run: python3 benchmarks/Database/campaign/campaign.py prepare --config artifacts/db-perf-01/config.json --output artifacts/db-perf-01
+      - name: Run complete real-query smoke checks
+        run: python3 benchmarks/Database/campaign/campaign.py smoke --config artifacts/db-perf-01/config.json --output artifacts/db-perf-01
+      - name: Calibrate noise, concurrency, saturation and sustainable load
+        if: env.CAMPAIGN_MODE == 'run'
+        run: python3 benchmarks/Database/campaign/campaign.py calibrate --config artifacts/db-perf-01/config.json --output artifacts/db-perf-01
+      - name: Require the full four-hour remaining budget
+        if: env.CAMPAIGN_MODE == 'run'
+        run: |
+          python3 - <<'PY'
+          import os,time
+          elapsed=time.time()-int(os.environ['DB_PERF_JOB_START'])
+          if elapsed>95*60:
+              raise SystemExit('Preparation exceeded 95 minutes; preserve evidence without shortening any segment.')
+          PY
+      - name: Segment 1 - PostgreSQL before
+        if: env.CAMPAIGN_MODE == 'run'
+        run: python3 benchmarks/Database/campaign/campaign.py segment --index 1 --config artifacts/db-perf-01/config.json --output artifacts/db-perf-01
+      - name: Retain segment 1
+        if: env.CAMPAIGN_MODE == 'run' && always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: db-perf-01-segment-1-${{ github.run_id }}
+          path: |
+            artifacts/db-perf-01/runs/long-01-*/
+            artifacts/db-perf-01/segments/01.json
+          if-no-files-found: ignore
+          retention-days: 30
+      - name: Segment 2 - PostgreSQL native
+        if: env.CAMPAIGN_MODE == 'run' && success()
+        run: python3 benchmarks/Database/campaign/campaign.py segment --index 2 --config artifacts/db-perf-01/config.json --output artifacts/db-perf-01
+      - name: Retain segment 2
+        if: env.CAMPAIGN_MODE == 'run' && always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: db-perf-01-segment-2-${{ github.run_id }}
+          path: |
+            artifacts/db-perf-01/runs/long-02-*/
+            artifacts/db-perf-01/segments/02.json
+          if-no-files-found: ignore
+          retention-days: 30
+      - name: Segment 3 - PostgreSQL after
+        if: env.CAMPAIGN_MODE == 'run' && success()
+        run: python3 benchmarks/Database/campaign/campaign.py segment --index 3 --config artifacts/db-perf-01/config.json --output artifacts/db-perf-01
+      - name: Retain segment 3
+        if: env.CAMPAIGN_MODE == 'run' && always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: db-perf-01-segment-3-${{ github.run_id }}
+          path: |
+            artifacts/db-perf-01/runs/long-03-*/
+            artifacts/db-perf-01/segments/03.json
+          if-no-files-found: ignore
+          retention-days: 30
+      - name: Segment 4 - PostgreSQL Dapper
+        if: env.CAMPAIGN_MODE == 'run' && success()
+        run: python3 benchmarks/Database/campaign/campaign.py segment --index 4 --config artifacts/db-perf-01/config.json --output artifacts/db-perf-01
+      - name: Retain segment 4
+        if: env.CAMPAIGN_MODE == 'run' && always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: db-perf-01-segment-4-${{ github.run_id }}
+          path: |
+            artifacts/db-perf-01/runs/long-04-*/
+            artifacts/db-perf-01/segments/04.json
+          if-no-files-found: ignore
+          retention-days: 30
+      - name: Segment 5 - SQLite native
+        if: env.CAMPAIGN_MODE == 'run' && success()
+        run: python3 benchmarks/Database/campaign/campaign.py segment --index 5 --config artifacts/db-perf-01/config.json --output artifacts/db-perf-01
+      - name: Retain segment 5
+        if: env.CAMPAIGN_MODE == 'run' && always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: db-perf-01-segment-5-${{ github.run_id }}
+          path: |
+            artifacts/db-perf-01/runs/long-05-*/
+            artifacts/db-perf-01/segments/05.json
+          if-no-files-found: ignore
+          retention-days: 30
+      - name: Segment 6 - SQLite after
+        if: env.CAMPAIGN_MODE == 'run' && success()
+        run: python3 benchmarks/Database/campaign/campaign.py segment --index 6 --config artifacts/db-perf-01/config.json --output artifacts/db-perf-01
+      - name: Retain segment 6
+        if: env.CAMPAIGN_MODE == 'run' && always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: db-perf-01-segment-6-${{ github.run_id }}
+          path: |
+            artifacts/db-perf-01/runs/long-06-*/
+            artifacts/db-perf-01/segments/06.json
+          if-no-files-found: ignore
+          retention-days: 30
+      - name: Segment 7 - SQLite before
+        if: env.CAMPAIGN_MODE == 'run' && success()
+        run: python3 benchmarks/Database/campaign/campaign.py segment --index 7 --config artifacts/db-perf-01/config.json --output artifacts/db-perf-01
+      - name: Retain segment 7
+        if: env.CAMPAIGN_MODE == 'run' && always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: db-perf-01-segment-7-${{ github.run_id }}
+          path: |
+            artifacts/db-perf-01/runs/long-07-*/
+            artifacts/db-perf-01/segments/07.json
+          if-no-files-found: ignore
+          retention-days: 30
+      - name: Segment 8 - SQLite Dapper
+        if: env.CAMPAIGN_MODE == 'run' && success()
+        run: python3 benchmarks/Database/campaign/campaign.py segment --index 8 --config artifacts/db-perf-01/config.json --output artifacts/db-perf-01
+      - name: Validate all eight effective intervals
+        if: env.CAMPAIGN_MODE == 'run' && success()
+        run: python3 benchmarks/Database/campaign/campaign.py summarize --config artifacts/db-perf-01/config.json --output artifacts/db-perf-01
+      - name: Retain complete raw observations and failures
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: db-perf-01-observations-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            artifacts/db-perf-01/*.json
+            artifacts/db-perf-01/*.log
+            artifacts/db-perf-01/build-logs/
+            artifacts/db-perf-01/runs/
+            artifacts/db-perf-01/allocations/
+            artifacts/db-perf-01/segments/
+            ${{ runner.temp }}/db-perf-01-build/*/*.log
+            ${{ runner.temp }}/db-perf-01-build/*/*.json
+            ${{ runner.temp }}/db-perf-01-build/*/evidence/
+            ${{ runner.temp }}/db-perf-01-build/*/logs/
+            ${{ runner.temp }}/db-perf-01-build/*/generated/
+            ${{ runner.temp }}/db-perf-01-build/*/app/*.cs
+            ${{ runner.temp }}/db-perf-01-build/*/common/*.cs
+            ${{ runner.temp }}/db-perf-01-build/*/out/
+            ${{ runner.temp }}/db-perf-01-build/*/publish/
+            ${{ runner.temp }}/db-perf-01-build/after-candidates/
+            ${{ runner.temp }}/db-perf-01-build/allocations-*/*/app/publish/
+          if-no-files-found: warn
+          retention-days: 30

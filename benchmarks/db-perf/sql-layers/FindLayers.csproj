@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net11.0</TargetFramework>
+    <LangVersion>15.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <PublishAot>true</PublishAot>
+    <IlcTreatWarningsAsErrors>true</IlcTreatWarningsAsErrors>
+    <UseSharedCompilation>false</UseSharedCompilation>
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <InterceptorsNamespaces>$(InterceptorsNamespaces);Dapper.AOT</InterceptorsNamespaces>
+    <DefineConstants>$(DefineConstants);POSTGRES</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Remove="original-source/**/*.cs" />
+    <PackageReference Include="Dapper" Version="2.1.100" />
+    <PackageReference Include="Dapper.AOT" Version="1.1.0" />
+    <PackageReference Include="Npgsql" Version="11.0.0" />
+  </ItemGroup>
+</Project>

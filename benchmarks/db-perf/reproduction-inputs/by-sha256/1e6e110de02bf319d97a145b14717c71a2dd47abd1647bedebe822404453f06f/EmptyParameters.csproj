@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>Korda.Query.Fluent.Tests</AssemblyName>
+    <PublishAot>true</PublishAot>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IsAotCompatible>true</IsAotCompatible>
+    <IlcTreatWarningsAsErrors>true</IlcTreatWarningsAsErrors>
+    <UseSharedCompilation>false</UseSharedCompilation>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../src/Data.NativeHost/Korda.Database.csproj" />
+    <Reference Include="Korda.Database.Sqlite"><HintPath>$(EmptyParameterInputs)/lib/net11.0/Korda.Database.Sqlite.dll</HintPath></Reference>
+    <Reference Include="Korda.Database.PostgreSql"><HintPath>$(EmptyParameterInputs)/lib/net11.0/Korda.Database.PostgreSql.dll</HintPath></Reference>
+    <None Include="$(EmptyParameterInputs)/runtimes/linux-x64/native/*.so" Link="runtimes/linux-x64/native/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

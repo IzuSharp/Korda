@@ -12,6 +12,7 @@
 #include <exception>
 #include <limits>
 #include <numeric>
+#include <type_traits>
 #include <utility>
 
 namespace nw
@@ -214,6 +215,32 @@ std::vector<std::uint64_t> token_vector(ByteView bytes)
         result.push_back(read_u64(bytes, i));
     return result;
 }
+std::uint64_t command_token(std::uint64_t local, std::span<const std::uint64_t> slots, bool root_alias = false)
+{
+    if (local == 0 && root_alias)
+        return 0;
+    if (local == 0 || local >= slots.size())
+        invalid("command slot must reference an earlier result in this block");
+    return slots[static_cast<std::size_t>(local)];
+}
+Fields text_clause_fields(ByteView operands)
+{
+    if (operands.size() < 32)
+        invalid("missing operation selector");
+    const auto count = read_u32(operands, 8);
+    const auto offset = read_u64(operands, 24);
+    if (count == 0 || count > MAX_NODES || 16 + static_cast<std::size_t>(count) * 16 > operands.size() ||
+        read_u16(operands, 16) != 1 || read_u16(operands, 18) != 1 || read_u32(operands, 20) != 4 ||
+        offset < 16 + static_cast<std::uint64_t>(count) * 16 || offset > operands.size() ||
+        operands.size() - offset < 4)
+        invalid("operation selector range");
+    const auto operation = read_u32(operands, static_cast<std::size_t>(offset));
+    if (operation > 4)
+        unsupported("text operation");
+    return Fields::parse(
+        operands, 6,
+        {{1, 1, true}, {2, 2, true}, {3, static_cast<std::uint16_t>(operation == 4 ? 4 : 6), true}, {4, 1, true}});
+}
 } // namespace
 
 void QueryLimits::validate() const
@@ -224,12 +251,12 @@ void QueryLimits::validate() const
 }
 Capabilities Capabilities::from_mask(std::uint64_t mask, Profile profile)
 {
-    if ((mask >> 26) != 0)
+    if ((mask >> 30) != 0)
         invalid("reserved database capability bits");
     auto has = [mask](unsigned bit) { return (mask & (std::uint64_t{1} << bit)) != 0; };
-    return {has(0), has(23), has(17), has(21), has(22),
-            has(1), has(12), has(10), has(9),  has(11) && profile == Profile::PostgreSql,
-            has(18)};
+    return {has(0),  has(23), has(17), has(21), has(22),
+            has(1),  has(12), has(10), has(9),  has(11) && profile == Profile::PostgreSql,
+            has(18), has(26)};
 }
 CodecBindings::CodecBindings(Profile profile, const std::vector<std::pair<std::uint32_t, Codec>>& configured)
 try : profile_(profile)
@@ -388,6 +415,36 @@ void ParameterRegistry::register_identity(const ParameterIdentity& identity)
         capacity("source parameter count");
     identities_.emplace(identity.id, identity);
 }
+void ParameterRegistry::register_identities(const std::map<std::uint32_t, ParameterIdentity>& identities)
+{
+    if (identities.empty())
+        return;
+    std::lock_guard lock(mutex_);
+    bool added = false;
+    for (const auto& [id, identity] : identities)
+    {
+        const auto old = identities_.find(id);
+        if (id != identity.id || (old != identities_.end() && old->second != identity))
+            invalid("source parameter ID reused with different identity");
+        added = added || old == identities_.end();
+    }
+    if (!added)
+        return;
+    auto candidate = identities_;
+    for (const auto& [id, identity] : identities)
+    {
+        if (auto old = candidate.find(id); old != candidate.end())
+        {
+            if (old->second != identity)
+                invalid("source parameter ID reused with different identity");
+            continue;
+        }
+        if (candidate.size() == maximum_)
+            capacity("source parameter count");
+        candidate.emplace(id, identity);
+    }
+    identities_.swap(candidate);
+}
 
 namespace query_detail
 {
@@ -400,6 +457,14 @@ struct Slot
     std::optional<Bytes> literal;
 };
 using SlotPtr = std::shared_ptr<const Slot>;
+struct CommandOrigin
+{
+    std::uint16_t kind;
+    std::uint16_t opcode;
+    Bytes identity;
+    std::vector<SlotPtr> slots;
+};
+using CommandOrigins = std::vector<std::shared_ptr<const CommandOrigin>>;
 struct Expr;
 using ExprPtr = std::shared_ptr<const Expr>;
 struct Order
@@ -503,7 +568,6 @@ struct Selected
 struct QueryData
 {
     std::vector<Node> nodes;
-    std::vector<Bytes> values;
     std::size_t bytes = 0;
     std::size_t retained_nodes = 0;
     std::size_t retained_native = 0;
@@ -586,6 +650,8 @@ struct CompiledPlan
 {
     std::shared_ptr<const CompiledShape> shape;
     std::vector<SlotPtr> arguments;
+    Expectation parameter_expectation;
+    std::vector<std::optional<std::size_t>> parameter_ordinals;
 };
 } // namespace query_detail
 
@@ -698,10 +764,11 @@ try
         invalid("value flags");
     auto codec = root.codecs->get(bound, flags == 1);
     Expectation expected{3, root.source.profile, {}, 0, 0, {{1, codec, bound}}, exact};
-    auto batch = Batch::parse(bytes, expected);
+    auto batch = BatchView::parse(bytes, expected);
     if (batch.rows() > limits.parameters)
         capacity("expression collection size");
     DecodedValues result{codec, bound, {}};
+    result.cells.reserve(batch.rows());
     for (std::uint32_t row = 0; row < batch.rows(); ++row)
     {
         auto cell = batch.cell(row, 0);
@@ -746,6 +813,75 @@ struct NativeQuery::Impl
     QueryState state = QueryState::Mutable;
     std::shared_ptr<std::atomic_bool> submitted = std::make_shared<std::atomic_bool>(false);
     query_detail::QueryData data;
+    bool command_private = false;
+    // Set only for one synchronous command record. Clone snapshots preserve
+    // literal/parameter identity without any process/thread-local replay state.
+    const std::vector<query_detail::SlotPtr>* command_slots = nullptr;
+    std::vector<query_detail::SlotPtr>* command_new_slots = nullptr;
+    std::size_t command_slot_offset = 0;
+    std::shared_ptr<const query_detail::CommandOrigins> command_origins;
+
+    class Edit
+    {
+      public:
+        explicit Edit(Impl& owner) : owner_(owner)
+        {
+            // An independently callable ABI mutation must leave its existing
+            // arena unchanged on failure. A complete command owns a fresh arena
+            // and shadow registry until the whole command succeeds, so it edits
+            // that arena directly instead of snapshotting every earlier node.
+            if (!owner.command_private)
+                copy_.emplace(owner.data);
+        }
+        Edit(const Edit&) = delete;
+        Edit& operator=(const Edit&) = delete;
+        ~Edit()
+        {
+            if (!copy_ && !committed_)
+                owner_.state = QueryState::Poisoned;
+        }
+        query_detail::QueryData& data()
+        {
+            return copy_ ? *copy_ : owner_.data;
+        }
+        void commit() noexcept
+        {
+            static_assert(std::is_nothrow_move_assignable_v<query_detail::QueryData>);
+            if (copy_)
+                owner_.data = std::move(*copy_);
+            committed_ = true;
+        }
+
+      private:
+        Impl& owner_;
+        std::optional<query_detail::QueryData> copy_;
+        bool committed_ = false;
+    };
+    Edit edit()
+    {
+        return Edit(*this);
+    }
+
+    query_detail::SlotPtr slot(Codec codec, std::uint32_t bound, std::optional<Bytes> literal,
+                               std::optional<std::uint32_t> parameter = std::nullopt)
+    {
+        if (!command_slots)
+            return make_slot(std::move(codec), bound, std::move(literal), parameter);
+        const auto at = command_slot_offset++;
+        if (at < command_slots->size())
+        {
+            const auto& value = command_slots->at(at);
+            if (value->codec != codec || value->bound_codec != bound || value->literal != literal ||
+                value->parameter != parameter)
+                invalid("command origin scalar identity changed");
+            return value;
+        }
+        if (!command_new_slots)
+            invalid("command origin scalar count changed");
+        auto value = make_slot(std::move(codec), bound, std::move(literal), parameter);
+        command_new_slots->push_back(value);
+        return value;
+    }
 
     void mutable_check(bool expression_operation) const
     {
@@ -858,6 +994,7 @@ std::shared_ptr<NativeQuery> NativeQuery::clone_selected() const
     copy->generation = new_generation();
     copy->submitted = std::make_shared<std::atomic_bool>(false);
     copy->state = QueryState::Mutable;
+    copy->command_private = false;
     copy->data.reserved.reset();
     return std::shared_ptr<NativeQuery>(new NativeQuery(std::move(copy)));
 }
@@ -889,9 +1026,10 @@ try
                      column_expression(qualifier, column.name),
                      1,
                      {}};
-    auto candidate = impl_->data;
+    auto edit = impl_->edit();
+    auto& candidate = edit.data();
     auto token = impl_->append_expression(candidate, std::move(value), 0);
-    impl_->data = std::move(candidate);
+    edit.commit();
     return token;
 }
 catch (const Error& error)
@@ -902,30 +1040,31 @@ std::uint64_t NativeQuery::value(ByteView one_cell)
 {
     impl_->mutable_check(true);
     auto decoded = decode_values(impl_->root, one_cell, 1, impl_->limits);
-    auto candidate = impl_->data;
+    auto edit = impl_->edit();
+    auto& candidate = edit.data();
     candidate.native_quota(1, one_cell.size(), impl_->limits);
-    auto slot = make_slot(decoded.codec, decoded.bound, std::move(decoded.cells.at(0)));
+    auto slot = impl_->slot(decoded.codec, decoded.bound, std::move(decoded.cells.at(0)));
     Expression value{{decoded.codec, decoded.bound, 1, false, false, {}}, slot_expression(slot), 1, {}};
     auto token = impl_->append_expression(candidate, std::move(value), one_cell.size());
     candidate.slots.emplace(slot->id, slot);
-    candidate.values.emplace_back(one_cell.begin(), one_cell.end());
-    impl_->data = std::move(candidate);
+    edit.commit();
     return token;
 }
 std::uint64_t NativeQuery::parameter(ParameterIdentity identity)
 {
     impl_->mutable_check(true);
     identity.validate(*impl_->root.codecs);
-    auto candidate = impl_->data;
+    auto edit = impl_->edit();
+    auto& candidate = edit.data();
     candidate.quota(identity.name.size(), 1, impl_->limits);
     candidate.native_quota(1, 0, impl_->limits);
     merge_parameter(candidate.parameters, identity, impl_->limits.parameters);
-    auto slot = make_slot(identity.codec, identity.bound_codec, {}, identity.id);
+    auto slot = impl_->slot(identity.codec, identity.bound_codec, {}, identity.id);
     Expression value{{identity.codec, identity.bound_codec, 1, false, false, {}}, slot_expression(slot), 1, {}};
     auto token = impl_->append_expression(candidate, std::move(value), identity.name.size());
     candidate.slots.emplace(slot->id, slot);
     impl_->registry->register_identity(identity);
-    impl_->data = std::move(candidate);
+    edit.commit();
     return token;
 }
 std::uint64_t NativeQuery::binary(std::uint32_t opcode, std::uint64_t left, std::uint64_t right)
@@ -960,9 +1099,10 @@ std::uint64_t NativeQuery::binary(std::uint32_t opcode, std::uint64_t left, std:
                                   : expression(ExprKind::Binary, {a.ast, b.ast}, opcode),
                      1 + a.nodes + b.nodes,
                      {}};
-    auto candidate = impl_->data;
+    auto edit = impl_->edit();
+    auto& candidate = edit.data();
     auto token = impl_->append_expression(candidate, std::move(value), 0);
-    impl_->data = std::move(candidate);
+    edit.commit();
     return token;
 }
 std::uint64_t NativeQuery::unary(std::uint32_t opcode, std::uint64_t input)
@@ -997,9 +1137,10 @@ std::uint64_t NativeQuery::unary(std::uint32_t opcode, std::uint64_t input)
     }
     ++value.type.depth;
     ++value.nodes;
-    auto candidate = impl_->data;
+    auto edit = impl_->edit();
+    auto& candidate = edit.data();
     auto token = impl_->append_expression(candidate, std::move(value), 0);
-    impl_->data = std::move(candidate);
+    edit.commit();
     return token;
 }
 std::uint64_t NativeQuery::list(std::uint32_t opcode, std::uint64_t input, ByteView cells)
@@ -1012,12 +1153,13 @@ std::uint64_t NativeQuery::list(std::uint32_t opcode, std::uint64_t input, ByteV
         decode_values(impl_->root, cells, opcode == 3 ? std::optional<std::uint32_t>(2) : std::nullopt, impl_->limits);
     if (!value.type.codec.same_scalar(decoded.codec) || value.type.bound_codec != decoded.bound)
         invalid("list element codec mismatch");
-    auto candidate = impl_->data;
+    auto edit = impl_->edit();
+    auto& candidate = edit.data();
     candidate.native_quota(value.nodes + decoded.cells.size() + 1, cells.size(), impl_->limits);
     std::vector<ExprPtr> arguments;
     for (auto& cell : decoded.cells)
     {
-        auto slot = make_slot(decoded.codec, decoded.bound, std::move(cell));
+        auto slot = impl_->slot(decoded.codec, decoded.bound, std::move(cell));
         candidate.slots.emplace(slot->id, slot);
         arguments.push_back(slot_expression(slot));
     }
@@ -1032,8 +1174,7 @@ std::uint64_t NativeQuery::list(std::uint32_t opcode, std::uint64_t input, ByteV
                       value.nodes + arguments.size() + 1,
                       {}};
     auto token = impl_->append_expression(candidate, std::move(result), cells.size());
-    candidate.values.emplace_back(cells.begin(), cells.end());
-    impl_->data = std::move(candidate);
+    edit.commit();
     return token;
 }
 std::uint64_t NativeQuery::import_model(ModelBinding model)
@@ -1043,18 +1184,22 @@ std::uint64_t NativeQuery::import_model(ModelBinding model)
     Node node;
     node.kind = NodeKind::Model;
     node.model = std::move(model);
-    auto candidate = impl_->data;
+    auto edit = impl_->edit();
+    auto& candidate = edit.data();
     auto token = candidate.append(std::move(node), 0, impl_->generation, impl_->limits);
-    impl_->data = std::move(candidate);
+    edit.commit();
     return token;
 }
 std::uint64_t NativeQuery::import_plan(std::shared_ptr<const NativePlan> plan)
 {
+    if (plan && plan->is_find_shape())
+        invalid("private Find slots cannot be imported into public queries");
     impl_->mutable_check(false);
     if (!plan || plan->source != source())
         state_error("imported plan from another source");
     impl_->dependency_quota(*plan);
-    auto candidate = impl_->data;
+    auto edit = impl_->edit();
+    auto& candidate = edit.data();
     import_native(candidate, *plan, impl_->limits);
     for (const auto& [id, identity] : plan->parameters)
     {
@@ -1067,7 +1212,7 @@ std::uint64_t NativeQuery::import_plan(std::shared_ptr<const NativePlan> plan)
     auto token = candidate.append(std::move(node), plan->owned_bytes, impl_->generation, impl_->limits);
     candidate.retained_nodes += plan->nodes;
     candidate.imported_depth = std::max(candidate.imported_depth, plan->depth + 1);
-    impl_->data = std::move(candidate);
+    edit.commit();
     return token;
 }
 std::uint64_t NativeQuery::import_cte(std::shared_ptr<const NativeCte> cte)
@@ -1078,7 +1223,8 @@ std::uint64_t NativeQuery::import_cte(std::shared_ptr<const NativeCte> cte)
     if (!cte || cte->source != source())
         state_error("CTE source generation");
     impl_->dependency_quota(*cte->body);
-    auto candidate = impl_->data;
+    auto edit = impl_->edit();
+    auto& candidate = edit.data();
     import_native(candidate, *cte->body, impl_->limits);
     for (const auto& [id, identity] : cte->body->parameters)
     {
@@ -1091,11 +1237,16 @@ std::uint64_t NativeQuery::import_cte(std::shared_ptr<const NativeCte> cte)
     auto token = candidate.append(std::move(node), cte->body->owned_bytes, impl_->generation, impl_->limits);
     candidate.retained_nodes += cte->body->nodes;
     candidate.imported_depth = std::max(candidate.imported_depth, cte->body->depth + 1);
-    impl_->data = std::move(candidate);
+    edit.commit();
     return token;
 }
 
 std::uint64_t NativeQuery::clause(std::uint32_t opcode, ByteView operands)
+{
+    return clause(opcode, operands, {});
+}
+std::uint64_t NativeQuery::clause(std::uint32_t opcode, ByteView operands, std::span<const std::uint64_t> command_slots,
+                                  const Fields* text_fields)
 try
 {
     if (opcode == 0 || opcode > 22)
@@ -1103,10 +1254,15 @@ try
     impl_->mutable_check(opcode == 7 || (opcode >= 13 && opcode <= 16) || (opcode >= 19 && opcode <= 21));
     if (opcode != 19)
         impl_->data.quota(operands.size(), 0, impl_->limits);
-    auto candidate = impl_->data;
+    auto edit = impl_->edit();
+    auto& candidate = edit.data();
     auto marker = [&] { return candidate.append(Node{}, operands.size(), impl_->generation, impl_->limits); };
     auto emit = [&](Expression value)
     { return impl_->append_expression(candidate, std::move(value), operands.size()); };
+    // The direct ABI carries native tokens; complete commands carry block-local
+    // indexes. Resolve only at this boundary, without rewriting a control frame.
+    auto token = [&](std::uint64_t value)
+    { return command_slots.empty() ? value : command_token(value, command_slots); };
     auto imported_plan = [&](std::uint64_t token)
     {
         const auto& node = impl_->node(token);
@@ -1130,7 +1286,7 @@ try
         case 2:
         {
             auto f = Fields::parse(operands, 6, {{1, 2, true}});
-            auto value = impl_->get_expression(f.u64(1));
+            auto value = impl_->get_expression(token(f.u64(1)));
             if (value.type.codec.id != 4)
                 invalid("predicate must be boolean");
             if (opcode == 1 && value.type.aggregate)
@@ -1145,7 +1301,7 @@ try
         case 3:
         {
             auto f = Fields::parse(operands, 6, {{1, 2, true}, {2, 1, true}, {3, 1, true}, {4, 1, true}});
-            auto value = impl_->get_expression(f.u64(1));
+            auto value = impl_->get_expression(token(f.u64(1)));
             direction(f.u32(2), f.u32(3));
             if (f.boolean(4))
                 candidate.orders.clear();
@@ -1157,7 +1313,7 @@ try
         case 4:
         {
             auto f = Fields::parse(operands, 6, {{1, 2, true}});
-            auto value = impl_->get_expression(f.u64(1));
+            auto value = impl_->get_expression(token(f.u64(1)));
             if (value.type.aggregate)
                 invalid("aggregate cannot be a GROUP key");
             candidate.groups.push_back(value.ast);
@@ -1186,18 +1342,21 @@ try
         {
             auto f = Fields::parse(operands, 6, {{1, 8, true}, {2, 5, true}});
             auto tokens = token_vector(f.bytes(1));
+            // Embedded projection references are compared in the input's token
+            // domain before either local indexes or native tokens enter the AST.
             auto projection = projection_record(f.bytes(2), source(), 1, impl_->root.codecs, &tokens);
             if (tokens.size() != projection.projection->fields().size())
                 invalid("projection count");
             candidate.selects.clear();
             for (std::size_t i = 0; i < tokens.size(); ++i)
             {
-                auto value = impl_->get_expression(tokens[i]);
+                const auto expression_token = token(tokens[i]);
+                auto value = impl_->get_expression(expression_token);
                 const auto& field = projection.projection->fields()[i];
                 if (value.type.codec != field.codec || value.type.bound_codec != projection.codecs->bound(field.codec))
                     invalid("projection expression codec/nullability");
                 candidate.selects.push_back(
-                    {value.ast, field.name, static_cast<std::uint32_t>(tokens[i]), value.type.aggregate});
+                    {value.ast, field.name, static_cast<std::uint32_t>(expression_token), value.type.aggregate});
                 candidate.statement_nodes += value.nodes;
             }
             candidate.projection = std::move(projection);
@@ -1209,13 +1368,14 @@ try
         {
             auto f = opcode == 7 ? Fields::parse(operands, 6, {{1, 2, true}, {2, 2, true}})
                                  : Fields::parse(operands, 6, {{1, 2, true}});
-            const auto at = impl_->index(f.u64(1));
+            const auto alias_token = token(f.u64(1));
+            const auto at = impl_->index(alias_token);
             const auto& node = impl_->data.nodes[at];
             if (node.kind != NodeKind::Alias || !node.alias.provisional || impl_->data.reserved != at + 1)
                 invalid("active provisional JOIN alias required");
             if (opcode == 7)
             {
-                auto on = impl_->get_expression(f.u64(2));
+                auto on = impl_->get_expression(token(f.u64(2)));
                 if (on.type.codec.id != 4 || on.type.aggregate)
                     invalid("JOIN ON requires scalar boolean");
                 auto alias = node.alias;
@@ -1227,7 +1387,7 @@ try
                     candidate.statement_nodes += alias.model.model->columns().size() + 2;
                 candidate.has_join = true;
                 (void)marker();
-                result = f.u64(1);
+                result = alias_token;
             }
             else
                 candidate.nodes[at].valid = false;
@@ -1253,7 +1413,7 @@ try
             const auto operation = f.u32(2);
             if (operation > 3)
                 unsupported("set operation");
-            auto plan = imported_plan(f.u64(1));
+            auto plan = imported_plan(token(f.u64(1)));
             if (!candidate.projection || !plan->projection)
                 invalid("set selection missing");
             const auto& own = candidate.projection->projection->fields();
@@ -1273,7 +1433,7 @@ try
         case 10:
         {
             auto f = Fields::parse(operands, 6, {{1, 2, true}});
-            const auto& node = impl_->node(f.u64(1));
+            const auto& node = impl_->node(token(f.u64(1)));
             if (node.kind != NodeKind::Cte || !node.cte)
                 invalid("expected imported CTE");
             if (!candidate.cte_names.insert(node.cte->name).second)
@@ -1299,6 +1459,10 @@ try
                                     {6, 1, false},
                                     {7, 1, false}});
             const auto action = f.u32(1);
+            // These optional fields remain token references even when an
+            // action does not consume them (for example window creation).
+            const auto window_token = f.get(2) ? std::optional{token(f.u64(2))} : std::nullopt;
+            const auto input_token = f.get(3) ? std::optional{token(f.u64(3))} : std::nullopt;
             if (action == 0)
             {
                 f.require_set({1});
@@ -1308,19 +1472,19 @@ try
                 candidate.advanced_mutation = true;
                 break;
             }
-            auto at = window_at(f.u64(2));
+            auto at = window_at(window_token.value_or(0));
             auto& window = candidate.nodes[at].window;
             if (action == 1)
             {
                 f.require_set({1, 2, 3});
-                auto value = impl_->get_expression(f.u64(3));
+                auto value = impl_->get_expression(input_token.value());
                 window.partitions.push_back(value.ast);
                 window.nodes += value.nodes;
             }
             else if (action == 2)
             {
                 f.require_set({1, 2, 3, 4, 5});
-                auto value = impl_->get_expression(f.u64(3));
+                auto value = impl_->get_expression(input_token.value());
                 direction(f.u32(4), f.u32(5));
                 window.orders.push_back({value.ast, f.u32(4), f.u32(5)});
                 window.nodes += value.nodes;
@@ -1364,7 +1528,7 @@ try
                 unsupported("window capability");
             std::optional<Expression> input;
             if (f.get(2))
-                input = impl_->get_expression(f.u64(2));
+                input = impl_->get_expression(token(f.u64(2)));
             if (((function == 0 || function >= 6) && (input || distinct)) || (function >= 1 && function <= 5 && !input))
                 invalid("aggregate operand set");
             const bool nullable = function >= 2 && function <= 5;
@@ -1399,7 +1563,7 @@ try
             auto nodes = 1 + (input ? input->nodes : 0);
             if (f.get(4))
             {
-                const auto& window = impl_->data.nodes[window_at(f.u64(4))].window;
+                const auto& window = impl_->data.nodes[window_at(token(f.u64(4)))].window;
                 ast = over_expression(ast, window);
                 nodes += window.nodes;
             }
@@ -1436,7 +1600,8 @@ try
         case 14:
         {
             auto f = Fields::parse(operands, 6, {{1, 2, true}, {2, 1, true}, {3, 2, false}});
-            auto plan = imported_plan(f.u64(1));
+            auto plan = imported_plan(token(f.u64(1)));
+            const auto input_token = f.get(3) ? std::optional{token(f.u64(3))} : std::nullopt;
             if (!plan->projection)
                 invalid("subquery projection");
             ExpressionType info{scalar(4), 4, plan->depth + 1, false, false, {}};
@@ -1450,7 +1615,7 @@ try
             else if (f.u32(2) == 1)
             {
                 f.require_set({1, 2, 3});
-                auto lhs = impl_->get_expression(f.u64(3));
+                auto lhs = impl_->get_expression(input_token.value());
                 const auto& fields = plan->projection->projection->fields();
                 if (fields.size() != 1 || !fields.front().codec.same_scalar(lhs.type.codec))
                     invalid("IN subquery scalar shape");
@@ -1471,9 +1636,9 @@ try
         case 15:
         {
             auto f = Fields::parse(operands, 6, {{1, 2, true}, {2, 2, true}, {3, 2, true}});
-            auto condition = impl_->get_expression(f.u64(1));
-            auto a = impl_->get_expression(f.u64(2));
-            auto b = impl_->get_expression(f.u64(3));
+            auto condition = impl_->get_expression(token(f.u64(1)));
+            auto a = impl_->get_expression(token(f.u64(2)));
+            auto b = impl_->get_expression(token(f.u64(3)));
             if (condition.type.codec.id != 4 || !a.type.codec.same_scalar(b.type.codec) ||
                 a.type.bound_codec != b.type.bound_codec)
                 invalid("CASE operand types");
@@ -1492,24 +1657,12 @@ try
         }
         case 16:
         {
-            if (operands.size() < 32)
-                invalid("missing operation selector");
-            const auto count = read_u32(operands, 8);
-            const auto offset = read_u64(operands, 24);
-            if (count == 0 || count > MAX_NODES || 16 + static_cast<std::size_t>(count) * 16 > operands.size() ||
-                read_u16(operands, 16) != 1 || read_u16(operands, 18) != 1 || read_u32(operands, 20) != 4 ||
-                offset < 16 + static_cast<std::uint64_t>(count) * 16 || offset > operands.size() ||
-                operands.size() - offset < 4)
-                invalid("operation selector range");
-            const auto operation = read_u32(operands, static_cast<std::size_t>(offset));
-            if (operation > 4)
-                unsupported("text operation");
-            auto f = Fields::parse(operands, 6,
-                                   {{1, 1, true},
-                                    {2, 2, true},
-                                    {3, static_cast<std::uint16_t>(operation == 4 ? 4 : 6), true},
-                                    {4, 1, true}});
-            auto input = impl_->get_expression(f.u64(2));
+            std::optional<Fields> parsed;
+            if (!text_fields)
+                parsed = text_clause_fields(operands);
+            const auto& f = text_fields ? *text_fields : *parsed;
+            const auto operation = f.u32(1);
+            auto input = impl_->get_expression(token(f.u64(2)));
             if (input.type.codec.id != 5)
                 invalid("text input codec");
             auto escape = f.u32(4);
@@ -1553,7 +1706,7 @@ try
                     transformed = bytes_of(pattern);
                 }
                 candidate.native_quota(input.nodes + 3, transformed ? transformed->size() : 0, impl_->limits);
-                auto slot = make_slot(decoded.codec, decoded.bound, std::move(transformed));
+                auto slot = impl_->slot(decoded.codec, decoded.bound, std::move(transformed));
                 candidate.slots.emplace(slot->id, slot);
                 auto rhs = expression(ExprKind::Binary,
                                       {slot_expression(slot), expression(ExprKind::Constant, {}, 1, escaped_character)},
@@ -1566,7 +1719,6 @@ try
             ++input.type.depth;
             input.type.windowable = false;
             result = emit({input.type, ast, nodes, {}});
-            candidate.values.emplace_back(f.bytes(3).begin(), f.bytes(3).end());
             break;
         }
         case 17:
@@ -1574,7 +1726,7 @@ try
             auto f = Fields::parse(operands, 6, {{1, 1, true}, {2, 2, true}});
             const auto id = f.u32(1);
             const auto& column = impl_->root.model->column(id);
-            auto value = impl_->get_expression(f.u64(2));
+            auto value = impl_->get_expression(token(f.u64(2)));
             if (column.key_ordinal || column.generated || candidate.assigned.contains(id) ||
                 !column.codec.same_scalar(value.type.codec) || (!column.codec.nullable && value.type.codec.nullable) ||
                 value.type.aggregate || !value.type.dependencies.empty())
@@ -1590,7 +1742,7 @@ try
             if (!impl_->capabilities.explicit_relationships)
                 unsupported("explicit relationship capability");
             auto f = Fields::parse(operands, 6, {{1, 2, true}, {2, 1, true}, {3, 4, true}, {4, 1, true}});
-            const auto& model_node = impl_->node(f.u64(1));
+            const auto& model_node = impl_->node(token(f.u64(1)));
             if (model_node.kind != NodeKind::Model)
                 invalid("JOIN imported model token");
             auto name = std::string(f.text(3));
@@ -1614,7 +1766,7 @@ try
         case 20:
         {
             auto f = Fields::parse(operands, 6, {{1, 2, true}});
-            const auto at = impl_->index(f.u64(1));
+            const auto at = impl_->index(token(f.u64(1)));
             const auto& node = impl_->data.nodes[at];
             if (node.kind != NodeKind::Alias || !node.alias.left || node.alias.provisional)
                 invalid("JOIN MATCH requires committed left alias");
@@ -1633,10 +1785,10 @@ try
             if (!impl_->capabilities.windows)
                 unsupported("window capability");
             auto f = Fields::parse(operands, 6, {{1, 2, true}, {2, 2, true}});
-            auto value = impl_->get_expression(f.u64(1));
+            auto value = impl_->get_expression(token(f.u64(1)));
             if (!value.type.windowable)
                 invalid("OVER requires native aggregate/window expression");
-            const auto& window = impl_->data.nodes[window_at(f.u64(2))].window;
+            const auto& window = impl_->data.nodes[window_at(token(f.u64(2)))].window;
             value.ast = value.window_cast
                             ? expression(ExprKind::Cast, {over_expression(value.window_cast->first, window)}, 0,
                                          value.window_cast->second)
@@ -1659,7 +1811,7 @@ try
             unsupported("clause opcode");
     }
     candidate.native_quota(0, 0, impl_->limits);
-    impl_->data = std::move(candidate);
+    edit.commit();
     return result;
 }
 catch (const Error& error)
@@ -1670,14 +1822,22 @@ catch (const Error& error)
 struct NativePlan::Impl
 {
     std::shared_ptr<const QueryData> data;
+    std::shared_ptr<const query_detail::CommandOrigins> command_origins;
     QueryLimits limits;
     std::shared_ptr<std::atomic_bool> submitted;
     mutable std::once_flag once;
     mutable std::unique_ptr<CompiledPlan> compiled;
     mutable std::exception_ptr compile_error;
+    // Private complete-key shapes have independent execution values and never
+    // enter the public source ParameterRegistry or public Prepare contract.
+    std::size_t find_fixed_bytes = 0;
 };
 NativePlan::NativePlan() : impl_(std::make_unique<Impl>()) {}
 NativePlan::~NativePlan() = default;
+bool NativePlan::is_find_shape() const
+{
+    return impl_->find_fixed_bytes != 0;
+}
 const QueryData& NativePlan::data() const
 {
     return *impl_->data;
@@ -1686,11 +1846,13 @@ bool NativePlan::requires_transaction() const
 {
     return data().requires_transaction;
 }
-std::pair<std::size_t, std::size_t> NativePlan::retained_counts() const
+std::size_t NativePlan::retained_literal_bytes() const
 {
-    return {static_cast<std::size_t>(
-                std::count_if(data().nodes.begin(), data().nodes.end(), [](const auto& node) { return node.valid; })),
-            data().values.size()};
+    return data().literal_bytes();
+}
+std::size_t NativePlan::expanded_nodes() const
+{
+    return data().expanded();
 }
 std::shared_ptr<NativePlan> NativeQuery::seal(std::uint32_t terminal)
 {
@@ -1726,11 +1888,134 @@ std::shared_ptr<NativePlan> NativeQuery::seal(std::uint32_t terminal)
     for (const auto& node : data.nodes)
         if (node.valid && node.kind == NodeKind::Expression)
             plan->depth = std::max(plan->depth, node.expression.type.depth);
-    plan->impl_->data = std::make_shared<const QueryData>(data);
+    // A complete command has no published mutable query owner. Its validated
+    // arena can become the immutable plan storage directly. Independently
+    // callable query handles retain their arena and existing state semantics.
+    static_assert(std::is_nothrow_move_constructible_v<QueryData>);
+    plan->impl_->data = impl_->command_private ? std::make_shared<const QueryData>(std::move(impl_->data))
+                                               : std::make_shared<const QueryData>(data);
     plan->impl_->limits = impl_->limits;
     plan->impl_->submitted = impl_->submitted;
+    plan->impl_->command_origins = impl_->command_origins;
     impl_->state = QueryState::Sealed;
     return plan;
+}
+
+std::shared_ptr<NativePlan> NativeQuery::find(ModelBinding root, ProjectionBinding projection, QueryLimits limits,
+                                              Capabilities capabilities, std::uint64_t timeout_ns)
+{
+    if (!root.model || !root.codecs || !projection.projection || projection.source != root.source)
+        invalid("Find model/projection source");
+    const auto& fields = projection.projection->fields();
+    const auto& columns = root.model->projection();
+    const auto keys = root.model->keys();
+    if (keys.empty() || fields.size() != columns.size())
+        invalid("Find requires the complete model projection and nonempty primary key");
+    for (std::size_t i = 0; i < fields.size(); ++i)
+    {
+        const auto& column = root.model->column(columns[i]);
+        if (fields[i].name != column.name || fields[i].codec != column.codec)
+            invalid("Find projection differs from model declaration order");
+    }
+    const auto table = root.model->table_id();
+    auto registry = std::make_shared<ParameterRegistry>(root.source, limits.parameters);
+    NativeQuery query(std::move(root), std::move(registry), table, limits, capabilities, timeout_ns);
+    query.impl_->command_private = true;
+    std::size_t ordinal = 0;
+    for (const auto* key : keys)
+    {
+        if (key->codec.nullable)
+            invalid("Find primary key cannot be nullable");
+        const auto name = "find_key_" + std::to_string(ordinal);
+        const auto parameter = query.parameter(
+            {static_cast<std::uint32_t>(++ordinal), name, key->codec, query.root().codecs->bound(key->codec)});
+        // Keep the original literal Find's logical frame charge (96-byte NWDB
+        // header + descriptor + cell). Changing payload bytes are charged on
+        // every execution; private slot names do not weaken that finite bound.
+        const auto bound = query.root().codecs->bound(key->codec);
+        const Expectation literal{3, query.root().source.profile, {}, 0, 0, {{1, key->codec, bound}}, 1};
+        const std::array<Scalar, 1> empty{{{key->codec, Bytes{}}}};
+        const auto extra = parameter_frame_size(literal, empty) - name.size();
+        if (extra > limits.bytes - query.impl_->data.bytes)
+            capacity("Find logical query byte bound");
+        query.impl_->data.bytes += extra;
+        const auto column = query.column(0, key->id);
+        const auto predicate = query.binary(1, column, parameter);
+        Bytes value(8);
+        put_u64(value, 0, predicate);
+        query.clause(1, encode_control(6, {{1, 2, std::move(value)}}));
+    }
+    Bytes tokens;
+    Bytes sequence(4);
+    put_u32(sequence, 0, static_cast<std::uint32_t>(fields.size()));
+    for (std::size_t i = 0; i < fields.size(); ++i)
+    {
+        const auto token = query.column(0, columns[i]);
+        Bytes expression(8), field_ordinal(4), codec(4), nullable(4);
+        put_u64(expression, 0, token);
+        put_u32(field_ordinal, 0, static_cast<std::uint32_t>(i));
+        put_u32(codec, 0, query.root().codecs->bound(fields[i].codec));
+        put_u32(nullable, 0, fields[i].codec.nullable ? 1 : 0);
+        auto record = encode_control(22, {{1, 1, std::move(field_ordinal)},
+                                          {2, 4, bytes_of(fields[i].name)},
+                                          {3, 1, std::move(codec)},
+                                          {4, 1, std::move(nullable)},
+                                          {5, 2, expression}});
+        const auto position = sequence.size();
+        sequence.resize(position + 4);
+        put_u32(sequence, position, static_cast<std::uint32_t>(record.size()));
+        sequence.insert(sequence.end(), record.begin(), record.end());
+        tokens.insert(tokens.end(), expression.begin(), expression.end());
+    }
+    const auto hash = projection.projection->hash();
+    auto encoded_projection = encode_control(13, {{1, 5, std::move(sequence)}, {2, 5, {hash.begin(), hash.end()}}});
+    query.clause(6, encode_control(6, {{1, 8, std::move(tokens)}, {2, 5, std::move(encoded_projection)}}));
+    // Selection admission has validated the exact schema. Both the arena and
+    // the plan retain the source's registered projection, not a parsed duplicate.
+    query.impl_->data.projection = std::move(projection);
+    auto plan = query.seal(3);
+    plan->impl_->find_fixed_bytes = plan->owned_bytes;
+    (void)plan->compiled_shape();
+    return plan;
+}
+
+std::size_t NativePlan::find_cache_charge() const
+{
+    if (impl_->find_fixed_bytes == 0)
+        state_error("Find cache charge requires a private Find shape");
+    const auto& value = data();
+    const auto& compilation = compiled();
+    // Conservative retained-capacity charge, excluding source-owned model and
+    // projection metadata already charged to their registry. Map/shared owner
+    // bookkeeping receives a fixed 64-byte allowance per allocation.
+    std::size_t result = sizeof(NativePlan) + sizeof(Impl) + sizeof(QueryData) + sizeof(CompiledPlan) + 256;
+    result += value.nodes.capacity() * sizeof(Node) + value.selects.capacity() * sizeof(Selected);
+    result += value.predicates.capacity() * sizeof(ExprPtr);
+    for (const auto& node : value.nodes)
+        if (node.kind == NodeKind::Expression && node.expression.ast)
+        {
+            const auto& expression = *node.expression.ast;
+            result += sizeof(Expr) + 64 + expression.text.capacity() + expression.qualifier.capacity() + 2;
+            result += expression.children.capacity() * sizeof(ExprPtr);
+            result += node.expression.type.codec.configuration.value_or("").size();
+        }
+    for (const auto& selected : value.selects)
+        result += selected.name.capacity() + 1;
+    for (const auto& [id, parameter] : parameters)
+    {
+        (void)id;
+        result += 2 * (sizeof(std::pair<const std::uint32_t, ParameterIdentity>) + 64 + parameter.name.capacity() + 1 +
+                       parameter.codec.configuration.value_or("").size());
+    }
+    result += value.slots.size() * (sizeof(std::pair<const std::uint64_t, SlotPtr>) + 64);
+    result += compilation.arguments.capacity() * sizeof(SlotPtr);
+    result += compilation.parameter_ordinals.capacity() * sizeof(std::optional<std::size_t>);
+    result += compilation.parameter_expectation.descriptors.capacity() * sizeof(Descriptor);
+    for (const auto& slot : compilation.arguments)
+        result += sizeof(Slot) + 64 + slot->codec.configuration.value_or("").size() +
+                  (slot->literal ? slot->literal->capacity() : 0);
+    result += 2 * compilation.shape->charge;
+    return result;
 }
 
 namespace
@@ -2229,8 +2514,8 @@ class Renderer
 };
 } // namespace
 
-std::shared_ptr<NativeCte> NativeCte::create(ModelBinding declared, std::uint32_t table_id, const NativeQuery& body,
-                                             std::uint32_t recursive)
+void NativeCte::validate(const ModelBinding& declared, std::uint32_t table_id, const NativeQuery& body,
+                         std::uint32_t recursive)
 {
     const auto& data = body.impl_->data;
     if (recursive == 1)
@@ -2269,7 +2554,13 @@ std::shared_ptr<NativeCte> NativeCte::create(ModelBinding declared, std::uint32_
     declared.ensure_source(body.source());
     if (declared.model->table_id() != table_id || recursive > 1)
         invalid("CTE declaration/recursive flag");
-    auto plan = body.clone_selected()->seal(8);
+}
+
+namespace
+{
+std::shared_ptr<NativeCte> cte_from_plan(ModelBinding declared, std::shared_ptr<NativePlan> plan,
+                                         std::uint32_t recursive)
+{
     if (!plan->projection || !row_codecs_match(*declared.model, *plan->projection->projection))
         invalid("CTE declared/body shape");
     auto result = std::make_shared<NativeCte>();
@@ -2280,6 +2571,406 @@ std::shared_ptr<NativeCte> NativeCte::create(ModelBinding declared, std::uint32_
     result->recursive = recursive == 1;
     return result;
 }
+} // namespace
+
+std::shared_ptr<NativeCte> NativeCte::create(ModelBinding declared, std::uint32_t table_id, const NativeQuery& body,
+                                             std::uint32_t recursive)
+{
+    validate(declared, table_id, body, recursive);
+    auto snapshot = body.clone_selected();
+    // The public body remains independently mutable. The private snapshot has
+    // no caller and does not need another arena copy when it is sealed.
+    snapshot->impl_->command_private = true;
+    return cte_from_plan(std::move(declared), snapshot->seal(8), recursive);
+}
+
+std::shared_ptr<NativeCte> NativeCte::create_owned(ModelBinding declared, std::uint32_t table_id, NativeQuery& body,
+                                                   std::uint32_t recursive)
+{
+    if (!body.impl_->command_private)
+        state_error("CTE command body is not private");
+    validate(declared, table_id, body, recursive);
+    return cte_from_plan(std::move(declared), body.seal(8), recursive);
+}
+
+// A complete command is replayed in private arenas, using the same authoritative
+// NativeQuery operations as the direct ABI. No owner or partially compiled plan
+// escapes on failure, and source parameter IDs are committed only after compile.
+class QueryCommandReplay
+{
+  public:
+    QueryCommandReplay(ByteView command, std::span<const QueryCommandDependency> dependencies,
+                       const QueryCommandContext& context)
+        : command_(command), dependencies_(dependencies), context_(context)
+    {
+        context_.limits.validate();
+        if (!context_.capabilities.command)
+            unsupported("db.query.command.v1 required");
+        if (!context_.parameters)
+            invalid("command source parameter registry");
+        const auto maximum = context_.limits.bytes + 128 * context_.limits.nodes + 64;
+        if (command_.size() > maximum || dependencies_.size() > 2 * context_.limits.nodes + 1)
+            capacity("query command envelope bound");
+        if (command_.size() < 32 || read_u32(command_, 0) != 0x4351574e)
+            invalid("query command magic/header");
+        if (read_u32(command_, 4) != 1)
+            unsupported("query command version");
+        blocks_ = read_u32(command_, 12);
+        records_ = read_u32(command_, 20);
+        binding_count_ = read_u32(command_, 24);
+        if (read_u32(command_, 8) != command_.size() || blocks_ == 0 || blocks_ > context_.limits.nodes + 1 ||
+            read_u32(command_, 16) != blocks_ - 1 || records_ > 2 * context_.limits.nodes ||
+            binding_count_ > records_ || binding_count_ > (command_.size() - 32) / 12 || read_u32(command_, 28) != 0)
+            invalid("query command envelope/counts");
+        for (const auto& dependency : dependencies_)
+            std::visit(
+                [&](const auto& value)
+                {
+                    SourceIdentity source;
+                    if constexpr (std::is_same_v<std::decay_t<decltype(value)>, ModelBinding>)
+                    {
+                        if (!value.model || !value.codecs)
+                            invalid("command model dependency");
+                        source = value.source;
+                    }
+                    else
+                    {
+                        if (!value)
+                            invalid("null command dependency");
+                        source = value->source;
+                    }
+                    if (source != context_.parameters->source)
+                        state_error("command dependency belongs to another source generation");
+                },
+                dependency);
+        for (std::uint32_t i = 0; i < binding_count_; ++i)
+        {
+            const auto at = 32 + static_cast<std::size_t>(i) * 12;
+            const auto target = read_u32(command_, at);
+            const auto dependency = read_u32(command_, at + 4);
+            const auto origin = read_u32(command_, at + 8);
+            if (target == 0 || target > records_ || dependency >= dependencies_.size() || origin == 0)
+                invalid("query command origin binding index");
+            const NativePlan* plan = nullptr;
+            if (const auto* value = std::get_if<std::shared_ptr<const NativePlan>>(&dependencies_[dependency]))
+                plan = value->get();
+            else if (const auto* value = std::get_if<std::shared_ptr<const NativeCte>>(&dependencies_[dependency]))
+                plan = (*value)->body.get();
+            if (!plan || !plan->impl_->command_origins || origin > plan->impl_->command_origins->size())
+                invalid("query command origin binding requires a retained command plan/CTE origin");
+            if (!bindings_.emplace(target, plan->impl_->command_origins->at(origin - 1)).second)
+                invalid("duplicate query command origin binding");
+        }
+        registry_ = std::make_shared<ParameterRegistry>(context_.parameters->source, context_.limits.parameters);
+    }
+
+    std::shared_ptr<NativePlan> compile(std::uint32_t terminal)
+    {
+        return replay()->seal(terminal);
+    }
+
+    std::shared_ptr<NativeCte> create_cte(ModelBinding declared, std::uint32_t table_id, std::uint32_t recursive)
+    {
+        auto body = replay();
+        return NativeCte::create_owned(std::move(declared), table_id, *body, recursive);
+    }
+
+    void commit(const NativePlan& plan) const
+    {
+        context_.parameters->register_identities(plan.parameters);
+    }
+
+  private:
+    std::shared_ptr<NativeQuery> replay()
+    {
+        std::vector<std::shared_ptr<NativePlan>> plans;
+        std::vector<bool> used(blocks_, false);
+        plans.reserve(blocks_ - 1);
+        std::size_t at = 32 + static_cast<std::size_t>(binding_count_) * 12;
+        std::size_t seen = 0;
+        std::shared_ptr<NativeQuery> root;
+        for (std::uint32_t block = 0; block < blocks_; ++block)
+        {
+            if (command_.size() - at < 24)
+                invalid("truncated query command block");
+            const auto length = read_u32(command_, at);
+            if (length < 24 || length > command_.size() - at)
+                invalid("query command block length");
+            const auto bytes = command_.subspan(at, length);
+            const auto dependency = read_u32(bytes, 4);
+            const auto count = read_u32(bytes, 12);
+            const auto declared_slots = read_u32(bytes, 16);
+            if (dependency >= dependencies_.size() ||
+                !std::holds_alternative<ModelBinding>(dependencies_[dependency]) || count > records_ - seen ||
+                declared_slots > count || read_u32(bytes, 20) != 0)
+                invalid("query command block root/counts");
+            auto query = std::make_shared<NativeQuery>(std::get<ModelBinding>(dependencies_[dependency]), registry_,
+                                                       read_u32(bytes, 8), context_.limits, context_.capabilities,
+                                                       context_.timeout_ns);
+            query->impl_->command_private = true;
+            std::vector<std::uint64_t> slots{0};
+            slots.reserve(static_cast<std::size_t>(declared_slots) + 1);
+            std::size_t position = 24;
+            for (std::uint32_t i = 0; i < count; ++i)
+            {
+                if (bytes.size() - position < 16)
+                    invalid("truncated query command record");
+                const auto size = read_u32(bytes, position);
+                if (size < 16 || size > bytes.size() - position)
+                    invalid("query command record length");
+                const auto record = bytes.subspan(position, size);
+                const auto kind = read_u16(record, 4);
+                const auto opcode = read_u16(record, 6);
+                const auto result_slot = read_u32(record, 8);
+                const auto origin = read_u32(record, 12);
+                const auto payload = record.subspan(16);
+                if (kind == 8 && (opcode == 0 || opcode > 22))
+                    unsupported("unknown required clause opcode");
+                if (result_slot != 0 && (result_slot != slots.size() || result_slot > declared_slots))
+                    invalid("query command results must use consecutive local slots");
+                std::optional<Fields> text_fields;
+                if (kind == 8 && opcode == 16)
+                    text_fields = text_clause_fields(payload);
+                origin_scope(*query, kind, opcode, origin, payload, text_fields ? &*text_fields : nullptr);
+                struct Reset
+                {
+                    NativeQuery::Impl& state;
+                    ~Reset()
+                    {
+                        state.command_slots = nullptr;
+                        state.command_new_slots = nullptr;
+                        state.command_slot_offset = 0;
+                    }
+                } reset{*query->impl_};
+                std::uint64_t result = 0;
+                switch (kind)
+                {
+                    case 1:
+                        exact(payload, 8);
+                        no_opcode(opcode);
+                        result = query->column(command_token(read_u32(payload, 0), slots, true), read_u32(payload, 4));
+                        break;
+                    case 2:
+                        no_opcode(opcode);
+                        result = query->value(payload);
+                        break;
+                    case 3:
+                    {
+                        no_opcode(opcode);
+                        if (payload.size() < 16 || read_u32(payload, 12) != payload.size() - 16 ||
+                            read_u32(payload, 8) > 1 || !valid_utf8(payload.subspan(16)))
+                            invalid("query command parameter record");
+                        const auto codec = read_u32(payload, 4);
+                        const auto name = payload.subspan(16);
+                        result = query->parameter({read_u32(payload, 0),
+                                                   std::string(reinterpret_cast<const char*>(name.data()), name.size()),
+                                                   query->root().codecs->get(codec, read_u32(payload, 8) == 1), codec});
+                        break;
+                    }
+                    case 4:
+                        exact(payload, 8);
+                        result = query->binary(opcode, command_token(read_u32(payload, 0), slots),
+                                               command_token(read_u32(payload, 4), slots));
+                        break;
+                    case 5:
+                        exact(payload, 4);
+                        result = query->unary(opcode, command_token(read_u32(payload, 0), slots));
+                        break;
+                    case 6:
+                        if (payload.size() < 4)
+                            invalid("query command list record");
+                        result = query->list(opcode, command_token(read_u32(payload, 0), slots), payload.subspan(4));
+                        break;
+                    case 7:
+                    {
+                        exact(payload, 4);
+                        const auto index = read_u32(payload, 0);
+                        if (opcode == 4)
+                        {
+                            if (index >= block)
+                                invalid("query command blocks must reference earlier blocks");
+                            result = query->import_plan(plans[index]);
+                            used[index] = true;
+                            break;
+                        }
+                        if (opcode < 1 || opcode > 3)
+                            unsupported("query command import kind");
+                        if (index >= dependencies_.size() || dependencies_[index].index() != opcode - 1)
+                            invalid("query command dependency kind/index");
+                        if (opcode == 1)
+                            result = query->import_model(std::get<ModelBinding>(dependencies_[index]));
+                        else if (opcode == 2)
+                            result =
+                                query->import_plan(std::get<std::shared_ptr<const NativePlan>>(dependencies_[index]));
+                        else
+                            result =
+                                query->import_cte(std::get<std::shared_ptr<const NativeCte>>(dependencies_[index]));
+                        break;
+                    }
+                    case 8:
+                        result = query->clause(opcode, payload, slots, text_fields ? &*text_fields : nullptr);
+                        // Commit promotes the same alias. It does not allocate a
+                        // new command result slot or replace that alias identity.
+                        if (opcode == 7)
+                            result = 0;
+                        break;
+                    default:
+                        unsupported("query command record kind");
+                }
+                if (query->impl_->command_slots &&
+                    query->impl_->command_slot_offset != query->impl_->command_slots->size())
+                    invalid("command origin scalar count changed");
+                if ((result_slot == 0) != (result == 0))
+                    invalid("query command result slot does not match operation");
+                if (result_slot != 0)
+                    slots.push_back(result);
+                position += size;
+            }
+            if (position != bytes.size() || slots.size() - 1 != declared_slots)
+                invalid("query command block trailing bytes/slot count");
+            seen += count;
+            at += length;
+            if (block + 1 == blocks_)
+                root = std::move(query);
+            else
+                plans.push_back(query->seal(8));
+        }
+        if (at != command_.size() || seen != records_ ||
+            std::find(used.begin(), used.end() - 1, false) != used.end() - 1)
+            invalid("query command trailing bytes/count/unreferenced block");
+        if (!bindings_.empty() && bindings_.rbegin()->first > origins_.size())
+            invalid("query command origin binding is not used by a record");
+        if (!origins_.empty())
+            root->impl_->command_origins = std::make_shared<const CommandOrigins>(std::move(origins_));
+        // Only compile/create_cte can receive this root. Both consume its arena
+        // into an immutable plan; no command-private mutable owner escapes.
+        return root;
+    }
+    ByteView command_;
+    std::span<const QueryCommandDependency> dependencies_;
+    const QueryCommandContext& context_;
+    std::shared_ptr<ParameterRegistry> registry_;
+    std::uint32_t blocks_ = 0;
+    std::uint32_t records_ = 0;
+    std::uint32_t binding_count_ = 0;
+    CommandOrigins origins_;
+    std::map<std::uint32_t, std::shared_ptr<const CommandOrigin>> bindings_;
+
+    static void exact(ByteView bytes, std::size_t size)
+    {
+        if (bytes.size() != size)
+            invalid("query command operand size");
+    }
+    static void no_opcode(std::uint16_t opcode)
+    {
+        if (opcode != 0)
+            invalid("query command reserved opcode");
+    }
+    void origin_scope(NativeQuery& query, std::uint16_t kind, std::uint16_t opcode, std::uint32_t origin,
+                      ByteView payload, const Fields* text_fields)
+    {
+        bool required = kind == 2 || kind == 3 || kind == 6;
+        std::array<ByteView, 3> identity_parts{};
+        if (kind == 6)
+        {
+            if (payload.size() < 4)
+                invalid("query command list origin");
+            identity_parts[0] = payload.subspan(4);
+        }
+        else if (kind == 8 && opcode == 16)
+        {
+            const auto& values = *text_fields;
+            const auto operation = values.u32(1);
+            required = operation < 4;
+            if (required)
+                identity_parts = {values.bytes(1), values.bytes(4), values.bytes(3)};
+        }
+        else if (required)
+            identity_parts[0] = payload;
+        if (required != (origin != 0))
+            invalid("query command origin is required only for scalar-producing records");
+        if (!required)
+            return;
+        if (origin > origins_.size() + 1)
+            invalid("query command origins must be consecutive");
+        const auto identity_size = identity_parts[0].size() + identity_parts[1].size() + identity_parts[2].size();
+        std::shared_ptr<CommandOrigin> created;
+        if (origin > origins_.size())
+        {
+            if (const auto found = bindings_.find(origin); found != bindings_.end())
+                origins_.push_back(found->second);
+            else
+            {
+                // Retain a snapshot only for a new origin. Replayed blocks and
+                // retained dependency origins compare directly with this input.
+                Bytes retained;
+                retained.reserve(identity_size);
+                for (auto part : identity_parts)
+                    retained.insert(retained.end(), part.begin(), part.end());
+                created = std::make_shared<CommandOrigin>(CommandOrigin{kind, opcode, std::move(retained), {}});
+                origins_.push_back(created);
+            }
+        }
+        const auto& value = *origins_[origin - 1];
+        if (!created)
+        {
+            if (value.kind != kind || value.opcode != opcode || value.identity.size() != identity_size)
+                invalid("query command origin record changed");
+            std::size_t at = 0;
+            for (auto part : identity_parts)
+            {
+                if (!std::equal(part.begin(), part.end(), value.identity.begin() + at))
+                    invalid("query command origin record changed");
+                at += part.size();
+            }
+        }
+        query.impl_->command_slots = &value.slots;
+        query.impl_->command_new_slots = created ? &created->slots : nullptr;
+        query.impl_->command_slot_offset = 0;
+    }
+};
+
+std::shared_ptr<NativePlan> compile_query_command(ByteView command,
+                                                  std::span<const QueryCommandDependency> dependencies,
+                                                  const QueryCommandContext& context, std::uint32_t terminal)
+try
+{
+    QueryCommandReplay replay(command, dependencies, context);
+    auto plan = replay.compile(terminal);
+    (void)plan->compiled_shape();
+    replay.commit(*plan);
+    return plan;
+}
+catch (const Error& error)
+{
+    binding_error(error);
+}
+Bytes render_query_command(ByteView command, std::span<const QueryCommandDependency> dependencies,
+                           const QueryCommandContext& context)
+{
+    auto plan = compile_query_command(command, dependencies, context, 8);
+    return bytes_of(plan->compiled_shape()->sql);
+}
+std::shared_ptr<NativeCte> create_query_command_cte(ByteView command,
+                                                    std::span<const QueryCommandDependency> dependencies,
+                                                    const QueryCommandContext& context, ModelBinding declared,
+                                                    std::uint32_t table_id, std::uint32_t recursive)
+try
+{
+    QueryCommandReplay replay(command, dependencies, context);
+    if (!declared.model || !declared.codecs)
+        invalid("query command CTE declaration");
+    declared.ensure_source(context.parameters->source);
+    auto cte = replay.create_cte(std::move(declared), table_id, recursive);
+    (void)cte->body->compiled_shape();
+    replay.commit(*cte->body);
+    return cte;
+}
+catch (const Error& error)
+{
+    binding_error(error);
+}
+
 Bytes NativePlan::parameter_schema() const
 {
     std::string text = "{\"version\":1,\"parameters\":[";
@@ -2352,11 +3043,29 @@ const CompiledPlan& NativePlan::compiled() const
                                append_integer(identity, slot.parameter.value_or(0));
                            }
                            shape->expectation = {1, source.profile, sha256(identity), 0, 0, std::move(descriptors), 1};
+                           shape->expectation.validate(1);
                            shape->charge = identity.size() + shape->sql.size() + sizeof(CompiledShape);
                            for (const auto& descriptor : shape->expectation.descriptors)
                                shape->charge += sizeof(Descriptor) + descriptor.codec.configuration.value_or("").size();
-                           impl_->compiled =
-                               std::make_unique<CompiledPlan>(CompiledPlan{std::move(shape), std::move(arguments)});
+                           auto inputs = parameter_expectation();
+                           std::vector<std::optional<std::size_t>> ordinals;
+                           ordinals.reserve(arguments.size());
+                           for (const auto& slot : arguments)
+                           {
+                               std::optional<std::size_t> ordinal;
+                               if (slot->parameter)
+                               {
+                                   const auto found = std::lower_bound(
+                                       inputs.descriptors.begin(), inputs.descriptors.end(), *slot->parameter,
+                                       [](const Descriptor& value, std::uint32_t id) { return value.id < id; });
+                                   if (found == inputs.descriptors.end() || found->id != *slot->parameter)
+                                       invalid("missing compiled parameter");
+                                   ordinal = static_cast<std::size_t>(found - inputs.descriptors.begin());
+                               }
+                               ordinals.push_back(ordinal);
+                           }
+                           impl_->compiled = std::make_unique<CompiledPlan>(CompiledPlan{
+                               std::move(shape), std::move(arguments), std::move(inputs), std::move(ordinals)});
                        }
                        catch (...)
                        {
@@ -2375,45 +3084,57 @@ RenderedQuery NativePlan::render(SourceIdentity session, ByteView values, ShapeC
 try
 {
     const auto& compilation = compiled();
-    auto shape = cache ? cache->acquire(*this) : compilation.shape;
+    // Private Find already retains this immutable compilation in its bounded
+    // source cache. Repeating the general shape hash/LRU lookup adds no reuse.
+    auto shape = cache && !is_find_shape() ? cache->acquire(*this) : compilation.shape;
     if (terminal == 8 && !prepared_supported)
         unsupported("prepared-shape capability");
     if (source != session)
         state_error("plan/session source mismatch");
     if (values.size() > impl_->limits.bytes || parameters.size() > impl_->limits.parameters)
         capacity("execution parameter bound");
-    auto batch = Batch::parse(values, parameter_expectation());
-    if (terminal != 8)
+    // The schema, hash and descriptors belong to the immutable compiled plan.
+    // Only the caller's value frame is parsed and validated on each execution.
+    auto batch = BatchView::parse(values, compilation.parameter_expectation);
+    if (impl_->find_fixed_bytes != 0)
+    {
+        std::size_t payload = 0;
+        for (std::size_t i = 0; i < parameters.size(); ++i)
+        {
+            const auto value = batch.cell(0, i);
+            if (!value)
+                invalid("complete Find key cannot contain NULL");
+            if (value->size() > impl_->limits.bytes - payload)
+                capacity("Find key byte bound");
+            payload += value->size();
+        }
+        if (impl_->find_fixed_bytes > impl_->limits.bytes - payload)
+            capacity("Find logical query byte bound");
+    }
+    else if (terminal != 8)
     {
         bool expected = false;
         if (!impl_->submitted->compare_exchange_strong(expected, true, std::memory_order_acq_rel))
             state_error("ordinary plan already submitted");
     }
-    std::map<std::uint32_t, std::optional<Bytes>> supplied;
-    std::size_t column = 0;
-    for (const auto& [id, p] : parameters)
+    std::vector<Scalar> arguments;
+    arguments.reserve(compilation.arguments.size());
+    for (std::size_t i = 0; i < compilation.arguments.size(); ++i)
     {
-        (void)p;
-        auto cell = batch.cell(0, column++);
-        supplied.emplace(id, cell ? std::optional<Bytes>(Bytes(cell->begin(), cell->end())) : std::nullopt);
-    }
-    std::vector<std::optional<Bytes>> cells;
-    for (const auto& slot : compilation.arguments)
-    {
-        if (slot->parameter)
+        const auto& slot = compilation.arguments[i];
+        if (const auto ordinal = compilation.parameter_ordinals[i])
         {
-            auto it = supplied.find(*slot->parameter);
-            if (it == supplied.end())
-                invalid("missing execution parameter");
-            cells.push_back(it->second);
+            const auto value = batch.cell(0, *ordinal);
+            arguments.push_back(
+                {slot->codec, value ? std::optional<Bytes>(Bytes(value->begin(), value->end())) : std::nullopt});
         }
         else
-            cells.push_back(slot->literal);
+            arguments.push_back({slot->codec, slot->literal});
     }
-    auto bytes = Batch::encode(shape->expectation, 1, cells);
-    if (bytes.size() > impl_->limits.bytes)
+    const auto charged_bytes = parameter_frame_size(shape->expectation, arguments);
+    if (charged_bytes > impl_->limits.bytes)
         capacity("rendered command byte bound");
-    return {shape->sql, std::move(bytes), shape->expectation, projection, terminal, timeout_ns};
+    return {shape->sql, std::move(arguments), shape->expectation, projection, terminal, timeout_ns, charged_bytes};
 }
 catch (const Error& error)
 {
@@ -2430,6 +3151,7 @@ struct ShapeCache::Impl
     Hash abi;
     std::size_t maximum_entries = 0;
     std::size_t maximum_bytes = 0;
+    mutable std::mutex mutex;
     std::size_t bytes = 0;
     std::deque<Entry> entries;
 };
@@ -2448,10 +3170,12 @@ ShapeCache::ShapeCache(std::size_t maximum_entries, std::size_t maximum_bytes, H
 ShapeCache::~ShapeCache() = default;
 std::pair<std::size_t, std::size_t> ShapeCache::counts() const
 {
+    std::lock_guard lock(impl_->mutex);
     return {impl_->entries.size(), impl_->bytes};
 }
 void ShapeCache::clear()
 {
+    std::lock_guard lock(impl_->mutex);
     impl_->entries.clear();
     impl_->bytes = 0;
 }
@@ -2461,19 +3185,19 @@ std::shared_ptr<const CompiledShape> ShapeCache::acquire(const NativePlan& plan)
     Bytes input(impl_->abi.begin(), impl_->abi.end());
     input.insert(input.end(), shape->identity.begin(), shape->identity.end());
     auto key = sha256(input);
+    std::lock_guard lock(impl_->mutex);
     auto found =
         std::find_if(impl_->entries.begin(), impl_->entries.end(), [&](const auto& entry) { return entry.key == key; });
     if (found != impl_->entries.end())
     {
-        auto entry = *found;
-        impl_->entries.erase(found);
-        if (entry.shape->identity != shape->identity)
+        if (found->shape->identity != shape->identity)
         {
-            impl_->bytes -= entry.shape->charge;
+            impl_->bytes -= found->shape->charge;
+            impl_->entries.erase(found);
             invalid("compiled shape hash collision");
         }
-        auto result = entry.shape;
-        impl_->entries.push_back(std::move(entry));
+        auto result = found->shape;
+        std::rotate(found, found + 1, impl_->entries.end());
         return result;
     }
     if (shape->charge > impl_->maximum_bytes)
@@ -2483,8 +3207,8 @@ std::shared_ptr<const CompiledShape> ShapeCache::acquire(const NativePlan& plan)
         impl_->bytes -= impl_->entries.front().shape->charge;
         impl_->entries.pop_front();
     }
-    impl_->bytes += shape->charge;
     impl_->entries.push_back({key, shape});
+    impl_->bytes += shape->charge;
     return shape;
 }
 

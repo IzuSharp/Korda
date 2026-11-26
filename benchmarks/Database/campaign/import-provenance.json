@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "status": "unvalidated intermediate workload copied for reconciliation",
+  "snapshot_manifest_sha256": "9347eabf58bde478402da2c2cc6860e5134131a0ac01c9b72b1774577fef7a5d",
+  "sources": [
+    {
+      "path": "benchmarks/db-perf/managed/Korda/AdvancedCases.cs",
+      "sha256": "f26c7634e4cc12b4f14a608272b5dcbc290e406947e4eb0660fd5b67ad16d427",
+      "copied_to": "benchmarks/Database/campaign/korda/AdvancedCases.cs"
+    },
+    {
+      "path": "benchmarks/db-perf/managed/Korda/Dataset.cs",
+      "sha256": "211083033651ce526a88bee130ab8f817a41b72dcc0b211dbcf287e190cc3f0a",
+      "copied_to": "benchmarks/Database/campaign/korda/Dataset.cs"
+    },
+    {
+      "path": "benchmarks/db-perf/managed/Korda/DbPerf.Korda.csproj",
+      "sha256": "7091f4c0158f34a8b0d31cf322f83b0f89b0f795a87df06eadbf40c481637e96",
+      "copied_to": "benchmarks/Database/campaign/korda/DbPerf.Korda.csproj"
+    },
+    {
+      "path": "benchmarks/db-perf/managed/Korda/Digest.cs",
+      "sha256": "fe47ba23ed9f7c7cbcbdd2f202793625d1cc528db7e835c6a06c093bd8c8ae00",
+      "copied_to": "benchmarks/Database/campaign/korda/Digest.cs"
+    },
+    {
+      "path": "benchmarks/db-perf/managed/Korda/Measurement.cs",
+      "sha256": "0732825bee80ad1a3ec5e3dfc03af22e059a3c888e3d4cf9e1486762f4a9c2dc",
+      "copied_to": "benchmarks/Database/campaign/korda/Measurement.cs"
+    },
+    {
+      "path": "benchmarks/db-perf/managed/Korda/Models.cs",
+      "sha256": "56af58130abffd7b4cc0b7f4f82d4a591ecd66ce248b435f41ef1a910ce099ec",
+      "copied_to": "benchmarks/Database/campaign/korda/Models.cs"
+    },
+    {
+      "path": "benchmarks/db-perf/managed/Korda/Options.cs",
+      "sha256": "828098643b57cdc04b06890ed108d5d04a5958814bd8a02cd29df628977ebbdc",
+      "copied_to": "benchmarks/Database/campaign/korda/Options.cs"
+    },
+    {
+      "path": "benchmarks/db-perf/managed/Korda/Program.cs",
+      "sha256": "f6c0d2526baf6fe9e274c4288d3b1b5813e0e8fe06c4aa5d42c44e56601c5616",
+      "copied_to": "benchmarks/Database/campaign/korda/Program.cs"
+    },
+    {
+      "path": "benchmarks/db-perf/managed/Korda/Workload.cs",
+      "sha256": "ad455ffd39c89a3b2a978a742f3cf21fbcc013985cfe6c2e5bf493dd0973e6bd",
+      "copied_to": "benchmarks/Database/campaign/korda/Workload.cs"
+    }
+  ],
+  "acceptance_claimed": false
+}

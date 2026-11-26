@@ -12,6 +12,7 @@
 #include <string>
 #include <string_view>
 #include <tuple>
+#include <variant>
 #include <vector>
 
 namespace nw
@@ -39,6 +40,7 @@ struct Capabilities
     bool cte = false;
     bool row_lock = false;
     bool prepared = false;
+    bool command = false;
     static Capabilities from_mask(std::uint64_t mask, Profile profile);
 };
 
@@ -100,6 +102,7 @@ class ParameterRegistry
     const SourceIdentity source;
     ParameterRegistry(SourceIdentity source, std::size_t maximum);
     void register_identity(const ParameterIdentity& identity);
+    void register_identities(const std::map<std::uint32_t, ParameterIdentity>& identities);
 
   private:
     std::size_t maximum_;
@@ -140,11 +143,12 @@ class ShapeCache;
 struct RenderedQuery
 {
     std::string sql;
-    Bytes parameter_bytes;
+    std::vector<Scalar> arguments;
     Expectation parameter_expectation;
     std::optional<ProjectionBinding> projection;
     std::uint32_t terminal = 0;
     std::uint64_t timeout_ns = 0;
+    std::size_t parameter_wire_bytes = 0;
 };
 
 // This object owns no runtime or connection. The Host supplies fail-fast single-writer admission.
@@ -178,12 +182,17 @@ class NativeQuery
     std::uint64_t import_cte(std::shared_ptr<const NativeCte> cte);
     std::uint64_t clause(std::uint32_t opcode, ByteView operands);
     std::shared_ptr<NativePlan> seal(std::uint32_t terminal);
+    static std::shared_ptr<NativePlan> find(ModelBinding root, ProjectionBinding projection, QueryLimits limits,
+                                            Capabilities capabilities, std::uint64_t timeout_ns);
 
   private:
     friend struct NativeCte;
+    friend class QueryCommandReplay;
     struct Impl;
     std::unique_ptr<Impl> impl_;
     explicit NativeQuery(std::unique_ptr<Impl> implementation);
+    std::uint64_t clause(std::uint32_t opcode, ByteView operands, std::span<const std::uint64_t> command_slots,
+                         const Fields* text_fields = nullptr);
 };
 
 class CompiledShape
@@ -221,11 +230,15 @@ class NativePlan
     RenderedQuery render(SourceIdentity session, ByteView values, ShapeCache* cache = nullptr) const;
     std::pair<std::string, std::vector<std::shared_ptr<const query_detail::Slot>>> render_shape() const;
     std::shared_ptr<const CompiledShape> compiled_shape() const;
-    std::pair<std::size_t, std::size_t> retained_counts() const;
+    std::size_t retained_literal_bytes() const;
+    std::size_t expanded_nodes() const;
+    std::size_t find_cache_charge() const;
+    bool is_find_shape() const;
     const query_detail::QueryData& data() const;
 
   private:
     friend class NativeQuery;
+    friend class QueryCommandReplay;
     friend struct NativeCte;
     struct Impl;
     std::unique_ptr<Impl> impl_;
@@ -242,9 +255,38 @@ struct NativeCte
     std::string name;
     static std::shared_ptr<NativeCte> create(ModelBinding declared, std::uint32_t table_id, const NativeQuery& body,
                                              std::uint32_t recursive);
+
+  private:
+    friend class QueryCommandReplay;
+    static void validate(const ModelBinding& declared, std::uint32_t table_id, const NativeQuery& body,
+                         std::uint32_t recursive);
+    static std::shared_ptr<NativeCte> create_owned(ModelBinding declared, std::uint32_t table_id, NativeQuery& body,
+                                                   std::uint32_t recursive);
 };
 
-// Source-owned LRU. The source admission lock serializes acquire/counts/clear.
+// The sidecar is resolved by the Host handle registry before decoding. The
+// command contains only bounded local indexes, never native pointers/tokens.
+using QueryCommandDependency =
+    std::variant<ModelBinding, std::shared_ptr<const NativePlan>, std::shared_ptr<const NativeCte>>;
+struct QueryCommandContext
+{
+    std::shared_ptr<ParameterRegistry> parameters;
+    QueryLimits limits;
+    Capabilities capabilities;
+    std::uint64_t timeout_ns = 0;
+};
+std::shared_ptr<NativePlan> compile_query_command(ByteView command,
+                                                  std::span<const QueryCommandDependency> dependencies,
+                                                  const QueryCommandContext& context, std::uint32_t terminal);
+Bytes render_query_command(ByteView command, std::span<const QueryCommandDependency> dependencies,
+                           const QueryCommandContext& context);
+std::shared_ptr<NativeCte> create_query_command_cte(ByteView command,
+                                                    std::span<const QueryCommandDependency> dependencies,
+                                                    const QueryCommandContext& context, ModelBinding declared,
+                                                    std::uint32_t table_id, std::uint32_t recursive);
+
+// Source-owned LRU. Only cache bookkeeping is serialized; compilation and
+// execution parameter processing remain outside this lock.
 class ShapeCache
 {
   public:

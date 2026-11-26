@@ -7,6 +7,7 @@
 #include <atomic>
 #include <bit>
 #include <cmath>
+#include <cstring>
 #include <limits>
 #include <set>
 #include <type_traits>
@@ -995,7 +996,7 @@ void Expectation::validate(std::uint32_t rows) const
     }
 }
 
-Batch Batch::parse(ByteView bytes, Expectation expected)
+BatchView BatchView::parse(ByteView bytes, const Expectation& expected)
 {
     if (bytes.size() < 96 || bytes.size() > MAX_BYTES || !equal(bytes.first(4), view("NWDB")))
     {
@@ -1074,11 +1075,182 @@ Batch Batch::parse(ByteView bytes, Expectation expected)
             invalid("overlapping cell data");
         }
     }
+    BatchView result;
+    result.bytes_ = bytes;
+    result.columns_ = expected.descriptors.size();
+    result.rows_ = rows;
+    return result;
+}
+
+Batch Batch::parse(ByteView bytes, Expectation expected)
+{
+    const auto view = BatchView::parse(bytes, expected);
     Batch result;
     result.bytes_ = Bytes(bytes.begin(), bytes.end());
     result.expectation_ = std::move(expected);
-    result.rows_ = rows;
+    result.rows_ = view.rows();
     return result;
+}
+
+std::optional<ByteView> BatchView::cell(std::uint32_t row, std::size_t column) const
+{
+    if (row >= rows_ || column >= columns_)
+        invalid("cell ordinal out of range");
+    const auto offset = 96 + columns_ * 16 + (static_cast<std::size_t>(row) * columns_ + column) * 24;
+    if (read_u16(bytes_, offset + 2) == 1)
+        return std::nullopt;
+    return bytes_.subspan(static_cast<std::size_t>(read_u64(bytes_, offset + 8)),
+                          static_cast<std::size_t>(read_u64(bytes_, offset + 16)));
+}
+
+BatchWriter::BatchWriter(const Expectation& expected, std::uint32_t row_limit, std::size_t byte_limit)
+    : expected_(expected), byte_limit_(byte_limit),
+      base_(add(96, multiply(expected.descriptors.size(), 16, "descriptor overflow"), "descriptor overflow")),
+      per_row_(multiply(expected.descriptors.size(), 24, "cell size overflow")), row_limit_(row_limit)
+{
+    expected.validate(0);
+    if (expected.kind != 2 || !row_limit || row_limit > MAX_NODES || !byte_limit || byte_limit > MAX_BYTES)
+        throw Error::capacity();
+    if (base_ > byte_limit || per_row_ > byte_limit - base_)
+        throw Error(NW_DOMAIN_ERROR, 14, "single row descriptors exceed batch capacity");
+    reserved_rows_ = static_cast<std::uint32_t>(std::min<std::size_t>(row_limit, (byte_limit - base_) / per_row_));
+    payload_offset_ = base_ + reserved_rows_ * per_row_;
+    // The final frame is bounded by byte_limit. The unused cell-table prefix is
+    // the only temporary extra space, covered by the existing stream grant.
+    // Large configured limits must not allocate their entire allowance for a
+    // one-row query. Grow only when an actual admitted cell needs more space.
+    bytes_.reserve(payload_offset_ + std::min<std::size_t>(row_payload_limit(), 1024));
+    bytes_.resize(payload_offset_, 0);
+    std::copy_n("NWDB", 4, bytes_.begin());
+    put_u16(bytes_, 4, 1);
+    put_u16(bytes_, 6, expected.kind);
+    put_u32(bytes_, 8, 96);
+    std::copy(expected.hash.begin(), expected.hash.end(), bytes_.begin() + 24);
+    put_u32(bytes_, 60, static_cast<std::uint32_t>(expected.descriptors.size()));
+    put_u32(bytes_, 64, expected.entity_id);
+    put_u32(bytes_, 72, expected.projection_id);
+    put_u32(bytes_, 76, static_cast<std::uint32_t>(expected.profile));
+    put_u64(bytes_, 80, 96);
+    for (std::size_t i = 0; i < expected.descriptors.size(); ++i)
+    {
+        const auto& descriptor = expected.descriptors[i];
+        const auto offset = 96 + i * 16;
+        put_u32(bytes_, offset, descriptor.id);
+        put_u16(bytes_, offset + 4, static_cast<std::uint16_t>(descriptor.codec.id));
+        put_u16(bytes_, offset + 6, static_cast<std::uint16_t>(descriptor.codec.nullable));
+        put_u32(bytes_, offset + 8, descriptor.bound_codec);
+    }
+}
+
+void BatchWriter::begin_row()
+{
+    if (finished_ || in_row_ || rows_ >= row_limit_)
+        throw Error::state("invalid batch row admission");
+    in_row_ = true;
+    row_fits_ = rows_ < reserved_rows_;
+    row_start_ = bytes_.size();
+    column_ = 0;
+}
+
+void BatchWriter::append_validated(std::optional<ByteView> value)
+{
+    if (!in_row_ || column_ >= expected_.descriptors.size())
+        throw Error::state("invalid batch cell admission");
+    const auto& descriptor = expected_.descriptors[column_];
+    if (!value && !descriptor.codec.nullable)
+        invalid("SQL NULL requires nullable metadata");
+    if (row_fits_)
+    {
+        const auto tables = base_ + (rows_ + 1) * per_row_;
+        const auto payload = bytes_.size() - payload_offset_;
+        const auto length = value ? value->size() : 0;
+        if (payload > byte_limit_ - tables || length > byte_limit_ - tables - payload)
+            row_fits_ = false;
+        else
+        {
+            const auto offset = base_ + rows_ * per_row_ + column_ * 24;
+            put_u16(bytes_, offset, static_cast<std::uint16_t>(descriptor.codec.id));
+            put_u16(bytes_, offset + 2, static_cast<std::uint16_t>(!value));
+            put_u32(bytes_, offset + 4, descriptor.bound_codec);
+            put_u64(bytes_, offset + 8, value && !value->empty() ? bytes_.size() : 0);
+            put_u64(bytes_, offset + 16, length);
+            if (value)
+            {
+                const auto needed = bytes_.size() + length;
+                if (needed > bytes_.capacity())
+                {
+                    const auto maximum = byte_limit_ + payload_offset_ - base_;
+                    const auto next = std::min(maximum, std::max(needed, bytes_.capacity() * 2));
+                    bytes_.reserve(next);
+                }
+                bytes_.insert(bytes_.end(), value->begin(), value->end());
+            }
+        }
+    }
+    ++column_;
+}
+
+bool BatchWriter::commit_row()
+{
+    if (!in_row_ || column_ != expected_.descriptors.size())
+        throw Error::state("incomplete batch row");
+    in_row_ = false;
+    if (!row_fits_)
+    {
+        bytes_.resize(row_start_);
+        return false;
+    }
+    ++rows_;
+    return true;
+}
+
+Bytes BatchWriter::finish()
+{
+    if (finished_ || in_row_)
+        throw Error::state("invalid batch completion");
+    finished_ = true;
+    const auto payload = base_ + rows_ * per_row_;
+    const auto length = bytes_.size() - payload_offset_;
+    if (length && payload != payload_offset_)
+        std::memmove(bytes_.data() + payload, bytes_.data() + payload_offset_, length);
+    for (std::size_t i = 0; i < rows_ * expected_.descriptors.size(); ++i)
+    {
+        const auto offset = base_ + i * 24;
+        if (read_u16(bytes_, offset + 2) == 0)
+        {
+            const auto old_start = static_cast<std::size_t>(read_u64(bytes_, offset + 8));
+            put_u64(bytes_, offset + 8,
+                    read_u64(bytes_, offset + 16) ? old_start - payload_offset_ + payload : payload);
+        }
+    }
+    bytes_.resize(payload + length);
+    put_u64(bytes_, 16, bytes_.size());
+    put_u32(bytes_, 56, rows_);
+    put_u64(bytes_, 88, payload);
+    return std::move(bytes_);
+}
+
+std::size_t parameter_frame_size(const Expectation& expected, std::span<const Scalar> values)
+{
+    if (values.size() != expected.descriptors.size())
+        invalid("parameter count differs");
+    auto size = add(96, multiply(values.size(), 40, "parameter table overflow"), "parameter table overflow");
+    for (std::size_t i = 0; i < values.size(); ++i)
+    {
+        const auto& descriptor = expected.descriptors[i];
+        const auto& scalar = values[i];
+        if (scalar.codec != descriptor.codec)
+            invalid("parameter codec differs");
+        if (scalar.value)
+        {
+            size = add(size, scalar.value->size(), "parameter payload overflow");
+        }
+        else if (!descriptor.codec.nullable)
+            invalid("SQL NULL requires nullable metadata");
+    }
+    if (size > MAX_BYTES)
+        invalid("encoded batch exceeds size limit");
+    return size;
 }
 
 Bytes Batch::encode(const Expectation& expected, std::uint32_t rows, const std::vector<std::optional<Bytes>>& values)

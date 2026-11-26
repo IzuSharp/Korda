@@ -85,10 +85,17 @@ Snapshot snapshot(ByteView value)
 }
 
 // One live proxied connection at a time, accepting a replacement after discard.
-// It forwards every complete frame unchanged except one explicitly armed pure
-// Sync request. No SQL probe or changed business-fault ordinal is involved.
+// It forwards every complete frame unchanged except an explicitly armed pure
+// Sync request or the ReadyForQuery that confirms a Parse/Describe or Execute
+// group. Reply faults target the real completion, not a later health probe.
 class SyncProxy
 {
+    enum class ReadyBoundary
+    {
+        None,
+        Description,
+        Execute
+    };
     int listener_ = -1;
     std::atomic<int> client_{-1}, server_{-1};
     std::atomic<bool> stopped_{false};
@@ -96,6 +103,9 @@ class SyncProxy
     std::mutex mutex_;
     std::condition_variable changed_;
     bool armed_ = false, after_commit_ = false, hold_ = false, released_ = false, allow_command_ = false;
+    std::vector<std::string> parsed_sql_;
+    ReadyBoundary ready_boundary_ = ReadyBoundary::None;
+    bool drop_ready_ = false;
     bool pause_initialization_ = false;
     unsigned target_ = 0, ordinal_ = 0;
     std::exception_ptr failure_;
@@ -163,7 +173,7 @@ class SyncProxy
             {
                 try
                 {
-                    bool has_command = false;
+                    bool has_command = false, has_parse = false, has_describe = false, has_execute = false;
                     while (!stopped_.load())
                     {
                         auto data = frame(client, 5);
@@ -180,6 +190,7 @@ class SyncProxy
                                 const auto sql = std::string_view(reinterpret_cast<const char*>(body.data() + offset),
                                                                   body.size() - offset);
                                 std::unique_lock lock(mutex_);
+                                parsed_sql_.emplace_back(sql.substr(0, sql.find('\0')));
                                 if (pause_initialization_ && sql.starts_with("SET statement_timeout TO "))
                                 {
                                     pause_initialization_ = false;
@@ -190,18 +201,40 @@ class SyncProxy
                             }
                         }
                         const bool standalone = tag == 'S' && !has_command;
+                        const bool description = tag == 'S' && has_parse && has_describe && !has_execute;
+                        const bool execution = tag == 'S' && has_execute;
                         if (tag == 'S')
+                        {
                             has_command = false;
+                            has_parse = has_describe = has_execute = false;
+                            if (standalone)
+                                ++standalone_syncs;
+                            if (description)
+                                ++description_groups;
+                            if (execution)
+                                ++execution_groups;
+                        }
                         else
+                        {
                             has_command = true;
+                            has_parse = has_parse || tag == 'P';
+                            has_describe = has_describe || tag == 'D';
+                            has_execute = has_execute || tag == 'E' || tag == 'Q';
+                        }
                         bool fault = false;
                         {
                             std::unique_lock lock(mutex_);
                             if (armed_ && (!after_commit_ || committed.load()))
                             {
-                                if (!standalone && !allow_command_)
+                                if ((ready_boundary_ == ReadyBoundary::Description && description) ||
+                                    (ready_boundary_ == ReadyBoundary::Execute && execution))
+                                {
+                                    armed_ = false;
+                                    drop_ready_ = true;
+                                }
+                                if (ready_boundary_ == ReadyBoundary::None && !standalone && !allow_command_)
                                     unexpected_command.store(true);
-                                if (standalone && ++ordinal_ == target_)
+                                if (ready_boundary_ == ReadyBoundary::None && standalone && ++ordinal_ == target_)
                                 {
                                     armed_ = false;
                                     fault = true;
@@ -239,6 +272,20 @@ class SyncProxy
                     commit_tag = body == std::string_view("COMMIT\0", 7);
                 if (data[0] == 'Z' && commit_tag && body == "I")
                     committed.store(true);
+                if (data[0] == 'Z')
+                {
+                    std::unique_lock lock(mutex_);
+                    if (drop_ready_)
+                    {
+                        drop_ready_ = false;
+                        faulted.store(true);
+                        changed_.notify_all();
+                        if (hold_)
+                            changed_.wait(lock, [&] { return released_ || stopped_.load(); });
+                        break;
+                    }
+                    ++ready_responses;
+                }
                 send_all(client, data);
             }
         }
@@ -259,7 +306,13 @@ class SyncProxy
 
   public:
     std::atomic<bool> faulted{false}, unexpected_command{false}, initialization_paused{false};
+    std::atomic<unsigned> description_groups{0}, execution_groups{0}, standalone_syncs{0}, ready_responses{0};
     std::uint16_t port{};
+    std::vector<std::string> parsed_sql()
+    {
+        std::lock_guard lock(mutex_);
+        return parsed_sql_;
+    }
     explicit SyncProxy(std::uint16_t upstream)
     {
         listener_ = socket(AF_INET, SOCK_STREAM, 0);
@@ -311,8 +364,36 @@ class SyncProxy
         after_commit_ = after_commit;
         hold_ = hold;
         allow_command_ = allow_command;
+        ready_boundary_ = ReadyBoundary::None;
+        drop_ready_ = false;
         released_ = false;
         ordinal_ = 0;
+        faulted.store(false);
+        unexpected_command.store(false);
+        armed_ = true;
+    }
+    void arm_description(bool hold = false)
+    {
+        std::lock_guard lock(mutex_);
+        after_commit_ = false;
+        hold_ = hold;
+        allow_command_ = true;
+        ready_boundary_ = ReadyBoundary::Description;
+        drop_ready_ = false;
+        released_ = false;
+        faulted.store(false);
+        unexpected_command.store(false);
+        armed_ = true;
+    }
+    void arm_execute_ready(bool hold = false)
+    {
+        std::lock_guard lock(mutex_);
+        after_commit_ = false;
+        hold_ = hold;
+        allow_command_ = true;
+        ready_boundary_ = ReadyBoundary::Execute;
+        drop_ready_ = false;
+        released_ = false;
         faulted.store(false);
         unexpected_command.store(false);
         armed_ = true;
@@ -348,8 +429,8 @@ class SyncProxy
         stop();
         if (failure_)
             std::rethrow_exception(failure_);
-        check(!expect_fault || faulted.load(), "real pure Sync fault was reached");
-        check(!unexpected_command.load(), "fault targeted a standalone Sync, not a later business command");
+        check(!expect_fault || faulted.load(), "armed real protocol confirmation fault was reached");
+        check(!unexpected_command.load(), "fault targeted its intended confirmation, not a later business command");
     }
 };
 
@@ -387,7 +468,7 @@ std::shared_ptr<SqlPlan> plan(const std::shared_ptr<Source>& source, std::string
     result->sql = std::move(sql);
     const auto schema = bytes("{\"version\":1,\"parameters\":[]}");
     result->expectation = {1, Profile::PostgreSql, sha256(schema), 0, 0, {}, 1};
-    result->parameters = Batch::encode(result->expectation, 1, {});
+    result->capture_parameters(Batch::encode(result->expectation, 1, {}));
     result->timeout_ns = 5'000'000'000;
     result->result_kind = rows ? 3 : 0;
     if (rows)
@@ -458,6 +539,167 @@ std::string proxy_uri(const std::string& uri, std::uint16_t port)
     const auto slash = uri.find('/', uri.find('@'));
     const auto colon = uri.rfind(':', slash);
     return uri.substr(0, colon + 1) + std::to_string(port) + uri.substr(slash);
+}
+void healthy_commit_dispatch(const std::string& uri, bool after_cursor)
+{
+    SyncProxy proxy(port_of(uri));
+    auto source = Source::create(configuration(proxy_uri(uri, proxy.port)));
+    auto session = open(source);
+    auto observer = ProviderConnection::open(configuration(uri).provider, {});
+    const auto pid = scalar(session->connection, "SELECT pg_backend_pid()");
+    const auto table = "nw_commit_proof_" + std::to_string(pid);
+    (void)observer->execute("CREATE TABLE " + table + "(id bigint primary key)", {}, {});
+    TransactionOptions options{};
+    options.commit_timeout_ns = options.cleanup_timeout_ns = 2'000'000'000;
+    auto tx = Transaction::begin(session, options, std::make_shared<Cancel>(), session->admit(true));
+    (void)execute(session, "INSERT INTO " + table + " VALUES(1)");
+    if (after_cursor)
+    {
+        auto value = execute(session, "SELECT id AS v FROM " + table, true);
+        auto owner = std::get<std::shared_ptr<Owner>>(value);
+        auto cursor = std::get<std::shared_ptr<Cursor>>(owner->data);
+        auto rows = cursor->fetch(std::make_shared<Cancel>(), 8, 65536);
+        rows->mark_taken();
+        check(rows->known_end && Batch::parse(rows->bytes, cursor->expectation).rows() == 1,
+              "commit count fixture consumes the real cursor EOF");
+        cursor->request_close();
+        cursor->join();
+    }
+    const auto dispatch_before = provider_dispatch_count();
+    const auto protocol_before = provider_protocol_count();
+    const auto description_before = proxy.description_groups.load();
+    const auto execution_before = proxy.execution_groups.load();
+    const auto sync_before = proxy.standalone_syncs.load();
+    const auto ready_before = proxy.ready_responses.load();
+    (void)tx->finish(true, std::make_shared<Cancel>(), session->admit(true));
+    tx->join();
+    const auto dispatches = provider_dispatch_count() - dispatch_before;
+    const auto protocols = provider_protocol_count() - protocol_before;
+    const auto descriptions = proxy.description_groups.load() - description_before;
+    const auto executions = proxy.execution_groups.load() - execution_before;
+    const auto syncs = proxy.standalone_syncs.load() - sync_before;
+    const auto ready = proxy.ready_responses.load() - ready_before;
+    const auto result = snapshot(tx->snapshot());
+    check(result.outcome == 1 && result.cleanup == 2 && result.disposition == 0 && result.released,
+          "counted healthy commit has completed its real cleanup and retirement");
+    check(descriptions == dispatches && executions == dispatches && syncs == 2 && ready == 2 * dispatches + 2 &&
+              protocols == 4 * dispatches + 2,
+          "real protocol frames retain COMMIT confirmation and independent recovery Sync");
+    check(scalar(observer, "SELECT count(*) FROM " + table) == 1,
+          "independent connection observes the counted commit's durable write");
+    close(session);
+    auto reused = open(source);
+    check(scalar(reused->connection, "SELECT pg_backend_pid()") == pid,
+          "counted commit returns the same safe physical connection");
+    close(reused);
+    source->join();
+    proxy.verify(false);
+    (void)observer->execute("DROP TABLE " + table, {}, {});
+    observer->close();
+    std::cout << "COMMIT-DISPATCH route=" << (after_cursor ? "cursor-eof" : "nonquery") << " sql=" << dispatches
+              << " descriptions=" << descriptions << " executions=" << executions << " standalone_syncs=" << syncs
+              << " ready=" << ready << " protocol_submissions=" << protocols << '\n'
+              << std::flush;
+    check(dispatches == 1,
+          "healthy outer commit must dispatch only COMMIT; observed SQL dispatches=" + std::to_string(dispatches));
+}
+void commit_ready_states(const std::string& uri)
+{
+    auto connection = ProviderConnection::open(configuration(uri).provider, {});
+    const auto prove = [&](bool expected, std::string_view label)
+    {
+        const auto dispatches = provider_dispatch_count();
+        const auto protocols = provider_protocol_count();
+        check(connection->postgres_transaction_ready_for_commit() == expected, label);
+        check(provider_dispatch_count() == dispatches && provider_protocol_count() == protocols,
+              "commit readiness reads local state without SQL or protocol submission");
+    };
+    prove(false, "an idle connection without a transaction has no commit proof");
+    (void)connection->execute("BEGIN", {}, {});
+    prove(true, "completed BEGIN has an idle confirmed INTRANS state");
+    auto rows = connection->query("SELECT n::bigint FROM generate_series(1,3) AS n", {}, {});
+    prove(false, "a live described statement cannot supply commit proof before Execute");
+    check(rows->next_text({}).has_value(), "active reader produced its first actual row");
+    prove(false, "an active reader before Execute completion cannot supply commit proof");
+    while (rows->next_text({}))
+    {
+    }
+    prove(false, "a live statement still excludes commit proof after its confirmed EOF");
+    rows->close();
+    rows.reset();
+    prove(true, "a closed reader preserves its confirmed INTRANS state");
+    check(rejected([&] { (void)connection->execute("SELECT 1/0", {}, {}); }).provider == "22012",
+          "commit proof failed-state fixture reaches real PostgreSQL division failure");
+    prove(false, "INERROR cannot masquerade as normal INTRANS commit readiness");
+    connection->synchronize_protocol();
+    prove(false, "protocol-only synchronization does not heal failed transaction state");
+    (void)connection->execute("ROLLBACK", {}, {});
+    prove(false, "completed ROLLBACK returns to IDLE without commit proof");
+    connection->close();
+    prove(false, "a physically closed connection has no commit proof");
+    std::cout << "COMMIT-READY idle=false intrans=true live-description=false active-reader=false "
+                 "live-eof=false closed-reader=true failed=false synchronized-failed=false rollback-idle=false "
+                 "closed=false\n"
+              << std::flush;
+}
+void commit_probe_fallback(const std::string& uri, bool with_savepoint, bool failed)
+{
+    SyncProxy proxy(port_of(uri));
+    auto source = Source::create(configuration(proxy_uri(uri, proxy.port)));
+    auto session = open(source);
+    auto observer = ProviderConnection::open(configuration(uri).provider, {});
+    const auto pid = scalar(session->connection, "SELECT pg_backend_pid()");
+    const auto table = "nw_commit_fallback_" + std::to_string(pid);
+    (void)observer->execute("CREATE TABLE " + table + "(id bigint primary key)", {}, {});
+    TransactionOptions options{};
+    options.commit_timeout_ns = options.cleanup_timeout_ns = 2'000'000'000;
+    auto tx = Transaction::begin(session, options, std::make_shared<Cancel>(), session->admit(true));
+    (void)execute(session, "INSERT INTO " + table + " VALUES(1)");
+    std::shared_ptr<Savepoint> point;
+    if (with_savepoint)
+        point = tx->create_savepoint(std::make_shared<Cancel>(), session->admit(true));
+    if (failed)
+        check(rejected([&] { (void)session->connection->execute("SELECT 1/0", {}, {}); }).provider == "22012",
+              "fallback fixture aborts the real provider transaction independently of Host bookkeeping");
+    check(session->connection->postgres_transaction_ready_for_commit() == !failed,
+          "savepoint policy is distinct from the physical INTRANS proof");
+    const auto parsed_before = proxy.parsed_sql().size();
+    const auto dispatch_before = provider_dispatch_count();
+    const auto sync_before = proxy.standalone_syncs.load();
+    const auto error = rejected([&] { (void)tx->finish(true, std::make_shared<Cancel>(), session->admit(true)); });
+    tx->join();
+    const auto dispatches = provider_dispatch_count() - dispatch_before;
+    const auto syncs = proxy.standalone_syncs.load() - sync_before;
+    auto parsed = proxy.parsed_sql();
+    parsed.erase(parsed.begin(), parsed.begin() + static_cast<std::ptrdiff_t>(parsed_before));
+    check(parsed == std::vector<std::string>{"SELECT 1", "ROLLBACK"},
+          "failed state or retained savepoint keeps the actual old probe and rollback sequence");
+    check(dispatches == (failed ? 1U : 2U) && syncs == 2,
+          "failed Parse never counts as Execute and both rollback confirmations remain");
+    const auto result = snapshot(tx->snapshot());
+    check(result.cleanup == 2 && result.disposition == 0 && result.released,
+          "fallback completes cleanup before releasing the transaction's local resources");
+    if (failed)
+        check(error.status == NW_DOMAIN_ERROR && error.code == 1 && error.provider == "25P02" && result.outcome == 2,
+              "25P02 wins over savepoint depth and confirms RolledBack without false commit success");
+    else
+        check(with_savepoint && error.code == 9 && result.outcome == 3,
+              "healthy retained savepoint keeps the existing depth-refusal and Unknown contract");
+    check(scalar(observer, "SELECT count(*) FROM " + table) == 0,
+          "independent connection confirms fallback rolled back the attempted write");
+    close(session);
+    auto reused = open(source);
+    check(scalar(reused->connection, "SELECT pg_backend_pid()") == pid,
+          "confirmed fallback cleanup safely reuses the same backend");
+    close(reused);
+    source->join();
+    proxy.verify(false);
+    (void)observer->execute("DROP TABLE " + table, {}, {});
+    observer->close();
+    std::cout << "COMMIT-FALLBACK savepoint=" << with_savepoint << " failed=" << failed
+              << " parsed=SELECT_1,ROLLBACK executions=" << dispatches << " standalone_syncs=" << syncs
+              << " outcome=" << result.outcome << '\n'
+              << std::flush;
 }
 void protocol_states(const std::string& uri)
 {
@@ -664,7 +906,7 @@ void initialization_budget(const std::string& uri)
     source->join();
     proxy.verify(false);
 }
-void stream_fault(const std::string& uri, bool eof)
+void stream_fault(const std::string& uri)
 {
     SyncProxy proxy(port_of(uri));
     auto source = Source::create(configuration(proxy_uri(uri, proxy.port)));
@@ -672,15 +914,11 @@ void stream_fault(const std::string& uri, bool eof)
     auto value = execute(session, "SELECT n::bigint AS v FROM generate_series(1,3) AS n", true);
     auto owner = std::get<std::shared_ptr<Owner>>(value);
     auto cursor = std::get<std::shared_ptr<Cursor>>(owner->data);
-    std::shared_ptr<Buffer> rows;
-    if (!eof)
-        rows = cursor->fetch(std::make_shared<Cancel>(), 1, 65536);
-    proxy.arm(1, false, false, eof);
-    if (eof)
-        rows = cursor->fetch(std::make_shared<Cancel>(), 8, 65536);
+    auto rows = cursor->fetch(std::make_shared<Cancel>(), 1, 65536);
+    proxy.arm(1, false);
     cursor->request_close();
     cursor->join();
-    check(Batch::parse(rows->bytes, cursor->expectation).rows() == (eof ? 3U : 1U),
+    check(Batch::parse(rows->bytes, cursor->expectation).rows() == 1,
           "retirement failure does not manufacture a business row error");
     const auto receipt = snapshot(cursor->snapshot());
     check(receipt.cleanup == 2 && receipt.disposition == 2 && receipt.released,
@@ -695,6 +933,227 @@ void stream_fault(const std::string& uri, bool eof)
     source->join();
     proxy.verify();
 }
+void stream_completion(const std::string& uri, bool exact_row_limit, bool in_transaction = false)
+{
+    SyncProxy proxy(port_of(uri));
+    auto source = Source::create(configuration(proxy_uri(uri, proxy.port)));
+    auto session = open(source);
+    const auto pid = scalar(session->connection, "SELECT pg_backend_pid()");
+    std::shared_ptr<Transaction> tx;
+    if (in_transaction)
+    {
+        TransactionOptions options{};
+        options.commit_timeout_ns = options.cleanup_timeout_ns = 2'000'000'000;
+        tx = Transaction::begin(session, options, std::make_shared<Cancel>(), session->admit(true));
+    }
+    auto value = execute(session, "SELECT n::bigint AS v FROM generate_series(1,3) AS n", true);
+    auto owner = std::get<std::shared_ptr<Owner>>(value);
+    auto cursor = std::get<std::shared_ptr<Cursor>>(owner->data);
+    const auto standalone = proxy.standalone_syncs.load();
+    const auto executions = proxy.execution_groups.load();
+    const auto ready = proxy.ready_responses.load();
+    const auto protocols = provider_protocol_count();
+    const auto dispatches = provider_dispatch_count();
+    auto rows = cursor->fetch(std::make_shared<Cancel>(), exact_row_limit ? 3 : 8, 65536);
+    rows->mark_taken();
+    check(rows->known_end == !exact_row_limit && cursor->ended == !exact_row_limit,
+          "only actual Execute completion supplies known EOF, not a matching row limit");
+    check(proxy.standalone_syncs.load() == standalone, "natural EOF does not submit a standalone stream health Sync");
+    check(provider_dispatch_count() == dispatches + 1 && provider_protocol_count() == protocols + 1,
+          "one non-pipeline execution submission produces the entire stream");
+    if (!exact_row_limit)
+        check(proxy.execution_groups.load() == executions + 1 && proxy.ready_responses.load() == ready + 1,
+              "natural EOF consumed the actual Execute group's ReadyForQuery");
+    cursor->request_close();
+    cursor->join();
+    check(proxy.standalone_syncs.load() == standalone + (exact_row_limit ? 1U : 0U),
+          "unfinished row-limit stop retains its independent drain and Sync confirmation");
+    check(provider_protocol_count() == protocols + (exact_row_limit ? 2U : 1U),
+          "libpq submission diagnostics retain their meaning when only the EOF Sync is removed");
+    const auto receipt = snapshot(cursor->snapshot());
+    check(receipt.cleanup == 2 && receipt.disposition == 0 && receipt.released,
+          "confirmed stream retirement remains reusable with local resources released");
+    check(session->connection->healthy() && session->connection->in_transaction() == in_transaction,
+          "stream completion preserves the known physical transaction state");
+    check(scalar(session->connection, "SELECT pg_backend_pid()") == pid,
+          "a completed stream leaves the same backend usable outside pipeline mode");
+    check(Batch::parse(rows->bytes, cursor->expectation).rows() == 3,
+          "transferred result ownership survives stream retirement and the next command");
+    rows.reset();
+    cursor.reset();
+    owner.reset();
+    value = std::shared_ptr<Owner>{};
+    if (tx)
+    {
+        (void)tx->finish(true, std::make_shared<Cancel>(), session->admit(true));
+        tx->join();
+        const auto outcome = snapshot(tx->snapshot());
+        check(outcome.outcome == 1 && outcome.cleanup == 2 && outcome.disposition == 0 && outcome.released,
+              "natural stream EOF does not replace the transaction's distinct COMMIT confirmation");
+    }
+    close(session);
+    source->join();
+    proxy.verify(false);
+}
+void stream_execute_ready_fault(const std::string& uri)
+{
+    SyncProxy proxy(port_of(uri));
+    auto source = Source::create(configuration(proxy_uri(uri, proxy.port)));
+    auto session = open(source);
+    auto value = execute(session, "SELECT n::bigint AS v FROM generate_series(1,3) AS n", true);
+    auto owner = std::get<std::shared_ptr<Owner>>(value);
+    auto cursor = std::get<std::shared_ptr<Cursor>>(owner->data);
+    const auto standalone = proxy.standalone_syncs.load();
+    proxy.arm_execute_ready(true);
+    auto rows = cursor->fetch(std::make_shared<Cancel>(), 1, 65536);
+    rows->mark_taken();
+    check(!rows->known_end, "a delivered row never proves the outstanding Execute ReadyForQuery");
+    eventually([&] { return proxy.faulted.load(); }, "Execute reached its held real ReadyForQuery");
+    // The first batch already belongs to the consumer. Drop the outstanding
+    // Execute reply before asking the remaining reader to drain and retire.
+    proxy.release();
+    cursor->request_close();
+    cursor->join();
+    check(proxy.standalone_syncs.load() == standalone,
+          "fault was in the real Execute response, before any standalone cleanup Sync");
+    check(Batch::parse(rows->bytes, cursor->expectation).rows() == 1,
+          "missing Execute ReadyForQuery cannot invalidate an already transferred batch");
+    const auto receipt = snapshot(cursor->snapshot());
+    check(receipt.cleanup == 2 && receipt.disposition == 2 && receipt.released,
+          "failed actual Execute drain preserves the native-retired Quarantined receipt");
+    host_permit_retained(source);
+    rows.reset();
+    cursor.reset();
+    owner.reset();
+    value = std::shared_ptr<Owner>{};
+    close(session);
+    released(source);
+    source->join();
+    proxy.verify();
+}
+void stream_after_eof_disconnect(const std::string& uri, bool after_checkin)
+{
+    SyncProxy proxy(port_of(uri));
+    auto source = Source::create(configuration(proxy_uri(uri, proxy.port)));
+    auto session = open(source);
+    auto observer = ProviderConnection::open(configuration(uri).provider, {});
+    const auto pid = scalar(session->connection, "SELECT pg_backend_pid()");
+    auto value = execute(session, "SELECT n::bigint AS v FROM generate_series(1,3) AS n", true);
+    auto owner = std::get<std::shared_ptr<Owner>>(value);
+    auto cursor = std::get<std::shared_ptr<Cursor>>(owner->data);
+    const auto standalone = proxy.standalone_syncs.load();
+    auto rows = cursor->fetch(std::make_shared<Cancel>(), 8, 65536);
+    rows->mark_taken();
+    check(rows->known_end && proxy.standalone_syncs.load() == standalone,
+          "the complete result precedes the separately injected post-EOF disconnect");
+    cursor->request_close();
+    cursor->join();
+    const auto completed = snapshot(cursor->snapshot());
+    check(completed.cleanup == 2 && completed.disposition == 0 && completed.released,
+          "completed EOF has its own successful retirement receipt");
+    if (after_checkin)
+        close(session);
+    check(scalar(observer, "SELECT pg_terminate_backend(" + std::to_string(pid) + ",2000)::int") == 1,
+          "independent PostgreSQL observer confirms the actual post-EOF backend termination");
+    if (!after_checkin)
+    {
+        close(session);
+        released(source);
+    }
+    const auto receipt = snapshot(session->snapshot());
+    check(receipt.cleanup == 2 && receipt.disposition == (after_checkin ? 0U : 3U) && receipt.released,
+          "later disconnect affects only the remaining check-in or acquire boundary");
+    auto replacement = open(source);
+    check(scalar(replacement->connection, "SELECT pg_backend_pid()") != pid,
+          "check-in/acquire never publishes the disconnected completed-stream backend");
+    (void)execute(replacement, "SELECT 7");
+    check(Batch::parse(rows->bytes, cursor->expectation).rows() == 3,
+          "completed batch remains owned and readable after the dead backend is replaced");
+    const auto preserved = snapshot(cursor->snapshot());
+    check(preserved.cleanup == completed.cleanup && preserved.disposition == completed.disposition &&
+              preserved.released == completed.released,
+          "a later independent disconnect does not rewrite completed cursor retirement");
+    rows.reset();
+    cursor.reset();
+    owner.reset();
+    value = std::shared_ptr<Owner>{};
+    close(replacement);
+    source->join();
+    observer->close();
+    proxy.verify(false);
+}
+void grouped_description(const std::string& uri)
+{
+    SyncProxy proxy(port_of(uri));
+    auto source = Source::create(configuration(proxy_uri(uri, proxy.port)));
+    auto session = open(source);
+    const auto groups = proxy.description_groups.load();
+    const auto standalone = proxy.standalone_syncs.load();
+    const auto dispatches = provider_dispatch_count();
+    auto value = execute(session, "SELECT 1::bigint AS v", true);
+    auto owner = std::get<std::shared_ptr<Owner>>(value);
+    auto cursor = std::get<std::shared_ptr<Cursor>>(owner->data);
+    check(proxy.description_groups.load() == groups + 1,
+          "cursor metadata is one real Parse/Describe/Sync protocol group");
+    check(proxy.standalone_syncs.load() == standalone, "metadata completion does not send a redundant standalone Sync");
+    check(provider_dispatch_count() == dispatches, "metadata protocol group never sends Execute");
+    cursor->request_close();
+    cursor->join();
+    check(proxy.standalone_syncs.load() == standalone + 1,
+          "description-only close cannot borrow an Execute confirmation it never observed");
+    cursor.reset();
+    owner.reset();
+    value = std::shared_ptr<Owner>{};
+    close(session);
+    {
+        std::lock_guard lock(source->mutex);
+        check(source->leased == 0 && source->idle.size() == 1,
+              "successful metadata-only command safely returns its physical connection");
+    }
+    source->join();
+    released(source);
+    proxy.verify(false);
+}
+
+void description_confirmation_budget(const std::string& uri)
+{
+    SyncProxy proxy(port_of(uri));
+    auto config = configuration(proxy_uri(uri, proxy.port));
+    config.provider.cleanup_timeout_ns = 50'000'000;
+    auto source = Source::create(config);
+    auto session = open(source);
+    auto cancel = std::make_shared<Cancel>();
+    auto command = plan(source, "SELECT 1::bigint AS v", true);
+    proxy.arm_description(true);
+    const auto began = Clock::now();
+    auto pending = std::async(std::launch::async,
+                              [&]() -> std::optional<Error>
+                              {
+                                  try
+                                  {
+                                      (void)session->execute(command, cancel, session->admit(false));
+                                      return {};
+                                  }
+                                  catch (const Error& error)
+                                  {
+                                      return error;
+                                  }
+                              });
+    eventually([&] { return proxy.faulted.load(); }, "metadata reached its held ReadyForQuery confirmation");
+    const auto completed = pending.wait_for(std::chrono::seconds(2)) == std::future_status::ready;
+    proxy.release();
+    const auto error = pending.get();
+    check(completed && Clock::now() - began < std::chrono::seconds(3),
+          "metadata confirmation uses its independent finite cleanup budget");
+    check(error && error->status == NW_DOMAIN_ERROR && error->code == 1 && !error->provider,
+          "metadata cleanup timeout keeps the original provider error instead of the command timeout category");
+    host_permit_retained(source);
+    close(session);
+    released(source);
+    source->join();
+    proxy.verify();
+}
+
 void command_fault(const std::string& uri, bool describe, bool sql_error)
 {
     SyncProxy proxy(port_of(uri));
@@ -708,7 +1167,10 @@ void command_fault(const std::string& uri, bool describe, bool sql_error)
                          ? (sql_error ? "SELECT missing::bigint AS v FROM absent_sync_table" : "SELECT 1::bigint AS v")
                          : (sql_error ? "SELECT 1/0" : "INSERT INTO " + table + " VALUES(1)");
     // Actual execution/description precedes the confirmation being faulted.
-    proxy.arm(1, false, false, true);
+    if (describe)
+        proxy.arm_description();
+    else
+        proxy.arm(1, false, false, true);
     const auto error = rejected([&] { (void)execute(session, sql, describe); });
     check(error.status == NW_DOMAIN_ERROR && error.code == 1,
           "execute/describe protocol failure retains public provider category");
@@ -738,10 +1200,32 @@ int main(int argc, char** argv)
 {
     try
     {
-        check(argc == 2, "postgres Sync tests require isolated PostgreSQL URI");
+        check(argc == 2 || (argc == 3 && std::string_view(argv[2]) == "--commit-count-only"),
+              "postgres Sync tests require isolated PostgreSQL URI and an optional commit count selector");
         const std::string uri = argv[1];
+        std::cout << "CASE healthy commit SQL dispatch\n" << std::flush;
+        healthy_commit_dispatch(uri, false);
+        std::cout << "CASE commit after real cursor EOF\n" << std::flush;
+        healthy_commit_dispatch(uri, true);
+        if (argc == 3)
+        {
+            std::cout << "PASS PostgreSQL commit SQL dispatch: " << checks << " checks\n";
+            return 0;
+        }
+        std::cout << "CASE commit readiness state exclusions\n" << std::flush;
+        commit_ready_states(uri);
+        std::cout << "CASE failed transaction commit probe\n" << std::flush;
+        commit_probe_fallback(uri, false, true);
+        std::cout << "CASE retained savepoint commit probe\n" << std::flush;
+        commit_probe_fallback(uri, true, false);
+        std::cout << "CASE failed savepoint SQLSTATE priority\n" << std::flush;
+        commit_probe_fallback(uri, true, true);
         std::cout << "CASE protocol states\n" << std::flush;
         protocol_states(uri);
+        std::cout << "CASE grouped metadata confirmation\n" << std::flush;
+        grouped_description(uri);
+        std::cout << "CASE metadata confirmation cleanup budget\n" << std::flush;
+        description_confirmation_budget(uri);
         std::cout << "CASE first commit confirmation\n" << std::flush;
         commit_fault(uri, 1, false);
         std::cout << "CASE recovery confirmation\n" << std::flush;
@@ -763,9 +1247,19 @@ int main(int argc, char** argv)
         std::cout << "CASE independent from-lease initialization\n" << std::flush;
         initialization_budget(uri);
         std::cout << "CASE partial stream retirement\n" << std::flush;
-        stream_fault(uri, false);
-        std::cout << "CASE EOF retirement\n" << std::flush;
-        stream_fault(uri, true);
+        stream_fault(uri);
+        std::cout << "CASE natural EOF confirmation\n" << std::flush;
+        stream_completion(uri, false);
+        std::cout << "CASE natural EOF inside transaction\n" << std::flush;
+        stream_completion(uri, false, true);
+        std::cout << "CASE exact row limit remains unfinished\n" << std::flush;
+        stream_completion(uri, true);
+        std::cout << "CASE lost Execute ReadyForQuery\n" << std::flush;
+        stream_execute_ready_fault(uri);
+        std::cout << "CASE post-EOF disconnect before check-in\n" << std::flush;
+        stream_after_eof_disconnect(uri, false);
+        std::cout << "CASE post-EOF disconnect before acquire\n" << std::flush;
+        stream_after_eof_disconnect(uri, true);
         for (bool describe : {false, true})
             for (bool sql_error : {false, true})
             {

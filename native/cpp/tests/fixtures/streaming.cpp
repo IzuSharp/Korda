@@ -213,7 +213,7 @@ std::unique_ptr<Fixture> open(std::uint32_t provider, std::uint32_t scenario, By
     plan->timeout_ns = 30'000'000'000;
     plan->projection = ProjectionBinding{fixture->source->identity, 7, shape, fixture->source->codecs()};
     plan->expectation = {1, profile, sha256(text_view("{\"version\":1,\"parameters\":[]}")), 0, 0, {}, 1};
-    plan->parameters = Batch::encode(plan->expectation, 1, {});
+    plan->capture_parameters(Batch::encode(plan->expectation, 1, {}));
     auto result = fixture->session->execute(plan, std::make_shared<Cancel>(), fixture->session->admit(false));
     auto owner = std::get<std::shared_ptr<Owner>>(std::move(result));
     fixture->cursor = std::get<std::shared_ptr<Cursor>>(std::move(owner->data));

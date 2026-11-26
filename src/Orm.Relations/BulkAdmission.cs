@@ -1,4 +1,5 @@
 using Korda.Data;
+using Korda.Query.Internal;
 
 namespace Korda.Database;
 
@@ -18,16 +19,17 @@ public sealed partial class DataSession
         }
     }
     private void CheckBulkOpen() { ObjectDisposedException.ThrowIf(Volatile.Read(ref _closing) != 0, this); Source.CheckOpen(); }
-    // The lock covers native Created-operation admission. An ordinary command
+    // The lock covers synchronous native command admission. An ordinary command
     // checked before bulk reserve cannot dispatch later inside its transaction.
-    internal nint AdmitOperation(Func<nint> create, BulkSessionLease? bulk = null)
+    private Task<T> SubmitCommand<T>(NativeCommandKind kind, DatabaseOwner? input, ReadOnlyMemory<byte> payload,
+        uint action, uint expectedKind, CommandResultReader<T> read, CancellationToken token, BulkSessionLease? bulk = null)
     {
         lock (_compoundGate)
         {
             CheckBulkOpen();
             if (!ReferenceEquals(_bulkLease, bulk) || bulk is not null && !ReferenceEquals(bulk.Owner, this))
                 throw new DatabaseException("Another compound operation owns this session.", DatabaseErrorKind.ConcurrentUse);
-            return create();
+            return Source.SubmitCommand(kind, Owner, input, payload, action, expectedKind, read, token);
         }
     }
     internal sealed class BulkSessionLease : IDisposable

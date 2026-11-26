@@ -181,6 +181,15 @@ struct Descriptor
     std::uint32_t bound_codec = 0;
 };
 
+// An accepted command owns each value before its synchronous ABI call returns.
+// The provider binds these typed values directly; it does not decode a second
+// parameter wire frame assembled by the query renderer.
+struct Scalar
+{
+    Codec codec;
+    std::optional<Bytes> value;
+};
+
 struct Expectation
 {
     std::uint16_t kind = 0;
@@ -211,6 +220,56 @@ class Batch
     Expectation expectation_;
     std::uint32_t rows_ = 0;
 };
+
+// A validated view never owns or copies its input. The caller retains the byte
+// owner for every synchronous access; views must not escape that scope.
+class BatchView
+{
+  public:
+    [[nodiscard]] static BatchView parse(ByteView bytes, const Expectation& expected);
+    [[nodiscard]] std::uint32_t rows() const noexcept
+    {
+        return rows_;
+    }
+    [[nodiscard]] std::optional<ByteView> cell(std::uint32_t row, std::size_t column) const;
+
+  private:
+    ByteView bytes_;
+    std::size_t columns_ = 0;
+    std::uint32_t rows_ = 0;
+};
+
+// Builds the final row-batch owner without owning individual cells or rows.
+// The provider validates each scalar before append_validated; a row which does
+// not fit is fully validated, then rolled back while the provider retains it.
+// finish compacts the payload once behind the actual row count's cell table.
+class BatchWriter
+{
+  public:
+    BatchWriter(const Expectation& expected, std::uint32_t row_limit, std::size_t byte_limit);
+    void begin_row();
+    void append_validated(std::optional<ByteView> value);
+    [[nodiscard]] bool commit_row();
+    [[nodiscard]] std::uint32_t rows() const noexcept
+    {
+        return rows_;
+    }
+    [[nodiscard]] std::size_t row_payload_limit() const noexcept
+    {
+        return byte_limit_ - base_ - per_row_;
+    }
+    [[nodiscard]] Bytes finish();
+
+  private:
+    const Expectation& expected_;
+    Bytes bytes_;
+    std::size_t byte_limit_, base_, per_row_, payload_offset_, row_start_ = 0, column_ = 0;
+    std::uint32_t row_limit_, reserved_rows_, rows_ = 0;
+    bool in_row_ = false, row_fits_ = false, finished_ = false;
+};
+
+// Exact canonical frame charge without constructing a redundant frame.
+[[nodiscard]] std::size_t parameter_frame_size(const Expectation& expected, std::span<const Scalar> values);
 
 void validate_scalar(const Codec& codec, ByteView bytes, Profile profile);
 

@@ -28,32 +28,43 @@ internal sealed class CountedResources
     private sealed class CountedTransport(IStreamTransport inner, CountedResources owner) : IStreamTransport
     {
         private int _joined;
-        public async Task<IStreamBatch> FetchAsync()
+        private ScopedStreamBatch? _last;
+        private long _generation;
+        private int _size;
+        private void ObserveRelease()
         {
+            if (_last is null) return;
+            Suite.Check(!_last.IsActive && _last.Generation == _generation,
+                "Actual scoped batch generation released before next fetch or join");
+            _last = null;
+            Interlocked.Decrement(ref owner.Batches);
+            Interlocked.Add(ref owner.Bytes, -_size);
+            Interlocked.Increment(ref owner.ReleasedBatches);
+        }
+        public async ValueTask<ScopedStreamBatch> FetchAsync()
+        {
+            ObserveRelease();
             var batch = await inner.FetchAsync();
             Interlocked.Increment(ref owner.Batches);
-            var size = batch.Bytes.Length; var current = Interlocked.Add(ref owner.Bytes, size);
+            int size;
+            using (var read = batch.AcquireRead()) size = read.Bytes.Length;
+            _last = batch; _generation = batch.Generation; _size = size;
+            var current = Interlocked.Add(ref owner.Bytes, size);
             owner.PeakBytes = Math.Max(owner.PeakBytes, current);
-            return new CountedBatch(batch, owner, size);
+            return batch;
         }
+        public void CheckReadAdmission() => inner.CheckReadAdmission();
         public void RequestStop() => inner.RequestStop();
         public async Task<StreamRetirement> JoinAsync()
         {
             var result = await inner.JoinAsync();
             Suite.Check(result.NativeRetired, "Actual native retirement receipt");
-            if (Interlocked.Exchange(ref _joined, 1) == 0) { Interlocked.Decrement(ref owner.Transports); Interlocked.Increment(ref owner.Joins); }
+            if (Interlocked.Exchange(ref _joined, 1) == 0)
+            {
+                ObserveRelease();
+                Interlocked.Decrement(ref owner.Transports); Interlocked.Increment(ref owner.Joins);
+            }
             return result;
-        }
-    }
-    private sealed class CountedBatch(IStreamBatch inner, CountedResources owner, int size) : IStreamBatch
-    {
-        private int _disposed;
-        public ReadOnlyMemory<byte> Bytes => inner.Bytes;
-        public bool End => inner.End;
-        public void Dispose()
-        {
-            if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
-            inner.Dispose(); Interlocked.Decrement(ref owner.Batches); Interlocked.Add(ref owner.Bytes, -size); Interlocked.Increment(ref owner.ReleasedBatches);
         }
     }
 }

@@ -58,11 +58,12 @@ internal static partial class Suite
             }
             await MappingAndClose(provider, connection);
             await SnapshotBudgets(provider, connection);
+            await FindShapes(provider, connection);
             if (provider == DatabaseProvider.PostgreSql) await ActualUnknownAndRollbackFailure(connection);
         }
         foreach (var (path, hash) in nativeHashes) Check(Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path))) == hash, "C# entities/descriptors reuse unchanged native asset");
         await WaitZero(SqliteDataSource.Engine); await WaitZero(PostgreSqlDataSource.Engine); Directory.Delete(directory, true);
-        Console.WriteLine($"B14 actual Linux two-provider assertions={_assertions}; managed retirements={_retirements}; all six native owner counters=0");
+        Console.WriteLine($"B14 actual Linux two-provider assertions={_assertions}; managed retirements={_retirements}; native owner counters [0..5,8,9]=0");
     }
     private static async Task Crud(DataSource source, DataSession session)
     {
@@ -140,5 +141,5 @@ internal static partial class Suite
     private sealed record Aggregate(long Id, long Count, long? Sum);
     internal static async IAsyncEnumerable<Item> Rows(params Item[] rows) { foreach (var row in rows) { await Task.Yield(); yield return row; } }
     private static async Task WaitZero(EngineDescriptor engine) { for (var i = 0; i < 200; i++) { if (Counts(engine).All(x => x == 0)) { Check(true, "all native owners retired"); return; } await Task.Delay(10); } throw new InvalidOperationException("native leak " + string.Join(',', Counts(engine))); }
-    internal static unsafe ulong[] Counts(EngineDescriptor engine) { var call = (delegate* unmanaged[Cdecl]<uint, ulong>)EngineModuleLoader.ResolveExport(engine, "nw_db_diagnostic_count_v1"); return Enumerable.Range(0, 6).Select(i => call((uint)i)).ToArray(); }
+    internal static unsafe ulong[] Counts(EngineDescriptor engine) { var call = (delegate* unmanaged[Cdecl]<uint, ulong>)EngineModuleLoader.ResolveExport(engine, "nw_db_diagnostic_count_v1"); return Enumerable.Range(0, 6).Concat([8, 9]).Select(i => call((uint)i)).ToArray(); }
 }

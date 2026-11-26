@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import re
-from model import ENGINES, RID, ROOT, json_bytes, module, sha
+from model import DATABASE_CAPABILITIES, ENGINES, RID, ROOT, json_bytes, module, sha
 
 SYSTEM_DEPENDENCIES = ['libc.so.6', 'libgcc_s.so.1', 'libm.so.6', 'ld-linux-x86-64.so.2',
                        'libcrypto.so.3', 'libssl.so.3', 'libz.so.1']
@@ -72,6 +72,13 @@ def collect(build_manifest_path, provider=None):
             if sha(Path(actual['source']) / name) != expected:
                 raise ValueError('Dependency source changed after compilation')
     signatures = json.loads((ROOT / 'native/database/binding/signatures-v1.json').read_text())['signatures']
+    for name, bit in (('query-command-v1.json', 26), ('cursor-pull-v1.json', 27),
+                      ('command-completion-v1.json', 28), ('find-shape-v1.json', 29)):
+        extension = json.loads((ROOT / 'native/database/binding' / name).read_text())
+        if (extension['version'] != 1 or extension['capability_bit'] != bit or
+                DATABASE_CAPABILITIES[bit] != extension['capability']):
+            raise ValueError(name + ': extension capability differs from the package descriptor')
+        signatures += extension['signatures']
     exports = [re.search(r'\b(nw_db_\w+_v1)\(', item).group(1) for item in signatures]
     exports += ['nw_db_diagnostic_count_v1', 'nw_database_get_abi_v1']
     assets = {item['engineId']: item for item in build['assets']}

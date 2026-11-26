@@ -1,0 +1,120 @@
+{
+  "schemaVersion": 1,
+  "task": "DB-Perf-01",
+  "purpose": "Exact iteration-14 versioned build/run/analyze helpers and patches, old Host-v1 test input and independent read-only verifier. Historical reproduction inputs only, excluded from active product/consumer builds. Actual raw receipts retain original failure or successful scope.",
+  "originEvidenceIndex": "ledger/evidence/batches/DB-Perf-01/checkpoints/iteration-14-v1/files.json",
+  "inputs": [
+    {
+      "sourcePath": "measurements/native-batch-borrow-v1/data-build-v1/source-inputs.json::tests/Data.NativeHost/BorrowedBatchHostTests.cs",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/fac285778ae8f557b3c1af4031c42d4d3bbedfaf5bd69d3c230b289c1a81253a/BorrowedBatchHostTests.cs",
+      "sha256": "fac285778ae8f557b3c1af4031c42d4d3bbedfaf5bd69d3c230b289c1a81253a",
+      "bytes": 11016,
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sourcePath": "measurements/native-batch-borrow-v1/analyze.py",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/259fdeb78c10aa33475cdda0e73411330ad14f9a32cf69d668372f9365a2d8ad/analyze.py",
+      "sha256": "259fdeb78c10aa33475cdda0e73411330ad14f9a32cf69d668372f9365a2d8ad",
+      "bytes": 5854,
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sourcePath": "measurements/native-batch-borrow-v1/build_suite.py",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/a0a4071b6cf4883fb5f51c497847a900e57a0cd8231d859250572453bd42840c/build_suite.py",
+      "sha256": "a0a4071b6cf4883fb5f51c497847a900e57a0cd8231d859250572453bd42840c",
+      "bytes": 4651,
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sourcePath": "measurements/native-batch-borrow-v1/candidate.patch",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/d89e5c4a940d885fe896c0e3d0d0f9bb8ecb28d0a5ad6b91e4cb743dc2aeda10/candidate.patch",
+      "sha256": "d89e5c4a940d885fe896c0e3d0d0f9bb8ecb28d0a5ad6b91e4cb743dc2aeda10",
+      "bytes": 57677,
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sourcePath": "measurements/native-batch-borrow-v1/compare.py",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/4586471ab2b414348eaf3bf90fd0bdf24736421c467397bb438619fb7ed0a516/compare.py",
+      "sha256": "4586471ab2b414348eaf3bf90fd0bdf24736421c467397bb438619fb7ed0a516",
+      "bytes": 4337,
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sourcePath": "measurements/native-batch-borrow-v1/data-build-v1/source.patch",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/7d3b5dbeb8dc12bd454de4c38a9273857b56597fe620cfa026654adcba0007fc/source.patch",
+      "sha256": "7d3b5dbeb8dc12bd454de4c38a9273857b56597fe620cfa026654adcba0007fc",
+      "bytes": 32822,
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sourcePath": "measurements/native-batch-borrow-v1/host-build-v1/source.patch",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/7d3b5dbeb8dc12bd454de4c38a9273857b56597fe620cfa026654adcba0007fc/source.patch",
+      "sha256": "7d3b5dbeb8dc12bd454de4c38a9273857b56597fe620cfa026654adcba0007fc",
+      "bytes": 32822,
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sourcePath": "measurements/native-batch-borrow-v1/host-build-v2/source.patch",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/7d3b5dbeb8dc12bd454de4c38a9273857b56597fe620cfa026654adcba0007fc/source.patch",
+      "sha256": "7d3b5dbeb8dc12bd454de4c38a9273857b56597fe620cfa026654adcba0007fc",
+      "bytes": 32822,
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sourcePath": "measurements/native-batch-borrow-v1/materialization-build-v1/source.patch",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/7d3b5dbeb8dc12bd454de4c38a9273857b56597fe620cfa026654adcba0007fc/source.patch",
+      "sha256": "7d3b5dbeb8dc12bd454de4c38a9273857b56597fe620cfa026654adcba0007fc",
+      "bytes": 32822,
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sourcePath": "measurements/native-batch-borrow-v1/query-build-v1/source.patch",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/7d3b5dbeb8dc12bd454de4c38a9273857b56597fe620cfa026654adcba0007fc/source.patch",
+      "sha256": "7d3b5dbeb8dc12bd454de4c38a9273857b56597fe620cfa026654adcba0007fc",
+      "bytes": 32822,
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sourcePath": "measurements/native-batch-borrow-v1/run_database_suite-v1.py",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/ca6da13da77ca7c435c3d4f8cdd3101e25a624efe615ace5f64547eb0ba1a3de/run_database_suite-v1.py",
+      "sha256": "ca6da13da77ca7c435c3d4f8cdd3101e25a624efe615ace5f64547eb0ba1a3de",
+      "bytes": 4116,
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sourcePath": "measurements/native-batch-borrow-v1/run_database_suite.py",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/7a7d93b52293ea74bda212cb657230e6e3d1953ea6c110be2fbe28758835f093/run_database_suite.py",
+      "sha256": "7a7d93b52293ea74bda212cb657230e6e3d1953ea6c110be2fbe28758835f093",
+      "bytes": 4750,
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sourcePath": "measurements/native-batch-borrow-v1/run_local_gates.py",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/e95a858c33d128b71fa6a875fbc185e6ddffb3905c4c38be62f1a731aaa119f2/run_local_gates.py",
+      "sha256": "e95a858c33d128b71fa6a875fbc185e6ddffb3905c4c38be62f1a731aaa119f2",
+      "bytes": 2354,
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sourcePath": "measurements/native-batch-borrow-v1/run_probe.py",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/3bb7406e7965bdcdfde90f52b25b6c5483c6a48099fa64ea1f6d2465bc784a4a/run_probe.py",
+      "sha256": "3bb7406e7965bdcdfde90f52b25b6c5483c6a48099fa64ea1f6d2465bc784a4a",
+      "bytes": 5643,
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sourcePath": "measurements/native-batch-borrow-v1/streaming-build-v1/source.patch",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/7d3b5dbeb8dc12bd454de4c38a9273857b56597fe620cfa026654adcba0007fc/source.patch",
+      "sha256": "7d3b5dbeb8dc12bd454de4c38a9273857b56597fe620cfa026654adcba0007fc",
+      "bytes": 32822,
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sourcePath": "measurements/native-batch-borrow-independent-v1/verify.py",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/4dd65752c24f0807a4a1ef76866d12aeed3064af43c3b6797108808cc8ef76b6/verify.py",
+      "sha256": "4dd65752c24f0807a4a1ef76866d12aeed3064af43c3b6797108808cc8ef76b6",
+      "bytes": 10523,
+      "bindingStatus": "pending_harness_commit"
+    }
+  ]
+}

@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>DbPerf.Scheduler.Tests</AssemblyName>
+    <PublishAot>true</PublishAot>
+    <IlcTreatWarningsAsErrors>true</IlcTreatWarningsAsErrors>
+    <NuGetLockFilePath>$(MSBuildProjectDirectory)/packages.linux-x64.aot.lock.json</NuGetLockFilePath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../Shared/OfferedLoad.cs" Link="OfferedLoad.cs" />
+    <Compile Include="../Shared/CorrectnessOracle.cs" Link="CorrectnessOracle.cs" />
+    <Compile Include="../Shared/ReadStream.cs" Link="ReadStream.cs" />
+    <Compile Include="../Korda/Digest.cs" Link="Digest.cs" />
+  </ItemGroup>
+</Project>

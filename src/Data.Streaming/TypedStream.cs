@@ -1,6 +1,17 @@
+using System.Runtime.CompilerServices;
 using Korda.Data;
 
 namespace Korda.Database.Internal;
+
+// Shape metadata only: no session, factory, cancellation or cursor state can be
+// retained here. The prepared owner publishes one immutable layout after its
+// first successful stream-construction validation.
+internal sealed class StreamProjectionLayout(object projection, WireExpectation expectation, int minimumBatchBytes)
+{
+    internal object Projection { get; } = projection;
+    internal WireExpectation Expectation { get; } = expectation;
+    internal int MinimumBatchBytes { get; } = minimumBatchBytes;
+}
 
 /// <summary>One-shot typed stream adapter used by the Database host and query terminal owners.</summary>
 /// <remarks>Creation validates and freezes the projection identity without dispatch. The factory captures an
@@ -9,19 +20,50 @@ namespace Korda.Database.Internal;
 /// This internal assembly does not define a second DataSession, QuerySelection, runtime, or NuGet package.</remarks>
 internal sealed class TypedStream<T> : IAsyncEnumerable<T>
 {
-    private readonly Func<int, CancellationToken, Task<IStreamTransport>> _start;
+    private readonly Func<int, CancellationToken, ValueTask<IStreamTransport>> _start;
     private readonly Projection<T> _projection;
     private readonly WireExpectation _expected;
     private readonly StreamLimits _limits;
     private readonly CancellationToken _methodToken;
     private int _enumerated;
 
-    internal TypedStream(Func<int, CancellationToken, Task<IStreamTransport>> start, Projection<T> projection,
+    internal TypedStream(Func<int, CancellationToken, ValueTask<IStreamTransport>> start, Projection<T> projection,
         uint profile, uint projectionId, ReadOnlySpan<uint> boundCodecs, StreamLimits limits, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(start);
         ArgumentNullException.ThrowIfNull(projection);
         limits.Validate();
+        _expected = CreateExpectation(projection, profile, projectionId, boundCodecs, out var minimumBatchBytes);
+        ValidateBatchCapacity(minimumBatchBytes, limits);
+        _start = start; _projection = projection; _limits = limits; _methodToken = cancellationToken;
+    }
+
+    internal TypedStream(Func<int, CancellationToken, ValueTask<IStreamTransport>> start, Projection<T> projection,
+        StreamProjectionLayout layout, StreamLimits limits, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(start);
+        ArgumentNullException.ThrowIfNull(projection);
+        limits.Validate();
+        ArgumentNullException.ThrowIfNull(layout);
+        if (!ReferenceEquals(layout.Projection, projection)) throw new ArgumentException("The frozen stream layout belongs to another projection.", nameof(layout));
+        ValidateBatchCapacity(layout.MinimumBatchBytes, limits);
+        _expected = layout.Expectation;
+        _start = start; _projection = projection; _limits = limits; _methodToken = cancellationToken;
+    }
+
+    internal static StreamProjectionLayout CreateProjectionLayout(Projection<T> projection, uint profile, uint projectionId,
+        ReadOnlySpan<uint> boundCodecs, StreamLimits limits)
+    {
+        ArgumentNullException.ThrowIfNull(projection);
+        limits.Validate();
+        var expectation = CreateExpectation(projection, profile, projectionId, boundCodecs, out var minimumBatchBytes);
+        ValidateBatchCapacity(minimumBatchBytes, limits);
+        return new(projection, expectation, minimumBatchBytes);
+    }
+
+    private static WireExpectation CreateExpectation(Projection<T> projection, uint profile, uint projectionId,
+        ReadOnlySpan<uint> boundCodecs, out int minimumBatchBytes)
+    {
         if (boundCodecs.Length != projection.Fields.Length) throw new ArgumentException("Bound codec count differs from the exact projection.", nameof(boundCodecs));
         var descriptors = new WireDescriptor[boundCodecs.Length];
         var configured = new Dictionary<uint, CodecDescriptor>();
@@ -38,11 +80,16 @@ internal sealed class TypedStream<T> : IAsyncEnumerable<T>
             }
             descriptors[i] = new((uint)i, codec, boundCodecs[i]);
         }
-        _expected = new(PayloadKind.Rows, profile, Convert.FromHexString(projection.ShapeHash), 0, projectionId, descriptors);
-        var empty = DbWire.Encode(_expected, 0, Array.Empty<ReadOnlyMemory<byte>?>());
-        if (checked(empty.Length + descriptors.Length * WireSchema.CellBytes) > limits.MaxBatchBytes)
+        var expectation = new WireExpectation(PayloadKind.Rows, profile, projection.ShapeBytes, 0, projectionId, descriptors);
+        var empty = DbWire.Encode(expectation, 0, Array.Empty<ReadOnlyMemory<byte>?>());
+        minimumBatchBytes = checked(empty.Length + descriptors.Length * WireSchema.CellBytes);
+        return expectation;
+    }
+
+    private static void ValidateBatchCapacity(int minimumBatchBytes, StreamLimits limits)
+    {
+        if (minimumBatchBytes > limits.MaxBatchBytes)
             throw new DatabaseException("LargeValueRequiresStreaming: a single row descriptor table exceeds the batch limit.", DatabaseErrorKind.ResourceLimit, "LargeValueRequiresStreaming");
-        _start = start; _projection = projection; _limits = limits; _methodToken = cancellationToken;
     }
 
     public IAsyncEnumerator<T> GetAsyncEnumerator(CancellationToken cancellationToken = default) => CreateEnumerator(cancellationToken, _limits.MaxBatchRows, false);
@@ -102,7 +149,8 @@ internal sealed class TypedStream<T> : IAsyncEnumerable<T>
         private readonly int _fetchRows;
         private readonly bool _buffered;
         private readonly object _gate = new();
-        private TaskCompletionSource? _activeMove;
+        private bool _moving;
+        private TaskCompletionSource? _moveJoin;
         private TaskCompletionSource? _cleanup;
         private IStreamTransport? _transport;
         private CancellationTokenRegistration _registration;
@@ -124,17 +172,16 @@ internal sealed class TypedStream<T> : IAsyncEnumerable<T>
         public T Current => _current;
         public ValueTask<bool> MoveNextAsync()
         {
-            TaskCompletionSource completion;
             lock (_gate)
             {
                 ObjectDisposedException.ThrowIf(_closed, this);
-                if (_activeMove is not null) throw new DatabaseException("Another MoveNext is active.", DatabaseErrorKind.ConcurrentUse);
-                completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
-                _activeMove = completion;
+                if (_moving) throw new DatabaseException("Another MoveNext is active.", DatabaseErrorKind.ConcurrentUse);
+                _moving = true;
             }
-            return new(MoveAsync(completion));
+            return MoveAsync();
         }
-        private async Task<bool> MoveAsync(TaskCompletionSource completion)
+        [AsyncMethodBuilder(typeof(PoolingAsyncValueTaskMethodBuilder<>))]
+        private async ValueTask<bool> MoveAsync()
         {
             try
             {
@@ -148,13 +195,19 @@ internal sealed class TypedStream<T> : IAsyncEnumerable<T>
                     bool closed; lock (_gate) closed = _closed;
                     if (closed) { RequestStop(); throw new ObjectDisposedException(nameof(Enumerator)); }
                 }
-                if (_batch is null || _row == _batch.Rows)
+                if (_batch is null || !_batch.IsActive || _row == _batch.Rows)
                 {
-                    _batch?.Dispose(); _batch = null;
-                    if (_lastBatch) { _finished = true; await CleanupAsync().ConfigureAwait(false); return false; }
+                    _batch?.Dispose();
+                    if (_lastBatch)
+                    {
+                        _transport.CheckReadAdmission();
+                        _finished = true; await CleanupAsync().ConfigureAwait(false); return false;
+                    }
                     var owner = await _transport.FetchAsync().ConfigureAwait(false);
-                    // Constructor owns compensation if validation fails.
-                    _batch = new(owner, _parent._expected, _parent._projection.Fields, _parent._limits with { MaxBatchRows = _fetchRows });
+                    // The serialized move reuses only its own inactive lease.
+                    // Construction/attachment owns compensation if validation fails.
+                    if (_batch is null) _batch = new(owner, _parent._expected, _parent._projection.Fields, _parent._limits with { MaxBatchRows = _fetchRows });
+                    else _batch.Attach(owner, _parent._expected, _parent._limits with { MaxBatchRows = _fetchRows });
                     _row = 0; _lastBatch = _batch.End;
                     if (_buffered)
                     {
@@ -168,13 +221,9 @@ internal sealed class TypedStream<T> : IAsyncEnumerable<T>
                 bool closing; lock (_gate) closing = _closed;
                 if (closing) throw new ObjectDisposedException(nameof(Enumerator));
                 if (_buffered)
-                {
-                    var bytes = _batch.RowBytes(_row);
-                    if (_bufferedRows >= _parent._limits.MaxBufferedRows || bytes > _parent._limits.MaxBufferedBytes - _bufferedBytes)
-                        throw new DatabaseException("Buffered result exceeds its row or charged-byte limit.", DatabaseErrorKind.ResourceLimit);
-                    _bufferedRows++; _bufferedBytes += bytes;
-                }
-                _current = _batch.Materialize(_row++, _parent._projection);
+                    _current = _batch.MaterializeBuffered(ref _row, _parent._projection, in _parent._limits,
+                        ref _bufferedRows, ref _bufferedBytes);
+                else _current = _batch.Materialize(_row++, _parent._projection);
                 return true;
             }
             catch (Exception original)
@@ -186,7 +235,12 @@ internal sealed class TypedStream<T> : IAsyncEnumerable<T>
             }
             finally
             {
-                lock (_gate) { _activeMove = null; completion.TrySetResult(); }
+                lock (_gate)
+                {
+                    _moving = false;
+                    var join = _moveJoin; _moveJoin = null;
+                    join?.TrySetResult();
+                }
             }
         }
         private Task CleanupAsync()
@@ -225,7 +279,11 @@ internal sealed class TypedStream<T> : IAsyncEnumerable<T>
             Task active;
             lock (_gate)
             {
-                _closed = true; active = _activeMove?.Task ?? Task.CompletedTask;
+                _closed = true;
+                // Normal row moves need no separate completion owner. Only an
+                // overlapping Dispose waits here, sharing one immutable Task
+                // until the active move has finished mapping and cleanup.
+                active = _moving ? (_moveJoin ??= new(TaskCreationOptions.RunContinuationsAsynchronously)).Task : Task.CompletedTask;
             }
             RequestStop();
             return new(DisposeAfterMoveAsync(active));

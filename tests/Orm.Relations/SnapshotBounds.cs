@@ -100,12 +100,19 @@ internal static partial class Suite
         var table = b.Build(row => new(row.Get(id), row.Get(text), row.Get(bytes), row.Get(json)),
             (row, entity) => { row.Set(id, entity.Id); row.Set(text, entity.Text); row.Set(bytes, entity.Bytes); row.Set(json, entity.Json); });
         var large = new string('x', 1024 * 1024); var escaped = new string('<', 1024 * 1024); var blob = new byte[1024 * 1024];
-        foreach (var row in new BudgetRow[] { new(1, large, null, null), new(2, null, blob, null), new(3, null, null, new(large)), new(4, null, null, new(escaped)) })
+        var requests = 0;
+        source.TestCommandBoundary = boundary => { if (boundary == HostCommandBoundary.BeforeRequest) Interlocked.Increment(ref requests); };
+        try
         {
-            var before = Volatile.Read(ref _retirements);
-            var failure = await Throws<DatabaseException>(() => session.InsertAsync(table, row));
-            Check(failure.Kind == DatabaseErrorKind.ResourceLimit && Volatile.Read(ref _retirements) == before, "oversized entity rejects before any asynchronous native operation is admitted");
+            foreach (var row in new BudgetRow[] { new(1, large, null, null), new(2, null, blob, null), new(3, null, null, new(large)), new(4, null, null, new(escaped)) })
+            {
+                var before = Volatile.Read(ref _retirements);
+                var failure = await Throws<DatabaseException>(() => session.InsertAsync(table, row));
+                Check(failure.Kind == DatabaseErrorKind.ResourceLimit && Volatile.Read(ref _retirements) == before
+                    && Volatile.Read(ref requests) == 0, "oversized entity rejects before either native completion path is entered");
+            }
         }
+        finally { source.TestCommandBoundary = null; }
         Check(await Count(session, "b14_budget_rows") == 0, "wide input preflight has no SQL side effect");
         if (provider == DatabaseProvider.Sqlite)
         {
@@ -113,8 +120,32 @@ internal static partial class Suite
             // wire-sized input copies; fitting the logical payload ceiling does
             // not guarantee that this nonwaiting physical grant is available.
             var before = Volatile.Read(ref _retirements);
-            var physical = await Throws<DatabaseException>(() => session.InsertAsync(table, new(98, null, null, new(new string('x', 7000)))));
-            Check(physical.Kind == DatabaseErrorKind.ResourceLimit && Volatile.Read(ref _retirements) > before, "physical input admission rejects within the admitted native operation");
+            var statements = StatementCount(source);
+            var ready = 0; var takes = 0; var publications = 0; var snapshots = 0;
+            HostCommandSnapshot completion = default;
+            source.TestCommandBoundary = boundary =>
+            {
+                if (boundary == HostCommandBoundary.Ready) Interlocked.Increment(ref ready);
+                if (boundary == HostCommandBoundary.BeforeTake) Interlocked.Increment(ref takes);
+                if (boundary == HostCommandBoundary.Published) Interlocked.Increment(ref publications);
+            };
+            source.TestCommandSnapshot = snapshot => { completion = snapshot; Interlocked.Increment(ref snapshots); };
+            DatabaseException physical;
+            try { physical = await Throws<DatabaseException>(() => session.InsertAsync(table, new(98, null, null, new(new string('x', 7000))))); }
+            finally { source.TestCommandBoundary = null; source.TestCommandSnapshot = null; }
+            Check(physical.Kind == DatabaseErrorKind.ResourceLimit, "physical input admission preserves the native resource-limit error");
+            // A failed typed take publishes safely without fallback only after
+            // the separate rich-error take has consumed the native error.
+            Check(snapshots == 1 && ready == 1 && takes == 1 && publications == 1
+                && completion.RequestKind == 2 && completion.ExpectedKind == 100
+                && completion.SetupReturned && completion.RequestEntered && completion.RequestReturned
+                && completion.Accepted && completion.Ready && !completion.ResultTaken && completion.Published
+                && completion.NativeSafe && !completion.Indeterminate && !completion.FallbackStarted
+                && !completion.Rooted && !completion.SlotReserved && completion.Controls == 0
+                && completion.CallbackEntries == 0 && completion.RegistrationDrained,
+                "physical input rejection consumes one admitted mutation error and drains every managed completion obligation");
+            Check(Volatile.Read(ref _retirements) == before, "physical input rejection uses the direct command completion path");
+            Check(StatementCount(source) == statements, "physical input rejection dispatches no SQL statement");
             Check(await Count(session, "b14_budget_rows") == 0, "physical input rejection precedes provider statement dispatch");
         }
         var valid = new BudgetRow(99, null, null, new(new string('x', 3000)));

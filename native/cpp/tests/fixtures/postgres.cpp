@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Retained B02 provider oracles use the production C++ Host and libpq adapter.
+#include "../parameter_test_support.hpp"
+#include "../provider_test_support.hpp"
 #include "nw/host.hpp"
 #include "support.hpp"
 
@@ -30,6 +32,7 @@ std::uint64_t module_identity()
 namespace
 {
 using namespace nw;
+using test::decode_parameters;
 using Json = nlohmann::ordered_json;
 using namespace std::chrono_literals;
 void check(bool value, std::string_view message)
@@ -253,7 +256,7 @@ std::shared_ptr<SqlPlan> plan(const std::shared_ptr<Session>& session, std::stri
     result->kind = kind;
     result->result_kind = 0;
     result->expectation = {1, Profile::PostgreSql, {}, 0, 0, {}, 1};
-    result->parameters = Batch::encode(result->expectation, 1, {});
+    result->capture_parameters(Batch::encode(result->expectation, 1, {}));
     result->timeout_ns = 5'000'000'000;
     return result;
 }
@@ -383,7 +386,7 @@ Json stream_and_admission()
     auto session = scope.open();
     auto pid = scalar(session, "SELECT pg_backend_pid()");
     auto stream = session->connection->query("SELECT n::bigint FROM generate_series(1,20000) n", {}, {});
-    auto row = stream->next({{3, {}, false}}, 4096, {});
+    auto row = test::next_row(*stream, Profile::PostgreSql, {{3, {}, false}}, 4096, {});
     check(row.has_value(), "first stream row");
     check(rejected([&] { execute(session, "SELECT 1"); }).code == 7, "one provider command at a time");
     auto admission = DbOperation::create(
@@ -406,7 +409,7 @@ Json stream_and_admission()
     check(empty->columns().size() == 1 && empty->columns()[0].name == "value" &&
               empty->columns()[0].type_name == "INT8",
           "empty result complete metadata");
-    check(!empty->next({{3, {}, false}}, 4096, {}), "empty result EOF");
+    check(!test::next_row(*empty, Profile::PostgreSql, {{3, {}, false}}, 4096, {}), "empty result EOF");
     empty->close();
     close(session);
     auto reused = scope.open();
@@ -446,12 +449,12 @@ Json codecs()
         const auto encoded = Batch::encode(expected, 1, {test.value});
         auto parameters = decode_parameters(encoded, expected, 4096, MAX_BYTES, 4096);
         auto stream = session->connection->query(test.sql, parameters, {});
-        auto row = stream->next({test.codec}, 4096, {});
+        auto row = test::next_row(*stream, Profile::PostgreSql, {test.codec}, 4096, {});
         check(row && row->size() == 1 && (*row)[0] == test.value, "actual B07 scalar parameter/result roundtrip");
         stream->close();
     }
     auto wide = session->connection->query("SELECT 1e100::numeric", {}, {});
-    (void)rejected([&] { (void)wide->next({tests[1].codec}, 4096, {}); });
+    (void)rejected([&] { (void)test::next_row(*wide, Profile::PostgreSql, {tests[1].codec}, 4096, {}); });
     wide->close();
     return {{"case", "codecs"}, {"actual_b07_roundtrips", 5}, {"wide_numeric_rejected", true}};
 }

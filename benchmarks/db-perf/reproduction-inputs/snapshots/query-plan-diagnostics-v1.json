@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "task": "DB-Perf-01",
+  "purpose": "Exact successful query-plan diagnostic controller before later connection-metadata edits, plus the retained intermediate collector source. Does not reconstruct unarchived early SQLite/WAL or initial SHOW-failure source; original failed receipts remain unmodified. Historical reproduction inputs excluded from active builds.",
+  "originEvidenceIndex": "ledger/evidence/batches/DB-Perf-01/checkpoints/query-plan-diagnostics-v1/files.json",
+  "inputs": [
+    {
+      "sourcePath": "Korda-DB-Perf-01-plan-diagnostics/benchmarks/db-perf/run.py",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/dcb01241ae20136a2ee89bcbb721c21cf1b77beee9bc5e4a98d46e0bf655451f/run.py",
+      "sha256": "dcb01241ae20136a2ee89bcbb721c21cf1b77beee9bc5e4a98d46e0bf655451f",
+      "bytes": 35627,
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sourcePath": "measurements/query-plan-helpers-v1/source-history/5923a64956693724ddf60ed01e01c4f6a9d929f12a97d13e355ad56ba46df0a1.py",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/5923a64956693724ddf60ed01e01c4f6a9d929f12a97d13e355ad56ba46df0a1/5923a64956693724ddf60ed01e01c4f6a9d929f12a97d13e355ad56ba46df0a1.py",
+      "sha256": "5923a64956693724ddf60ed01e01c4f6a9d929f12a97d13e355ad56ba46df0a1",
+      "bytes": 32673,
+      "bindingStatus": "pending_harness_commit"
+    }
+  ]
+}

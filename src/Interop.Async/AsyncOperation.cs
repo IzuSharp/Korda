@@ -40,7 +40,8 @@ internal abstract class AsyncOperation : CoordinatedCallback, IDisposable, IAsyn
     private readonly long _inputBytes;
     private readonly int _slot;
     private readonly Action<AsyncBoundary>? _testBoundary;
-    private readonly TaskCompletionSource _retirement = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private TaskCompletionSource? _retirement;
+    private bool _retirementPublished;
     private GCHandle _root;
     private CancellationTokenRegistration _registration;
     private bool _rootLive;
@@ -105,7 +106,17 @@ internal abstract class AsyncOperation : CoordinatedCallback, IDisposable, IAsyn
         catch { _root.Free(); _rootLive = false; throw; }
     }
 
-    internal Task Retirement => _retirement.Task;
+    internal Task Retirement
+    {
+        get
+        {
+            lock (_gate)
+            {
+                if (_retirementPublished) return Task.CompletedTask;
+                return (_retirement ??= new(TaskCreationOptions.RunContinuationsAsynchronously)).Task;
+            }
+        }
+    }
     internal AsyncSnapshot Snapshot
     {
         get
@@ -241,8 +252,12 @@ internal abstract class AsyncOperation : CoordinatedCallback, IDisposable, IAsyn
             if (_released || _releasing || (!cleanup && _closing)) return false;
             checked { _controls++; }
         }
-        try { pointer = _owner.Acquire(ref acquired); return true; }
-        catch { lock (_gate) _controls--; Signal(); throw; }
+        try
+        {
+            pointer = _owner.Acquire(ref acquired);
+            return true;
+        }
+        catch { acquired = false; lock (_gate) _controls--; Signal(); throw; }
     }
 
     internal void ReleaseControl(ref bool acquired) => ReleaseControl(ref acquired, notify: true);
@@ -369,7 +384,7 @@ internal abstract class AsyncOperation : CoordinatedCallback, IDisposable, IAsyn
         Dispose();
         if (ReferenceEquals(s_callbackScope, this))
             throw new InvalidOperationException("An operation callback/result mapper cannot wait for its own retirement.");
-        return new ValueTask(_retirement.Task);
+        return new ValueTask(Retirement);
     }
 
     protected override void SchedulingFault(Exception error)
@@ -536,13 +551,16 @@ internal abstract class AsyncOperation : CoordinatedCallback, IDisposable, IAsyn
                 _callbackEntries != 0 || _releasing) return;
             _releasing = true;
         }
-        _owner.Dispose();
+        try { _owner.Dispose(); }
+        finally { GC.KeepAlive(_native); }
         _inputLifetime?.Dispose();
         _root.Free();
         lock (_gate) { _rootLive = false; _released = true; }
         CompleteScheduling();
         _coordinator.Release(_slot, this);
-        _retirement.TrySetResult();
+        TaskCompletionSource? retirement;
+        lock (_gate) { _retirementPublished = true; retirement = _retirement; }
+        retirement?.TrySetResult();
     }
 
     private async Task FinishRegistrationDrainAsync(ValueTask drain)
@@ -567,6 +585,7 @@ internal abstract class AsyncOperation : CoordinatedCallback, IDisposable, IAsyn
     protected abstract void PublishSuccess(nint operation);
     protected abstract void PublishFailure(Exception error);
     protected abstract void PublishCanceled(CancellationToken token);
+
 }
 
 /// <summary>Typed managed Task bridge; TResult and its mapper never cross the unmanaged ABI.</summary>

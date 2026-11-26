@@ -157,6 +157,14 @@ PGresult* receive(PGconn* connection, const CallContext& context)
         wait_socket(PQsocket(connection), false, context);
     }
 }
+bool postgres_state_is_idle(PGconn* connection)
+{
+    if (!connection || PQstatus(connection) != CONNECTION_OK || !PQisnonblocking(connection) ||
+        PQpipelineStatus(connection) != PQ_PIPELINE_OFF)
+        return false;
+    const auto transaction = PQtransactionStatus(connection);
+    return transaction == PQTRANS_IDLE || transaction == PQTRANS_INTRANS || transaction == PQTRANS_INERROR;
+}
 void protocol_sync(PGconn* connection, const CallContext& cleanup)
 {
     cleanup.check();
@@ -225,9 +233,13 @@ std::string text_result(std::uint32_t oid, ByteView bytes)
 #endif
 } // namespace
 
-void Cancel::request()
+void Cancel::mark_requested() noexcept
 {
     requested_.store(true, std::memory_order_release);
+}
+void Cancel::request()
+{
+    mark_requested();
     std::lock_guard lock(mutex_);
     if (hook_)
         hook_();
@@ -330,15 +342,18 @@ struct ProviderStatement::Impl
     std::int64_t affected = 0;
     bool closed = false;
     bool ended = false;
+    bool row_held = false;
     CallContext context;
 #if NW_ENABLE_SQLITE
     sqlite3_stmt* sqlite = nullptr;
     bool sqlite_started = false;
+    bool sqlite_bound = false;
 #endif
 #if NW_ENABLE_POSTGRES
     PGresult* postgres = nullptr;
     bool postgres_started = false;
     bool postgres_pending = false;
+    bool postgres_execution_confirmed = false;
     std::vector<std::optional<std::string>> postgres_parameters;
 #endif
     void update_transaction()
@@ -375,9 +390,13 @@ struct ProviderStatement::Impl
                     if (auto owner = weak.lock())
                         owner->interrupt();
                 });
+        if (row_held)
+            return true;
 #if NW_ENABLE_SQLITE
         if (sqlite)
         {
+            if (!sqlite_bound)
+                throw Error::state("SQLite statement parameters have not been bound");
             if (!sqlite_started)
             {
                 dispatch_count.fetch_add(1, std::memory_order_relaxed);
@@ -386,7 +405,10 @@ struct ProviderStatement::Impl
             const int status = sqlite3_step(sqlite);
             update_transaction();
             if (status == SQLITE_ROW)
+            {
+                row_held = true;
                 return true;
+            }
             if (status != SQLITE_DONE)
             {
                 call.check();
@@ -425,6 +447,10 @@ struct ProviderStatement::Impl
                     postgres = receive(provider.postgres, call);
                 if (!postgres)
                 {
+                    // Outside a pipeline, libpq returns the final null only
+                    // after ReadyForQuery has made this Execute idle. A row
+                    // limit or CommandComplete alone never reaches this path.
+                    postgres_execution_confirmed = postgres_state_is_idle(provider.postgres);
                     ended = true;
                     postgres_pending = false;
                     update_transaction();
@@ -432,7 +458,10 @@ struct ProviderStatement::Impl
                 }
                 const auto status = PQresultStatus(postgres);
                 if (status == PGRES_SINGLE_TUPLE)
+                {
+                    row_held = true;
                     return true;
+                }
                 if (status != PGRES_TUPLES_OK && status != PGRES_COMMAND_OK)
                 {
                     auto error = postgres_error(postgres);
@@ -457,6 +486,7 @@ struct ProviderStatement::Impl
     }
     void consume_row()
     {
+        row_held = false;
 #if NW_ENABLE_POSTGRES
         if (postgres)
         {
@@ -651,14 +681,11 @@ ProviderConnection::query(std::string_view sql, const std::vector<Scalar>& param
 {
     return prepare(sql, parameters, context, true);
 }
-std::vector<ProviderColumn> ProviderConnection::describe_sqlite(std::string_view sql, const CallContext& context)
+std::unique_ptr<ProviderStatement> ProviderConnection::prepare_unbound(std::string_view sql, const CallContext& context)
 {
     if (profile() != Profile::Sqlite)
         throw Error::unsupported();
-    auto statement = prepare(sql, {}, context, false);
-    auto columns = statement->columns();
-    statement->close();
-    return columns;
+    return prepare(sql, {}, context, false);
 }
 std::unique_ptr<ProviderStatement> ProviderConnection::prepare(std::string_view sql,
                                                                const std::vector<Scalar>& parameters,
@@ -701,39 +728,8 @@ std::unique_ptr<ProviderStatement> ProviderConnection::prepare(std::string_view 
             throw sqlite_error(impl_->sqlite, status);
         if (!result->impl_->sqlite)
             throw Error::invalid("empty SQL command");
-        if (bind_parameters &&
-            sqlite3_bind_parameter_count(result->impl_->sqlite) != static_cast<int>(parameters.size()))
-            throw Error::invalid("SQL parameter count differs");
-        for (std::size_t index = 0; bind_parameters && index < parameters.size(); ++index)
-        {
-            const auto& value = parameters[index];
-            const int parameter = static_cast<int>(index + 1);
-            if (!value.value)
-                status = sqlite3_bind_null(result->impl_->sqlite, parameter);
-            else
-            {
-                auto storage = sqlite_encode(value.codec, *value.value);
-                status = std::visit(
-                    [&](const auto& item) -> int
-                    {
-                        using T = std::decay_t<decltype(item)>;
-                        if constexpr (std::is_same_v<T, std::int64_t>)
-                            return sqlite3_bind_int64(result->impl_->sqlite, parameter, item);
-                        else if constexpr (std::is_same_v<T, double>)
-                            return sqlite3_bind_double(result->impl_->sqlite, parameter, item);
-                        else if constexpr (std::is_same_v<T, std::string>)
-                            return sqlite3_bind_text64(result->impl_->sqlite, parameter, item.data(), item.size(),
-                                                       SQLITE_TRANSIENT, SQLITE_UTF8);
-                        else
-                            return sqlite3_bind_blob64(result->impl_->sqlite, parameter,
-                                                       item.empty() ? static_cast<const void*>("") : item.data(),
-                                                       item.size(), SQLITE_TRANSIENT);
-                    },
-                    storage);
-            }
-            if (status != SQLITE_OK)
-                throw sqlite_error(impl_->sqlite, status);
-        }
+        if (bind_parameters)
+            result->bind_parameters(parameters);
         const int count = sqlite3_column_count(result->impl_->sqlite);
         for (int i = 0; i < count; ++i)
             result->impl_->columns.push_back({sqlite3_column_name(result->impl_->sqlite, i),
@@ -755,43 +751,128 @@ std::unique_ptr<ProviderStatement> ProviderConnection::prepare(std::string_view 
                                               : std::nullopt);
         }
         const std::string owned_sql(sql);
-        // Describe before execution, as the original provider did. Opening a
-        // cursor never waits for its first row or executes DML/volatile functions.
-        // The unnamed statement has bounded server state and this connection
-        // remains exclusively leased until its result is drained or discarded.
-        auto prepare = [&]
+        // As in Npgsql's SendPrepare, send Parse and Describe before waiting,
+        // then confirm both with one Sync. Keep a fresh unnamed statement: a
+        // persistent prepared statement can turn a later schema change into
+        // 0A000 instead of the original fresh-description/shape behavior.
+        // Bind/Execute still belong to the first fetch, never cursor creation.
+        auto prepare = [&](bool describe)
         {
-            if (!PQsendPrepare(impl_->postgres, "", owned_sql.c_str(), static_cast<int>(types.size()), types.data()))
-                throw postgres_error();
-            protocol_count.fetch_add(1, std::memory_order_relaxed);
-            result->impl_->postgres_pending = true;
-            while (auto* reply = receive(impl_->postgres, context))
+            const unsigned expected = describe ? 2U : 1U;
+            unsigned replies = 0, separators = 0;
+            bool entered = false, sync_queued = false, sync_received = false;
+            std::optional<CallContext> cleanup;
+            std::exception_ptr failure;
+            const auto cleanup_context = [&]() -> const CallContext&
             {
-                std::unique_ptr<PGresult, decltype(&PQclear)> owner(reply, PQclear);
-                if (PQresultStatus(reply) != PGRES_COMMAND_OK)
-                    throw postgres_error(reply);
+                if (!cleanup)
+                    cleanup = impl_->cleanup_context();
+                return *cleanup;
+            };
+            const auto consume = [&](bool collect_columns)
+            {
+                while (!sync_received)
+                {
+                    auto* reply = receive(impl_->postgres, cleanup ? *cleanup : context);
+                    if (!reply)
+                    {
+                        // Pipeline NULLs separate commands; they do not end
+                        // this group. Its only completion is PIPELINE_SYNC.
+                        if (++separators > expected)
+                            throw postgres_error();
+                        continue;
+                    }
+                    std::unique_ptr<PGresult, decltype(&PQclear)> owner(reply, PQclear);
+                    const auto status = PQresultStatus(reply);
+                    if (status == PGRES_PIPELINE_SYNC)
+                    {
+                        sync_received = true;
+                        if (replies != expected)
+                            throw postgres_error();
+                        break;
+                    }
+                    if (++replies > expected)
+                        throw postgres_error();
+                    if (status != PGRES_COMMAND_OK)
+                    {
+                        // Preserve the first SQLSTATE. An aborted later
+                        // command and cleanup failure cannot replace it.
+                        if (!failure)
+                            failure = std::make_exception_ptr(postgres_error(reply));
+                        (void)cleanup_context();
+                        continue;
+                    }
+                    if (collect_columns && !failure && describe && replies == expected)
+                    {
+                        for (int i = 0; i < PQnfields(reply); ++i)
+                        {
+                            const auto oid = PQftype(reply, i);
+                            const auto type = impl_->extension_types.contains(oid) ? impl_->extension_types.at(oid)
+                                                                                   : postgres_type_name(oid);
+                            result->impl_->columns.push_back({PQfname(reply, i), type, oid});
+                        }
+                    }
+                    // Once metadata is available, confirmation has its own
+                    // bounded cleanup budget and ignores caller cancellation.
+                    if (replies == expected)
+                        (void)cleanup_context();
+                }
+            };
+            try
+            {
+                if (!PQenterPipelineMode(impl_->postgres))
+                    throw postgres_error();
+                entered = true;
+                result->impl_->postgres_pending = true;
+                if (!PQsendPrepare(impl_->postgres, "", owned_sql.c_str(), static_cast<int>(types.size()),
+                                   types.data()))
+                    throw postgres_error();
+                protocol_count.fetch_add(1, std::memory_order_relaxed);
+                if (describe)
+                {
+                    if (!PQsendDescribePrepared(impl_->postgres, ""))
+                        throw postgres_error();
+                    protocol_count.fetch_add(1, std::memory_order_relaxed);
+                }
+                if (!PQpipelineSync(impl_->postgres))
+                    throw postgres_error();
+                protocol_count.fetch_add(1, std::memory_order_relaxed);
+                sync_queued = true;
+                consume(true);
+                if (!PQexitPipelineMode(impl_->postgres))
+                    throw postgres_error();
+            }
+            catch (...)
+            {
+                if (!failure)
+                    failure = cleanup && replies == expected ? std::make_exception_ptr(postgres_error())
+                                                             : std::current_exception();
+                try
+                {
+                    (void)cleanup_context();
+                    // A partially queued/failed send has no confirmed group
+                    // boundary. Do not improvise a replay or return its lease.
+                    if (!entered || !sync_queued || !impl_->postgres)
+                        throw postgres_error();
+                    consume(false);
+                    if (!PQexitPipelineMode(impl_->postgres))
+                        throw postgres_error();
+                }
+                catch (...)
+                {
+                    close();
+                }
             }
             result->impl_->postgres_pending = false;
-        };
-        prepare();
-        if (!PQsendDescribePrepared(impl_->postgres, ""))
-            throw postgres_error();
-        protocol_count.fetch_add(1, std::memory_order_relaxed);
-        result->impl_->postgres_pending = true;
-        while (auto* reply = receive(impl_->postgres, context))
-        {
-            std::unique_ptr<PGresult, decltype(&PQclear)> owner(reply, PQclear);
-            if (PQresultStatus(reply) != PGRES_COMMAND_OK)
-                throw postgres_error(reply);
-            for (int i = 0; i < PQnfields(reply); ++i)
+            result->impl_->update_transaction();
+            if (failure)
             {
-                const auto oid = PQftype(reply, i);
-                auto type =
-                    impl_->extension_types.contains(oid) ? impl_->extension_types.at(oid) : postgres_type_name(oid);
-                result->impl_->columns.push_back({PQfname(reply, i), type, oid});
+                impl_->pending_cleanup_deadline = cleanup_context().deadline;
+                std::rethrow_exception(failure);
             }
-        }
-        result->impl_->postgres_pending = false;
+            impl_->pending_cleanup_deadline.reset();
+        };
+        prepare(true);
         std::string unknown;
         for (const auto& column : result->impl_->columns)
         {
@@ -831,13 +912,62 @@ std::unique_ptr<ProviderStatement> ProviderConnection::prepare(std::string_view 
             }
             result->impl_->postgres_pending = false;
             // The catalog query replaced the unnamed statement.
-            prepare();
+            prepare(false);
         }
         result->impl_->update_transaction();
         return result;
     }
 #endif
     throw Error::unsupported();
+}
+
+void ProviderStatement::bind_parameters([[maybe_unused]] const std::vector<Scalar>& parameters)
+{
+#if NW_ENABLE_SQLITE
+    auto& provider = *impl_->connection->impl_;
+    if (!impl_->sqlite)
+        throw Error::unsupported();
+    if (impl_->closed || impl_->sqlite_started || impl_->sqlite_bound)
+        throw Error::state("SQLite statement is not awaiting parameter binding");
+    impl_->context.check();
+    if (parameters.size() > MAX_NODES ||
+        sqlite3_bind_parameter_count(impl_->sqlite) != static_cast<int>(parameters.size()))
+        throw Error::invalid("SQL parameter count differs");
+    for (std::size_t index = 0; index < parameters.size(); ++index)
+    {
+        const auto& value = parameters[index];
+        const int parameter = static_cast<int>(index + 1);
+        int status;
+        if (!value.value)
+            status = sqlite3_bind_null(impl_->sqlite, parameter);
+        else
+        {
+            auto storage = sqlite_encode(value.codec, *value.value);
+            status = std::visit(
+                [&](const auto& item) -> int
+                {
+                    using T = std::decay_t<decltype(item)>;
+                    if constexpr (std::is_same_v<T, std::int64_t>)
+                        return sqlite3_bind_int64(impl_->sqlite, parameter, item);
+                    else if constexpr (std::is_same_v<T, double>)
+                        return sqlite3_bind_double(impl_->sqlite, parameter, item);
+                    else if constexpr (std::is_same_v<T, std::string>)
+                        return sqlite3_bind_text64(impl_->sqlite, parameter, item.data(), item.size(), SQLITE_TRANSIENT,
+                                                   SQLITE_UTF8);
+                    else
+                        return sqlite3_bind_blob64(impl_->sqlite, parameter,
+                                                   item.empty() ? static_cast<const void*>("") : item.data(),
+                                                   item.size(), SQLITE_TRANSIENT);
+                },
+                storage);
+        }
+        if (status != SQLITE_OK)
+            throw sqlite_error(provider.sqlite, status);
+    }
+    impl_->sqlite_bound = true;
+#else
+    throw Error::unsupported();
+#endif
 }
 
 const std::vector<ProviderColumn>& ProviderStatement::columns() const noexcept
@@ -848,13 +978,8 @@ std::int64_t ProviderStatement::affected() const noexcept
 {
     return impl_->affected;
 }
-std::optional<Row> ProviderStatement::next(const std::vector<Codec>& codecs, std::size_t field_bytes,
-                                           const CallContext& context, std::size_t row_payload_bytes)
+void ProviderStatement::preflight_row(const std::vector<Codec>& codecs) const
 {
-    if (codecs.size() != impl_->columns.size())
-        throw shape_error();
-    if (!impl_->advance(context))
-        return {};
     // The original B06 row preflight checks every observed type before scalar
     // decoding. This keeps a late shape error ahead of an earlier field's
     // conversion/size error and avoids partially materializing an invalid row.
@@ -882,28 +1007,66 @@ std::optional<Row> ProviderStatement::next(const std::vector<Codec>& codecs, std
         }
 #endif
     }
-    std::size_t remaining = row_payload_bytes;
-    Row row;
-    row.reserve(codecs.size());
+}
+
+RowAppendResult ProviderStatement::append_next(BatchWriter& writer, const std::vector<Codec>& codecs,
+                                               std::size_t field_bytes, const CallContext& context)
+{
+    const RowSink output{
+        &writer, writer.row_payload_limit(), [](void* state) { static_cast<BatchWriter*>(state)->begin_row(); },
+        [](void* state, std::optional<ByteView> value) { static_cast<BatchWriter*>(state)->append_validated(value); },
+        [](void* state) { return static_cast<BatchWriter*>(state)->commit_row(); }};
+    const auto result = append_next(output, codecs, field_bytes, context);
+    if (result.state == RowAppendState::Full && writer.rows() == 0)
+        throw Error(NW_DOMAIN_ERROR, 14, "single inline row exceeds batch capacity");
+    return result;
+}
+
+RowAppendResult ProviderStatement::append_next(RowSink output, const std::vector<Codec>& codecs,
+                                               std::size_t field_bytes, const CallContext& context)
+{
+    if (codecs.size() != impl_->columns.size())
+        throw shape_error();
+    const bool advanced = !impl_->row_held;
+    if (!impl_->advance(context))
+        return {RowAppendState::End, false};
+    preflight_row(codecs);
+    output.begin(output.state);
+    std::size_t remaining = output.payload_limit;
+    struct Target
+    {
+        RowSink& output;
+        std::size_t limit;
+        std::size_t& remaining;
+    } target{output, 0, remaining};
+    const ScalarSink sink{&target, [](void* state, ByteView bytes)
+                          {
+                              auto& target = *static_cast<Target*>(state);
+                              if (bytes.size() > target.limit || bytes.size() > target.remaining)
+                                  throw large_error();
+                              target.remaining -= bytes.size();
+                              target.output.append_validated(target.output.state, bytes);
+                          }};
     for (std::size_t index = 0; index < codecs.size(); ++index)
     {
         const auto& codec = codecs[index];
-        // One byte of decode scratch when no payload remains matches the old
-        // staged-row conversion order; publication still requires exact space.
-        const auto limit = std::min(field_bytes, std::max<std::size_t>(remaining, 1));
+        // This is the whole-row quota, independently of the current batch's
+        // remaining space. A held lookahead row still receives every conversion
+        // check before earlier rows may be published.
+        target.limit = std::min(field_bytes, std::max<std::size_t>(remaining, 1));
 #if NW_ENABLE_SQLITE
         if (impl_->sqlite)
         {
-            const int ordinal = static_cast<int>(index);
-            const int type = sqlite3_column_type(impl_->sqlite, ordinal);
+            const auto ordinal = static_cast<int>(index);
+            const auto type = sqlite3_column_type(impl_->sqlite, ordinal);
             if (type == SQLITE_NULL)
             {
                 if (!codec.nullable)
                     throw Error(NW_DOMAIN_ERROR, 3, "database scalar conversion failed");
-                row.push_back({});
+                output.append_validated(output.state, std::nullopt);
                 continue;
             }
-            StorageValue value;
+            StorageView value;
             if (type == SQLITE_INTEGER)
                 value = static_cast<std::int64_t>(sqlite3_column_int64(impl_->sqlite, ordinal));
             else if (type == SQLITE_FLOAT)
@@ -911,26 +1074,22 @@ std::optional<Row> ProviderStatement::next(const std::vector<Codec>& codecs, std
             else
             {
                 const auto length = static_cast<std::size_t>(sqlite3_column_bytes(impl_->sqlite, ordinal));
-                if (length > limit)
+                if (length > target.limit)
                     throw large_error();
                 if (type == SQLITE_TEXT)
                 {
                     const auto* data = sqlite3_column_text(impl_->sqlite, ordinal);
-                    value = std::string(
+                    value = std::string_view(
                         reinterpret_cast<const char*>(data ? data : reinterpret_cast<const unsigned char*>("")),
                         length);
                 }
                 else
                 {
                     const auto* data = static_cast<const std::uint8_t*>(sqlite3_column_blob(impl_->sqlite, ordinal));
-                    value = length ? Bytes(data, data + length) : Bytes{};
+                    value = length ? ByteView(data, length) : ByteView{};
                 }
             }
-            auto encoded = sqlite_decode(codec, type, value);
-            if (encoded.size() > limit || encoded.size() > remaining)
-                throw large_error();
-            remaining -= encoded.size();
-            row.emplace_back(std::move(encoded));
+            sqlite_decode_into(codec, type, value, sink);
             continue;
         }
 #endif
@@ -942,26 +1101,25 @@ std::optional<Row> ProviderStatement::next(const std::vector<Codec>& codecs, std
             {
                 if (!codec.nullable)
                     throw Error(NW_DOMAIN_ERROR, 3, "database scalar conversion failed");
-                row.push_back({});
+                output.append_validated(output.state, std::nullopt);
                 continue;
             }
             const auto length = static_cast<std::size_t>(PQgetlength(impl_->postgres, 0, static_cast<int>(index)));
-            if (length > limit)
+            if (length > target.limit)
                 throw large_error();
-            ByteView bytes(
+            const ByteView bytes(
                 reinterpret_cast<const std::uint8_t*>(PQgetvalue(impl_->postgres, 0, static_cast<int>(index))), length);
             const auto oid = column.type_name == "citext" ? 25 : column.native_type;
-            auto encoded = postgres_decode(codec, oid, bytes);
-            if (encoded.size() > limit || encoded.size() > remaining)
-                throw large_error();
-            remaining -= encoded.size();
-            row.emplace_back(std::move(encoded));
+            postgres_decode_into(codec, oid, bytes, sink);
         }
 #endif
     }
+    if (!output.commit(output.state))
+        return {RowAppendState::Full, advanced};
     impl_->consume_row();
-    return row;
+    return {RowAppendState::Appended, advanced};
 }
+
 std::optional<TextRow> ProviderStatement::next_text(const CallContext& context)
 {
     if (!impl_->advance(context))
@@ -1008,17 +1166,6 @@ std::optional<TextRow> ProviderStatement::next_text(const CallContext& context)
     impl_->consume_row();
     return row;
 }
-void ProviderStatement::confirm_description()
-{
-    auto& provider = *impl_->connection->impl_;
-    if (provider.options.profile != Profile::PostgreSql)
-        return;
-#if NW_ENABLE_POSTGRES
-    if (impl_->closed || impl_->postgres_started || impl_->postgres_pending)
-        throw Error::state("description confirmation requires an idle prepared statement");
-    provider.synchronize_protocol(provider.cleanup_context());
-#endif
-}
 void ProviderStatement::close([[maybe_unused]] bool confirm_protocol)
 {
     if (impl_->closed)
@@ -1035,7 +1182,12 @@ void ProviderStatement::close([[maybe_unused]] bool confirm_protocol)
     }
 #endif
 #if NW_ENABLE_POSTGRES
-    if (provider.postgres && (impl_->postgres_pending || confirm_protocol))
+    // Only the same statement's fully consumed Execute can supply the stream
+    // retirement confirmation. An older description/connection receipt cannot
+    // replace the drain owed by an unopened, interrupted or failed reader.
+    const bool execution_confirmed =
+        impl_->postgres_execution_confirmed && provider.usable.load() && postgres_state_is_idle(provider.postgres);
+    if (provider.postgres && (impl_->postgres_pending || (confirm_protocol && !execution_confirmed)))
     {
         if (impl_->postgres)
         {
@@ -1206,6 +1358,7 @@ void ProviderConnection::execute_script(std::string_view sql, const CallContext&
                 continue;
             statement->impl_->ended = false;
             statement->impl_->sqlite_started = false;
+            statement->impl_->sqlite_bound = true;
             while (statement->impl_->advance(context))
             {
             }
@@ -1262,6 +1415,20 @@ bool ProviderConnection::healthy() const noexcept
 bool ProviderConnection::in_transaction() const noexcept
 {
     return impl_->transaction.load();
+}
+bool ProviderConnection::postgres_transaction_ready_for_commit() const
+{
+#if NW_ENABLE_POSTGRES
+    if (impl_->options.profile != Profile::PostgreSql)
+        return false;
+    // Session admission excludes a competing statement. The lifetime lock
+    // excludes physical destruction while reading libpq's confirmed state.
+    std::lock_guard lock(impl_->lifetime);
+    return !impl_->statement_live && impl_->usable.load() && postgres_state_is_idle(impl_->postgres) &&
+           PQtransactionStatus(impl_->postgres) == PQTRANS_INTRANS;
+#else
+    return false;
+#endif
 }
 Profile ProviderConnection::profile() const noexcept
 {
@@ -1362,8 +1529,8 @@ void* ProviderConnection::test_sqlite_handle() const noexcept
 #endif
 }
 #endif
-std::vector<Scalar> decode_parameters(ByteView bytes, const Expectation& expected, std::size_t maximum_parameters,
-                                      std::size_t maximum_bytes, std::size_t maximum_field_bytes)
+void validate_parameters(std::span<const Scalar> parameters, const Expectation& expected, std::size_t wire_bytes,
+                         std::size_t maximum_parameters, std::size_t maximum_bytes, std::size_t maximum_field_bytes)
 {
     if (maximum_parameters == 0 || maximum_parameters > MAX_NODES || maximum_bytes == 0 || maximum_bytes > MAX_BYTES ||
         maximum_field_bytes == 0 || maximum_field_bytes > maximum_bytes)
@@ -1371,24 +1538,24 @@ std::vector<Scalar> decode_parameters(ByteView bytes, const Expectation& expecte
     if ((expected.kind != 1 && expected.kind != 3 && expected.kind != 4) ||
         (expected.exact_rows && *expected.exact_rows != 1))
         throw Error(NW_DOMAIN_ERROR, 4, "parameters require one admitted value or key row");
-    if (bytes.size() > maximum_bytes || expected.descriptors.size() > maximum_parameters)
+    if (wire_bytes > maximum_bytes || expected.descriptors.size() > maximum_parameters)
         throw Error::capacity();
-    auto one_row = expected;
-    one_row.exact_rows = 1;
     for (const auto& descriptor : expected.descriptors)
     {
         descriptor.codec.validate(expected.profile);
         if (expected.profile == Profile::PostgreSql && descriptor.codec.id == 14)
             throw Error::unsupported();
     }
-    const auto batch = Batch::parse(bytes, std::move(one_row));
-    std::vector<Scalar> parameters;
-    parameters.reserve(expected.descriptors.size());
+    if (parameters.size() != expected.descriptors.size())
+        throw Error(NW_DOMAIN_ERROR, 4, "parameter count differs");
     std::size_t provider_bytes = 0;
     for (std::size_t index = 0; index < expected.descriptors.size(); ++index)
     {
-        const auto value = batch.cell(0, index);
+        const auto& scalar = parameters[index];
+        const auto value = scalar.value ? std::optional<ByteView>(*scalar.value) : std::nullopt;
         const auto& codec = expected.descriptors[index].codec;
+        if (scalar.codec != codec || (!value && !codec.nullable))
+            throw Error(NW_DOMAIN_ERROR, 4, "parameter codec or nullability differs");
         auto encoded_bytes = value ? value->size() : 0;
         if (value && expected.profile == Profile::Sqlite)
         {
@@ -1434,8 +1601,7 @@ std::vector<Scalar> decode_parameters(ByteView bytes, const Expectation& expecte
         if (maximum_bytes - provider_bytes < 4 || encoded_bytes > maximum_bytes - provider_bytes - 4)
             throw Error::capacity();
         provider_bytes += encoded_bytes + 4;
-        parameters.push_back({codec, value ? std::optional(Bytes(value->begin(), value->end())) : std::nullopt});
     }
-    return parameters;
 }
+
 } // namespace nw

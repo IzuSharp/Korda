@@ -1,4 +1,4 @@
-#include "nw/provider.hpp"
+#include "provider_test_support.hpp"
 
 #include <atomic>
 #include <bit>
@@ -12,6 +12,7 @@
 namespace
 {
 using namespace nw;
+using test::Row;
 
 std::size_t checks = 0;
 std::size_t failures = 0;
@@ -215,7 +216,7 @@ void sqlite_stream(const std::filesystem::path& root)
         "WITH RECURSIVE n(x) AS (VALUES(1) UNION ALL SELECT x+1 FROM n WHERE x<100000000) SELECT x FROM n", {}, {});
     for (std::int64_t expected = 1; expected <= 3; ++expected)
     {
-        const auto row = statement->next({codec(3)}, MAX_BYTES, {});
+        const auto row = test::next_row(*statement, Profile::Sqlite, {codec(3)}, MAX_BYTES, {});
         require(row && value(*row) == expected, "SQLite streaming prefix order");
     }
     require(Clock::now() - began < std::chrono::seconds(1), "SQLite produces rows without full materialization");
@@ -225,18 +226,57 @@ void sqlite_stream(const std::filesystem::path& root)
     require(scalar(*connection, "SELECT 44") == 44, "partial SQLite stream finalized before reuse");
     auto empty = connection->query("SELECT 1 AS id WHERE 0", {}, {});
     require(empty->columns().size() == 1 && empty->columns()[0].name == "id", "empty SQLite statement metadata");
-    require(!empty->next({codec(3)}, 8, {}), "empty SQLite stream");
+    require(!test::next_row(*empty, Profile::Sqlite, {codec(3)}, 8, {}), "empty SQLite stream");
     empty->close();
     auto large = connection->query("SELECT zeroblob(1024)", {}, {});
-    const auto too_large = rejects([&] { (void)large->next({codec(6)}, 512, {}); });
+    const auto too_large = rejects([&] { (void)test::next_row(*large, Profile::Sqlite, {codec(6)}, 512, {}); });
     require(too_large.code == 14, "field budget preserves LargeValueRequiresStreaming");
     large->close();
     auto wrong = connection->query("SELECT '42'", {}, {});
-    require(rejects([&] { (void)wrong->next({codec(3)}, 512, {}); }).code == 4, "SQLite runtime type refuses coercion");
+    require(rejects([&] { (void)test::next_row(*wrong, Profile::Sqlite, {codec(3)}, 512, {}); }).code == 4,
+            "SQLite runtime type refuses coercion");
     wrong->close();
     auto null = connection->query("SELECT NULL", {}, {});
-    require(rejects([&] { (void)null->next({codec(5)}, 512, {}); }).code == 3, "unexpected SQL NULL is conversion");
+    require(rejects([&] { (void)test::next_row(*null, Profile::Sqlite, {codec(5)}, 512, {}); }).code == 3,
+            "unexpected SQL NULL is conversion");
     null->close();
+    connection->close();
+}
+
+void sqlite_prepare_then_bind(const std::filesystem::path& root)
+{
+    const auto options = sqlite_options(root, "prepare-bind.db");
+    auto connection = ProviderConnection::open(options, {});
+    auto observer = ProviderConnection::open(options, {});
+    execute(*connection, "CREATE TABLE prepared_input(id INTEGER PRIMARY KEY)");
+    auto statement = connection->prepare_unbound("INSERT INTO prepared_input VALUES(?1) RETURNING id", {});
+    require(statement->columns().size() == 1 && statement->columns()[0].name == "id",
+            "unbound SQLite statement provides metadata before parameter admission");
+    require(scalar(*observer, "SELECT count(*) FROM prepared_input") == 0,
+            "SQLite prepare has no mutation side effect");
+    require(rejects([&] { (void)test::next_row(*statement, Profile::Sqlite, {codec(3)}, 8, {}); }).code == 8,
+            "unbound SQLite statement cannot execute with implicit NULL parameters");
+    (void)rejects([&] { statement->bind_parameters({}); });
+    Bytes seven(8);
+    put_u64(seven, 0, 7);
+    statement->bind_parameters({{codec(3), seven}});
+    require(scalar(*observer, "SELECT count(*) FROM prepared_input") == 0,
+            "SQLite parameter binding has no mutation side effect");
+    const auto row = test::next_row(*statement, Profile::Sqlite, {codec(3)}, 8, {});
+    require(row && value(*row) == 7, "first SQLite fetch executes the admitted values");
+    require(rejects([&] { statement->bind_parameters({{codec(3), seven}}); }).code == 8,
+            "live SQLite statement cannot replace its parameters");
+    statement->close();
+    require(scalar(*observer, "SELECT count(*) FROM prepared_input") == 1,
+            "SQLite statement retirement preserves exactly one committed mutation");
+    const auto cancel = std::make_shared<Cancel>();
+    auto canceled = connection->prepare_unbound("SELECT ?1 AS id", {cancel});
+    cancel->request();
+    require(rejects([&] { canceled->bind_parameters({{codec(3), seven}}); }).status == NW_CANCELED,
+            "SQLite cancellation between preparation and binding prevents execution");
+    canceled->close();
+    require(scalar(*connection, "SELECT 42") == 42, "unbound/canceled SQLite statement releases its physical gate");
+    observer->close();
     connection->close();
 }
 
@@ -374,7 +414,7 @@ void postgres_cancel_and_stream()
     auto rows = connection->query("SELECT n::bigint FROM generate_series(1,1000000) AS n", {}, {});
     for (std::int64_t expected = 1; expected <= 3; ++expected)
     {
-        const auto row = rows->next({codec(3)}, 8, {});
+        const auto row = test::next_row(*rows, Profile::PostgreSql, {codec(3)}, 8, {});
         require(row && value(*row) == expected, "PG single-row prefix order");
     }
     require(Clock::now() - streaming < std::chrono::seconds(2), "PG rows stream before full materialization");
@@ -395,7 +435,7 @@ void postgres_cancel_and_stream()
     require(empty->columns().size() == 1 && empty->columns()[0].name == "exact_alias" &&
                 empty->columns()[0].type_name == "INT8",
             "empty PG result metadata");
-    require(!empty->next({codec(3)}, 8, {}), "empty PG stream EOF");
+    require(!test::next_row(*empty, Profile::PostgreSql, {codec(3)}, 8, {}), "empty PG stream EOF");
     empty->close();
     connection->close();
     auto short_budget = postgres_options();
@@ -415,10 +455,63 @@ void postgres_cancel_and_stream()
     execute(*late_failure, "BEGIN");
     auto unfinished = late_failure->query(
         "SELECT (CASE WHEN n=5 THEN 1/(n-5) ELSE n END)::bigint FROM generate_series(1,10) AS n", {}, {});
-    auto first = unfinished->next({codec(3)}, 8, {});
+    auto first = test::next_row(*unfinished, Profile::PostgreSql, {codec(3)}, 8, {});
     require(first && value(*first) == 1, "late provider error follows a delivered row");
     unfinished->close();
     require(!late_failure->healthy(), "unread fatal response during drain discards the physical connection");
+}
+
+void postgres_preparation_and_schema()
+{
+    auto connection = ProviderConnection::open(postgres_options(), {});
+    auto observer = ProviderConnection::open(postgres_options(), {});
+    const auto suffix = std::to_string(scalar(*connection, "SELECT pg_backend_pid()"));
+    const auto sequence = "nw_prepare_sequence_" + suffix;
+    const auto table = "nw_prepare_schema_" + suffix;
+    observer->execute_script("CREATE SEQUENCE " + sequence + "; CREATE TABLE " + table + " (id bigint); INSERT INTO " +
+                                 table + " VALUES(7)",
+                             {});
+    const auto sql = "SELECT nextval('" + sequence + "') AS v";
+    const auto dispatches = provider_dispatch_count();
+    const auto submissions = provider_protocol_count();
+    auto unopened = connection->query(sql, {}, {});
+    require(provider_dispatch_count() == dispatches, "PostgreSQL preparation never dispatches Execute");
+    require(provider_protocol_count() == submissions + 3,
+            "preparation returns after Parse, Describe and their single confirming Sync");
+    require(scalar(*observer, "SELECT is_called::int FROM " + sequence) == 0,
+            "opening PostgreSQL cursor does not call volatile SQL");
+    unopened->close(true);
+    require(scalar(*observer, "SELECT is_called::int FROM " + sequence) == 0,
+            "closing an unfetched PostgreSQL cursor does not execute it");
+    auto executed = connection->query(sql, {}, {});
+    const auto row = test::next_row(*executed, Profile::PostgreSql, {codec(3)}, 8, {});
+    require(row && value(*row) == 1, "first PostgreSQL fetch executes the command exactly once");
+    executed->close(true);
+    require(scalar(*observer, "SELECT last_value FROM " + sequence) == 1,
+            "PostgreSQL cleanup does not replay the executed command");
+
+    const auto select = "SELECT id FROM " + table;
+    auto original = connection->query(select, {}, {});
+    require(original->columns().size() == 1 && original->columns()[0].type_name == "INT8",
+            "fresh PostgreSQL description observes original database type");
+    original->close();
+    execute(*observer, "ALTER TABLE " + table + " ALTER COLUMN id TYPE text USING id::text");
+    auto changed = connection->query(select, {}, {});
+    require(changed->columns().size() == 1 && changed->columns()[0].type_name == "TEXT",
+            "fresh PostgreSQL Parse observes external DDL instead of a cached-plan 0A000");
+    const auto changed_row = test::next_row(*changed, Profile::PostgreSql, {codec(5)}, 8, {});
+    require(changed_row && changed_row->size() == 1 && (*changed_row)[0] == Bytes{'7'},
+            "post-DDL result uses the fresh description");
+    changed->close();
+
+    const auto before_error = scalar(*connection, "SELECT pg_backend_pid()");
+    const auto error = rejects([&] { (void)connection->query("SELECT missing FROM absent_prepare_table", {}, {}); });
+    require(error.provider == "42P01", "pipeline abort preserves the first Parse SQLSTATE");
+    require(connection->healthy() && scalar(*connection, "SELECT pg_backend_pid()") == before_error,
+            "failed metadata group is drained and leaves its physical connection reusable");
+    observer->execute_script("DROP SEQUENCE " + sequence + "; DROP TABLE " + table, {});
+    observer->close();
+    connection->close();
 }
 
 void postgres_disconnect()
@@ -448,6 +541,7 @@ int main()
     run_case("sqlite_savepoints_and_query_only", [&] { sqlite_savepoints(root); });
     run_case("sqlite_cancellation_deadline_and_stale_generation", [&] { sqlite_cancellation(root); });
     run_case("sqlite_streaming_early_exit_shape_and_field_limit", [&] { sqlite_stream(root); });
+    run_case("sqlite_single_preparation_and_deferred_binding", [&] { sqlite_prepare_then_bind(root); });
     // Isolated fixture setup/reads; environment mutation never overlaps active provider work.
     // NOLINTNEXTLINE(concurrency-mt-unsafe)
     const bool postgres = std::getenv("NW_PG_URL") != nullptr;
@@ -457,6 +551,8 @@ int main()
         run_case("postgres_environment_and_uri_policy", postgres_environment);
         run_case("postgres_timeout_rollback_and_savepoints", postgres_timeout_transaction);
         run_case("postgres_cancel_stream_drain_and_reuse", postgres_cancel_and_stream);
+        run_case("postgres_grouped_preparation_deferred_execution_and_external_schema",
+                 postgres_preparation_and_schema);
         run_case("postgres_disconnect_and_replacement", postgres_disconnect);
     }
     std::filesystem::remove_all(root);

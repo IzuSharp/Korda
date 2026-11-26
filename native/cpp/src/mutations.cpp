@@ -170,9 +170,15 @@ struct Parameters
             identity[at + 8] = static_cast<std::uint8_t>(descriptor.codec.nullable);
         }
         Expectation expected{1, profile, sha256(identity), 0, 0, std::move(descriptors), 1};
-        auto bytes = Batch::encode(expected, 1, cells);
-        check_limits(limits, bytes.size(), expected.descriptors.size(), expected.descriptors.size() * 2 + 1);
-        return {std::move(sql), std::move(bytes), std::move(expected), std::move(projection), terminal, timeout_ns};
+        expected.validate(1);
+        std::vector<Scalar> arguments;
+        arguments.reserve(cells.size());
+        for (std::size_t i = 0; i < cells.size(); ++i)
+            arguments.push_back({expected.descriptors[i].codec, std::move(cells[i])});
+        const auto charged_bytes = parameter_frame_size(expected, arguments);
+        check_limits(limits, charged_bytes, expected.descriptors.size(), expected.descriptors.size() * 2 + 1);
+        return {std::move(sql), std::move(arguments), std::move(expected), std::move(projection),
+                terminal,       timeout_ns,           charged_bytes};
     }
 };
 std::string conditions(const RowValues& values, Parameters& parameters)

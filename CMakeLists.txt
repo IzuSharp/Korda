@@ -237,7 +237,9 @@ if(NW_BUILD_POSTGRESQL)
   nw_database_target(nw_database_postgresql 0 1)
   install(TARGETS nw_database_postgresql LIBRARY DESTINATION lib RUNTIME DESTINATION bin)
 endif()
-install(FILES native/database/binding/korda_database_binding_v1.h DESTINATION include/korda/database/binding)
+install(FILES native/database/binding/korda_database_binding_v1.h
+  native/database/binding/korda_query_command_v1.h
+  native/database/binding/korda_cursor_pull_v1.h DESTINATION include/korda/database/binding)
 install(FILES native/interop/abi/include/korda_abi_v1.h DESTINATION include/korda/interop/abi/include)
 
 if(NW_BUILD_TESTS)

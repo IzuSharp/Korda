@@ -1,0 +1,7 @@
+{
+  "database-perf-probes": {
+    "tests": [
+      "benchmarks/Database/"
+    ]
+  }
+}

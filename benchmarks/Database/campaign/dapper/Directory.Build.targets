@@ -1,0 +1,12 @@
+<Project>
+  <Target Name="ValidateCampaignDapperInterceptors" AfterTargets="CoreCompile">
+    <PropertyGroup>
+      <DbPerfGeneratedPath Condition="'$(CompilerGeneratedFilesOutputPath)' != ''">$(CompilerGeneratedFilesOutputPath)</DbPerfGeneratedPath>
+      <DbPerfGeneratedPath Condition="'$(DbPerfGeneratedPath)' == ''">$(IntermediateOutputPath)generated</DbPerfGeneratedPath>
+    </PropertyGroup>
+    <Exec Command="&quot;$(DbPerfPython)&quot; &quot;$(MSBuildThisFileDirectory)verify_interceptors.py&quot; --provider $(DbPerfProvider) --source &quot;$(MSBuildThisFileDirectory)&quot; --generated &quot;$(DbPerfGeneratedPath)&quot; --lock-file &quot;$(MSBuildProjectDirectory)/packages.lock.json&quot; --output &quot;$(IntermediateOutputPath)dapper-interceptors.json&quot;" />
+  </Target>
+  <Target Name="RecordPublishedCampaignDapperInterceptors" AfterTargets="Publish">
+    <Exec Command="&quot;$(DbPerfPython)&quot; &quot;$(MSBuildThisFileDirectory)verify_interceptors.py&quot; --provider $(DbPerfProvider) --source &quot;$(MSBuildThisFileDirectory)&quot; --generated &quot;$(DbPerfGeneratedPath)&quot; --lock-file &quot;$(MSBuildProjectDirectory)/packages.lock.json&quot; --binary &quot;$(PublishDir)$(AssemblyName)&quot; --copy-generated --output &quot;$(PublishDir)dapper-interceptors.json&quot;" />
+  </Target>
+</Project>

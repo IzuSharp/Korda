@@ -39,8 +39,8 @@ public sealed partial class DataSession : IDisposable, IAsyncDisposable
     }
     private async Task<long> ExecuteCommand(SqlCommand command, CancellationToken token)
     { using var plan = SqlSubmission.Create(this, command, 0, 0); return await ExecuteCountAsync(plan, ReadOnlyMemory<byte>.Empty, token).ConfigureAwait(false); }
-    internal Task<long> ExecuteCountAsync(DatabaseOwner plan, ReadOnlyMemory<byte> values, CancellationToken token) => Source.Start(() => AdmitOperation(() => NativeHost.Execute(Owner, plan, values)), operation => NativeHost.TakeCount(Source.Binding, operation), token);
-    internal Task<DatabaseOwner> ExecutePlanAsync(DatabaseOwner plan, ReadOnlyMemory<byte> values, CancellationToken token) => Source.Start(() => AdmitOperation(() => NativeHost.Execute(Owner, plan, values)), operation => NativeHost.TakeOwner(Source.Binding, operation, 2, DatabaseOwnerKind.Cursor), token);
+    internal Task<long> ExecuteCountAsync(DatabaseOwner plan, ReadOnlyMemory<byte> values, CancellationToken token)
+        => SubmitCommand(NativeCommandKind.Execute, plan, values, 0, 100, NativeCommand.Count, token);
     /// <summary>Reads exactly one row and column through an explicit scalar codec.</summary>
     /// <typeparam name="T">The owned scalar type, including an explicitly nullable codec.</typeparam>
     /// <param name="command">An immutable query command.</param>
@@ -89,21 +89,33 @@ public sealed partial class DataSession : IDisposable, IAsyncDisposable
         var projectionId = Source.RegisterProjection(projection); var bound = projection.Fields.Select(field => Source.BindCodec(field.Descriptor)).ToArray();
         return new((rows, ct) => OpenSqlStream(command, resultKind, projectionId, rows, ct), projection, Source.Binding.SemanticProfile, projectionId, bound, StreamingLimits, token);
     }
-    private async Task<IStreamTransport> OpenSqlStream(SqlCommand command, uint kind, uint projectionId, int rows, CancellationToken token)
+    private ValueTask<IStreamTransport> OpenSqlStream(SqlCommand command, uint kind, uint projectionId, int rows, CancellationToken token)
     {
         CheckOpen(); token.ThrowIfCancellationRequested(); using var plan = SqlSubmission.Create(this, command, kind, projectionId);
-        var cursor = await ExecutePlanAsync(plan, ReadOnlyMemory<byte>.Empty, token).ConfigureAwait(false);
-        try { return new HostStreamTransport(Source, cursor, rows, token); } catch { cursor.Dispose(); throw; }
+        return OpenPlanStreamAsync(plan, ReadOnlyMemory<byte>.Empty, rows, token);
     }
     internal StreamLimits StreamingLimits => new(Source.Limits.MaxBatchRows, checked((int)Source.Limits.MaxBatchBytes), Math.Max(1, Source.Limits.MaxBufferedRows), Math.Max(1, Source.Limits.MaxBufferedBytes));
-    internal async Task<IStreamTransport> OpenPlanStreamAsync(DatabaseOwner plan, ReadOnlyMemory<byte> values, int rows, CancellationToken token)
-    { CheckOpen(); var cursor = await ExecutePlanAsync(plan, values, token).ConfigureAwait(false); try { return new HostStreamTransport(Source, cursor, rows, token); } catch { cursor.Dispose(); throw; } }
+    internal ValueTask<IStreamTransport> OpenPlanStreamAsync(DatabaseOwner plan, ReadOnlyMemory<byte> values, int rows, CancellationToken token)
+    {
+        lock (_compoundGate)
+        {
+            CheckOpen(); token.ThrowIfCancellationRequested();
+            var channel = NativeHost.CreatePull(this, plan, values);
+            try { return new(new HostStreamTransport(Source, channel, rows, token)); }
+            catch { channel.Dispose(); throw; }
+        }
+    }
     /// <summary>Begins a native transaction using the provider's default isolation.</summary>
     /// <param name="cancellationToken">Controls admission before BEGIN dispatch.</param>
     /// <returns>The native transaction owner.</returns>
     /// <exception cref="ObjectDisposedException">Admission is closed.</exception>
     /// <exception cref="DatabaseException">The provider or single-command admission rejects BEGIN.</exception>
-    public Task<DataTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default) => BeginTransactionAsync(new TransactionOptions(), cancellationToken);
+    public Task<DataTransaction> BeginTransactionAsync(CancellationToken cancellationToken = default)
+    {
+        var record = DefaultTransactionRecord.Bytes; CheckOpen(); Source.Capabilities.Require("db.transactions.v1");
+        if (cancellationToken.IsCancellationRequested) return Task.FromCanceled<DataTransaction>(cancellationToken);
+        return BeginCore(record, null, cancellationToken);
+    }
     /// <summary>Begins an exact native transaction without weakening unsupported isolation or read-only policy.</summary>
     /// <param name="options">Immutable isolation, effect and independent commit/cleanup deadline settings.</param>
     /// <param name="cancellationToken">Controls admission before BEGIN dispatch.</param>
@@ -117,9 +129,16 @@ public sealed partial class DataSession : IDisposable, IAsyncDisposable
         if (cancellationToken.IsCancellationRequested) return Task.FromCanceled<DataTransaction>(cancellationToken);
         return BeginCore(record, options.RecoveryKey, cancellationToken);
     }
+    private static class DefaultTransactionRecord
+    {
+        internal static readonly byte[] Bytes;
+        // Explicit initialization keeps the one default frame lazy and shared.
+        // The native BEGIN factory reads it synchronously and captures values.
+        static DefaultTransactionRecord() => Bytes = HostEncoding.Transaction(new TransactionOptions());
+    }
     private async Task<DataTransaction> BeginCore(byte[] record, string? recovery, CancellationToken token, BulkSessionLease? bulk = null)
     {
-        var owner = await Source.Start(() => AdmitOperation(() => HostTransactionTransport.Begin(Owner, record), bulk), operation => NativeHost.TakeOwner(Source.Binding, operation, 3, HostTransactionTransport.TransactionKind), token).ConfigureAwait(false);
+        var owner = await SubmitCommand(NativeCommandKind.BeginTransaction, null, record, 0, 3, NativeCommand.Owner, token, bulk).ConfigureAwait(false);
         try { var transaction = new DataTransaction(new HostTransactionTransport(Source, owner, recovery), recovery); bulk?.AttachTransaction(transaction); Volatile.Write(ref _transaction, transaction); return transaction; }
         catch { owner.Dispose(); throw; }
     }

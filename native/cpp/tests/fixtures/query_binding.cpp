@@ -1,14 +1,9 @@
 // SPDX-License-Identifier: MIT
 // Test-only B09 bridge. It exercises the production C++ validators with the
 // original synchronous fixture protocol; it is never a product database Host.
+#include "../../../database/binding/korda_query_command_v1.h"
 #include "nw/mutations.hpp"
 #include "support.hpp"
-
-// The canonical C11 declarations are compiled independently by abi-probe.c.
-// Keep the same opaque handle representations at this test-only ABI boundary.
-struct nw_db_owner;
-using nw_db_ref = nw_db_owner*;
-struct nw_db_buffer;
 
 #include <algorithm>
 #include <cstdlib>
@@ -191,7 +186,56 @@ RelationCapabilities relation_capabilities()
 }
 Capabilities capabilities(Profile profile)
 {
-    return Capabilities::from_mask((1ull << 25) - 1, profile);
+    return Capabilities::from_mask((1ull << 27) - 1, profile);
+}
+ByteView command_view(nw_bytes_view_v1 value)
+{
+    if (value.length > MAX_BYTES + 128 * MAX_NODES + 64 || (value.length != 0 && value.data == nullptr))
+        bad();
+    return {value.data, static_cast<std::size_t>(value.length)};
+}
+QueryCommandContext command_context(const std::shared_ptr<Source>& origin)
+{
+    return {origin->parameters, {}, capabilities(origin->identity.profile), 1000000000};
+}
+std::vector<QueryCommandDependency> command_dependencies(const std::shared_ptr<Source>& origin,
+                                                         const nw_db_query_dependency_v1* dependencies,
+                                                         std::uint32_t count)
+{
+    if (count > 2 * MAX_NODES + 1 || (count != 0 && (!dependencies || reinterpret_cast<std::uintptr_t>(dependencies) %
+                                                                          alignof(nw_db_query_dependency_v1))))
+        bad();
+    std::vector<QueryCommandDependency> result;
+    result.reserve(count);
+    for (std::uint32_t i = 0; i < count; ++i)
+    {
+        const auto& value = dependencies[i];
+        if (value.reserved != 0)
+            bad();
+        if (value.kind == 1)
+        {
+            auto model = get<ModelBinding>(value.owner);
+            model.ensure_source(origin->identity);
+            result.emplace_back(std::move(model));
+        }
+        else if (value.kind == 2)
+        {
+            auto plan = get<std::shared_ptr<NativePlan>>(value.owner);
+            if (plan->source != origin->identity)
+                wrong();
+            result.emplace_back(std::move(plan));
+        }
+        else if (value.kind == 3)
+        {
+            auto cte = get<std::shared_ptr<NativeCte>>(value.owner);
+            if (cte->source != origin->identity)
+                wrong();
+            result.emplace_back(std::move(cte));
+        }
+        else
+            wrong();
+    }
+    return result;
 }
 Bytes copy(ByteView value)
 {
@@ -431,6 +475,17 @@ NW_FIXTURE_API nw_status nw_db_query_clone_v1(nw_db_ref owner, nw_db_ref* result
                       *result = release(owned(std::make_shared<Query>(std::move(value))));
                   });
 }
+NW_FIXTURE_API nw_status nw_db_query_render_v1(nw_db_ref owner, nw_db_buffer** result, nw_error_info_v1* error)
+{
+    return finish(error,
+                  [&]
+                  {
+                      output(result);
+                      auto sql = query(owner, [](const auto& value)
+                                       { return value.clone_selected()->seal(8)->render_shape().first; });
+                      *result = reinterpret_cast<nw_db_buffer*>(new Buffer(Bytes(sql.begin(), sql.end())));
+                  });
+}
 NW_FIXTURE_API nw_status nw_db_cte_create_v1(nw_db_ref declared, std::uint32_t table_id, nw_db_ref body,
                                              std::uint32_t recursive, nw_db_ref* result, nw_error_info_v1* error)
 {
@@ -441,6 +496,56 @@ NW_FIXTURE_API nw_status nw_db_cte_create_v1(nw_db_ref declared, std::uint32_t t
                       auto cte =
                           query(body, [&](const auto& value)
                                 { return NativeCte::create(get<ModelBinding>(declared), table_id, value, recursive); });
+                      *result = release(owned(std::move(cte)));
+                  });
+}
+NW_FIXTURE_API nw_status NW_CDECL nw_db_query_command_compile_v1(nw_db_ref session, nw_bytes_view_v1 command,
+                                                                 const nw_db_query_dependency_v1* dependencies,
+                                                                 std::uint32_t dependency_count, std::uint32_t terminal,
+                                                                 nw_db_ref* result, nw_error_info_v1* error)
+{
+    return finish(error,
+                  [&]
+                  {
+                      output(result);
+                      auto origin = source(session, true);
+                      auto resolved = command_dependencies(origin, dependencies, dependency_count);
+                      auto plan =
+                          compile_query_command(command_view(command), resolved, command_context(origin), terminal);
+                      *result = release(owned(std::move(plan)));
+                  });
+}
+NW_FIXTURE_API nw_status NW_CDECL nw_db_query_command_render_v1(nw_db_ref session, nw_bytes_view_v1 command,
+                                                                const nw_db_query_dependency_v1* dependencies,
+                                                                std::uint32_t dependency_count, nw_db_buffer** result,
+                                                                nw_error_info_v1* error)
+{
+    return finish(error,
+                  [&]
+                  {
+                      output(result);
+                      auto origin = source(session, true);
+                      auto resolved = command_dependencies(origin, dependencies, dependency_count);
+                      auto sql = render_query_command(command_view(command), resolved, command_context(origin));
+                      *result = reinterpret_cast<nw_db_buffer*>(new Buffer(std::move(sql)));
+                  });
+}
+NW_FIXTURE_API nw_status NW_CDECL nw_db_query_command_cte_v1(nw_db_ref session, nw_bytes_view_v1 command,
+                                                             const nw_db_query_dependency_v1* dependencies,
+                                                             std::uint32_t dependency_count, nw_db_ref declared,
+                                                             std::uint32_t table_id, std::uint32_t recursive,
+                                                             nw_db_ref* result, nw_error_info_v1* error)
+{
+    return finish(error,
+                  [&]
+                  {
+                      output(result);
+                      auto origin = source(session, true);
+                      auto model = get<ModelBinding>(declared);
+                      model.ensure_source(origin->identity);
+                      auto resolved = command_dependencies(origin, dependencies, dependency_count);
+                      auto cte = create_query_command_cte(command_view(command), resolved, command_context(origin),
+                                                          std::move(model), table_id, recursive);
                       *result = release(owned(std::move(cte)));
                   });
 }

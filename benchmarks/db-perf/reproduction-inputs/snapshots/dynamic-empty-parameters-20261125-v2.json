@@ -1,0 +1,190 @@
+{
+  "schemaVersion": 1,
+  "task": "DB-Perf-01",
+  "capturedUtc": "2026-11-25T06:30:15.346953+00:00",
+  "purpose": "Exact dynamic empty-frame AOT microprobe source and controller inputs, including loader/stale-build/diagnostic failures. Source archive only; does not rerun, qualify or replace any measurement. Raw evidence remains outside product source.",
+  "inputs": [
+    {
+      "sha256": "9f1eb1459fd68976bcaebdcd9a7cdb937dff4281639ae81ab07640e382198e9a",
+      "bytes": 3490,
+      "git_blob": "f70fa916fa52f9d0b0aad4374bd312d23115ebc0",
+      "sourcePath": "recovery-20261125/empty-parameters/build.py",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/9f1eb1459fd68976bcaebdcd9a7cdb937dff4281639ae81ab07640e382198e9a/build.py",
+      "executionStatus": "v1 historical controller; v1 owner evidence excluded",
+      "verification": "commands and final force-rebuild form preserved; see corresponding build receipts",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "5e4849a12cd50f87c9842a8652e75a7b72c94e450034c00eaeadeb91a717d963",
+      "bytes": 3451,
+      "git_blob": "8c7826428dd820670210dae2c5500ddeb6ae504b",
+      "sourcePath": "recovery-20261125/empty-parameters/run.py",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/5e4849a12cd50f87c9842a8652e75a7b72c94e450034c00eaeadeb91a717d963/run.py",
+      "executionStatus": "v1 historical controller; v1 owner evidence excluded",
+      "verification": "run.py SHA matches both actual phase receipts",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "251823257e1afce2b52722667fcb5ca1f47a8fa37ccf3ddf69af02177266a897",
+      "bytes": 3514,
+      "git_blob": "012f9af1c3b5c8e5b43d5970f834768cc90f12dd",
+      "sourcePath": "recovery-20261125/empty-parameters-v2/build.py",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/251823257e1afce2b52722667fcb5ca1f47a8fa37ccf3ddf69af02177266a897/build.py",
+      "executionStatus": "v2 final valid execution controller",
+      "verification": "commands and final force-rebuild form preserved; see corresponding build receipts",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "0c71f476fbf47915265041adfe212bae430cec61e97eea4ef28b7ace466b300f",
+      "bytes": 3454,
+      "git_blob": "aed8b6fdc858809b4e5cb20df436c986146d51ea",
+      "sourcePath": "recovery-20261125/empty-parameters-v2/run.py",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/0c71f476fbf47915265041adfe212bae430cec61e97eea4ef28b7ace466b300f/run.py",
+      "executionStatus": "v2 final valid execution controller",
+      "verification": "run.py SHA matches both actual phase receipts",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "f6445f853ea26a1469996fd6915835cd32c47c11b493df36d38ab77c95cc86a0",
+      "bytes": 3493,
+      "git_blob": "b80d2bb4eead0a5ad3cee0ed8745deb9122ef328",
+      "sourcePath": "recovery-20261125/empty-parameters-v2/build.py before forced rebuild",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/f6445f853ea26a1469996fd6915835cd32c47c11b493df36d38ab77c95cc86a0/build.py",
+      "executionStatus": "v2 baseline and rejected stale-candidate build controller",
+      "verification": "Recovered by exact one-argument reversal; matches original v1 helper except frozen evidence root; final rejected output never executed",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "18aa1e528787477bbe5595faaf4694312fb361a53d9fd9fa1734b5bdc557b59d",
+      "bytes": 9793,
+      "git_blob": "fe206c61595d35f7c4a31426af98a41ad38d5ddd",
+      "sourcePath": "recovery-20261125/empty-parameters-v2/analyze.py",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/18aa1e528787477bbe5595faaf4694312fb361a53d9fd9fa1734b5bdc557b59d/analyze.py",
+      "executionStatus": "v2 read-only six-process verifier",
+      "verification": "SHA matches verified-summary.json validatorSha256",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "9684c9baf344e35068469a30beadfee6d032e42779cc6c8f9bc37ff6a2e2c39b",
+      "bytes": 17408,
+      "git_blob": "ef63c3b48d19f1b38b26a3b48cce8c08306ad5a4",
+      "sourcePath": "recovery-20261125/empty-parameters-v2/baseline/QueryContext.cs",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/9684c9baf344e35068469a30beadfee6d032e42779cc6c8f9bc37ff6a2e2c39b/QueryContext.cs",
+      "executionStatus": "baseline product source snapshot",
+      "verification": "SHA matches accepted build receipts and all three raw processes",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "b77baea49554226f7f31c9564c0bcc4dab19817823d58ce3554dd1a5ff5aa3de",
+      "bytes": 18588,
+      "git_blob": "35cde7cb8257221c48f32eadd8a392d378af3caa",
+      "sourcePath": "recovery-20261125/empty-parameters-v2/candidate/QueryContext.cs",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/b77baea49554226f7f31c9564c0bcc4dab19817823d58ce3554dd1a5ff5aa3de/QueryContext.cs",
+      "executionStatus": "candidate product source snapshot",
+      "verification": "SHA matches accepted build receipts and all three raw processes",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "da7e5e44ad0dbd3d62517266c03d38d4cbc7a793d1adf0a6ccafdb291818d332",
+      "bytes": 16491,
+      "git_blob": "8474048e21836aa893b52ced3d7cf7a59f6ef016",
+      "sourcePath": "benchmarks/db-perf/empty-parameters/Program.cs at v1 execution",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/da7e5e44ad0dbd3d62517266c03d38d4cbc7a793d1adf0a6ccafdb291818d332/Program.cs",
+      "executionStatus": "v1 isolated allocation valid but owner-zero evidence excluded",
+      "verification": "Exact original bytes recovered from v2 reversal; SHA equals both v1 build receipts",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "ee3700d4631fa31dc7521541faf630f45422cecbf364df02472cfd1de785a33b",
+      "bytes": 17844,
+      "git_blob": "e601516605127d99e86bbe15ae4925d3d36939ee",
+      "sourcePath": "benchmarks/db-perf/empty-parameters/Program.cs at v2 execution",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/ee3700d4631fa31dc7521541faf630f45422cecbf364df02472cfd1de785a33b/Program.cs",
+      "executionStatus": "v2 final valid diagnostic",
+      "verification": "SHA equals both v2 accepted build receipts",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "f424ae596340db714a315919d6132bc7d7169c35d4ee93c2ec986c9efcb62821",
+      "bytes": 1237,
+      "git_blob": "8e55515be503bfec7adc520d9d97c487342bec1d",
+      "sourcePath": "benchmarks/db-perf/empty-parameters/EmptyParameters.csproj after provider location records added",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/f424ae596340db714a315919d6132bc7d7169c35d4ee93c2ec986c9efcb62821/EmptyParameters.csproj",
+      "executionStatus": "v1/v2 successful fixture project",
+      "verification": "SHA equals accepted build receipts",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "1e6e110de02bf319d97a145b14717c71a2dd47abd1647bedebe822404453f06f",
+      "bytes": 1037,
+      "git_blob": "bf7dd8d7b43e74bbfa3b20cecdacc17547361f65",
+      "sourcePath": "benchmarks/db-perf/empty-parameters/EmptyParameters.csproj before provider location records",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/1e6e110de02bf319d97a145b14717c71a2dd47abd1647bedebe822404453f06f/EmptyParameters.csproj",
+      "executionStatus": "v0 loader rejection before measurements",
+      "verification": "SHA equals preserved baseline-fixture-v0 build receipt",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "770cc5b7ceb7b7670c39b3e9e93d89aa03c032f73498587b5a17d0da0b2ac3ca",
+      "bytes": 405,
+      "git_blob": "222adc4e655b21a321a62def123ca6a406b9899a",
+      "sourcePath": "recovery-20261125/empty-parameters-v2/NuGet.Config",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/770cc5b7ceb7b7670c39b3e9e93d89aa03c032f73498587b5a17d0da0b2ac3ca/NuGet.Config",
+      "executionStatus": "v1/v2 build configuration",
+      "verification": "Identical v1/v2 bytes; paths frozen to the existing support cache, public NuGet only",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "e8ac5de06fe6977127ad8cec9b493663f4e209c41a44d89fa9c8cef6bdef1df9",
+      "bytes": 1341,
+      "git_blob": "8ffb1896c08d592a297b760bd95e325dea37ebd5",
+      "sourcePath": "tooling/env.sh",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/e8ac5de06fe6977127ad8cec9b493663f4e209c41a44d89fa9c8cef6bdef1df9/env.sh",
+      "executionStatus": "Task-local verified toolchain environment",
+      "verification": "Same environment script as original provisioning receipt; runtime processor/spin overrides absent",
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sha256": "c2959c5ec1a0098bc9dd86d272371acec0b10cde1a4d6cc1f9c59993795290f9",
+      "bytes": 109,
+      "sourcePath": "global.json",
+      "reference": {
+        "repository": "IzuSharp/Korda",
+        "commit": "456140129c3ef3ff1ea0412b2b8cb3da82d099fd",
+        "tree": "dcc806523bf7c48fdd95b6bea8b8ec645a7b1b39",
+        "path": "global.json"
+      },
+      "executionStatus": "unchanged committed build/observer input"
+    },
+    {
+      "sha256": "d5f1a103f32525b83fbf2a64b2e01734ddac38a390007eb405de4eab52e8fa13",
+      "bytes": 1183,
+      "sourcePath": "Directory.Build.props",
+      "reference": {
+        "repository": "IzuSharp/Korda",
+        "commit": "456140129c3ef3ff1ea0412b2b8cb3da82d099fd",
+        "tree": "dcc806523bf7c48fdd95b6bea8b8ec645a7b1b39",
+        "path": "Directory.Build.props"
+      },
+      "executionStatus": "unchanged committed build/observer input"
+    },
+    {
+      "sha256": "296e6b802d8bc1bcf964d7faa71d4adaa37226a867c17a9a3b5f00284f769b86",
+      "bytes": 38227,
+      "sourcePath": "benchmarks/db-perf/run.py",
+      "reference": {
+        "repository": "IzuSharp/Korda",
+        "commit": "456140129c3ef3ff1ea0412b2b8cb3da82d099fd",
+        "tree": "dcc806523bf7c48fdd95b6bea8b8ec645a7b1b39",
+        "path": "benchmarks/db-perf/run.py"
+      },
+      "executionStatus": "unchanged committed build/observer input"
+    }
+  ],
+  "failuresRetained": [
+    "v0 NWPKG002 before any allocation window",
+    "v1 diagnostic DSO identity invalidates owner-zero scope only; retained separately",
+    "v2 incremental candidate with baseline ELF rejected before execution; final forced Rebuild,Publish used"
+  ],
+  "acceptedEvidenceSummarySha256": "daf143612cdb0e2a8a550fad8afd230e779d1d6918e071e8bbc3fa4ca1039764"
+}

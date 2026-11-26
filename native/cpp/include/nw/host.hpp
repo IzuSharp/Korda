@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 
+#include "../../../database/binding/korda_command_completion_v1.h"
 #include "nw/administration.hpp"
 #include "nw/interop.hpp"
 #include "nw/mutations.hpp"
@@ -35,9 +36,11 @@ struct HostConfig
 struct Source;
 struct Session;
 struct Cursor;
+struct CursorPull;
 struct Transaction;
 struct Savepoint;
 struct DbOperation;
+struct CommandCompletion;
 struct Owner;
 struct Buffer;
 struct CommandGate;
@@ -52,7 +55,8 @@ struct QueryOwner
 using OwnerData =
     std::variant<std::monostate, std::shared_ptr<Session>, std::shared_ptr<Cursor>, std::shared_ptr<Transaction>,
                  std::shared_ptr<Savepoint>, ModelBinding, std::shared_ptr<SqlPlan>, std::shared_ptr<RelationBinding>,
-                 std::shared_ptr<QueryOwner>, std::shared_ptr<NativePlan>, std::shared_ptr<NativeCte>>;
+                 std::shared_ptr<QueryOwner>, std::shared_ptr<NativePlan>, std::shared_ptr<NativeCte>,
+                 std::shared_ptr<CursorPull>, std::shared_ptr<CommandCompletion>>;
 struct Owner
 {
     std::shared_ptr<Source> source;
@@ -66,9 +70,10 @@ struct Buffer
     std::shared_ptr<Source> source;
     Bytes bytes;
     std::shared_ptr<Cursor> cursor;
+    const bool known_end = false;
     std::atomic<bool> taken{false};
     void mark_taken();
-    Buffer(std::shared_ptr<Source> source, Bytes bytes, std::shared_ptr<Cursor> cursor = {});
+    Buffer(std::shared_ptr<Source> source, Bytes bytes, std::shared_ptr<Cursor> cursor = {}, bool known_end = false);
     ~Buffer();
 };
 using Value = std::variant<std::shared_ptr<Owner>, std::shared_ptr<Buffer>, std::int64_t>;
@@ -80,12 +85,33 @@ class WorkerPool
     ~WorkerPool();
     void post(std::function<void()> work);
     void stop();
+#ifdef NW_HOST_TEST_HOOKS
+    std::function<void()> test_before_post;
+#endif
 
   private:
     struct State;
     std::shared_ptr<State> state_;
     std::vector<std::thread> threads_;
     std::mutex stop_mutex_;
+};
+
+// Independent of the owners whose last references a worker releases. A worker
+// may destroy those owners before completing its ticket without accessing them
+// again, and an explicit parent join can await all descendant accessors.
+class RetirementFence
+{
+  public:
+    void add();
+    void complete();
+    void wait();
+    void wait_until(Clock::time_point deadline);
+    [[nodiscard]] bool done() const;
+
+  private:
+    mutable std::mutex mutex_;
+    std::condition_variable changed_;
+    std::size_t pending_ = 0;
 };
 
 struct Source : std::enable_shared_from_this<Source>
@@ -95,12 +121,16 @@ struct Source : std::enable_shared_from_this<Source>
     std::shared_ptr<ParameterRegistry> parameters;
     std::atomic<bool> closing{false}, retired{false}, poisoned{false};
     std::atomic<std::size_t> pending{0}, close_waiters{0};
+    std::shared_ptr<RetirementFence> transaction_workers = std::make_shared<RetirementFence>();
+    std::shared_ptr<RetirementFence> pull_workers = std::make_shared<RetirementFence>();
+    std::shared_ptr<RetirementFence> command_workers = std::make_shared<RetirementFence>();
     WorkerPool workers;
     WorkerPool controls{2};
-    std::mutex mutex, registry_mutex, shape_mutex, join_mutex;
+    std::mutex mutex, registry_mutex, join_mutex;
     std::condition_variable changed;
 #ifdef NW_HOST_TEST_HOOKS
     std::function<void()> test_before_join_wait;
+    std::function<void()> test_before_transaction_wait;
 #endif
     std::vector<std::weak_ptr<Session>> children;
     std::vector<std::shared_ptr<ProviderConnection>> idle;
@@ -116,7 +146,6 @@ struct Source : std::enable_shared_from_this<Source>
     std::mutex stream_mutex;
     std::array<std::uint64_t, 7> stream_stats{};
     std::size_t stream_max_bytes = 0;
-    std::vector<std::shared_ptr<Cursor>> quarantined_cursors;
     std::shared_ptr<StreamReservation> reserve_stream(std::size_t bytes);
     std::vector<std::pair<std::uint32_t, Codec>> configured;
     std::map<Hash, std::shared_ptr<const Model>> models;
@@ -190,11 +219,49 @@ struct DbOperation : std::enable_shared_from_this<DbOperation>
                 std::function<Value(std::shared_ptr<Cancel>)> work, Dispatch dispatch);
 };
 
+// A one-shot readiness boundary. The worker releases its execution captures
+// before notification; independent tickets retain only the notification tail.
+struct CommandCompletion
+{
+    static std::shared_ptr<CommandCompletion> create(std::shared_ptr<Source> source, std::uint32_t result_kind,
+                                                     bool control, std::function<Value(std::shared_ptr<Cancel>)> work,
+                                                     nw_db_cursor_callbacks_v1 callbacks,
+                                                     std::shared_ptr<CommandGate> admission_gate = {});
+    ~CommandCompletion();
+    void start();
+    Value take(std::uint32_t expected_kind);
+    Error take_error();
+    void request_close();
+    void join();
+    [[nodiscard]] Bytes snapshot() const;
+#ifdef NW_HOST_TEST_HOOKS
+    std::function<void()> test_before_work;
+    std::function<void()> test_result_frozen;
+    std::function<void()> test_after_ready;
+    std::function<void()> test_before_request_return;
+#endif
+
+  private:
+    struct Lifetime;
+    struct ReadyState;
+    struct Worker;
+    CommandCompletion();
+    std::shared_ptr<ReadyState> state_;
+    std::shared_ptr<Worker> pending_;
+    std::shared_ptr<RetirementFence> completion_;
+    std::weak_ptr<Source> source_;
+    std::mutex start_mutex_, join_mutex_;
+};
+
 struct SqlPlan
 {
     std::shared_ptr<Source> source;
     std::string sql;
+    // Raw SQL keeps its exact accepted snapshot only for the frozen ABI's
+    // optional equality check. Execution uses typed arguments for every route.
     Bytes parameters;
+    std::vector<Scalar> arguments;
+    std::size_t parameter_wire_bytes = 0;
     Expectation expectation;
     std::optional<ProjectionBinding> projection;
     std::shared_ptr<RelationBinding> relation;
@@ -205,14 +272,15 @@ struct SqlPlan
     static std::shared_ptr<SqlPlan> parse(std::shared_ptr<Source> source, ByteView sql, ByteView parameters,
                                           ByteView options);
     static std::shared_ptr<SqlPlan> rendered(std::shared_ptr<Source> source, RenderedQuery rendered);
+    void capture_parameters(ByteView values);
     void submit(const Source& source);
 };
 
 struct CommandGate
 {
     std::shared_ptr<Session> session;
-    bool dispatched = false;
-    bool completed = false;
+    std::atomic<bool> dispatched{false};
+    std::atomic<bool> completed{false};
     explicit CommandGate(std::shared_ptr<Session> session);
     ~CommandGate();
     void finish(bool failed = false);
@@ -228,6 +296,7 @@ struct Session : std::enable_shared_from_this<Session>
     std::condition_variable changed;
     std::weak_ptr<Transaction> transaction;
     std::vector<std::weak_ptr<Cursor>> cursors;
+    std::vector<std::weak_ptr<CursorPull>> pulls;
     std::weak_ptr<Cancel> current_cancel;
     std::uint32_t cleanup = 0, disposition = 0;
     std::optional<std::string> cleanup_provider;
@@ -235,6 +304,10 @@ struct Session : std::enable_shared_from_this<Session>
     ~Session();
     std::shared_ptr<CommandGate> admit(bool transaction_control);
     Value execute(std::shared_ptr<SqlPlan> plan, std::shared_ptr<Cancel> cancel, std::shared_ptr<CommandGate> gate);
+    std::int64_t execute_scalar_count(std::shared_ptr<SqlPlan> plan, std::shared_ptr<Cancel> cancel,
+                                      std::shared_ptr<CommandGate> gate);
+    std::shared_ptr<Cursor> open_cursor(std::shared_ptr<SqlPlan> plan, std::shared_ptr<Cancel> cancel,
+                                        std::shared_ptr<CommandGate> gate, bool retain_gate = true);
     void request_close();
     void schedule_cleanup();
     void retire_now();
@@ -264,7 +337,6 @@ struct Cursor : std::enable_shared_from_this<Cursor>
     std::mutex mutex;
     std::condition_variable changed;
     std::weak_ptr<Cancel> current_cancel;
-    std::optional<Row> pending_row;
     bool ended = false, failed = false, end_sent = false;
     std::atomic<bool> close_started{false}, cleanup_unconfirmed{false};
     std::atomic<bool> protocol_quarantined{false};
@@ -277,10 +349,13 @@ struct Cursor : std::enable_shared_from_this<Cursor>
                                         std::shared_ptr<Cancel> cancel, std::shared_ptr<CommandGate> gate,
                                         Clock::time_point deadline);
     ~Cursor();
-    std::shared_ptr<Buffer> fetch(std::shared_ptr<Cancel> cancel, std::size_t rows, std::size_t bytes);
+    void check_read_admission();
+    std::shared_ptr<Buffer> fetch(std::shared_ptr<Cancel> cancel, std::size_t rows, std::size_t bytes,
+                                  bool preserve_cancel_on_close = false);
+    std::int64_t read_scalar_count(std::shared_ptr<Cancel> cancel);
     void request_close();
     void close_now();
-    void schedule_cleanup();
+    void schedule_cleanup() noexcept;
     void join();
     Bytes snapshot() const;
 
@@ -293,8 +368,67 @@ struct Cursor : std::enable_shared_from_this<Cursor>
         void publish();
     };
     std::shared_ptr<Completion> completion_ = std::make_shared<Completion>();
+    // An unconfirmed provider accessor cannot be released or returned to the
+    // pool. Retain it without allocating on the cleanup-failure path.
+    std::shared_ptr<Cursor> quarantine_;
     void retire_provider();
     void close_resources();
+    void quarantine_cleanup() noexcept;
+};
+
+// One privately owned reader channel, with one accepted request/result at a time.
+// Readiness detaches its callback; independent tickets retain only native tails.
+struct CursorPull : std::enable_shared_from_this<CursorPull>
+{
+    std::shared_ptr<Session> session;
+    static std::shared_ptr<CursorPull> create(std::shared_ptr<Session> session, std::shared_ptr<SqlPlan> plan,
+                                              std::shared_ptr<CommandGate> gate,
+                                              std::optional<Clock::time_point> admitted = {});
+    ~CursorPull();
+    void request(std::uint64_t generation, std::size_t rows, std::size_t bytes, nw_db_cursor_callbacks_v1 callbacks);
+    std::shared_ptr<Buffer> take(std::uint64_t generation);
+    Error take_error(std::uint64_t generation);
+    void close_request(nw_db_cursor_callbacks_v1 callbacks);
+    std::shared_ptr<Buffer> close_take();
+    void check_read_admission();
+    void request_close();
+    void join();
+    Bytes snapshot() const;
+#ifdef NW_HOST_TEST_HOOKS
+    // Copied into a request's independent ticket before acceptance. These
+    // seams are absent from both production provider profiles.
+    std::function<void()> test_before_work;
+    std::function<void()> test_before_first_fetch;
+    std::function<void()> test_after_ready;
+    std::function<void()> test_before_close_work;
+    // Observes logical stop before the out-of-lock provider wake.
+    std::function<void()> test_before_stop_wake;
+#endif
+
+  private:
+    struct Worker;
+    struct CloseState;
+    struct CloseWorker;
+    CursorPull(std::shared_ptr<Session> session, std::shared_ptr<SqlPlan> plan, std::shared_ptr<CommandGate> gate,
+               std::optional<Clock::time_point> admitted);
+    void run(std::uint64_t generation, std::size_t rows, std::size_t bytes, std::shared_ptr<Cancel> cancel);
+    void complete(std::uint64_t generation, std::shared_ptr<Buffer> buffer, std::optional<Error> error);
+    void join_resources();
+    Bytes resources_snapshot(bool include_final_notification = false) const;
+    mutable std::mutex mutex_;
+    std::shared_ptr<SqlPlan> plan_;
+    std::shared_ptr<CommandGate> gate_;
+    std::shared_ptr<Cursor> cursor_;
+    std::shared_ptr<Cancel> cancel_;
+    std::shared_ptr<Buffer> buffer_;
+    std::optional<Error> error_;
+    std::optional<Clock::time_point> admitted_;
+    std::shared_ptr<RetirementFence> completion_ = std::make_shared<RetirementFence>();
+    std::shared_ptr<RetirementFence> close_completion_ = std::make_shared<RetirementFence>();
+    std::shared_ptr<CloseState> close_;
+    std::uint64_t generation_ = 0;
+    bool outstanding_ = false, ready_ = false, running_ = false, closing_ = false;
+    nw_db_cursor_callbacks_v1 callbacks_{};
 };
 
 struct TransactionOptions
@@ -327,6 +461,11 @@ struct Transaction : std::enable_shared_from_this<Transaction>
     // provider binaries contain neither these fields nor either dispatch seam.
     std::function<bool(bool)> test_finish;
     std::function<void()> test_retire_gate;
+    std::function<void()> test_after_finish_worker;
+    std::function<void()> test_after_deadline_worker;
+    std::function<void()> test_before_finish_dispatch;
+    std::function<void()> test_before_join_wait;
+    std::function<void(std::uint32_t)> test_before_worker_start;
 #endif
     static std::shared_ptr<Transaction> begin(std::shared_ptr<Session> session, TransactionOptions options,
                                               std::shared_ptr<Cancel> cancel, std::shared_ptr<CommandGate> gate);
@@ -344,6 +483,9 @@ struct Transaction : std::enable_shared_from_this<Transaction>
     Bytes dispose_savepoint(std::uint64_t token);
 
   private:
+    struct Worker;
+    class WorkerLaunch;
+    std::shared_ptr<RetirementFence> completion_ = std::make_shared<RetirementFence>();
     void finish_worker(bool commit, std::shared_ptr<CommandGate> gate);
     void deadline_worker();
 };
@@ -355,7 +497,8 @@ struct Savepoint : std::enable_shared_from_this<Savepoint>
     void request_close();
 };
 
-extern std::atomic<std::uint64_t> source_count, session_count, operation_count, cursor_count, buffer_count;
+extern std::atomic<std::uint64_t> source_count, session_count, operation_count, cursor_count, buffer_count, pull_count,
+    command_count;
 std::uint64_t module_identity();
 std::uint64_t capability_mask();
 Bytes snapshot_record(std::uint32_t state, std::uint32_t outcome, bool attempted, std::uint32_t cleanup,

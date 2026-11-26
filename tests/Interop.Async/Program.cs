@@ -5,7 +5,7 @@ using Korda.Interop.Abi;
 using Korda.Interop.Async;
 using Korda.Interop.Callbacks;
 
-internal static class Program
+internal static partial class Program
 {
     private static int s_assertions;
     private static readonly TimeSpan Deadline = TimeSpan.FromSeconds(15);
@@ -200,10 +200,12 @@ internal static class Program
         {
             using var cancel = new CancellationTokenSource();
             var input = new InputLease();
+            var original = new ApplicationException("setup-boundary-" + boundary);
             var operation = new AsyncOperation<NativeBuffer>(Fixture.New(boundary == AsyncBoundary.StartReturned ? 2u : 0u),
                 new FixtureCalls(), coordinator, Fixture.TakeBuffer, cancel.Token, input, 3,
-                testBoundary: value => { if (value == boundary) throw new ApplicationException("setup-boundary"); });
-            await Failure<ApplicationException>(operation.Start());
+                testBoundary: value => { if (value == boundary) throw original; });
+            var failure = await Failure<ApplicationException>(operation.Start());
+            Check(ReferenceEquals(failure, original), "Setup settlement replaced the original boundary failure.");
             await Finish(operation);
             Check(input.Releases == 1, "Failed setup retained its input owner.");
             Check(operation.Snapshot.Start == (boundary == AsyncBoundary.StartReturned ? AsyncStartOutcome.AcceptedReturned : AsyncStartOutcome.Skipped),
@@ -244,11 +246,16 @@ internal static class Program
         foreach (int mode in new[] { 0, 1, 2 })
         {
             var input = new InputLease();
+            var original = new ApplicationException("before-take");
             var failing = new AsyncOperation<NativeBuffer>(Fixture.New(mode == 2 ? 18u : 2u), new FixtureCalls(), coordinator,
                 p => Fixture.TakeBuffer(p, throwAfterTake: mode == 1), inputLifetime: input, inputBytes: 3,
-                testBoundary: boundary => { if (mode == 0 && boundary == AsyncBoundary.BeforeTake) throw new ApplicationException("before-take"); });
+                testBoundary: boundary => { if (mode == 0 && boundary == AsyncBoundary.BeforeTake) throw original; });
             if (mode == 2) await Failure<NativeEngineException>(failing.Start());
-            else await Failure<ApplicationException>(failing.Start());
+            else
+            {
+                var failure = await Failure<ApplicationException>(failing.Start());
+                if (mode == 0) Check(ReferenceEquals(failure, original), "Typed take replaced the original boundary failure.");
+            }
             await Finish(failing);
             Check(input.Releases == 1 && Fixture.Count(5) == 0 && Fixture.Count(6) == 0, "Failed take/materialization leaked an owned or untaken result.");
         }
@@ -467,6 +474,7 @@ internal static class Program
         await BindingFailureAndRejectedScheduling();
         await BindingDiagnostics();
         await ResultBeforeNativeQuiet();
+        await OperationOwnershipChecks();
         await NativeWorkersAndGc();
         await ContextAndSelfWait();
         await DiscardedTaskCleanup();

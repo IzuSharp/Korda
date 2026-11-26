@@ -40,7 +40,8 @@ DATABASE_CAPABILITIES = [
     "db.window.v1", "db.row-lock.v1", "db.null-safe-equality.v1", "db.json.v1", "db.decimal.numeric.v1",
     "db.decimal.text.v1", "db.fixed-money.v1", "db.relationships.explicit.v1", "db.prepared-shape.v1",
     "db.bulk-batches.v1", "db.dynamic-fields.v1", "db.recursive-cte.v1", "db.set-operations.v1",
-    "db.scalar-codecs.v1", "db.sql.expert.v1", "db.schema.draft.v1",
+    "db.scalar-codecs.v1", "db.sql.expert.v1", "db.schema.draft.v1", "db.query.command.v1", "db.cursor.pull.v1",
+    "db.command.completion.v1", "db.find.shape.v1",
 ]
 ENGINES = {
     "database.sqlite": ("Korda.Database.Sqlite", "libnw_database_sqlite.so", "nw_database_sqlite", DATABASE_CAPABILITIES),

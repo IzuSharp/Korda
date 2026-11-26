@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: MIT
 // B14 Host adapter regressions use the real product C ABI, not Host test hooks.
 // Fixed Rust reference: native/database/relations/host.rs at 465cd0f.
+#include "../../database/binding/korda_cursor_pull_v1.h"
 #include "nw/contracts.hpp"
 #include "nw_database_declarations.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <filesystem>
@@ -170,6 +172,9 @@ struct Operation
     {
         nw_db_ref result{};
         auto error = error_slot();
+        nw_db_buffer* wrong{};
+        check(nw_db_operation_take_buffer_v1(value, &wrong, &error) == NW_INVALID_STATE && !wrong,
+              "a wrong buffer take must leave an owner result available");
         ok(nw_db_operation_take_owner_v1(value, kind, &result, &error), error, "actual owner transfer");
         return result;
     }
@@ -187,6 +192,12 @@ struct Operation
         ok(failed ? nw_db_operation_take_error_v1(value, &result, &error)
                   : nw_db_operation_take_buffer_v1(value, &result, &error),
            error, "actual buffer transfer");
+        if (!failed)
+        {
+            nw_db_buffer* twice{};
+            check(nw_db_operation_take_buffer_v1(value, &twice, &error) == NW_INVALID_STATE && !twice,
+                  "a legacy buffer take consumes its result once");
+        }
         return copy_buffer(result);
     }
 };
@@ -472,12 +483,185 @@ struct Fixture
                 for (std::uint32_t i = 0; i < 6; ++i)
                     if (nw_db_diagnostic_count_v1(i) != 0)
                         return false;
-                return true;
+                return nw_db_diagnostic_count_v1(8) == 0;
             },
             "all six actual product owner counters return to zero");
         finished = true;
     }
 };
+struct PullNotice
+{
+    std::atomic<std::uint64_t> generation{0};
+    std::atomic<unsigned> calls{0};
+    static void NW_CDECL ready(void* context, std::uint64_t generation)
+    {
+        auto& notice = *static_cast<PullNotice*>(context);
+        ++notice.calls;
+        notice.generation.store(generation);
+    }
+    void request(nw_db_ref channel, std::uint64_t next = 1)
+    {
+        const nw_db_cursor_callbacks_v1 callbacks{sizeof(callbacks), 0, this, ready};
+        auto error = error_slot();
+        ok(nw_db_cursor_pull_request_v1(channel, next, 64, 8192, &callbacks, &error), error,
+           "actual pull request accepted");
+        eventually([&] { return generation.load() == next; }, "actual detached ready callback");
+    }
+};
+void close_pull(Owner& channel)
+{
+    PullNotice notice;
+    notice.generation.store(UINT64_MAX);
+    auto error = error_slot();
+    nw_db_buffer* result = reinterpret_cast<nw_db_buffer*>(1);
+    check(nw_db_cursor_pull_close_take_v1(channel.value, &result, &error) == NW_INVALID_STATE && !result,
+          "missing close take clears its output without inventing a result");
+    nw_db_cursor_callbacks_v1 callbacks{sizeof(callbacks), 1, &notice, PullNotice::ready};
+    check(nw_db_cursor_pull_close_request_v1(channel.value, &callbacks, &error) == NW_INVALID_ARGUMENT &&
+              notice.calls == 0,
+          "invalid close callback rejects before acceptance");
+    callbacks.reserved = 0;
+    const auto operations = nw_db_diagnostic_count_v1(2);
+    ok(nw_db_cursor_pull_close_request_v1(channel.value, &callbacks, &error), error,
+       "actual one-shot final close accepted");
+    eventually([&] { return notice.generation.load() == 0; }, "actual detached final readiness");
+    ok(nw_db_cursor_pull_close_take_v1(channel.value, &result, &error), error, "actual final snapshot transfer");
+    const auto payload = copy_buffer(result);
+    const auto fields = Fields::parse(payload, 7,
+                                      {{1, 1, true},
+                                       {2, 1, true},
+                                       {3, 1, true},
+                                       {4, 1, true},
+                                       {5, 1, true},
+                                       {6, 1, true},
+                                       {7, 1, true},
+                                       {8, 2, true},
+                                       {9, 4, false}});
+    check(fields.boolean(6) && notice.calls == 1 && nw_db_diagnostic_count_v1(2) == operations,
+          "direct final receipt proves resources with no generic close operation");
+    result = reinterpret_cast<nw_db_buffer*>(1);
+    check(nw_db_cursor_pull_close_take_v1(channel.value, &result, &error) == NW_INVALID_STATE && !result &&
+              nw_db_cursor_pull_close_request_v1(channel.value, &callbacks, &error) == NW_INVALID_STATE &&
+              notice.calls == 1,
+          "actual final request and result are each consumed once");
+    channel.release();
+}
+Bytes take_pull(nw_db_ref channel, std::uint64_t generation = 1)
+{
+    nw_db_batch_result_v1 result{};
+    auto error = error_slot();
+    check(nw_db_cursor_pull_take_v1(channel, generation + 1, &result, &error) == NW_INVALID_STATE && !result.owner,
+          "wrong-generation take leaves the current batch available");
+    ok(nw_db_cursor_pull_take_v1(channel, generation, &result, &error), error, "actual pull batch transfer");
+    std::unique_ptr<nw_db_buffer, decltype(&nw_db_buffer_release_v1)> buffer(result.owner, nw_db_buffer_release_v1);
+    check(result.owner && result.bytes.data && result.bytes.length >= 96 && result.known_end == 1 && !result.reserved,
+          "bounded pull result contains native ownership and observed EOF");
+    nw_bytes_view_v1 same{};
+    ok(nw_db_buffer_view_v1(buffer.get(), &same, &error), error, "frozen view of pull Buffer");
+    check(same.data == result.bytes.data && same.length == result.bytes.length,
+          "pull view uses the same creating Buffer without an additional native frame");
+    auto duplicate = result;
+    check(nw_db_cursor_pull_take_v1(channel, generation, &duplicate, &error) == NW_INVALID_STATE && !duplicate.owner &&
+              !duplicate.bytes.data && !duplicate.bytes.length && !duplicate.known_end && !duplicate.reserved,
+          "a duplicate take fails and clears the entire output record");
+    check(nw_db_cursor_pull_check_read_v1(channel, &error) == NW_INVALID_STATE,
+          "a retained native Buffer blocks EOF admission");
+    return {result.bytes.data, result.bytes.data + result.bytes.length};
+}
+Bytes child_input(const Fixture& fixture, std::uint64_t id)
+{
+    Expectation expected{4, Profile::Sqlite, fixture.child->hash(), fixture.child->table_id(), 0, {}, 1};
+    for (const auto column : fixture.child->projection())
+    {
+        const auto& codec = fixture.child->column(column).codec;
+        expected.descriptors.push_back({column, codec, codec.id});
+    }
+    const auto row = Batch::encode(expected, 1, {u64_bytes(id), bytes("t"), bytes("p")});
+    return encode_control(4, {u32(1, fixture.child->table_id()), {2, 5, row}, u32(7, fixture.projection_id)});
+}
+void lazy_pull_abi()
+{
+    Fixture fixture;
+    auto error = error_slot();
+    Expectation expected{
+        2, Profile::Sqlite,       fixture.projection->hash(),
+        0, fixture.projection_id, {{0, {3, {}, false}, 3}, {1, {5, {}, false}, 5}, {2, {5, {}, false}, 5}},
+        {}};
+    // Relation input is copied at creation, and creation never performs SQL.
+    {
+        Owner channel;
+        auto key = fixture.key();
+        const auto sql = nw_db_diagnostic_count_v1(6);
+        ok(nw_db_cursor_pull_relation_create_v1(fixture.session.value, fixture.relation.value, view(key),
+                                                fixture.projection_id, &channel.value, &error),
+           error, "actual lazy relation pull create");
+        std::fill(key.begin(), key.end(), 0);
+        check(nw_db_diagnostic_count_v1(2) == 0 && nw_db_diagnostic_count_v1(3) == 0 &&
+                  nw_db_diagnostic_count_v1(6) == sql && nw_db_diagnostic_count_v1(8) == 1,
+              "relation channel captures without generic open operation or provider dispatch");
+        PullNotice notice;
+        notice.request(channel.value);
+        const auto payload = take_pull(channel.value);
+        const auto batch = Batch::parse(payload, expected);
+        check(batch.rows() == 1 && read_u64(*batch.cell(0, 0), 0) == 1 && notice.calls == 1,
+              "lazy relation preserves the original key after caller bytes change");
+        const auto sends = nw_db_diagnostic_count_v1(7);
+        const auto executions = nw_db_diagnostic_count_v1(6);
+        ok(nw_db_cursor_pull_check_read_v1(channel.value, &error), error, "pull known EOF admission");
+        check(nw_db_diagnostic_count_v1(2) == 0 && nw_db_diagnostic_count_v1(6) == executions &&
+                  nw_db_diagnostic_count_v1(7) == sends,
+              "known EOF admission sends no SQL/protocol and creates no operation");
+        close_pull(channel);
+        check(nw_db_diagnostic_count_v1(8) == 0, "normal channel close retires the native pull owner");
+    }
+    // Insert-returning uses the same lazy native reader channel.
+    {
+        Owner channel;
+        auto payload = child_input(fixture, 2);
+        const auto sql = nw_db_diagnostic_count_v1(6);
+        ok(nw_db_cursor_pull_mutation_create_v1(fixture.session.value, fixture.child_owner.value, 1, view(payload),
+                                                &channel.value, &error),
+           error, "actual lazy returning mutation pull create");
+        std::fill(payload.begin(), payload.end(), 0);
+        check(nw_db_diagnostic_count_v1(6) == sql && nw_db_diagnostic_count_v1(2) == 0,
+              "returning mutation creation has no database effect or generic open operation");
+        PullNotice notice;
+        notice.request(channel.value);
+        const auto output = take_pull(channel.value);
+        const auto batch = Batch::parse(output, expected);
+        check(batch.rows() == 1 && read_u64(*batch.cell(0, 0), 0) == 2,
+              "returning mutation captures values and produces its complete DTO row");
+        close_pull(channel);
+    }
+    // The ordinary SQL creation route shares the same request/take path.
+    {
+        Owner plan, channel;
+        const auto schema = bytes("{\"version\":1,\"parameters\":[]}");
+        const Expectation input{1, Profile::Sqlite, sha256(schema), 0, 0, {}, 1};
+        const auto values = Batch::encode(input, 1, {});
+        const auto options = encode_control(20, {u32(1, 0),
+                                                 u32(2, 3),
+                                                 u64(3, 5'000'000'000, 3),
+                                                 u32(4, fixture.projection_id),
+                                                 {5, 5, u32_bytes(0)},
+                                                 u32(6, 0)});
+        const auto sql = bytes("SELECT Id,Tenant,ParentId FROM b14_adapter_child ORDER BY Id");
+        ok(nw_db_sql_create_v1(fixture.session.value, view(sql), view(values), view(options), &plan.value, &error),
+           error, "actual raw reader plan create");
+        ok(nw_db_cursor_pull_create_v1(fixture.session.value, plan.value, {}, &channel.value, &error), error,
+           "actual ordinary lazy pull create");
+        plan.release();
+        PullNotice notice;
+        notice.request(channel.value);
+        const auto output = take_pull(channel.value);
+        const auto batch = Batch::parse(output, expected);
+        check(batch.rows() == 2 && read_u64(*batch.cell(1, 0), 0) == 2,
+              "ordinary channel retains its plan and observes the prior returning write");
+        close_pull(channel);
+    }
+    fixture.finish();
+}
+
 void delayed_deadlines()
 {
     for (bool mutation : {true, false})
@@ -572,6 +756,8 @@ int main(int argc, char** argv)
             relation_capacity();
         if (mode == "all" || mode == "raw-sql")
             raw_sql_keeps_start_deadline();
+        if (mode == "all")
+            lazy_pull_abi();
         std::cout << "PASS B14 actual C ABI adapters: " << assertions << " checks; six owner counters zero\n";
         return 0;
     }

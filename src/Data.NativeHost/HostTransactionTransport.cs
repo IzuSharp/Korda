@@ -1,13 +1,10 @@
 using Korda.Data;
-using Korda.Interop.Abi;
 using Korda.Query.Internal;
 
 namespace Korda.Database;
 
 internal sealed class HostTransactionTransport : ITransactionTransport
 {
-    internal const DatabaseOwnerKind TransactionKind = (DatabaseOwnerKind)8;
-    internal const DatabaseOwnerKind SavepointKind = (DatabaseOwnerKind)9;
     private readonly DataSource _source;
     private readonly DatabaseOwner _owner;
     private readonly CloseController _close;
@@ -41,17 +38,15 @@ internal sealed class HostTransactionTransport : ITransactionTransport
     }
     private async Task Finish(uint action, CancellationToken token)
     {
-        try { await _source.Start(() => FinishCreate(_owner, action), ReadSnapshot, token).ConfigureAwait(false); }
+        try { await _source.SubmitCommand(NativeCommandKind.FinishTransaction, _owner, null, default, action, 101, NativeCommand.Snapshot, token).ConfigureAwait(false); }
         catch (CommitOutcomeUnknownException failure) { throw new CommitOutcomeUnknownException(failure.Message, _recoveryKey, failure.ProviderCode, failure.CorrelationId); }
         catch (DatabaseException failure) when (action == 1) { throw new DatabaseCleanupException("The native rollback was not confirmed.", Snapshot.Cleanup) { Data = { ["Korda.Database.Primary.v1"] = failure } }; }
         finally { lock (_gate) if (!_owner.IsClosed) _last = NativeHost.Snapshot(_owner); }
     }
-    private TransactionSnapshot ReadSnapshot(nint operation)
-    { using var buffer = NativeHost.TakeBuffer(_source.Binding, operation); var value = HostEncoding.Snapshot(buffer.Copy()); lock (_gate) _last = value; return value; }
     public async Task<SavepointId> CreateSavepointAsync(CancellationToken admissionToken)
     {
         Admit(admissionToken);
-        var owner = await _source.Start(() => SavepointCreate(_owner), operation => NativeHost.TakeOwner(_source.Binding, operation, 4, SavepointKind), admissionToken).ConfigureAwait(false);
+        var owner = await _source.SubmitCommand(NativeCommandKind.BeginSavepoint, _owner, null, default, 0, 4, NativeCommand.Owner, admissionToken).ConfigureAwait(false);
         lock (_gate)
         {
             try { var id = new SavepointId(1, checked(++_sequence)); _savepoints.Add(id, owner); return id; }
@@ -65,7 +60,8 @@ internal sealed class HostTransactionTransport : ITransactionTransport
     private async Task Action(SavepointId id, uint action, CancellationToken token)
     {
         Admit(token); var owner = Get(id);
-        await _source.Start(() => SavepointAction(owner, action), ReadSnapshot, token).ConfigureAwait(false);
+        var snapshot = await _source.SubmitCommand(NativeCommandKind.SavepointAction, owner, null, default, action, 101, NativeCommand.Snapshot, token).ConfigureAwait(false);
+        lock (_gate) _last = snapshot;
         if (action == 1) { lock (_gate) _savepoints.Remove(id); owner.Dispose(); }
     }
     public ValueTask DisposeSavepointAsync(SavepointId id)
@@ -75,32 +71,11 @@ internal sealed class HostTransactionTransport : ITransactionTransport
     }
     private async Task DisposeSavepoint(SavepointId id, DatabaseOwner owner)
     {
-        try { await _source.Start(() => NativeHost.Close(owner), operation => { using var buffer = NativeHost.TakeBuffer(_source.Binding, operation); return HostEncoding.Snapshot(buffer.Copy()); }, control: true).ConfigureAwait(false); }
+        try { await _source.CloseOwner(owner).ConfigureAwait(false); }
         finally { lock (_gate) _savepoints.Remove(id); owner.Dispose(); }
     }
     public void RequestClose() { lock (_gate) _closed = true; _close.Request(); }
     public Task<DatabaseCloseResult> WaitCloseAsync(TimeSpan waitBudget, CancellationToken cancellationToken)
     { HostEncoding.WaitBudget(waitBudget); RequestClose(); return _close.WaitAsync(waitBudget, cancellationToken); }
     public ValueTask JoinAsync() { RequestClose(); return new(_close.JoinAsync()); }
-    internal static unsafe nint Begin(DatabaseOwner session, byte[] record)
-    {
-        using var lease = session.Borrow(DatabaseOwnerKind.Session); nint result = 0; var error = BindingChecks.Error(); fixed (byte* bytes = record)
-            HostFailure.Check(session.Source, session.Source.Calls.nw_db_tx_begin_create_v1(lease.Pointer, BindingChecks.View(bytes, record.Length), &result, &error), error);
-        return result;
-    }
-    private static unsafe nint FinishCreate(DatabaseOwner owner, uint action)
-    {
-        using var lease = owner.Borrow(TransactionKind); nint result = 0; var error = BindingChecks.Error();
-        HostFailure.Check(owner.Source, owner.Source.Calls.nw_db_tx_finish_create_v1(lease.Pointer, action, &result, &error), error); return result;
-    }
-    private static unsafe nint SavepointCreate(DatabaseOwner owner)
-    {
-        using var lease = owner.Borrow(TransactionKind); nint result = 0; var error = BindingChecks.Error();
-        HostFailure.Check(owner.Source, owner.Source.Calls.nw_db_savepoint_create_v1(lease.Pointer, &result, &error), error); return result;
-    }
-    private static unsafe nint SavepointAction(DatabaseOwner owner, uint action)
-    {
-        using var lease = owner.Borrow(SavepointKind); nint result = 0; var error = BindingChecks.Error();
-        HostFailure.Check(owner.Source, owner.Source.Calls.nw_db_savepoint_action_create_v1(lease.Pointer, action, &result, &error), error); return result;
-    }
 }

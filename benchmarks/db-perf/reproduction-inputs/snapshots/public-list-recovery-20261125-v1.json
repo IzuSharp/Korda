@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "task": "DB-Perf-01",
+  "snapshot": "public-list-recovery-20261125-v1",
+  "purpose": "Exact preparation, serial Native AOT build, interleaved consumption and report-finalization helpers actually used for the 2026-11-25 public List<BusinessRow> allocation diagnostic. These historical files retain original absolute paths and are excluded from active builds. They do not qualify formal CPU, latency, throughput or long segments; raw counters, commands, attribution limits and eventual fixed Korda source bindings belong in Plan. The finalization helper is a post-processing source, not the measured consumer.",
+  "originEvidenceIndex": "ledger/evidence/batches/DB-Perf-01/checkpoints/public-list-recovery-20261125/files.json",
+  "consumerCommit": "db0f674f3849fa86f69d86eea2c830dc1c84da83",
+  "packageProducerCommit": "3df4f4f3ac455cb8bae8901c80a4fefb33021970",
+  "originalEvidenceIndexSha256": "2c84d38a3fe5229a2837082d2859d5096fa53d49f3671909d992ba968c8ea28a",
+  "inputs": [
+    {
+      "sourcePath": "/workspace/scratch/37c4f8cc3a91/recovery-20261125/public-list-current/prepare-inputs.py",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/7dcab90ce7bd75c47b24588c3598af856a987e06137af948f856e45c1bc5b9f8/prepare-inputs.py",
+      "sha256": "7dcab90ce7bd75c47b24588c3598af856a987e06137af948f856e45c1bc5b9f8",
+      "bytes": 10949,
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sourcePath": "/workspace/scratch/37c4f8cc3a91/recovery-20261125/public-list-current/build-all.py",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/e683b6b9029fd0630f46629cfea51547ab94641d3f5713de96c8f9add48057fc/build-all.py",
+      "sha256": "e683b6b9029fd0630f46629cfea51547ab94641d3f5713de96c8f9add48057fc",
+      "bytes": 6286,
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sourcePath": "/workspace/scratch/37c4f8cc3a91/recovery-20261125/public-list-current/run-all.py",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/7c34d7286f884dbb618e97fa4a0ec326f7d038857973bd3f1c16e5d5bef4320a/run-all.py",
+      "sha256": "7c34d7286f884dbb618e97fa4a0ec326f7d038857973bd3f1c16e5d5bef4320a",
+      "bytes": 7643,
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sourcePath": "/workspace/scratch/37c4f8cc3a91/recovery-20261125/public-list-current/finalize-report.py",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/45133c1dfcdf200c32dad62af24f311d8cc91841c9b4ef9aae53e261bd2116fd/finalize-report.py",
+      "sha256": "45133c1dfcdf200c32dad62af24f311d8cc91841c9b4ef9aae53e261bd2116fd",
+      "bytes": 20174,
+      "bindingStatus": "pending_harness_commit"
+    }
+  ]
+}

@@ -1,0 +1,106 @@
+{
+  "schemaVersion": 1,
+  "task": "DB-Perf-01",
+  "purpose": "Exact historical iteration-13 failed-v1 / diagnostic-v2 probes and versioned build/run scripts/dirty patches, including final stable v3 helper inputs. Excluded from active product and consumer builds; raw receipts own their execution scope.",
+  "originEvidenceIndex": "ledger/evidence/batches/DB-Perf-01/checkpoints/iteration-13-v1/files.json",
+  "inputs": [
+    {
+      "sourcePath": "measurements/transaction-default-v1/before-build/source.patch",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/bcbf635ec89f046b3f5ebf089a4b78d81602b5a5b42b4b4048a05b0c79e1e5ca/source.patch",
+      "sha256": "bcbf635ec89f046b3f5ebf089a4b78d81602b5a5b42b4b4048a05b0c79e1e5ca",
+      "bytes": 691,
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sourcePath": "measurements/transaction-default-v1/build.py",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/d63fce9b453f80b330832db7ac8ba08a2a57d19084091a94da09c33edddab88a/build.py",
+      "sha256": "d63fce9b453f80b330832db7ac8ba08a2a57d19084091a94da09c33edddab88a",
+      "bytes": 3618,
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sourcePath": "measurements/transaction-default-v1/run_probe.py",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/a7c1d232cb37352d61eec7999cce06977d5d208361406902ebe838d7370e335c/run_probe.py",
+      "sha256": "a7c1d232cb37352d61eec7999cce06977d5d208361406902ebe838d7370e335c",
+      "bytes": 3216,
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sourcePath": "measurements/transaction-default-v1/before-build/source-inputs.json::tests/Data.NativeHost/TransactionDefaultProbe.cs",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/9c9eceb7bfd15f17d7cac31b271a76353ba6b65288d09e59cdffc5a4d8c7924e/TransactionDefaultProbe.cs",
+      "sha256": "9c9eceb7bfd15f17d7cac31b271a76353ba6b65288d09e59cdffc5a4d8c7924e",
+      "bytes": 16523,
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sourcePath": "measurements/transaction-default-v2/before-build/source.patch",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/bcbf635ec89f046b3f5ebf089a4b78d81602b5a5b42b4b4048a05b0c79e1e5ca/source.patch",
+      "sha256": "bcbf635ec89f046b3f5ebf089a4b78d81602b5a5b42b4b4048a05b0c79e1e5ca",
+      "bytes": 691,
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sourcePath": "measurements/transaction-default-v2/build.py",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/d63fce9b453f80b330832db7ac8ba08a2a57d19084091a94da09c33edddab88a/build.py",
+      "sha256": "d63fce9b453f80b330832db7ac8ba08a2a57d19084091a94da09c33edddab88a",
+      "bytes": 3618,
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sourcePath": "measurements/transaction-default-v2/run_probe.py",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/a7c1d232cb37352d61eec7999cce06977d5d208361406902ebe838d7370e335c/run_probe.py",
+      "sha256": "a7c1d232cb37352d61eec7999cce06977d5d208361406902ebe838d7370e335c",
+      "bytes": 3216,
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sourcePath": "measurements/transaction-default-v2/before-build/source-inputs.json::tests/Data.NativeHost/TransactionDefaultProbe.cs",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/321757eb8111d28b9b9f3a95bc2626c905d6b06d4659d08ddb2e8ec6d52fae71/TransactionDefaultProbe.cs",
+      "sha256": "321757eb8111d28b9b9f3a95bc2626c905d6b06d4659d08ddb2e8ec6d52fae71",
+      "bytes": 16908,
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sourcePath": "measurements/transaction-default-v3/after-build/source.patch",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/7a11f8f730d712fefcf0aa4c56132f93158099254e0ffa140fdbc32bade5f47e/source.patch",
+      "sha256": "7a11f8f730d712fefcf0aa4c56132f93158099254e0ffa140fdbc32bade5f47e",
+      "bytes": 3252,
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sourcePath": "measurements/transaction-default-v3/before-build/source.patch",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/bcbf635ec89f046b3f5ebf089a4b78d81602b5a5b42b4b4048a05b0c79e1e5ca/source.patch",
+      "sha256": "bcbf635ec89f046b3f5ebf089a4b78d81602b5a5b42b4b4048a05b0c79e1e5ca",
+      "bytes": 691,
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sourcePath": "measurements/transaction-default-v3/build.py",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/d63fce9b453f80b330832db7ac8ba08a2a57d19084091a94da09c33edddab88a/build.py",
+      "sha256": "d63fce9b453f80b330832db7ac8ba08a2a57d19084091a94da09c33edddab88a",
+      "bytes": 3618,
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sourcePath": "measurements/transaction-default-v3/candidate.patch",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/ffdcf21f6d86294bbc3db6a0c8b1042f7a34c78655ef49a3a2e34583cf32b355/candidate.patch",
+      "sha256": "ffdcf21f6d86294bbc3db6a0c8b1042f7a34c78655ef49a3a2e34583cf32b355",
+      "bytes": 2147,
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sourcePath": "measurements/transaction-default-v3/run_correctness.py",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/c98e7d3b88bd6fb21a078c2c603f7bbc501fb90232f798a42628874f0a202f0f/run_correctness.py",
+      "sha256": "c98e7d3b88bd6fb21a078c2c603f7bbc501fb90232f798a42628874f0a202f0f",
+      "bytes": 2415,
+      "bindingStatus": "pending_harness_commit"
+    },
+    {
+      "sourcePath": "measurements/transaction-default-v3/run_probe.py",
+      "archivePath": "benchmarks/db-perf/reproduction-inputs/by-sha256/a7c1d232cb37352d61eec7999cce06977d5d208361406902ebe838d7370e335c/run_probe.py",
+      "sha256": "a7c1d232cb37352d61eec7999cce06977d5d208361406902ebe838d7370e335c",
+      "bytes": 3216,
+      "bindingStatus": "pending_harness_commit"
+    }
+  ]
+}

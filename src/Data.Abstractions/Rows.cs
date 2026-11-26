@@ -16,13 +16,17 @@ public delegate T RowMaterializer<T>(RowReader row);
 /// values into owned buffers before native dispatch; the stack-only writer must not be retained.</remarks>
 public delegate void EntityWriter<T>(RowWriter row, T value);
 
-internal interface IRowLease
+internal interface IRowLifetime
+{
+    void AssertAlive();
+}
+
+internal interface IRowLease : IRowLifetime
 {
     int Count { get; }
     string Name(int ordinal);
     CodecDescriptor Codec(int ordinal);
     ReadOnlyMemory<byte>? Value(int ordinal);
-    void AssertAlive();
 }
 
 /// <summary>A stack-only reader over a validated live row lease.</summary>
@@ -31,9 +35,18 @@ internal interface IRowLease
 public readonly ref struct RowReader
 {
     private readonly IRowLease? _lease;
+    private readonly IRowLifetime? _lifetime;
     private readonly object? _projection;
     private readonly TableIdentity? _table;
-    internal RowReader(IRowLease lease, object projection, TableIdentity? table) { _lease = lease; _projection = projection; _table = table; }
+    private readonly ResultField[]? _validatedFields;
+    private readonly ReadOnlySpan<byte> _batch;
+    private readonly WireLayout? _layout;
+    private readonly uint _row;
+    internal RowReader(IRowLease lease, object projection, TableIdentity? table, ResultField[]? validatedFields = null)
+    { _lease = lease; _lifetime = lease; _projection = projection; _table = table; _validatedFields = validatedFields; }
+    internal RowReader(IRowLifetime lifetime, object projection, TableIdentity? table,
+        ResultField[] fields, WireLayout layout, ReadOnlySpan<byte> batch, uint row)
+    { _lifetime = lifetime; _projection = projection; _table = table; _validatedFields = fields; _layout = layout; _batch = batch; _row = row; }
     /// <summary>Reads a typed token belonging to this exact projection.</summary>
     /// <typeparam name="T">The result value type.</typeparam>
     /// <param name="column">The projection-bound result token.</param>
@@ -68,7 +81,13 @@ public readonly ref struct RowReader
     /// <exception cref="ArgumentOutOfRangeException">The ordinal is outside the shape.</exception>
     /// <exception cref="InvalidOperationException">The reader is default.</exception>
     /// <exception cref="ObjectDisposedException">The lease has retired.</exception>
-    public bool IsNull(int ordinal) => Lease(ordinal).Value(ordinal) is null;
+    public bool IsNull(int ordinal)
+    {
+        AssertOrdinal(ordinal);
+        if (_layout is not { } layout) return _lease!.Value(ordinal) is null;
+        _ = layout.Cell(_batch, _row, ordinal, out var isNull);
+        return isNull;
+    }
     /// <summary>Reads an explicit ordinal with the exact declared scalar configuration and nullability.</summary>
     /// <typeparam name="T">The statically known value type.</typeparam>
     /// <param name="ordinal">A zero-based ordinal.</param>
@@ -80,17 +99,19 @@ public readonly ref struct RowReader
     /// <exception cref="ObjectDisposedException">The lease has retired.</exception>
     public T Read<T>(int ordinal, ValueCodec<T> codec)
     {
-        ArgumentNullException.ThrowIfNull(codec); var lease = Lease(ordinal); var actual = lease.Codec(ordinal);
-        if (!actual.SameScalar(codec.Descriptor) || actual.Nullable != codec.Descriptor.Nullable)
+        ArgumentNullException.ThrowIfNull(codec); AssertOrdinal(ordinal);
+        var actual = _validatedFields is { } fields ? fields[ordinal].Descriptor : _lease!.Codec(ordinal);
+        if (!ReferenceEquals(actual, codec.Descriptor) && (!actual.SameScalar(codec.Descriptor) || actual.Nullable != codec.Descriptor.Nullable))
             throw new DatabaseException("The requested codec differs from the row shape.", DatabaseErrorKind.ShapeMismatch);
-        return codec.Decode(lease.Value(ordinal));
+        if (_layout is not { } layout) return codec.Decode(_lease!.Value(ordinal));
+        var cell = layout.Cell(_batch, _row, ordinal, out var isNull);
+        return codec.Decode(cell, isNull);
     }
-    private IRowLease Lease(int ordinal)
+    private void AssertOrdinal(int ordinal)
     {
-        var lease = _lease ?? throw new InvalidOperationException("The default RowReader has no lease.");
-        lease.AssertAlive();
-        if ((uint)ordinal >= (uint)lease.Count) throw new ArgumentOutOfRangeException(nameof(ordinal));
-        return lease;
+        var lifetime = _lifetime ?? throw new InvalidOperationException("The default RowReader has no lease.");
+        lifetime.AssertAlive();
+        if ((uint)ordinal >= (uint)(_validatedFields?.Length ?? _lease!.Count)) throw new ArgumentOutOfRangeException(nameof(ordinal));
     }
 }
 
@@ -166,13 +187,18 @@ public sealed class ResultField
 public sealed class Projection<T>
 {
     internal Projection(ResultField[] fields, RowMaterializer<T> materializer, TableIdentity? table = null, bool scalar = false, object? tokenIdentity = null)
-    { Fields = fields; Materializer = materializer; Table = table; IsScalar = scalar; TokenIdentity = tokenIdentity ?? this; CanonicalBytes = Canonical.Projection(fields); ShapeHash = Canonical.Hash(CanonicalBytes); }
+    {
+        Fields = fields; Materializer = materializer; Table = table; IsScalar = scalar; TokenIdentity = tokenIdentity ?? this;
+        CanonicalBytes = Canonical.Projection(fields); ShapeBytes = System.Security.Cryptography.SHA256.HashData(CanonicalBytes);
+        ShapeHash = Convert.ToHexStringLower(ShapeBytes);
+    }
     private object TokenIdentity { get; }
     internal ResultField[] Fields { get; }
     internal RowMaterializer<T> Materializer { get; }
     internal TableIdentity? Table { get; }
     internal bool IsScalar { get; }
     internal byte[] CanonicalBytes { get; }
+    internal byte[] ShapeBytes { get; }
     /// <summary>Gets lowercase SHA-256 of the exact logical shape, excluding managed delegate and native IDs.</summary>
     public string ShapeHash { get; }
     /// <summary>Copies a unique ordered field sequence and retains an AOT-visible materializer.</summary>
@@ -207,6 +233,41 @@ public sealed class Projection<T>
             if (lease.Value(i) is null && !expected.IsNullable) throw new DatabaseException("A non-null column contains SQL NULL.", DatabaseErrorKind.Conversion);
         }
         return Materializer(new RowReader(lease, TokenIdentity, Table));
+    }
+
+    // A retained immutable batch validates every cell, including NULL and scalar
+    // representation, before it exposes any row. Bind that proof to this exact
+    // projection once; ordinary leases retain the full per-row validation above.
+    internal bool MatchesValidatedBatch(ResultField[] fields, WireExpectation expected)
+    {
+        if (!ReferenceEquals(fields, Fields) || expected.Kind != PayloadKind.Rows
+            || expected.Descriptors.Length != fields.Length || !expected.MetadataHash.AsSpan().SequenceEqual(ShapeBytes)) return false;
+        for (var i = 0; i < fields.Length; i++)
+        {
+            var actual = expected.Descriptors[i]; var field = fields[i];
+            if (actual.Id != (uint)i || !actual.Codec.SameScalar(field.Descriptor) || actual.Codec.Nullable != field.IsNullable) return false;
+        }
+        return true;
+    }
+
+    internal T ReadBatch(IRowLifetime lifetime, ResultField[] fields, WireLayout layout,
+        ReadOnlySpan<byte> bytes, uint row, bool validated)
+    {
+        lifetime.AssertAlive();
+        if (!validated)
+        {
+            if (fields.Length != Fields.Length) throw new DatabaseException("The row column count differs from its projection.", DatabaseErrorKind.ShapeMismatch);
+            for (var i = 0; i < Fields.Length; i++)
+            {
+                var expected = Fields[i]; var actual = fields[i];
+                if (!IsScalar && actual.Name != expected.Name || !actual.Descriptor.SameScalar(expected.Descriptor)
+                    || actual.IsNullable != expected.IsNullable)
+                    throw new DatabaseException("The complete ordered row shape differs from its projection.", DatabaseErrorKind.ShapeMismatch);
+                _ = layout.Cell(bytes, row, i, out var isNull);
+                if (isNull && !expected.IsNullable) throw new DatabaseException("A non-null column contains SQL NULL.", DatabaseErrorKind.Conversion);
+            }
+        }
+        return Materializer(new RowReader(lifetime, TokenIdentity, Table, Fields, layout, bytes, row));
     }
 }
 

@@ -140,7 +140,15 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: diagnostics-${{ inputs.scope }}-${{ github.run_id }}
-          path: artifacts/logs/
+          path: |
+            artifacts/logs/
+            artifacts/provider-test/${{ inputs.scope }}/*.stdout.log
+            artifacts/provider-test/${{ inputs.scope }}/*.stderr.log
+            artifacts/provider-test/${{ inputs.scope }}/pg-*.log
+            artifacts/provider-test/${{ inputs.scope }}/result.json
+            artifacts/provider-test/${{ inputs.scope }}/commands.json
+            artifacts/provider-test/${{ inputs.scope }}/summary.json
+            artifacts/provider-test/${{ inputs.scope }}/failure.txt
           if-no-files-found: ignore
           retention-days: 7
       - name: Compiler cache statistics

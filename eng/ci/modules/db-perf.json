@@ -1,0 +1,7 @@
+{
+  "db-perf-benchmarks": {
+    "tests": [
+      "benchmarks/db-perf/"
+    ]
+  }
+}

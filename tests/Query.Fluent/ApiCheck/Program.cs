@@ -62,7 +62,7 @@ else if (File.ReadAllText(baselinePath) != baseline) throw new Exception("Pinned
 
 var docs = XDocument.Load(Path.Combine(output, "Korda.Database.xml")).Descendants("member").ToDictionary(x => x.Attribute("name")!.Value);
 string? Remarks(XElement doc) => doc.Element("remarks")?.Value ?? (doc.Element("inheritdoc")?.Attribute("cref")?.Value is { } parent && docs.TryGetValue(parent, out var inherited) ? Remarks(inherited) : null);
-var reference = new System.Text.StringBuilder("# Fluent query API reference\n\nGenerated from the actual compiled public API and XML; compared against the exact pinned design declarations. The public namespace is composed into Korda.Database. All expression and SQL operations use B09/B11 native owners; B01/B12 own static row contracts.\n\n");
+var reference = new System.Text.StringBuilder("# Fluent query API reference\n\nGenerated from the actual compiled public API and XML; compared against the exact pinned design declarations. The public namespace is composed into Korda.Database. Expressions form a bounded B09 command; B11 owns native validation, SQL compilation and execution. B01/B12 own static row contracts.\n\n");
 foreach (var pair in actual.Where(x => documented.Contains(x.Key)))
 {
     if (!docs.TryGetValue(pair.Key, out var doc) || doc.Element("summary") is null || string.IsNullOrWhiteSpace(Remarks(doc))) throw new Exception("Missing summary/resolvable remarks: " + pair.Key);
