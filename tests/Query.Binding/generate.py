@@ -33,12 +33,14 @@ declarations=re.findall(r'\bnw_status\s+NW_CDECL\s+nw_db_query_command_\w+_v1\([
 declarations=[re.sub(r'\s+', ' ', value) for value in declarations]
 assert declarations==extension['signatures'],'Additive query command signatures differ from the reviewed extension'
 assert len(declarations)==3 and not set(declarations).intersection(data['signatures'])
-batch=json.loads((ROOT/'native/database/binding/result-batch-v1.json').read_text())
-assert batch['version']==1 and batch['capability']=='db.result.batch.v1' and batch['capability_bit']==27
-batch_declarations=re.findall(r'\bnw_status\s+NW_CDECL\s+nw_db_(?:operation_take_batch|cursor_check_read_admission)_v1\([^;]+;', (ROOT/batch['header']).read_text())
+batch=json.loads((ROOT/'native/database/binding/cursor-pull-v1.json').read_text())
+assert batch['version']==1 and batch['capability']=='db.cursor.pull.v1' and batch['capability_bit']==27
+batch_declarations=re.findall(r'\bnw_status\s+NW_CDECL\s+nw_db_cursor_pull_\w+_v1\([^;]+;', (ROOT/batch['header']).read_text())
 batch_declarations=[re.sub(r'\s+', ' ', value) for value in batch_declarations]
-assert batch_declarations==batch['signatures'],'Additive batch result signature differs from the reviewed extension'
-assert len(batch_declarations)==2 and not set(batch_declarations).intersection(data['signatures'])
+assert batch_declarations==batch['signatures'],'Additive cursor pull signatures differ from the reviewed extension'
+assert len(batch_declarations)==8 and not set(batch_declarations).intersection(data['signatures'])
 assert batch['record']=={'name':'nw_db_batch_result_v1','linux_x64_size':32,
     'offsets':{'owner':0,'bytes':8,'known_end':24,'reserved':28}},'Additive batch record layout differs'
+assert batch['callback_record']=={'name':'nw_db_cursor_callbacks_v1','linux_x64_size':24,
+    'offsets':{'struct_size':0,'reserved':4,'context':8,'ready':16}},'Cursor ready callback layout differs'
 print(f'PASS exact frozen signatures={len(data["signatures"])}; outputs={len(outputs)}; additive command signatures={len(declarations)}; additive batch signatures={len(batch_declarations)}')

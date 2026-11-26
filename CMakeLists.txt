@@ -239,7 +239,7 @@ if(NW_BUILD_POSTGRESQL)
 endif()
 install(FILES native/database/binding/korda_database_binding_v1.h
   native/database/binding/korda_query_command_v1.h
-  native/database/binding/korda_result_batch_v1.h DESTINATION include/korda/database/binding)
+  native/database/binding/korda_cursor_pull_v1.h DESTINATION include/korda/database/binding)
 install(FILES native/interop/abi/include/korda_abi_v1.h DESTINATION include/korda/interop/abi/include)
 
 if(NW_BUILD_TESTS)

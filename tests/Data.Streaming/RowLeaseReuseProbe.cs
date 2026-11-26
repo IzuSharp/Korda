@@ -25,7 +25,7 @@ internal static class RowLeaseReuseProbe
         for (var i = 0; i < Rows; i++) cells[i] = Codecs.Int64.Encode(i + 1L);
         var payload = DbWire.Encode(Expected, Rows, cells);
         var initialOwner = new Owner((byte[])payload.Clone());
-        using var lease = new RowBatchLease(initialOwner, Expected, Shape.Fields, Limits);
+        using var lease = new RowBatchLease(initialOwner.Batch, Expected, Shape.Fields, Limits);
         lease.Dispose();
         var warm = Prepare(payload, Warmup);
         _ = Consume(lease, warm, -1);
@@ -36,7 +36,7 @@ internal static class RowLeaseReuseProbe
         _ = Capture();
         for (var i = 0; i < Windows; i++) windows[i] = Consume(lease, owners[i], i);
         foreach (var batches in owners) AssertReleased(batches);
-        if (initialOwner.Takes != 1 || initialOwner.Releases != 1 || lease.IsActive)
+        if (initialOwner.Acquisitions != 1 || initialOwner.NativeReleases != 1 || lease.IsActive)
             throw new InvalidOperationException("Reusable lease retained an owner outside its attachment window.");
         var passed = windows.All(window => window.After.Bytes - window.Before.Bytes == 0
             && window.After.ThreadBytes - window.Before.ThreadBytes == 0
@@ -46,8 +46,8 @@ internal static class RowLeaseReuseProbe
         using (var file = File.Create(path))
         using (var json = new Utf8JsonWriter(file, new() { Indented = true }))
         {
-            json.WriteStartObject(); json.WriteNumber("schema_version", 1);
-            json.WriteString("task", "DB-Perf-01"); json.WriteBoolean("passed", passed);
+            json.WriteStartObject(); json.WriteNumber("schema_version", 2);
+            json.WriteString("task", "DB-Exec-02"); json.WriteBoolean("passed", passed);
             json.WriteBoolean("native_aot", !RuntimeFeature.IsDynamicCodeSupported);
             json.WriteBoolean("public_provider_acceptance", false);
             json.WriteNumber("process_id", Environment.ProcessId);
@@ -60,8 +60,8 @@ internal static class RowLeaseReuseProbe
             json.WriteNumber("warmup_operations", Warmup); json.WriteNumber("rows_per_batch", Rows);
             json.WriteNumber("encoded_batch_bytes", payload.Length);
             json.WriteString("batch_sha256", Convert.ToHexStringLower(SHA256.HashData(payload)));
-            json.WriteString("boundary", "One lease and all single-use owned batches are precreated. Attach, complete wire validation, all numeric row reads and Dispose are inside each all-thread cumulative allocation boundary. First lease construction, owner/input construction, provider fetch and output serialization are excluded and never declared zero by this gate.");
-            json.WriteString("ownership", "One private lease; no global pool, no reused batch owner, no retained prior payload. Every owner transfers and releases exactly once. Original per-batch constructor gate remains separate.");
+            json.WriteString("boundary", "One lease and all single-use native batches and scoped owners are precreated. Attach, complete wire validation, all numeric row reads and Dispose are inside each all-thread cumulative allocation boundary. First lease construction, owner/input construction, provider fetch and output serialization are excluded and never declared zero by this gate.");
+            json.WriteString("ownership", "One private lease; no global pool, no reused batch owner, no retained prior payload. Every native owner attaches and releases exactly once; NativeMemory and GCHandle preparation occur before the window. Original per-batch constructor gate remains separate.");
             json.WriteStartArray("windows");
             foreach (var window in windows)
             {
@@ -89,7 +89,7 @@ internal static class RowLeaseReuseProbe
         var before = Capture();
         foreach (var owner in owners)
         {
-            lease.Attach(owner, Expected, Limits);
+            lease.Attach(owner.Batch, Expected, Limits);
             try
             {
                 for (uint row = 0; row < lease.Rows; row++) { sum += lease.Materialize(row, Shape); rows++; }
@@ -111,23 +111,10 @@ internal static class RowLeaseReuseProbe
     private static void AssertReleased(Owner[] owners)
     {
         foreach (var owner in owners)
-            if (owner.Takes != 1 || owner.Releases != 1) throw new InvalidOperationException("Attachment owner was not consumed/released exactly once.");
+            if (owner.Acquisitions != 1 || owner.NativeReleases != 1) throw new InvalidOperationException("Attachment owner was not consumed/released exactly once.");
     }
-    private sealed class Owner(byte[] bytes) : IOwnedStreamBatch
+    private sealed class Owner : ScopedBatchFixture
     {
-        private byte[]? _bytes = bytes;
-        internal int Takes, Releases;
-        public ReadOnlyMemory<byte> Bytes => _bytes ?? throw new ObjectDisposedException(nameof(Owner));
-        public bool End => false;
-        public byte[] TakeBytes()
-        {
-            var result = Interlocked.Exchange(ref _bytes, null) ?? throw new InvalidOperationException("Owner bytes transferred twice.");
-            Takes++; return result;
-        }
-        public void Dispose()
-        {
-            if (Releases != 0) throw new InvalidOperationException("Owner released twice.");
-            _bytes = null; Releases++;
-        }
+        internal Owner(byte[] bytes) : base(bytes) => Acquire();
     }
 }

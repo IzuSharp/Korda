@@ -92,8 +92,8 @@ internal static class AllocationProbe
         using (var json = new Utf8JsonWriter(file, new JsonWriterOptions { Indented = true }))
         {
             json.WriteStartObject();
-            json.WriteNumber("schema", 1);
-            json.WriteString("kind", "isolated-internal-stream-transport-diagnostic");
+            json.WriteNumber("schema", 2);
+            json.WriteString("kind", "isolated-scoped-native-stream-transport-diagnostic");
             json.WriteString("lane", lane);
             json.WriteBoolean("publicProviderAcceptance", false);
             json.WriteString("sourceCommitDeclaredByRunner", Option(args, "--probe-source-commit=", "unspecified"));
@@ -130,7 +130,7 @@ internal static class AllocationProbe
                 : lane == "inbatch-control" ? "Independent synchronous arithmetic loop control, without TypedStream; no zero result is transferred to another lane."
                 : scalar ? "Repeated scalar validation only; immutable input and codec construction are excluded."
                 : "Every query's TypedStream construction (except driver controls), enumeration, all batch fetches, completion and cleanup are included. Synthetic payload/thread construction is excluded.");
-            json.WriteString("driver", "Bounded reusable immutable managed batch transport. Sync uses precreated completed tasks. Async allocates its own TCS/Task per fetch and publishes from one worker only after the consumer observes an incomplete await. Driver lanes report that cost separately.");
+            json.WriteString("driver", "Bounded reusable scoped-native owner transport. Each fetch copies setup bytes into a fresh NativeMemory buffer and roots only its release counter; that fixture work is inside whole-query/driver windows and outside in-batch windows. Sync uses precreated completed tasks. Async allocates its own TCS/Task per fetch and publishes from one worker only after the consumer observes an incomplete await. Driver totals remain separate and are not subtracted.");
             json.WriteStartArray("windows");
             foreach (var window in windows)
             {
@@ -280,14 +280,14 @@ internal static class AllocationProbe
     {
         private readonly object _gate = new();
         private readonly BatchOwner _data, _end;
-        private readonly Task<IStreamBatch> _dataTask, _endTask;
+        private readonly Task<ScopedStreamBatch> _dataTask, _endTask;
         private readonly Task<IStreamTransport> _start;
         private readonly Task<StreamRetirement> _join = Task.FromResult(new StreamRetirement(true, true, 0));
         private readonly int _batches;
         private readonly AutoResetEvent? _signal;
         private readonly Thread? _worker;
-        private TaskCompletionSource<IStreamBatch>? _pending;
-        private IStreamBatch? _pendingBatch;
+        private TaskCompletionSource<ScopedStreamBatch>? _pending;
+        private ScopedStreamBatch? _pendingBatch;
         private int _fetch, _stopped, _exit;
         internal long Fetches { get; private set; }
         internal int LiveBatches => _data.Active + _end.Active;
@@ -295,16 +295,16 @@ internal static class AllocationProbe
         internal Transport(byte[] data, byte[] end, int batches, bool asynchronous)
         {
             _data = new(data, false); _end = new(end, true); _batches = batches;
-            _dataTask = Task.FromResult<IStreamBatch>(_data); _endTask = Task.FromResult<IStreamBatch>(_end);
+            _dataTask = Task.FromResult(_data.Batch); _endTask = Task.FromResult(_end.Batch);
             _start = Task.FromResult<IStreamTransport>(this);
             if (asynchronous)
             {
                 _signal = new(false); _worker = new(CompleteLoop) { IsBackground = true, Name = "allocation-probe-fetch" }; _worker.Start();
             }
         }
-        internal Task<IStreamTransport> Start(int rows, CancellationToken token) { token.ThrowIfCancellationRequested(); return _start; }
+        internal ValueTask<IStreamTransport> Start(int rows, CancellationToken token) { token.ThrowIfCancellationRequested(); return new(_start); }
         internal void Reset() { AssertDrained(); _fetch = 0; _stopped = 0; }
-        public ValueTask<IStreamBatch> FetchAsync()
+        public ValueTask<ScopedStreamBatch> FetchAsync()
         {
             if (_stopped != 0 || LiveBatches != 0 || _fetch > _batches) throw new InvalidOperationException("Invalid bounded probe fetch.");
             var batch = _fetch++ == _batches ? _end : _data;
@@ -313,7 +313,7 @@ internal static class AllocationProbe
             lock (_gate)
             {
                 if (_pending is not null) throw new InvalidOperationException("A probe fetch is already pending.");
-                _pendingBatch = batch; _pending = new(TaskCreationOptions.RunContinuationsAsynchronously);
+                _pendingBatch = batch.Batch; _pending = new(TaskCreationOptions.RunContinuationsAsynchronously);
                 return new(_pending.Task);
             }
         }
@@ -328,7 +328,7 @@ internal static class AllocationProbe
             {
                 _signal!.WaitOne();
                 if (Volatile.Read(ref _exit) != 0) return;
-                TaskCompletionSource<IStreamBatch> pending; IStreamBatch batch;
+                TaskCompletionSource<ScopedStreamBatch> pending; ScopedStreamBatch batch;
                 lock (_gate)
                 {
                     pending = _pending ?? throw new InvalidOperationException("Missing pending fetch.");
@@ -348,13 +348,8 @@ internal static class AllocationProbe
             AssertDrained(); Volatile.Write(ref _exit, 1); _signal?.Set(); _worker?.Join(); _signal?.Dispose();
         }
     }
-    private sealed class BatchOwner(byte[] bytes, bool end) : IStreamBatch
+    private sealed class BatchOwner(byte[] bytes, bool end) : ScopedBatchFixture(bytes, end)
     {
-        private int _active;
-        internal int Active => Volatile.Read(ref _active);
-        internal void Acquire() { if (Interlocked.Exchange(ref _active, 1) != 0) throw new InvalidOperationException("Probe batch was reused before disposal."); }
-        public ReadOnlyMemory<byte> Bytes => Active != 0 ? bytes : throw new ObjectDisposedException(nameof(BatchOwner));
-        public bool End => end;
-        public void Dispose() => Interlocked.Exchange(ref _active, 0);
+        internal new int Active => base.Active ? 1 : 0;
     }
 }

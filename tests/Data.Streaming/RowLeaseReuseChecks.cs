@@ -17,7 +17,7 @@ internal static class RowLeaseReuseChecks
     internal static async Task RunAsync()
     {
         s_checks = 0;
-        foreach (var storage in new[] { "owned", "unmarked", "native" })
+        foreach (var storage in new[] { "native", "snapshot-input" })
         {
             ReattachAndCompensate(storage);
             await IndependentEnumerators(storage);
@@ -25,7 +25,7 @@ internal static class RowLeaseReuseChecks
             await ReentrantMapping(storage);
             ValidatedLayout(storage);
         }
-        Console.WriteLine($"PASS row lease reuse: {s_checks} assertions; inactive checks, ownership compensation, later malformed batches, independent enumerators and reentrant mapper rejection across owned/unmarked/native storage");
+        Console.WriteLine($"PASS row lease reuse: {s_checks} assertions; inactive checks, ownership compensation, later malformed batches, independent enumerators and reentrant mapper rejection across native storage and independently captured input");
     }
 
     private static byte[] Encode(params long?[] values)
@@ -44,12 +44,7 @@ internal static class RowLeaseReuseChecks
 
     private static ITrackedBatch Owner(string storage, byte[] bytes, bool end = false)
     {
-        ITrackedBatch result = storage switch
-        {
-            "native" => new BorrowedBatchFixture(bytes, end),
-            "owned" => new OwnedBatch(bytes, end),
-            _ => new ManagedBatch(bytes, end),
-        };
+        ITrackedBatch result = new ScopedBatchFixture(bytes, end);
         result.Acquire();
         return result;
     }
@@ -57,26 +52,25 @@ internal static class RowLeaseReuseChecks
     private static void ReattachAndCompensate(string storage)
     {
         var first = Owner(storage, Encode(1, 2));
-        var lease = new RowBatchLease(first, Expected, Shape.Fields, Limits);
+        var lease = new RowBatchLease(first.Batch, Expected, Shape.Fields, Limits);
         Check(lease.IsActive && lease.Rows == 2 && lease.Materialize(1, Shape) == 2, "initial row lease failed");
         var unaccepted = Owner(storage, Encode(99));
-        Throws<InvalidOperationException>(() => lease.Attach(unaccepted, Expected, Limits));
+        Throws<InvalidOperationException>(() => lease.Attach(unaccepted.Batch, Expected, Limits));
         Check(first.Disposals == 0 && unaccepted.Disposals == 0 && first.Active && unaccepted.Active,
             "active-lease rejection transferred or released an owner");
-        if (unaccepted is OwnedBatch untouched) Check(untouched.Takes == 0, "precondition rejection took incoming bytes");
         Check(lease.Materialize(0, Shape) == 1, "active-lease rejection changed the previous row");
         unaccepted.Dispose(); Released(unaccepted);
         lease.Dispose(); lease.Dispose(); Released(first); Inactive(lease);
 
         var second = Owner(storage, Encode(null, 301, 302));
-        lease.Attach(second, Expected, Limits);
-        Check(lease.IsActive && lease.Rows == 3 && lease.Value(0) is null && !lease.End,
+        lease.Attach(second.Batch, Expected, Limits);
+        Check(lease.IsActive && lease.Rows == 3 && lease.Materialize(0, Shape) is null && !lease.End,
             "attachment did not reset row zero or nullable state");
         Check(lease.Materialize(0, Shape) is null && lease.Materialize(2, Shape) == 302,
             "different-sized attachment materialized stale cells");
         lease.Dispose(); Released(second); Inactive(lease);
         var empty = Owner(storage, Encode(), end: true);
-        lease.Attach(empty, Expected, Limits);
+        lease.Attach(empty.Batch, Expected, Limits);
         Check(lease.Rows == 0 && lease.End, "terminal empty attachment changed");
         lease.Dispose(); Released(empty); Inactive(lease);
 
@@ -91,22 +85,21 @@ internal static class RowLeaseReuseChecks
             if (failure == "row-budget") limits = limits with { MaxBatchRows = 1 };
             if (failure == "empty-not-end") bytes = Encode();
             var incoming = Owner(storage, bytes);
-            var error = Throws<DatabaseException>(() => lease.Attach(incoming, Expected, limits));
+            var error = Throws<DatabaseException>(() => lease.Attach(incoming.Batch, Expected, limits));
             Check(error.Kind == (failure == "byte-budget" ? DatabaseErrorKind.ResourceLimit : DatabaseErrorKind.ShapeMismatch),
                 "attachment changed failure classification: " + failure);
             if (failure is "header" or "range" or "shape")
                 Check(error.InnerException is ArgumentException, "wire parser failure lost its original wrapper");
-            if (incoming is OwnedBatch transferred) Check(transferred.Takes == 1, "failed attachment transferred bytes more than once");
             Released(incoming); Inactive(lease);
             lease.Dispose(); Released(incoming);
         }
 
         var bytesAfterFailure = Encode(611);
         var afterFailure = Owner(storage, bytesAfterFailure);
-        lease.Attach(afterFailure, Expected, Limits);
-        if (storage == "unmarked") Array.Clear(bytesAfterFailure);
+        lease.Attach(afterFailure.Batch, Expected, Limits);
+        if (storage == "snapshot-input") Array.Clear(bytesAfterFailure);
         Check(!lease.End && lease.Rows == 1 && lease.Materialize(0, Shape) == 611,
-            "failed attachments left stale state or unmarked input lost defensive isolation");
+            "failed attachments left stale state or fixture input mutation reached the captured native payload");
         lease.Dispose(); Released(afterFailure); Inactive(lease);
     }
 
@@ -183,7 +176,7 @@ internal static class RowLeaseReuseChecks
         Check(!lease.IsActive, "retired or failed lease still reports active");
         Throws<ObjectDisposedException>(lease.AssertAlive);
         Throws<ObjectDisposedException>(() => { _ = lease.Rows; });
-        Throws<ObjectDisposedException>(() => { _ = lease.Value(0); });
+        Throws<ObjectDisposedException>(() => lease.AssertAlive());
         Throws<ObjectDisposedException>(() => { _ = lease.RowBytes(0); });
         Throws<ObjectDisposedException>(() => { _ = lease.Materialize(0, Shape); });
     }
@@ -206,7 +199,7 @@ internal static class RowLeaseReuseChecks
         });
         var expected = Expected with { MetadataHash = shape.ShapeBytes };
         var owner = Owner(storage, Encode(81, null));
-        using (var lease = new RowBatchLease(owner, expected, shape.Fields, Limits))
+        using (var lease = new RowBatchLease(owner.Batch, expected, shape.Fields, Limits))
         {
             Check(lease.Materialize(0, shape) == 81 && lease.Materialize(1, shape) is null && maps == 2,
                 "Validated layout changed equivalent codec reads or nullable values.");
@@ -225,12 +218,12 @@ internal static class RowLeaseReuseChecks
             catch (ObjectDisposedException) { s_checks++; return -1; }
         });
         var retiringOwner = Owner(storage, Encode(91));
-        retiring = new(retiringOwner, Expected with { MetadataHash = retiringShape.ShapeBytes }, retiringShape.Fields, Limits);
+        retiring = new(retiringOwner.Batch, Expected with { MetadataHash = retiringShape.ShapeBytes }, retiringShape.Fields, Limits);
         Check(retiring.Materialize(0, retiringShape) == -1, "A validated reader outlived its retired lease.");
         Released(retiringOwner); Inactive(retiring);
     }
     private static void Released(ITrackedBatch owner) => Check(owner.Disposals == 1 && !owner.Active
-        && (owner is not BorrowedBatchFixture || owner.NativeReleases == 1), "batch owner was not released exactly once");
+        && owner.NativeReleases == 1, "batch owner was not released exactly once");
     private static void Check(bool condition, string message)
     { s_checks++; if (!condition) throw new InvalidOperationException(message); }
     private static TException Throws<TException>(Action action) where TException : Exception
@@ -242,33 +235,10 @@ internal static class RowLeaseReuseChecks
     private sealed class BatchSequence(ITrackedBatch[] owners) : IStreamTransport
     {
         internal int Fetches, Joins;
-        public Task<IStreamTransport> Start(int rows, CancellationToken token) => Task.FromResult<IStreamTransport>(this);
-        public ValueTask<IStreamBatch> FetchAsync() => Fetches < owners.Length
-            ? new(owners[Fetches++]) : throw new InvalidOperationException("No fixture batch remains.");
+        public ValueTask<IStreamTransport> Start(int rows, CancellationToken token) => new(this);
+        public ValueTask<ScopedStreamBatch> FetchAsync() => Fetches < owners.Length
+            ? new(owners[Fetches++].Batch) : throw new InvalidOperationException("No fixture batch remains.");
         public void RequestStop() { }
         public Task<StreamRetirement> JoinAsync() { Joins++; return Task.FromResult(new StreamRetirement(true, true, 0)); }
-    }
-    private class ManagedBatch(byte[] bytes, bool end) : ITrackedBatch
-    {
-        protected byte[]? Payload = bytes;
-        private bool _active;
-        public bool Active => _active;
-        public int Disposals { get; private set; }
-        public int NativeReleases => 0;
-        public void Acquire()
-        { if (_active || Disposals != 0) throw new InvalidOperationException("Fixture owner acquired twice."); _active = true; }
-        public ReadOnlyMemory<byte> Bytes => Active && Payload is { } current ? current : throw new ObjectDisposedException(nameof(ManagedBatch));
-        public bool End => end;
-        public void Dispose()
-        { if (!_active) throw new InvalidOperationException("Fixture owner released twice."); Disposals++; _active = false; Payload = null; }
-    }
-    private sealed class OwnedBatch(byte[] bytes, bool end) : ManagedBatch(bytes, end), IOwnedStreamBatch
-    {
-        internal int Takes;
-        public byte[] TakeBytes()
-        {
-            var result = Interlocked.Exchange(ref Payload, null) ?? throw new InvalidOperationException("Fixture bytes transferred twice.");
-            Takes++; return result;
-        }
     }
 }

@@ -20,14 +20,14 @@ internal sealed class StreamProjectionLayout(object projection, WireExpectation 
 /// This internal assembly does not define a second DataSession, QuerySelection, runtime, or NuGet package.</remarks>
 internal sealed class TypedStream<T> : IAsyncEnumerable<T>
 {
-    private readonly Func<int, CancellationToken, Task<IStreamTransport>> _start;
+    private readonly Func<int, CancellationToken, ValueTask<IStreamTransport>> _start;
     private readonly Projection<T> _projection;
     private readonly WireExpectation _expected;
     private readonly StreamLimits _limits;
     private readonly CancellationToken _methodToken;
     private int _enumerated;
 
-    internal TypedStream(Func<int, CancellationToken, Task<IStreamTransport>> start, Projection<T> projection,
+    internal TypedStream(Func<int, CancellationToken, ValueTask<IStreamTransport>> start, Projection<T> projection,
         uint profile, uint projectionId, ReadOnlySpan<uint> boundCodecs, StreamLimits limits, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(start);
@@ -38,7 +38,7 @@ internal sealed class TypedStream<T> : IAsyncEnumerable<T>
         _start = start; _projection = projection; _limits = limits; _methodToken = cancellationToken;
     }
 
-    internal TypedStream(Func<int, CancellationToken, Task<IStreamTransport>> start, Projection<T> projection,
+    internal TypedStream(Func<int, CancellationToken, ValueTask<IStreamTransport>> start, Projection<T> projection,
         StreamProjectionLayout layout, StreamLimits limits, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(start);

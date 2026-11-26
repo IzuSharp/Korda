@@ -1,73 +1,134 @@
-using System.Runtime.InteropServices;
 using Korda.Data;
 
 namespace Korda.Database.Internal;
 
-/// <summary>Internal host seam for one independently owned, bounded batch.</summary>
-/// <remarks>Bytes are immutable and valid until disposal or an explicit owned handoff. The creating transport retains
-/// the native owner and its byte permit until Dispose. Native spans are consumed only within a synchronous read scope.</remarks>
-internal interface IStreamBatch : IDisposable
+/// <summary>One reusable native batch owner. Only synchronous span leases expose its storage.</summary>
+/// <remarks>Releasing a generation closes new reads immediately. Existing read scopes retain the pointer;
+/// another generation cannot attach before physical release finishes. The library lifetime stays bound.</remarks>
+internal sealed unsafe class ScopedStreamBatch : IDisposable
 {
-    ReadOnlyMemory<byte> Bytes { get; }
-    bool End { get; }
-}
+    private readonly object _gate = new();
+    private readonly delegate* unmanaged[Cdecl]<nint, void> _release;
+    private readonly object _lifetime;
+    private nint _owner, _address;
+    private int _length, _readers;
+    private long _generation;
+    private bool _active, _releasing, _closed, _end;
 
-/// <summary>Optional internal handoff for a host batch's exclusive managed copy.</summary>
-/// <remarks>TakeBytes transfers exactly once and invalidates Bytes. No writable
-/// aliases may remain. End and Dispose stay usable; the native owner and byte
-/// permit remain held until Dispose, including when parsing the array fails.
-/// Other IStreamBatch implementations keep the defensive-copy path.</remarks>
-internal interface IOwnedStreamBatch : IStreamBatch
-{
-    byte[] TakeBytes();
-}
-
-/// <summary>Trusted immutable native storage whose reads require a temporary SafeHandle reference.</summary>
-/// <remarks>The batch holds the ordinary SafeHandle owner; it never holds an extra reference across await.
-/// Parsing, row sizing and the complete synchronous projection call retain ReadOwner until consumption ends.
-/// Returned application values must own their data; borrowed memory never escapes a public row reader.</remarks>
-internal interface IBorrowedStreamBatch : IStreamBatch
-{
-    SafeHandle ReadOwner { get; }
-}
-
-/// <summary>A nonallocating native read lifetime; no scope may cross await.</summary>
-internal ref struct BatchReadScope
-{
-    private SafeHandle? _owner;
-    internal BatchReadScope(SafeHandle? owner)
+    internal ScopedStreamBatch(delegate* unmanaged[Cdecl]<nint, void> release, object lifetime)
     {
-        _owner = null;
-        if (owner is null) return;
-        var retained = false;
-        try { owner.DangerousAddRef(ref retained); _owner = owner; }
-        catch { if (retained) owner.DangerousRelease(); throw; }
+        if (release == null) throw new ArgumentNullException(nameof(release));
+        ArgumentNullException.ThrowIfNull(lifetime);
+        _release = release; _lifetime = lifetime;
     }
+    internal bool IsActive { get { lock (_gate) return _active; } }
+    internal bool CanAttach { get { lock (_gate) return !_closed && !_active && !_releasing && _owner == 0 && _readers == 0; } }
+    internal long Generation { get { lock (_gate) return _generation; } }
+    internal bool End { get { lock (_gate) return _end; } }
+
+    // Ownership transfers only on success. Rejected attachment leaves compensation with the caller.
+    internal void Attach(nint owner, nint address, int length, bool end)
+    {
+        if (owner == 0) throw new ArgumentException("A native batch requires an owner.", nameof(owner));
+        if (length < 0 || length != 0 && address == 0) throw new ArgumentOutOfRangeException(nameof(length));
+        lock (_gate)
+        {
+            ObjectDisposedException.ThrowIf(_closed, this);
+            if (_active || _releasing || _owner != 0 || _readers != 0)
+                throw new InvalidOperationException("The previous batch generation has not released its storage.");
+            var generation = checked(_generation + 1);
+            _owner = owner; _address = address; _length = length; _end = end;
+            _generation = generation; _active = true;
+        }
+    }
+    internal ScopedBatchRead AcquireRead() => AcquireRead(null);
+    internal ScopedBatchRead AcquireRead(long generation) => AcquireRead((long?)generation);
+    private ScopedBatchRead AcquireRead(long? generation)
+    {
+        lock (_gate)
+        {
+            ObjectDisposedException.ThrowIf(!_active || generation is { } expected && expected != _generation, this);
+            _readers = checked(_readers + 1);
+            return new(this, _generation, new ReadOnlySpan<byte>((void*)_address, _length));
+        }
+    }
+    public void Dispose() => ReleaseBatch(false);
+    internal void Close() => ReleaseBatch(true);
+    private void ReleaseBatch(bool permanent)
+    {
+        nint release;
+        lock (_gate)
+        {
+            _closed |= permanent; _active = false;
+            release = _readers == 0 ? Detach() : 0;
+        }
+        Release(release);
+    }
+    private nint Detach()
+    {
+        var owner = _owner;
+        if (owner == 0) return 0;
+        _owner = 0; _address = 0; _length = 0; _releasing = true;
+        return owner;
+    }
+    internal void EndRead(long generation)
+    {
+        nint release;
+        lock (_gate)
+        {
+            if (generation != _generation || _readers == 0)
+                throw new InvalidOperationException("A batch read scope must be released exactly once.");
+            _readers--;
+            release = _readers == 0 && !_active ? Detach() : 0;
+        }
+        Release(release);
+    }
+    private void Release(nint owner)
+    {
+        if (owner != 0)
+        {
+            try { _release(owner); }
+            finally
+            {
+                GC.KeepAlive(_lifetime);
+                lock (_gate) _releasing = false;
+            }
+        }
+        lock (_gate)
+            if (_closed && _owner == 0 && _readers == 0 && !_releasing) GC.SuppressFinalize(this);
+    }
+    ~ScopedStreamBatch() => ReleaseBatch(true);
+}
+
+/// <summary>A synchronous span lease; do not copy it or carry it across await.</summary>
+internal ref struct ScopedBatchRead
+{
+    private ScopedStreamBatch? _owner;
+    private readonly long _generation;
+    private ReadOnlySpan<byte> _bytes;
+    internal ScopedBatchRead(ScopedStreamBatch owner, long generation, ReadOnlySpan<byte> bytes)
+    { _owner = owner; _generation = generation; _bytes = bytes; }
+    internal readonly ReadOnlySpan<byte> Bytes => _owner is not null ? _bytes : throw new ObjectDisposedException(nameof(ScopedBatchRead));
     public void Dispose()
     {
-        var owner = _owner; _owner = null;
-        owner?.DangerousRelease();
+        var owner = _owner; _owner = null; _bytes = default;
+        owner?.EndRead(_generation);
     }
 }
 
-/// <summary>Provider-confirmed native retirement, distinct from physical protocol reuse and managed disposal.</summary>
+/// <summary>Provider-confirmed native retirement, distinct from protocol reuse and managed disposal.</summary>
 internal readonly record struct StreamRetirement(bool NativeRetired, bool ConnectionReusable, long ProviderRowsPeak);
 
-/// <summary>The internal B04 host composition seam; it owns no managed provider or public native handle.</summary>
-/// <remarks>Fetch transfers a batch once. Stop only records a request. Join awaits the real native provider
-/// cleanup owner, even if the enumerator or original operation was abandoned. A canceled token cannot locally
-/// complete an accepted fetch before its native terminal result. B06 never infers retirement from a dropped task.</remarks>
+/// <summary>The private cursor pull seam. Each cursor reuses one controller and one scoped batch owner.</summary>
 internal interface IStreamTransport
 {
-    ValueTask<IStreamBatch> FetchAsync();
-    // Called only when a known final batch replaces a fetch. A real host keeps
-    // the same source-admission failure boundary without dispatching more work.
+    ValueTask<ScopedStreamBatch> FetchAsync();
     void CheckReadAdmission() { }
     void RequestStop();
     Task<StreamRetirement> JoinAsync();
 }
 
-/// <summary>Finite managed batch and buffered-result capacities; these are charged encoded bytes, not CLR heap or RSS.</summary>
+/// <summary>Finite capacities charge encoded bytes, not CLR heap or RSS.</summary>
 internal readonly record struct StreamLimits(int MaxBatchRows, int MaxBatchBytes, int MaxBufferedRows, long MaxBufferedBytes)
 {
     internal static StreamLimits Default => new(256, 1024 * 1024, 10_000, 16 * 1024 * 1024);
@@ -79,90 +140,94 @@ internal readonly record struct StreamLimits(int MaxBatchRows, int MaxBatchBytes
     }
 }
 
-/// <summary>A synchronous B01 row lease over one validated, retained batch.</summary>
-/// <remarks>Complete wire identity and all cell ranges/types are checked before materialization. Disposing
-/// invalidates every reader and releases the creating transport's native owner exactly once. A serialized
-/// enumerator may attach its next owner only after disposal; no public reader survives its synchronous mapper.</remarks>
-internal sealed class RowBatchLease : IRowLease, IDisposable
+/// <summary>One validated layout and row lifetime over a scoped native generation.</summary>
+internal sealed class RowBatchLease : IRowLifetime, IDisposable
 {
-    private IStreamBatch? _owner;
-    private DbWire? _wire;
+    private readonly object _gate = new();
+    private ScopedStreamBatch? _owner;
+    private WireLayout? _layout;
     private readonly ResultField[] _fields;
     private object? _validatedProjection;
     private WireExpectation? _validatedExpectation;
-    private uint _row;
-    internal RowBatchLease(IStreamBatch owner, WireExpectation expected, ResultField[] fields, StreamLimits limits)
-    {
-        _fields = fields;
-        Attach(owner, expected, limits);
-    }
-    internal bool IsActive => _wire.HasValue;
-    // Reject an active lease before accepting ownership. After this precondition,
-    // all validation failures compensate the incoming owner exactly once.
-    internal void Attach(IStreamBatch owner, WireExpectation expected, StreamLimits limits)
-    {
-        if (IsActive) throw new InvalidOperationException("The previous row batch must be disposed before attachment.");
-        try
-        {
-            using var read = new BatchReadScope((owner as IBorrowedStreamBatch)?.ReadOwner);
-            byte[]? ownedBytes = null;
-            ReadOnlyMemory<byte> bytes;
-            if (owner is IOwnedStreamBatch owned)
-            {
-                ownedBytes = owned.TakeBytes();
-                bytes = ownedBytes;
-            }
-            else bytes = owner.Bytes;
-            if (bytes.Length > limits.MaxBatchBytes) throw new DatabaseException("Native batch exceeds its admitted byte limit.", DatabaseErrorKind.ResourceLimit);
-            var wire = ownedBytes is not null ? DbWire.ParseOwned(ownedBytes, expected)
-                : owner is IBorrowedStreamBatch ? DbWire.ParseBorrowed(bytes, expected) : DbWire.Parse(bytes.Span, expected);
-            if (wire.Rows > limits.MaxBatchRows || wire.Rows == 0 && !owner.End)
-                throw new DatabaseException("Native batch row count or end marker is invalid.", DatabaseErrorKind.ShapeMismatch);
-            var end = owner.End;
-            _owner = owner;
-            _wire = wire;
-            _row = 0;
-            End = end;
-        }
-        catch (ArgumentException exception)
-        {
-            owner.Dispose();
-            throw new DatabaseException("Native row batch does not match the admitted shape.", DatabaseErrorKind.ShapeMismatch, innerException: exception);
-        }
-        catch { owner.Dispose(); throw; }
-    }
-    internal uint Rows => Wire.Rows;
+    private long _generation;
+    private int _active, _readers;
+
+    internal RowBatchLease(ScopedStreamBatch owner, WireExpectation expected, ResultField[] fields, StreamLimits limits)
+    { _fields = fields; Attach(owner, expected, limits); }
+    internal bool IsActive => Volatile.Read(ref _active) != 0;
+    internal uint Rows { get { lock (_gate) return Layout.Rows; } }
     internal bool End { get; private set; }
+    internal void Attach(ScopedStreamBatch owner, WireExpectation expected, StreamLimits limits)
+    {
+        lock (_gate)
+        {
+            if (IsActive || _readers != 0)
+                throw new InvalidOperationException("The previous row batch must finish every read before attachment.");
+            try
+            {
+                var generation = owner.Generation;
+                using var read = owner.AcquireRead(generation);
+                if (read.Bytes.Length > limits.MaxBatchBytes)
+                    throw new DatabaseException("Native batch exceeds its admitted byte limit.", DatabaseErrorKind.ResourceLimit);
+                var layout = DbWire.Validate(read.Bytes, expected);
+                if (layout.Rows > limits.MaxBatchRows || layout.Rows == 0 && !owner.End)
+                    throw new DatabaseException("Native batch row count or end marker is invalid.", DatabaseErrorKind.ShapeMismatch);
+                _owner = owner; _generation = generation; _layout = layout; End = owner.End;
+                Volatile.Write(ref _active, 1);
+            }
+            catch (ArgumentException error)
+            {
+                owner.Dispose();
+                throw new DatabaseException("Native row batch does not match the admitted shape.", DatabaseErrorKind.ShapeMismatch, innerException: error);
+            }
+            catch { owner.Dispose(); throw; }
+        }
+    }
     internal long RowBytes(uint row)
     {
-        using var read = new BatchReadScope((_owner as IBorrowedStreamBatch)?.ReadOwner);
-        var wire = Wire;
-        long bytes = checked(_fields.Length * (long)WireSchema.CellBytes);
-        for (var i = 0; i < _fields.Length; i++) bytes = checked(bytes + (wire.Cell(row, i)?.Length ?? 0));
-        return bytes;
+        var read = BeginRead(out var layout);
+        try
+        {
+            long bytes = checked(_fields.Length * (long)WireSchema.CellBytes);
+            for (var i = 0; i < _fields.Length; i++) bytes = checked(bytes + layout.Cell(read.Bytes, row, i, out _).Length);
+            return bytes;
+        }
+        finally { read.Dispose(); EndRead(); }
     }
     internal T Materialize<T>(uint row, Projection<T> projection)
     {
-        using var read = new BatchReadScope((_owner as IBorrowedStreamBatch)?.ReadOwner);
-        var wire = Wire;
-        if (row >= wire.Rows) throw new ArgumentOutOfRangeException(nameof(row));
-        _row = row;
-        if (!ReferenceEquals(_validatedProjection, projection) || !ReferenceEquals(_validatedExpectation, wire.Expected))
+        var read = BeginRead(out var layout);
+        try
         {
-            if (!projection.MatchesValidatedBatch(_fields, wire.Expected)) return projection.Read(this);
-            _validatedProjection = projection; _validatedExpectation = wire.Expected;
+            if (row >= layout.Rows) throw new ArgumentOutOfRangeException(nameof(row));
+            var validated = ReferenceEquals(_validatedProjection, projection) && ReferenceEquals(_validatedExpectation, layout.Expected);
+            if (!validated && projection.MatchesValidatedBatch(_fields, layout.Expected))
+            { _validatedProjection = projection; _validatedExpectation = layout.Expected; validated = true; }
+            return projection.ReadBatch(this, _fields, layout, read.Bytes, row, validated);
         }
-        return projection.ReadValidatedBatch(this);
+        finally { read.Dispose(); EndRead(); }
     }
-    private DbWire Wire => _wire ?? throw new ObjectDisposedException(nameof(RowBatchLease));
-    public int Count { get { AssertAlive(); return _fields.Length; } }
-    public string Name(int ordinal) { AssertAlive(); return _fields[ordinal].Name; }
-    public CodecDescriptor Codec(int ordinal) { AssertAlive(); return _fields[ordinal].Descriptor; }
-    public ReadOnlyMemory<byte>? Value(int ordinal) => Wire.Cell(_row, ordinal);
-    public void AssertAlive() => ObjectDisposedException.ThrowIf(_wire is null, this);
+    private ScopedBatchRead BeginRead(out WireLayout layout)
+    {
+        lock (_gate)
+        {
+            layout = Layout;
+            var read = _owner!.AcquireRead(_generation);
+            _readers++;
+            return read;
+        }
+    }
+    private void EndRead() { lock (_gate) _readers--; }
+    private WireLayout Layout => _layout ?? throw new ObjectDisposedException(nameof(RowBatchLease));
+    public void AssertAlive() => ObjectDisposedException.ThrowIf(!IsActive, this);
     public void Dispose()
     {
-        _wire = null;
-        Interlocked.Exchange(ref _owner, null)?.Dispose();
+        ScopedStreamBatch? owner;
+        lock (_gate)
+        {
+            Volatile.Write(ref _active, 0); _layout = null;
+            owner = _owner; _owner = null;
+        }
+        owner?.Dispose();
     }
 }

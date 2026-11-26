@@ -4,8 +4,8 @@
 // CMake derives this private C++ view from the byte-frozen C header, changing
 // only its `template` parameter name. Every definition is type-checked against
 // the normative declarations; applications still consume the original C ABI.
+#include "../../database/binding/korda_cursor_pull_v1.h"
 #include "../../database/binding/korda_query_command_v1.h"
-#include "../../database/binding/korda_result_batch_v1.h"
 #include "nw_database_declarations.hpp"
 
 #include <algorithm>
@@ -213,6 +213,115 @@ std::uint64_t remaining_command_time(std::uint64_t timeout_ns, Clock::time_point
     return elapsed >= std::chrono::nanoseconds(timeout_ns) ? 0
                                                            : timeout_ns - static_cast<std::uint64_t>(elapsed.count());
 }
+struct CapturedExecution
+{
+    std::shared_ptr<SqlPlan> plan;
+    std::shared_ptr<CommandGate> gate;
+};
+CapturedExecution capture_execution(const std::shared_ptr<Session>& session, nw_db_ref input,
+                                    nw_bytes_view_v1 arguments)
+{
+    auto value = owner(input);
+    auto bytes = borrow(arguments);
+    auto gate = session->admit(false);
+    std::shared_ptr<SqlPlan> plan;
+    if (auto sql = std::get_if<std::shared_ptr<SqlPlan>>(&value->data))
+    {
+        plan = *sql;
+        if (!bytes.empty() && (bytes.size() != plan->parameters.size() ||
+                               !std::equal(bytes.begin(), bytes.end(), plan->parameters.begin())))
+            throw Error::invalid("raw command arguments changed");
+        if (plan->kind == 2)
+        {
+            std::lock_guard lock(session->mutex);
+            if (auto tx = session->transaction.lock())
+            {
+                std::lock_guard state(tx->mutex);
+                if (!tx->retired)
+                    throw Error::state("session mutation in a transaction");
+            }
+        }
+        plan->submit(*session->source);
+    }
+    else if (auto native = std::get_if<std::shared_ptr<NativePlan>>(&value->data))
+    {
+        if (value->source->identity != session->source->identity)
+            throw Error::state("mixed plan source");
+        if ((*native)->requires_transaction())
+        {
+            std::shared_ptr<Transaction> tx;
+            {
+                std::lock_guard lock(session->mutex);
+                tx = session->transaction.lock();
+            }
+            if (!tx || !tx->active())
+                throw Error::state("row locking requires an active explicit transaction");
+        }
+        auto rendered = (*native)->render(session->source->identity, bytes, &session->source->shapes);
+        plan = SqlPlan::rendered(session->source, std::move(rendered));
+    }
+    else
+        throw Error::state("execution plan required");
+    return {std::move(plan), std::move(gate)};
+}
+struct CapturedTimedExecution
+{
+    std::shared_ptr<SqlPlan> plan;
+    std::shared_ptr<CommandGate> gate;
+    std::uint64_t timeout;
+    Clock::time_point admitted;
+    Mutation mutation{};
+};
+CapturedTimedExecution capture_relation(const std::shared_ptr<Session>& session, nw_db_ref input, nw_bytes_view_v1 key,
+                                        std::uint32_t projection)
+{
+    auto relation = typed<std::shared_ptr<RelationBinding>>(input);
+    auto source = session->source;
+    if (relation->source != source->identity)
+        throw Error(NW_INVALID_STATE, 13, "mixed relation load source");
+    const auto limits = source->config.limits.binding();
+    const auto timeout = source->config.limits.command_ns;
+    const auto admitted = Clock::now();
+    if (!timeout)
+        throw Error(NW_TIMEOUT, 8, "relation deadline expired");
+    const auto bytes = borrow(key);
+    const auto arity = relation->parent.model->keys().size();
+    // The B14 Host applies these capacity checks before projection
+    // lookup and the binding compiler's own argument validation.
+    if (bytes.size() > limits.bytes || arity > limits.parameters || arity > limits.nodes / 3 || limits.depth < 2)
+        throw Error::capacity();
+    auto rendered =
+        compile_relation(*relation, source->identity, bytes, source->projection(projection), limits, timeout);
+    auto plan = SqlPlan::rendered(source, std::move(rendered));
+    plan->relation = relation;
+    auto gate = session->admit(false);
+    return {std::move(plan), std::move(gate), timeout, admitted, {}};
+}
+CapturedTimedExecution capture_mutation(const std::shared_ptr<Session>& session, nw_db_ref input, std::uint32_t kind,
+                                        nw_bytes_view_v1 payload)
+{
+    auto model = typed<ModelBinding>(input);
+    auto source = session->source;
+    if (model.source != source->identity)
+        throw Error(NW_INVALID_STATE, 13, "mixed mutation source");
+    source->admit();
+    auto bytes = borrow(payload);
+    std::optional<ProjectionBinding> projection;
+    if (kind == 1)
+    {
+        auto fields = Fields::parse(bytes, 4, {{1, 1, true}, {2, 5, true}, {7, 1, true}});
+        projection = source->projection(fields.u32(7));
+    }
+    const auto timeout = source->config.limits.command_ns;
+    const auto admitted = Clock::now();
+    auto mutation = compile_mutation(model, kind, bytes, projection, source->config.limits.binding(), timeout);
+    if (mutation.input_rows > source->config.limits.batch_rows)
+        throw Error::capacity();
+    auto plan = SqlPlan::rendered(source, std::move(mutation.command));
+    plan->kind = 1;
+    auto gate = session->admit(false);
+    return {std::move(plan), std::move(gate), timeout, admitted, std::move(mutation)};
+}
 std::shared_ptr<Buffer> snapshot_buffer(const std::shared_ptr<Owner>& value)
 {
     Bytes bytes;
@@ -224,6 +333,8 @@ std::shared_ptr<Buffer> snapshot_buffer(const std::shared_ptr<Owner>& value)
         bytes = (*cursor)->snapshot();
     else if (auto transaction = std::get_if<std::shared_ptr<Transaction>>(&value->data))
         bytes = (*transaction)->snapshot();
+    else if (auto pull = std::get_if<std::shared_ptr<CursorPull>>(&value->data))
+        bytes = (*pull)->snapshot();
     else
         throw Error::state("owner has no snapshot");
     return std::make_shared<Buffer>(value->source, std::move(bytes));
@@ -378,24 +489,6 @@ NW_DATABASE_API nw_status NW_CDECL nw_db_operation_take_buffer_v1(nw_db_ref raw,
                         auto buffer = std::get<std::shared_ptr<Buffer>>(std::move(value));
                         buffer->mark_taken();
                         *output = reinterpret_cast<nw_db_buffer*>(publish(std::move(buffer)));
-                    });
-}
-NW_DATABASE_API nw_status NW_CDECL nw_db_operation_take_batch_v1(nw_db_ref raw, nw_db_batch_result_v1* output,
-                                                                 nw_error_info_v1* error)
-{
-    return boundary(error,
-                    [&]
-                    {
-                        clear(output);
-                        auto value = take(get<std::shared_ptr<DbOperation>>(raw), 101);
-                        if (!std::holds_alternative<std::shared_ptr<Buffer>>(value))
-                            throw Error::state("buffer result required");
-                        auto buffer = std::get<std::shared_ptr<Buffer>>(std::move(value));
-                        const nw_bytes_view_v1 bytes{buffer->bytes.data(), buffer->bytes.size()};
-                        const auto known_end = buffer->known_end ? 1u : 0u;
-                        buffer->mark_taken();
-                        auto owner = reinterpret_cast<nw_db_buffer*>(publish(std::move(buffer)));
-                        *output = {owner, bytes, known_end, 0};
                     });
 }
 NW_DATABASE_API nw_status NW_CDECL nw_db_operation_take_error_v1(nw_db_ref raw, nw_db_buffer** output,
@@ -751,48 +844,7 @@ NW_DATABASE_API nw_status NW_CDECL nw_db_execute_create_v1(nw_db_ref raw, nw_db_
                     {
                         clear(output);
                         auto session = typed<std::shared_ptr<Session>>(raw);
-                        auto value = owner(input);
-                        auto bytes = borrow(arguments);
-                        auto gate = session->admit(false);
-                        std::shared_ptr<SqlPlan> plan;
-                        if (auto sql = std::get_if<std::shared_ptr<SqlPlan>>(&value->data))
-                        {
-                            plan = *sql;
-                            if (!bytes.empty() && (bytes.size() != plan->parameters.size() ||
-                                                   !std::equal(bytes.begin(), bytes.end(), plan->parameters.begin())))
-                                throw Error::invalid("raw command arguments changed");
-                            if (plan->kind == 2)
-                            {
-                                std::lock_guard lock(session->mutex);
-                                if (auto tx = session->transaction.lock())
-                                {
-                                    std::lock_guard state(tx->mutex);
-                                    if (!tx->retired)
-                                        throw Error::state("session mutation in a transaction");
-                                }
-                            }
-                            plan->submit(*session->source);
-                        }
-                        else if (auto native = std::get_if<std::shared_ptr<NativePlan>>(&value->data))
-                        {
-                            if (value->source->identity != session->source->identity)
-                                throw Error::state("mixed plan source");
-                            if ((*native)->requires_transaction())
-                            {
-                                std::shared_ptr<Transaction> tx;
-                                {
-                                    std::lock_guard lock(session->mutex);
-                                    tx = session->transaction.lock();
-                                }
-                                if (!tx || !tx->active())
-                                    throw Error::state("row locking requires an active explicit transaction");
-                            }
-                            auto rendered =
-                                (*native)->render(session->source->identity, bytes, &session->source->shapes);
-                            plan = SqlPlan::rendered(session->source, std::move(rendered));
-                        }
-                        else
-                            throw Error::state("execution plan required");
+                        auto [plan, gate] = capture_execution(session, input, arguments);
                         const auto kind = plan->result_kind == 0 || plan->scalar_count ? 100 : 2;
                         output_operation(output, DbOperation::create(session->source, kind, false,
                                                                      [session, plan, gate](auto cancel)
@@ -816,113 +868,185 @@ NW_DATABASE_API nw_status NW_CDECL nw_db_cursor_fetch_create_v1(nw_db_ref raw, s
                                         { return cursor->fetch(cancel, rows, static_cast<std::size_t>(bytes)); }));
                     });
 }
-NW_DATABASE_API nw_status NW_CDECL nw_db_cursor_check_read_admission_v1(nw_db_ref raw, nw_error_info_v1* error)
-{
-    return boundary(error, [&] { typed<std::shared_ptr<Cursor>>(raw)->check_read_admission(); });
-}
 NW_DATABASE_API nw_status NW_CDECL nw_db_relation_load_create_v1(nw_db_ref raw, nw_db_ref input, nw_bytes_view_v1 key,
                                                                  std::uint32_t projection, nw_db_ref* output,
                                                                  nw_error_info_v1* error)
 {
-    return boundary(
-        error,
-        [&]
-        {
-            clear(output);
-            auto session = typed<std::shared_ptr<Session>>(raw);
-            auto relation = typed<std::shared_ptr<RelationBinding>>(input);
-            auto source = session->source;
-            if (relation->source != source->identity)
-                throw Error(NW_INVALID_STATE, 13, "mixed relation load source");
-            const auto limits = source->config.limits.binding();
-            const auto timeout = source->config.limits.command_ns;
-            const auto admitted = Clock::now();
-            if (!timeout)
-                throw Error(NW_TIMEOUT, 8, "relation deadline expired");
-            const auto bytes = borrow(key);
-            const auto arity = relation->parent.model->keys().size();
-            // The B14 Host applies these capacity checks before projection
-            // lookup and the binding compiler's own argument validation.
-            if (bytes.size() > limits.bytes || arity > limits.parameters || arity > limits.nodes / 3 ||
-                limits.depth < 2)
-                throw Error::capacity();
-            auto rendered =
-                compile_relation(*relation, source->identity, bytes, source->projection(projection), limits, timeout);
-            auto plan = SqlPlan::rendered(source, std::move(rendered));
-            plan->relation = relation;
-            auto gate = session->admit(false);
-            output_operation(output, DbOperation::create(source, 2, false,
-                                                         [session, plan, gate, timeout, admitted](auto cancel)
-                                                         {
-                                                             // Preserve B14's create-time total deadline, including
-                                                             // copied input, delayed Start and worker queue time.
-                                                             plan->timeout_ns =
-                                                                 remaining_command_time(timeout, admitted);
-                                                             return session->execute(plan, cancel, gate);
-                                                         }));
-        });
+    return boundary(error,
+                    [&]
+                    {
+                        clear(output);
+                        auto session = typed<std::shared_ptr<Session>>(raw);
+                        auto captured = capture_relation(session, input, key, projection);
+                        auto source = session->source;
+                        auto plan = std::move(captured.plan);
+                        auto gate = std::move(captured.gate);
+                        const auto timeout = captured.timeout;
+                        const auto admitted = captured.admitted;
+                        output_operation(output,
+                                         DbOperation::create(source, 2, false,
+                                                             [session, plan, gate, timeout, admitted](auto cancel)
+                                                             {
+                                                                 // Preserve B14's create-time total deadline, including
+                                                                 // copied input, delayed Start and worker queue time.
+                                                                 plan->timeout_ns =
+                                                                     remaining_command_time(timeout, admitted);
+                                                                 return session->execute(plan, cancel, gate);
+                                                             }));
+                    });
 }
 NW_DATABASE_API nw_status NW_CDECL nw_db_mutation_create_v1(nw_db_ref raw, nw_db_ref input, std::uint32_t kind,
                                                             nw_bytes_view_v1 payload, nw_db_ref* output,
                                                             nw_error_info_v1* error)
 {
-    return boundary(
-        error,
-        [&]
-        {
-            clear(output);
-            auto session = typed<std::shared_ptr<Session>>(raw);
-            auto model = typed<ModelBinding>(input);
-            auto source = session->source;
-            if (model.source != source->identity)
-                throw Error(NW_INVALID_STATE, 13, "mixed mutation source");
-            source->admit();
-            auto bytes = borrow(payload);
-            std::optional<ProjectionBinding> projection;
-            if (kind == 1)
-            {
-                auto fields = Fields::parse(bytes, 4, {{1, 1, true}, {2, 5, true}, {7, 1, true}});
-                projection = source->projection(fields.u32(7));
-            }
-            const auto timeout = source->config.limits.command_ns;
-            const auto admitted = Clock::now();
-            auto mutation = compile_mutation(model, kind, bytes, projection, source->config.limits.binding(), timeout);
-            if (mutation.input_rows > source->config.limits.batch_rows)
-                throw Error::capacity();
-            auto plan = SqlPlan::rendered(source, std::move(mutation.command));
-            plan->kind = 1;
-            auto gate = session->admit(false);
-            output_operation(output, DbOperation::create(
-                                         source, kind == 1 ? 2 : 100, false,
-                                         [session, plan, gate, mutation, kind, timeout, admitted](auto cancel) -> Value
-                                         {
-                                             try
-                                             {
-                                                 plan->timeout_ns = remaining_command_time(timeout, admitted);
-                                                 auto value = session->execute(plan, cancel, gate);
-                                                 if (auto count = std::get_if<std::int64_t>(&value))
-                                                     mutation.validate_affected(*count);
-                                                 return value;
-                                             }
-                                             catch (Error& error)
-                                             {
-                                                 if (kind == 0)
-                                                 {
-                                                     std::uint32_t outcome = 0;
-                                                     {
-                                                         std::lock_guard lock(session->mutex);
-                                                         if (auto tx = session->transaction.lock())
-                                                         {
-                                                             std::lock_guard state(tx->mutex);
-                                                             outcome = tx->outcome;
-                                                         }
-                                                     }
-                                                     error.bulk = NativeBulkProgress{0, 0, false, outcome};
-                                                 }
-                                                 throw;
-                                             }
-                                         }));
-        });
+    return boundary(error,
+                    [&]
+                    {
+                        clear(output);
+                        auto session = typed<std::shared_ptr<Session>>(raw);
+                        auto captured = capture_mutation(session, input, kind, payload);
+                        auto source = session->source;
+                        auto plan = std::move(captured.plan);
+                        auto gate = std::move(captured.gate);
+                        auto mutation = std::move(captured.mutation);
+                        const auto timeout = captured.timeout;
+                        const auto admitted = captured.admitted;
+                        output_operation(
+                            output, DbOperation::create(
+                                        source, kind == 1 ? 2 : 100, false,
+                                        [session, plan, gate, mutation, kind, timeout, admitted](auto cancel) -> Value
+                                        {
+                                            try
+                                            {
+                                                plan->timeout_ns = remaining_command_time(timeout, admitted);
+                                                auto value = session->execute(plan, cancel, gate);
+                                                if (auto count = std::get_if<std::int64_t>(&value))
+                                                    mutation.validate_affected(*count);
+                                                return value;
+                                            }
+                                            catch (Error& error)
+                                            {
+                                                if (kind == 0)
+                                                {
+                                                    std::uint32_t outcome = 0;
+                                                    {
+                                                        std::lock_guard lock(session->mutex);
+                                                        if (auto tx = session->transaction.lock())
+                                                        {
+                                                            std::lock_guard state(tx->mutex);
+                                                            outcome = tx->outcome;
+                                                        }
+                                                    }
+                                                    error.bulk = NativeBulkProgress{0, 0, false, outcome};
+                                                }
+                                                throw;
+                                            }
+                                        }));
+                    });
+}
+
+NW_DATABASE_API nw_status NW_CDECL nw_db_cursor_pull_create_v1(nw_db_ref raw, nw_db_ref input,
+                                                               nw_bytes_view_v1 arguments, nw_db_ref* output,
+                                                               nw_error_info_v1* error)
+{
+    return boundary(error,
+                    [&]
+                    {
+                        clear(output);
+                        auto session = typed<std::shared_ptr<Session>>(raw);
+                        auto [plan, gate] = capture_execution(session, input, arguments);
+                        auto pull = CursorPull::create(session, std::move(plan), std::move(gate));
+                        output_owner(output, session->source, std::move(pull));
+                    });
+}
+NW_DATABASE_API nw_status NW_CDECL nw_db_cursor_pull_relation_create_v1(nw_db_ref raw, nw_db_ref input,
+                                                                        nw_bytes_view_v1 key, std::uint32_t projection,
+                                                                        nw_db_ref* output, nw_error_info_v1* error)
+{
+    return boundary(error,
+                    [&]
+                    {
+                        clear(output);
+                        auto session = typed<std::shared_ptr<Session>>(raw);
+                        auto captured = capture_relation(session, input, key, projection);
+                        auto pull = CursorPull::create(session, std::move(captured.plan), std::move(captured.gate),
+                                                       captured.admitted);
+                        output_owner(output, session->source, std::move(pull));
+                    });
+}
+NW_DATABASE_API nw_status NW_CDECL nw_db_cursor_pull_mutation_create_v1(nw_db_ref raw, nw_db_ref input,
+                                                                        std::uint32_t kind, nw_bytes_view_v1 payload,
+                                                                        nw_db_ref* output, nw_error_info_v1* error)
+{
+    return boundary(error,
+                    [&]
+                    {
+                        clear(output);
+                        auto session = typed<std::shared_ptr<Session>>(raw);
+                        auto captured = capture_mutation(session, input, kind, payload);
+                        auto pull = CursorPull::create(session, std::move(captured.plan), std::move(captured.gate),
+                                                       captured.admitted);
+                        output_owner(output, session->source, std::move(pull));
+                    });
+}
+NW_DATABASE_API nw_status NW_CDECL nw_db_cursor_pull_request_v1(nw_db_ref raw, std::uint64_t generation,
+                                                                std::uint32_t rows, std::uint64_t bytes,
+                                                                const nw_db_cursor_callbacks_v1* callbacks,
+                                                                nw_error_info_v1* error)
+{
+    return boundary(error,
+                    [&]
+                    {
+                        auto pull = typed<std::shared_ptr<CursorPull>>(raw);
+                        if (!callbacks ||
+                            reinterpret_cast<std::uintptr_t>(callbacks) % alignof(nw_db_cursor_callbacks_v1))
+                            throw Error::invalid("cursor callback record address");
+                        if (bytes > MAX_BYTES)
+                            throw Error::invalid("fetch capacity");
+                        pull->request(generation, rows, static_cast<std::size_t>(bytes), *callbacks);
+                    });
+}
+NW_DATABASE_API nw_status NW_CDECL nw_db_cursor_pull_take_v1(nw_db_ref raw, std::uint64_t generation,
+                                                             nw_db_batch_result_v1* output, nw_error_info_v1* error)
+{
+    return boundary(error,
+                    [&]
+                    {
+                        clear(output);
+                        auto buffer = typed<std::shared_ptr<CursorPull>>(raw)->take(generation);
+                        const nw_bytes_view_v1 bytes{buffer->bytes.data(), buffer->bytes.size()};
+                        const auto known_end = buffer->known_end ? 1u : 0u;
+                        buffer->mark_taken();
+                        auto owner = reinterpret_cast<nw_db_buffer*>(publish(std::move(buffer)));
+                        *output = {owner, bytes, known_end, 0};
+                    });
+}
+NW_DATABASE_API nw_status NW_CDECL nw_db_cursor_pull_take_error_v1(nw_db_ref raw, std::uint64_t generation,
+                                                                   nw_db_buffer** output, nw_error_info_v1* error)
+{
+    return boundary(error,
+                    [&]
+                    {
+                        clear(output);
+                        auto pull = typed<std::shared_ptr<CursorPull>>(raw);
+                        auto failure = pull->take_error(generation);
+                        auto bytes = snapshot_record(0, 0, false, failure.cleanup ? 4 : 0, failure.cleanup ? 2 : 0,
+                                                     false, false, failure.correlation, failure.provider);
+                        if (failure.bulk)
+                        {
+                            auto bulk = failure.bulk->encode();
+                            bytes.insert(bytes.end(), bulk.begin(), bulk.end());
+                        }
+                        output_buffer(output, pull->session->source, std::move(bytes));
+                    });
+}
+NW_DATABASE_API nw_status NW_CDECL nw_db_cursor_pull_check_read_v1(nw_db_ref raw, nw_error_info_v1* error)
+{
+    return boundary(error, [&] { typed<std::shared_ptr<CursorPull>>(raw)->check_read_admission(); });
+}
+NW_DATABASE_API nw_status NW_CDECL nw_db_cursor_pull_stop_v1(nw_db_ref raw)
+{
+    return boundary(nullptr, [&] { typed<std::shared_ptr<CursorPull>>(raw)->request_close(); });
 }
 
 NW_DATABASE_API nw_status NW_CDECL nw_db_tx_begin_create_v1(nw_db_ref raw, nw_bytes_view_v1 bytes, nw_db_ref* output,
@@ -1092,6 +1216,14 @@ NW_DATABASE_API nw_status NW_CDECL nw_db_close_create_v1(nw_db_ref raw, nw_db_re
                                 return std::make_shared<Buffer>(source, cursor->snapshot());
                             };
                         }
+                        else if (auto pull = std::get_if<std::shared_ptr<CursorPull>>(&value->data))
+                        {
+                            action = [pull = *pull, source](auto) -> Value
+                            {
+                                pull->join();
+                                return std::make_shared<Buffer>(source, pull->snapshot());
+                            };
+                        }
                         else if (auto tx = std::get_if<std::shared_ptr<Transaction>>(&value->data))
                         {
                             action = [tx = *tx, source](auto) -> Value
@@ -1181,6 +1313,8 @@ NW_DATABASE_API std::uint64_t NW_CDECL nw_db_diagnostic_count_v1(std::uint32_t k
             return provider_dispatch_count();
         case 7:
             return provider_protocol_count();
+        case 8:
+            return pull_count.load();
         default:
             return 0;
     }

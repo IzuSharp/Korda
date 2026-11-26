@@ -72,13 +72,15 @@ public sealed class ValueCodec<T>
     internal static DatabaseException Capacity() => new("The value exceeds the finite snapshot byte budget.", DatabaseErrorKind.ResourceLimit);
     internal T DecodeScalar(ReadOnlySpan<byte> bytes) => _decode(bytes);
     internal T Decode(ReadOnlyMemory<byte>? value)
+        => Decode(value.GetValueOrDefault().Span, value is null);
+    internal T Decode(ReadOnlySpan<byte> value, bool isNull)
     {
-        if (value is null)
+        if (isNull)
         {
             if (!Descriptor.Nullable) throw new DatabaseException("SQL NULL is not allowed by this codec.", DatabaseErrorKind.Conversion);
             return default!;
         }
-        try { return _decode(value.Value.Span); }
+        try { return _decode(value); }
         catch (Exception e) when (e is ArgumentException or OverflowException or FormatException or JsonException)
         { throw new DatabaseException("The wire value does not match its declared codec.", DatabaseErrorKind.Conversion, innerException: e); }
     }

@@ -4,6 +4,7 @@
     <AssemblyName>Korda.Data.Streaming</AssemblyName>
     <RootNamespace>Korda.Database.Internal</RootNamespace>
     <IsAotCompatible>true</IsAotCompatible>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifiers)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifiers).aot.lock.json</NuGetLockFilePath>
     <NuGetLockFilePath Condition="'$(PublishAot)' == 'true' and '$(RuntimeIdentifier)' != ''">$(MSBuildProjectDirectory)/packages.$(RuntimeIdentifier).aot.lock.json</NuGetLockFilePath>
@@ -11,6 +12,7 @@
   <ItemGroup>
     <ProjectReference Include="../Data.Abstractions/Korda.Data.csproj" />
     <InternalsVisibleTo Include="Korda.Data.Streaming.Tests" />
+    <InternalsVisibleTo Include="Korda.Data.NativeHost.Tests" />
     <InternalsVisibleTo Include="Korda.Data.Streaming.Sample" />
     <InternalsVisibleTo Include="Korda.Database" />
     <InternalsVisibleTo Include="Korda.Data.Materialization.Tests" />

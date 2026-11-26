@@ -55,15 +55,15 @@ public sealed partial class DataSession
         var projection = relation.Child.Row; var projectionId = Source.RegisterProjection(projection);
         var codecs = projection.Fields.Select(field => Source.BindCodec(field.Descriptor)).ToArray();
         var owner = Source.RegisterRelation(relation);
-        var stream = new TypedStream<TChild>(async (rows, token) =>
+        var stream = new TypedStream<TChild>((rows, token) =>
         {
-            CheckOpen();
-            var cursor = await Source.Start(() =>
+            lock (_compoundGate)
             {
-                try { return AdmitOperation(() => MetadataBindings.CreateRelationLoad(Owner, owner, key, projectionId)); }
-                catch (BindingFailure failure) { throw HostFailure.Binding(Source.Binding, failure); }
-            }, operation => NativeHost.TakeOwner(Source.Binding, operation, 2, DatabaseOwnerKind.Cursor), token).ConfigureAwait(false);
-            try { return new HostStreamTransport(Source, cursor, rows, token); } catch { cursor.Dispose(); throw; }
+                CheckOpen(); token.ThrowIfCancellationRequested();
+                var channel = NativeHost.CreateRelationPull(this, owner, key, projectionId);
+                try { return new ValueTask<IStreamTransport>(new HostStreamTransport(Source, channel, rows, token)); }
+                catch { channel.Dispose(); throw; }
+            }
         }, projection, Source.Binding.SemanticProfile, projectionId, codecs, StreamingLimits, cancellationToken);
         return stream.ToListAsync();
     }

@@ -195,12 +195,17 @@ returning arguments for B04's Created operation. There is no parent existence
 lookup, implicit ordering or inferred tenant/security filter in this helper.
 B11/B14 construct the actual child equality query using these ordered arguments.
 
-The exact bound lifecycle is create, start, terminal notification,
+The frozen bound operation lifecycle remains create, start, terminal notification,
 `take_owner(expected_kind=2)`, bounded cursor fetch, close, operation retirement
 and release. A wrong take kind does not consume the result; retirement does not
-destroy a transferred cursor. Request-cancel is a nonblocking request and cannot
-rewrite an already completed result. No second production cancellation or async
-runtime protocol is defined by B09.
+destroy a transferred cursor. Production ordinary/relation/CRUD streams now use
+the [cursor pull extension](../../native/database/binding/cursor-pull-v1.md).
+Lazy creation captures the same validated inputs without executing SQL. The
+first accepted request opens and validates the cursor and rechecks admission
+before fetching. Every generation supplies one detached ready notification and
+one transferred native batch or structured error. Final close joins all channel
+tails and the provider's cleanup. These private readiness semantics do not
+weaken the generic operation's `NativeQuiet` or retirement contract.
 
 ## Costs and error behavior
 

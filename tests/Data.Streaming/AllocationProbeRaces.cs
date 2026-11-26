@@ -26,7 +26,7 @@ internal static class AllocationProbeRaces
             await DelayedMoveConsumption();
         }
         BorrowedBatchChecks.Run();
-        Console.WriteLine($"PASS lazy stream join races: {s_checks} assertions; managed-owned and native-borrowed pending start/fetch, shared disposers, active mapper, primary/cleanup failures and cancellation");
+        Console.WriteLine($"PASS lazy stream join races: {s_checks} assertions; scoped native batches with and without forced-GC pending start/fetch, shared disposers, active mapper, primary/cleanup failures and cancellation");
     }
 
     private static async Task DisposeDuringStart()
@@ -34,7 +34,7 @@ internal static class AllocationProbeRaces
         var projection = Projection<long>.Create([ResultField.Create("id", Codecs.Int64)], static row => row.Read(0, Codecs.Int64));
         var transport = new ControlledTransport(projection, pendingFetch: false);
         var started = new TaskCompletionSource<IStreamTransport>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var sequence = Stream(projection, (_, _) => started.Task);
+        var sequence = Stream(projection, (_, _) => new(started.Task));
         var reader = sequence.GetAsyncEnumerator();
         var move = reader.MoveNextAsync().AsTask();
         Task first = reader.DisposeAsync().AsTask(), second = reader.DisposeAsync().AsTask();
@@ -162,7 +162,7 @@ internal static class AllocationProbeRaces
         finally { transport.CancelFetch(cancellation.Token); transport.ReleaseJoin(); }
     }
 
-    private static TypedStream<long> Stream(Projection<long> projection, Func<int, CancellationToken, Task<IStreamTransport>> start,
+    private static TypedStream<long> Stream(Projection<long> projection, Func<int, CancellationToken, ValueTask<IStreamTransport>> start,
         CancellationToken token = default) => new(start, projection, 2, 71, [3], new(2, 4096, 2, 4096), token);
     private static async Task DelayedMoveConsumption()
     {
@@ -225,8 +225,8 @@ internal static class AllocationProbeRaces
     private sealed class ControlledTransport : IStreamTransport
     {
         private readonly Task<IStreamTransport> _start;
-        private readonly Task<IStreamBatch> _ready;
-        private readonly TaskCompletionSource<IStreamBatch>? _fetch;
+        private readonly Task<ScopedStreamBatch> _ready;
+        private readonly TaskCompletionSource<ScopedStreamBatch>? _fetch;
         private readonly TaskCompletionSource<StreamRetirement> _retirement = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal readonly TaskCompletionSource FetchEntered = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal readonly TaskCompletionSource JoinEntered = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -238,17 +238,17 @@ internal static class AllocationProbeRaces
             var expectation = new WireExpectation(PayloadKind.Rows, 2, Convert.FromHexString(projection.ShapeHash), 0, 71,
                 [new(0, Codecs.Int64.Descriptor, 3)]);
             var bytes = DbWire.Encode(expectation, 1, [new ReadOnlyMemory<byte>(scalar)]);
-            Batch = s_borrowNative ? new BorrowedBatchFixture(bytes) : new OwnedBatch(bytes);
-            _start = Task.FromResult<IStreamTransport>(this); _ready = Task.FromResult<IStreamBatch>(Batch);
+            Batch = new ScopedBatchFixture(bytes);
+            _start = Task.FromResult<IStreamTransport>(this); _ready = Task.FromResult(Batch.Batch);
             if (pendingFetch) _fetch = new(TaskCreationOptions.RunContinuationsAsynchronously);
         }
-        internal Task<IStreamTransport> Start(int rows, CancellationToken token) => _start;
-        public ValueTask<IStreamBatch> FetchAsync()
+        internal ValueTask<IStreamTransport> Start(int rows, CancellationToken token) => new(_start);
+        public ValueTask<ScopedStreamBatch> FetchAsync()
         {
             if (Interlocked.Increment(ref Fetches) != 1) throw new InvalidOperationException("Race fixture fetched twice.");
             Batch.Acquire(); FetchEntered.TrySetResult(); return new(_fetch?.Task ?? _ready);
         }
-        internal void CompleteFetch() => _fetch?.TrySetResult(Batch);
+        internal void CompleteFetch() => _fetch?.TrySetResult(Batch.Batch);
         internal void CancelFetch(CancellationToken token)
         {
             if (_fetch is { Task.IsCompleted: false }) { Batch.Dispose(); _fetch.TrySetCanceled(token); }
@@ -263,29 +263,6 @@ internal static class AllocationProbeRaces
         {
             if (failure is null) _retirement.TrySetResult(new(true, true, 0));
             else _retirement.TrySetException(failure);
-        }
-    }
-    private sealed class OwnedBatch(byte[] bytes) : IOwnedStreamBatch, ITrackedBatch
-    {
-        private byte[]? _bytes = bytes;
-        private int _active;
-        private int _disposals;
-        public int Disposals => _disposals;
-        public int NativeReleases => 0;
-        public bool Active => Volatile.Read(ref _active) != 0;
-        public void Acquire() => Volatile.Write(ref _active, 1);
-        public ReadOnlyMemory<byte> Bytes => Active && _bytes is { } value ? value : throw new ObjectDisposedException(nameof(OwnedBatch));
-        public byte[] TakeBytes()
-        {
-            if (!Active) throw new ObjectDisposedException(nameof(OwnedBatch));
-            return Interlocked.Exchange(ref _bytes, null) ?? throw new ObjectDisposedException(nameof(OwnedBatch));
-        }
-        public bool End => false;
-        public void Dispose()
-        {
-            if (Interlocked.Exchange(ref _active, 0) == 0) throw new InvalidOperationException("Race fixture batch was released twice.");
-            Interlocked.Exchange(ref _bytes, null);
-            Interlocked.Increment(ref _disposals);
         }
     }
 }

@@ -1,6 +1,7 @@
 using System.Buffers.Binary;
 using System.Runtime.InteropServices;
 using Korda.Data;
+using Korda.Database.Internal;
 using Korda.Interop;
 using Korda.Interop.Abi;
 using Korda.Interop.Async;
@@ -34,7 +35,7 @@ internal sealed class NativeBuffer : SafeHandle
     { if (pointer == 0) throw new InvalidOperationException("Native buffer owner is zero."); _binding = binding; SetHandle(pointer); }
     public override bool IsInvalid => handle == 0;
     protected override unsafe bool ReleaseHandle() { _binding.Calls.nw_db_buffer_release_v1(handle); return true; }
-    // Only callers holding a synchronous BatchReadScope may consume this view.
+    // Only callers holding a synchronous DangerousAddRef reference may consume this view.
     // The buffer's immutable native storage remains owned by this SafeHandle.
     internal unsafe void ViewWhileRetained(int maximum, out nint address, out int length)
     {
@@ -147,29 +148,111 @@ internal static class NativeHost
     { long result = 0; var error = BindingChecks.Error(); HostFailure.Check(binding, binding.Calls.nw_db_operation_take_count_v1(operation, &result, &error), error); return result; }
     internal static unsafe NativeBuffer TakeBuffer(SourceBinding binding, nint operation)
     { nint result = 0; var error = BindingChecks.Error(); HostFailure.Check(binding, binding.Calls.nw_db_operation_take_buffer_v1(operation, &result, &error), error); try { return new(binding, result); } catch { binding.Calls.nw_db_buffer_release_v1(result); throw; } }
-    internal static unsafe HostStreamBatch TakeBatch(SourceBinding binding, nint operation, int maximum)
+    internal static unsafe void TakePullBatch(SourceBinding binding, nint channel, ulong generation,
+        ScopedStreamBatch batch, int maximum, CancellationToken token = default, Action? afterErrorTake = null)
     {
-        var calls = binding.Batches ?? throw new NotSupportedException("The native result batch extension is unavailable.");
-        calls.Require(); NativeBatchResult result = default; var error = BindingChecks.Error();
+        var calls = Pulls(binding);
+        NativePullBatch result = default; var error = BindingChecks.Error();
+        try
+        {
+            var status = calls.Take(channel, generation, &result, &error);
+            if (status != NativeStatus.Ok)
+                throw PullFailure(binding, channel, generation, status, error, token, afterErrorTake);
+            if (result.Owner == 0) throw new InvalidOperationException("Native pull returned a zero batch owner.");
+            if (result.KnownEnd > 1 || result.Reserved != 0)
+                throw new DatabaseException("Native pull batch flags are invalid.", DatabaseErrorKind.ShapeMismatch);
+            NativeBuffer.CheckView(result.Bytes, maximum, out var address, out var length);
+            if (length < 96)
+                throw new DatabaseException("Native pull batch header is incomplete.", DatabaseErrorKind.ShapeMismatch);
+            batch.Attach(result.Owner, address, length, result.KnownEnd != 0);
+            result.Owner = 0; // Attach accepted this exact owner; no wrapper allocation.
+        }
+        finally { if (result.Owner != 0) binding.Calls.nw_db_buffer_release_v1(result.Owner); }
+    }
+    private static unsafe Exception PullFailure(SourceBinding binding, nint channel, ulong generation,
+        uint status, in NwErrorInfoV1 error, CancellationToken token, Action? afterErrorTake)
+    {
+        if (status == NativeStatus.Pending)
+            return new NativeEngineException("The pull ready notification preceded a transferable result.");
+        nint pointer = 0; var detail = BindingChecks.Error();
+        var taken = Pulls(binding).TakeError(channel, generation, &pointer, &detail);
         NativeBuffer? owner = null;
         try
         {
-            HostFailure.Check(binding, calls.Take(operation, &result, &error), error);
-            owner = new(binding, result.Owner);
-            return new(owner, result.Bytes, result.KnownEnd, result.Reserved, maximum);
+            if (taken != NativeStatus.Ok) return HostFailure.Create(binding, status, error, token: token);
+            owner = new(binding, pointer); pointer = 0;
+            afterErrorTake?.Invoke();
+            var fields = HostEncoding.ReadControl(BulkErrorPayload.Read(owner.Copy(), out var progress), 7);
+            var provider = fields.TryGetValue(9, out var code) ? HostEncoding.Utf8.GetString(code) : null;
+            var cleanupFailed = fields.TryGetValue(4, out var cleanup)
+                && BinaryPrimitives.ReadUInt32LittleEndian(cleanup) == (uint)CleanupStatus.Failed;
+            var failure = HostFailure.Create(binding, status, error, provider, token);
+            if (!cleanupFailed) return BulkErrorPayload.AttachNative(failure, progress);
+            var cleanupFailure = new DatabaseException("Native cursor cleanup also failed; the connection cannot be reused.", DatabaseErrorKind.Provider);
+            Exception enriched = failure switch
+            {
+                DatabaseException database => new DatabaseException(database.Message, database.Kind, database.ProviderCode, database.CorrelationId, database.IsTransient, cleanupFailure),
+                OperationCanceledException cancellation => new OperationCanceledException(cancellation.Message, cleanupFailure, cancellation.CancellationToken),
+                TimeoutException timeout => new TimeoutException(timeout.Message, cleanupFailure),
+                _ => new AggregateException(failure, cleanupFailure)
+            };
+            return BulkErrorPayload.AttachNative(enriched, progress);
         }
-        catch
+        finally
         {
-            if (owner is not null) owner.Dispose();
-            else if (result.Owner != 0) binding.Calls.nw_db_buffer_release_v1(result.Owner);
-            throw;
+            owner?.Dispose();
+            if (pointer != 0) binding.Calls.nw_db_buffer_release_v1(pointer);
         }
     }
-    internal static unsafe void CheckCursorReadAdmission(DatabaseOwner cursor)
+    internal static CursorPullCalls Pulls(SourceBinding binding) => binding.Pulls
+        ?? throw new NotSupportedException("The native cursor pull extension is unavailable.");
+    internal static unsafe void CheckPullRead(DatabaseOwner channel)
     {
-        var calls = cursor.Source.Batches ?? throw new NotSupportedException("The native result batch extension is unavailable.");
-        using var lease = cursor.Borrow(DatabaseOwnerKind.Cursor); var error = BindingChecks.Error();
-        HostFailure.Check(cursor.Source, calls.CheckReadAdmission(lease.Pointer, &error), error);
+        using var lease = channel.Borrow(DatabaseOwnerKind.Cursor); var error = BindingChecks.Error();
+        HostFailure.Check(channel.Source, Pulls(channel.Source).CheckRead(lease.Pointer, &error), error);
+    }
+    internal static unsafe DatabaseOwner CreatePull(DataSession session, DatabaseOwner plan, ReadOnlyMemory<byte> arguments)
+    {
+        var binding = session.Source.Binding;
+        BindingChecks.SameSource(binding, plan);
+        using var sessionLease = session.Owner.Borrow(DatabaseOwnerKind.Session);
+        using var planLease = plan.Borrow(DatabaseOwnerKind.Plan);
+        nint channel = 0; var error = BindingChecks.Error();
+        fixed (byte* bytes = arguments.Span)
+            HostFailure.Check(binding, Pulls(binding).Create(sessionLease.Pointer, planLease.Pointer,
+                BindingChecks.View(bytes, arguments.Length), &channel, &error), error);
+        return AdoptPull(binding, channel);
+    }
+    internal static unsafe DatabaseOwner CreateMutationPull(DataSession session, DatabaseOwner model, uint kind, byte[] payload)
+    {
+        var binding = session.Source.Binding;
+        BindingChecks.SameSource(binding, model);
+        using var sessionLease = session.Owner.Borrow(DatabaseOwnerKind.Session);
+        using var modelLease = model.Borrow(DatabaseOwnerKind.Model);
+        nint channel = 0; var error = BindingChecks.Error();
+        fixed (byte* bytes = payload)
+            HostFailure.Check(binding, Pulls(binding).CreateMutation(sessionLease.Pointer, modelLease.Pointer,
+                kind, BindingChecks.View(bytes, payload.Length), &channel, &error), error);
+        return AdoptPull(binding, channel);
+    }
+    internal static unsafe DatabaseOwner CreateRelationPull(DataSession session, DatabaseOwner relation, byte[] key, uint projection)
+    {
+        var binding = session.Source.Binding;
+        BindingChecks.SameSource(binding, relation);
+        using var sessionLease = session.Owner.Borrow(DatabaseOwnerKind.Session);
+        using var relationLease = relation.Borrow(DatabaseOwnerKind.Relation);
+        nint channel = 0; var error = BindingChecks.Error();
+        fixed (byte* bytes = key)
+            HostFailure.Check(binding, Pulls(binding).CreateRelation(sessionLease.Pointer, relationLease.Pointer,
+                BindingChecks.View(bytes, key.Length), projection, &channel, &error), error);
+        return AdoptPull(binding, channel);
+    }
+    private static unsafe DatabaseOwner AdoptPull(SourceBinding binding, nint pointer)
+    {
+        // Cursor is a managed lifetime tag; native close/snapshot distinguish
+        // the channel variant without changing frozen take-owner kinds.
+        try { return new(binding, DatabaseOwnerKind.Cursor, pointer); }
+        catch { if (pointer != 0) binding.Calls.nw_db_owner_release_v1(pointer); throw; }
     }
     internal static unsafe TransactionSnapshot Snapshot(DatabaseOwner owner)
     {
@@ -183,10 +266,5 @@ internal static class NativeHost
         nint result = 0; var error = BindingChecks.Error(); fixed (byte* bytes = parameters.Span)
             HostFailure.Check(session.Source, session.Source.Calls.nw_db_execute_create_v1(sessionLease.Pointer, planLease.Pointer, BindingChecks.View(bytes, parameters.Length), &result, &error), error);
         return result;
-    }
-    internal static unsafe nint Fetch(DatabaseOwner cursor, int rows, long bytes)
-    {
-        using var lease = cursor.Borrow(DatabaseOwnerKind.Cursor); nint result = 0; var error = BindingChecks.Error();
-        HostFailure.Check(cursor.Source, cursor.Source.Calls.nw_db_cursor_fetch_create_v1(lease.Pointer, checked((uint)rows), checked((ulong)bytes), &result, &error), error); return result;
     }
 }

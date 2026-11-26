@@ -6,72 +6,79 @@ using System.Text.Json.Serialization;
 using Korda.Data;
 using Korda.Database.Internal;
 
-internal interface ITrackedBatch : IStreamBatch
+internal interface ITrackedBatch : IDisposable
 {
+    ScopedStreamBatch Batch { get; }
     int Disposals { get; }
     int NativeReleases { get; }
     bool Active { get; }
     void Acquire();
 }
 
-// This fixture uses actual unmanaged storage and SafeHandle finalization. It
-// exercises the same borrowed-memory seam without making a provider race depend
-// on the database worker's scheduling.
-internal sealed class BorrowedBatchFixture(byte[] input, bool end = false, BorrowedReleaseCounter? counter = null)
-    : MemoryManager<byte>, IBorrowedStreamBatch, ITrackedBatch
+// Test-only producer of real native storage. The GCHandle roots a release
+// counter, never this fixture or its ScopedStreamBatch; abandoned idle owners
+// therefore remain finalizable. Every acquisition owns a separate native buffer.
+internal class ScopedBatchFixture : ITrackedBatch
 {
-    private NativeOwner? _owner;
-    private int _active, _disposals;
-    private readonly BorrowedReleaseCounter _counter = counter ?? new();
-    public int Disposals => _disposals;
+    private readonly byte[] _input;
+    private readonly bool _end;
+    private readonly BorrowedReleaseCounter _counter;
+    internal int Acquisitions { get; private set; }
+    public ScopedStreamBatch Batch { get; }
+    public int Disposals => Volatile.Read(ref _counter.Releases);
     public int NativeReleases => Volatile.Read(ref _counter.Releases);
-    public bool Active => Volatile.Read(ref _active) != 0;
-    public void Acquire()
+    public bool Active => Batch.IsActive;
+    public bool End => _end;
+    internal unsafe ScopedBatchFixture(byte[] input, bool end = false,
+        BorrowedReleaseCounter? counter = null, Action? afterRelease = null)
     {
-        if (Interlocked.Exchange(ref _active, 1) != 0 || _owner is not null) throw new InvalidOperationException("Fixture may be acquired only once.");
-        _owner = new(input, _counter);
+        _input = input; _end = end; _counter = counter ?? new();
+        _counter.AfterRelease = afterRelease;
+        Batch = new(&Release, _counter);
     }
-    public SafeHandle ReadOwner => Active && _owner is { } owner ? owner : throw new ObjectDisposedException(nameof(BorrowedBatchFixture));
-    public ReadOnlyMemory<byte> Bytes { get { _ = ReadOwner; return CreateMemory(input.Length); } }
-    public bool End => end;
-    public override unsafe Span<byte> GetSpan()
+    public unsafe void Acquire()
     {
-        var owner = ReadOwner;
-        ObjectDisposedException.ThrowIf(owner.IsClosed, this);
-        return new Span<byte>((void*)owner.DangerousGetHandle(), input.Length);
-    }
-    public override MemoryHandle Pin(int elementIndex = 0) => throw new NotSupportedException();
-    public override void Unpin() { }
-    public void Dispose() => Dispose(true);
-    protected override void Dispose(bool disposing)
-    {
-        if (Interlocked.Exchange(ref _active, 0) == 0) throw new InvalidOperationException("Fixture batch was released twice.");
-        _owner!.Dispose();
-        Interlocked.Increment(ref _disposals);
-    }
-    private sealed class NativeOwner : SafeHandle
-    {
-        private readonly BorrowedReleaseCounter _counter;
-        internal unsafe NativeOwner(byte[] input, BorrowedReleaseCounter counter) : base(0, true)
+        if (!Batch.CanAttach) throw new InvalidOperationException("A prior generation is still active or retained.");
+        var storage = (Storage*)NativeMemory.AllocZeroed((nuint)sizeof(Storage));
+        if (storage == null) throw new OutOfMemoryException();
+        try
         {
-            _counter = counter;
-            SetHandle((nint)NativeMemory.Alloc((nuint)Math.Max(1, input.Length)));
-            if (handle == 0) throw new OutOfMemoryException();
-            input.CopyTo(new Span<byte>((void*)handle, input.Length));
+            storage->Bytes = (byte*)NativeMemory.Alloc((nuint)Math.Max(1, _input.Length));
+            if (storage->Bytes == null) throw new OutOfMemoryException();
+            _input.CopyTo(new Span<byte>(storage->Bytes, _input.Length));
+            storage->Counter = GCHandle.ToIntPtr(GCHandle.Alloc(_counter));
+            Batch.Attach((nint)storage, (nint)storage->Bytes, _input.Length, _end);
+            Acquisitions++;
         }
-        public override bool IsInvalid => handle == 0;
-        protected override unsafe bool ReleaseHandle()
+        catch
         {
-            NativeMemory.Free((void*)handle);
-            Interlocked.Increment(ref _counter.Releases);
-            return true;
+            if (storage->Counter != 0) GCHandle.FromIntPtr(storage->Counter).Free();
+            NativeMemory.Free(storage->Bytes); NativeMemory.Free(storage);
+            throw;
         }
     }
+    public void Dispose() => Batch.Dispose();
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static unsafe void Release(nint owner)
+    {
+        var storage = (Storage*)owner;
+        var root = GCHandle.FromIntPtr(storage->Counter);
+        var counter = (BorrowedReleaseCounter)root.Target!;
+        NativeMemory.Free(storage->Bytes); NativeMemory.Free(storage);
+        root.Free();
+        Interlocked.Increment(ref counter.Releases);
+        counter.AfterRelease?.Invoke();
+    }
+    private unsafe struct Storage { internal byte* Bytes; internal nint Counter; }
 }
+
+internal sealed class BorrowedBatchFixture(byte[] input, bool end = false, BorrowedReleaseCounter? counter = null)
+    : ScopedBatchFixture(input, end, counter);
 
 internal sealed class BorrowedReleaseCounter
 {
     internal int Releases;
+    internal Action? AfterRelease;
 }
 
 internal static class BorrowedBatchChecks
@@ -90,29 +97,29 @@ internal static class BorrowedBatchChecks
     private static void ScopeAndAbandonment()
     {
         var batch = new BorrowedBatchFixture([42]); batch.Acquire();
-        var memory = batch.Bytes;
-        using (var read = new BatchReadScope(batch.ReadOwner))
+        var generation = batch.Batch.Generation;
+        using (var read = batch.Batch.AcquireRead())
         {
-            var bytes = memory.Span;
-            Check(!MemoryMarshal.TryGetArray(memory, out _), "Borrowed fixture unexpectedly owns a managed copy.");
+            var bytes = read.Bytes;
+            Check(bytes.Length == 1 && batch.Batch.IsActive, "Scoped fixture must expose its active native generation.");
             batch.Dispose();
             GC.Collect(); GC.WaitForPendingFinalizers();
-            Check(batch.NativeReleases == 0 && bytes[0] == 42, "The complete synchronous span read lost its SafeHandle reference.");
+            Check(batch.NativeReleases == 0 && bytes[0] == 42, "The complete synchronous span read lost its native owner reference.");
         }
         Check(batch.NativeReleases == 1, "The last synchronous read did not release native memory exactly once.");
         var rejected = false;
-        try { _ = memory.Span.Length; } catch (ObjectDisposedException) { rejected = true; }
-        Check(rejected, "A stale borrowed memory value remained readable after disposal.");
+        try { using var stale = batch.Batch.AcquireRead(generation); } catch (ObjectDisposedException) { rejected = true; }
+        Check(rejected, "A retired scoped generation remained readable after disposal.");
         var counter = new BorrowedReleaseCounter();
         var orphan = Abandon(counter);
         for (var i = 0; i < 10 && counter.Releases == 0; i++) { GC.Collect(); GC.WaitForPendingFinalizers(); GC.Collect(); }
-        Check(!orphan.IsAlive && counter.Releases == 1, "An abandoned native batch leaked a persistent SafeHandle reference.");
+        Check(!orphan.IsAlive && counter.Releases == 1, "An abandoned native batch leaked a persistent native owner reference.");
     }
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static WeakReference Abandon(BorrowedReleaseCounter counter)
     {
         var batch = new BorrowedBatchFixture([1, 2, 3], counter: counter); batch.Acquire();
-        using (var read = new BatchReadScope(batch.ReadOwner)) Check(batch.Bytes.Span[2] == 3, "Abandonment fixture read failed.");
+        using (var read = batch.Batch.AcquireRead()) Check(read.Bytes[2] == 3, "Abandonment fixture read failed.");
         return new WeakReference(batch);
     }
     private static void ValidationAndOwnedResults()
@@ -126,7 +133,7 @@ internal static class BorrowedBatchChecks
         var valid = DbWire.Encode(expected, 1, [Codecs.Int64.Encode(42), Codecs.String.Encode("retained"), new byte[] { 1, 2, 255 }]);
         var batch = new BorrowedBatchFixture(valid); batch.Acquire();
         OwnedResult result;
-        using (var lease = new RowBatchLease(batch, expected, fields, new(2, 4096, 2, 4096)))
+        using (var lease = new RowBatchLease(batch.Batch, expected, fields, new(2, 4096, 2, 4096)))
         {
             Check(lease.RowBytes(0) == 3 * WireSchema.CellBytes + 8 + 8 + 3, "Borrowed row byte accounting changed.");
             result = lease.Materialize(0, projection);
@@ -144,7 +151,7 @@ internal static class BorrowedBatchChecks
         var tooMany = DbWire.Encode(expected, 2, [Codecs.Int64.Encode(1), Codecs.String.Encode("a"), new byte[] { 1 }, Codecs.Int64.Encode(2), Codecs.String.Encode("b"), new byte[] { 2 }]);
         Reject(tooMany, expected, fields, new(1, 4096, 2, 4096), false, DatabaseErrorKind.ShapeMismatch);
         var eos = new BorrowedBatchFixture(empty, end: true); eos.Acquire();
-        using (var lease = new RowBatchLease(eos, expected, fields, new(2, 4096, 2, 4096)))
+        using (var lease = new RowBatchLease(eos.Batch, expected, fields, new(2, 4096, 2, 4096)))
             Check(lease.End && lease.Rows == 0, "Borrowed empty EOS was rejected.");
         Check(eos.NativeReleases == 1, "EOS native owner leaked.");
     }
@@ -152,7 +159,7 @@ internal static class BorrowedBatchChecks
     {
         var batch = new BorrowedBatchFixture(input, end); batch.Acquire();
         var rejected = false;
-        try { using var lease = new RowBatchLease(batch, expected, fields, limits); }
+        try { using var lease = new RowBatchLease(batch.Batch, expected, fields, limits); }
         catch (DatabaseException error) when (error.Kind == kind) { rejected = true; }
         Check(rejected && batch.Disposals == 1 && batch.NativeReleases == 1, "Borrowed constructor failure did not compensate its owner exactly once.");
     }
@@ -164,7 +171,7 @@ internal static class BorrowedBatchChecks
         var input = DbWire.Encode(expected, 1, [codec.Encode(new(42, ["owned", "values"]))]);
         var batch = new BorrowedBatchFixture(input); batch.Acquire();
         BorrowedJsonValue value;
-        using (var lease = new RowBatchLease(batch, expected, projection.Fields, new(1, 4096, 1, 4096)))
+        using (var lease = new RowBatchLease(batch.Batch, expected, projection.Fields, new(1, 4096, 1, 4096)))
             value = lease.Materialize(0, projection);
         GC.Collect(); GC.WaitForPendingFinalizers();
         Check(batch.NativeReleases == 1 && value.Id == 42 && value.Labels.SequenceEqual(new[] { "owned", "values" }), "Typed JSON retained borrowed native storage after deserialization.");
@@ -172,7 +179,7 @@ internal static class BorrowedBatchChecks
         var failed = false;
         try
         {
-            using var lease = new RowBatchLease(wrongShape, expected, projection.Fields, new(1, 4096, 1, 4096));
+            using var lease = new RowBatchLease(wrongShape.Batch, expected, projection.Fields, new(1, 4096, 1, 4096));
             _ = lease.Materialize(0, projection);
         }
         catch (Exception error) when (error is JsonException or DatabaseException) { failed = true; }

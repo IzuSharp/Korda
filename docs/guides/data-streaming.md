@@ -116,16 +116,27 @@ allocations are outside this charged-data bound.
    state and no second owner. Managed disposal is idempotent; a native destructor
    is never deliberately called twice with the same pointer.
 4. The production host retains a bounded immutable native batch. B01 validates
-   its borrowed wire without a managed payload copy; validation, row sizing and
-   the complete synchronous materializer hold a temporary SafeHandle reference.
-   A managed transport can instead transfer an exclusive array, or use the
-   defensive-copy fallback. `RowReader` and spans never cross an await. CLR
+   its borrowed wire without a managed payload copy. One scoped batch owner is
+   reused across generations; validation, row sizing and the complete synchronous
+   materializer acquire a scoped read. Disposal closes new reads immediately and
+   releases the native buffer after the last admitted read exits. A later batch
+   cannot attach before that release finishes. `RowReader` and spans never cross
+   an await, and no borrowed `ReadOnlyMemory` escapes this ownership boundary. CLR
    strings/arrays/DTOs can outlive the lease because they own their data.
 5. Break, cancellation, failed decoding, or a constructor exception releases
    the current batch, closes further admission, requests stop, and awaits the
    provider's explicit retirement receipt. A constructor exception is preserved;
    an additional cleanup failure is retained separately on the exception under
    `Korda.Database.StreamCleanup.v1`.
+
+The host lazily creates a cursor pull channel for ordinary SQL, Fluent, relation
+loads and CRUD returning results. Its first accepted request opens and validates
+the cursor, rechecks execution admission, and then fetches the first batch.
+Later requests reuse the same channel and managed ValueTask source. A ready
+notification permits taking that generation's batch after provider/read guards
+have exited; independent worker tails are joined at final close. Per-batch
+requests do not create generic asynchronous operations. The frozen operation
+ABI remains available for its existing callers.
 
 The private suspended move uses the runtime's pooling ValueTask builder. Each
 returned `ValueTask<bool>` is consumed once; callers needing a reusable Task can

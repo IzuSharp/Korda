@@ -73,11 +73,15 @@ public sealed partial class DataSession
         var projection = Source.RegisterProjection(returning); var codecs = returning.Fields.Select(f => Source.BindCodec(f.Descriptor)).ToArray();
         var payload = MutationEncoding.Record(Source, table, MutationEncoding.Bytes(2, values), new(7, 1, ControlRecord.U32(projection)));
         var model = Source.RegisterModel(table);
-        var stream = new TypedStream<T>(async (rows, token) =>
+        var stream = new TypedStream<T>((rows, token) =>
         {
-            CheckOpen();
-            var cursor = await Source.Start(() => AdmitOperation(() => MutationEncoding.Create(this, model, 1, payload)), operation => NativeHost.TakeOwner(Source.Binding, operation, 2, DatabaseOwnerKind.Cursor), token).ConfigureAwait(false);
-            try { return new HostStreamTransport(Source, cursor, rows, token); } catch { cursor.Dispose(); throw; }
+            lock (_compoundGate)
+            {
+                CheckOpen(); token.ThrowIfCancellationRequested();
+                var channel = NativeHost.CreateMutationPull(this, model, 1, payload);
+                try { return new ValueTask<IStreamTransport>(new HostStreamTransport(Source, channel, rows, token)); }
+                catch { channel.Dispose(); throw; }
+            }
         }, returning, Source.Binding.SemanticProfile, projection, codecs, StreamingLimits, cancellationToken);
         return stream.SingleAsync();
     }

@@ -83,18 +83,18 @@ internal static class TransactionDefaultProbe
             try { await admission; throw new InvalidOperationException("Expected canceled admission."); }
             catch (OperationCanceledException failure) when (failure.CancellationToken == canceled.Token) { }
         }
-        var finalImmediate = new ulong[8]; var drained = new ulong[8]; var zero = new ulong[6];
+        var finalImmediate = new ulong[9]; var drained = new ulong[9]; var zero = new ulong[9];
         var finalBefore = Counter.Read();
         foreach (var session in sessions) await session.DisposeAsync();
         await source.DisposeAsync(); var finalAfter = Counter.Read(); native.Fill(finalImmediate);
         var finalPolls = Settle(native, drained, zero, "final-source-close", -1); var finalSettled = Counter.Read();
-        if (!source.Cleanup.LocalResourcesReleased || sessions.Any(s => !s.Cleanup.LocalResourcesReleased) || drained.Take(6).Any(value => value != 0))
+        if (!source.Cleanup.LocalResourcesReleased || sessions.Any(s => !s.Cleanup.LocalResourcesReleased) || (drained.Take(6).Any(value => value != 0) || drained[8] != 0))
             throw new InvalidOperationException("Default-transaction fixture did not release all owners.");
         try { _ = sessions[0].BeginTransactionAsync(); throw new InvalidOperationException("Disposed default admission was accepted."); }
         catch (ObjectDisposedException) { }
         using var file = File.Create(Path.Combine(args[3], "transaction-allocation.json"));
         using var json = new Utf8JsonWriter(file, new() { Indented = true });
-        json.WriteStartObject(); json.WriteBoolean("NativeAot", true); json.WriteString("Provider", source.Provider.ToString());
+        json.WriteStartObject(); json.WriteNumber("SchemaVersion", 2); json.WriteBoolean("NativeAot", true); json.WriteString("Provider", source.Provider.ToString());
         json.WriteString("ExecutableSha256", Hash(Environment.ProcessPath!)); json.WriteString("LoadedNativePath", native.Path);
         json.WriteString("LoadedNativeSha256", Hash(native.Path)); json.WriteNumber("OperationsPerWorker", iterations); json.WriteNumber("Windows", windows);
         json.WriteNumber("WarmupOperationsPerWorker", 16); json.WriteNumber("DefaultFrameDataBytes", referenceFrame.Length);
@@ -126,7 +126,7 @@ internal static class TransactionDefaultProbe
         json.WriteNumber("SettleGen0", finalSettled.Gen0 - finalAfter.Gen0); json.WriteNumber("SettleGen1", finalSettled.Gen1 - finalAfter.Gen1); json.WriteNumber("SettleGen2", finalSettled.Gen2 - finalAfter.Gen2);
         WriteNative(json, "NativeImmediate", finalImmediate); WriteNative(json, "NativeSettled", drained); json.WriteEndObject();
         WriteNative(json, "NativeDrained", drained); json.WriteBoolean("OwnersReturnedToZero", true);
-        json.WriteString("NativeCounterOrder", "sources,sessions,operations,cursors,buffers,handles,cumulative-sql,cumulative-protocol"); json.WriteEndObject();
+        json.WriteString("NativeCounterOrder", "sources,sessions,operations,cursors,buffers,handles,cumulative-sql,cumulative-protocol,pulls"); json.WriteEndObject();
         Console.WriteLine($"TRANSACTION_DEFAULT_PROBE_PASS provider={source.Provider} windows={windows} operationsPerWorker={iterations}");
         return true;
     }
@@ -152,11 +152,11 @@ internal static class TransactionDefaultProbe
     {
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var results = new WorkerResult[concurrency]; var workers = new Task[concurrency];
-        var nativeBeforeImmediate = new ulong[8]; var nativeBefore = new ulong[8];
-        var nativeAfter = new ulong[8]; var nativeSettledAfter = new ulong[8];
+        var nativeBeforeImmediate = new ulong[9]; var nativeBefore = new ulong[9];
+        var nativeAfter = new ulong[9]; var nativeSettledAfter = new ulong[9];
         // The fixture owns exactly one source and four open sessions; no query,
         // cursor, buffer or operation is allowed to become a new warm baseline.
-        var expectedOwners = new ulong[] { 1, (ulong)sessions.Length, 0, 0, 0, (ulong)sessions.Length + 1 };
+        var expectedOwners = new ulong[] { 1, (ulong)sessions.Length, 0, 0, 0, (ulong)sessions.Length + 1, 0, 0, 0 };
         var ingressName = name + "/ingress";
         for (var i = 0; i < concurrency; i++) workers[i] = Worker(sessions[i], options, useExplicit, iterations, gate.Task, results, i);
         var completion = Task.WhenAll(workers); await Task.Yield();
@@ -177,6 +177,7 @@ internal static class TransactionDefaultProbe
         {
             native.Fill(values); polls++; var match = true;
             for (var i = 0; i < 6; i++) if (values[i] != expected[i]) match = false;
+            if (values[8] != expected[8]) match = false;
             consecutive = match ? consecutive + 1 : 0;
             if (consecutive == 2) return polls;
             if (Stopwatch.GetTimestamp() >= deadline)
@@ -264,7 +265,7 @@ internal static class TransactionDefaultProbe
         }
         internal unsafe ulong[] Counts()
         {
-            var result = new ulong[8]; Fill(result); return result;
+            var result = new ulong[9]; Fill(result); return result;
         }
         internal unsafe void Fill(ulong[] result)
         { var count = (delegate* unmanaged[Cdecl]<uint, ulong>)_counter; for (uint i = 0; i < result.Length; i++) result[i] = count(i); }

@@ -6,7 +6,7 @@ using Korda.Database.Sqlite;
 using Korda.Interop;
 
 // Real provider integration for the borrowed native batch path. The separate
-// Streaming fixture checks the SafeHandle seam under forced release; these
+// Streaming fixture checks scoped native ownership under forced release; these
 // tests keep the complete public StreamAsync -> synchronous mapper boundary.
 internal static class BorrowedBatchHostTests
 {
@@ -35,7 +35,11 @@ internal static class BorrowedBatchHostTests
         if (provider == DatabaseProvider.Sqlite) builder.UseSqlite(connection);
         else builder.UsePostgreSql(connection, options => options.TlsMode = PostgreSqlTlsMode.DisableForLocalDevelopment);
         var source = builder.Build();
-        var retired = 0;
+        var retired = 0; var stopped = 0;
+        source.TestPullBoundary = boundary =>
+        {
+            if (boundary == HostPullBoundary.StopReturned) Interlocked.Increment(ref stopped);
+        };
         source.TestRetirement = snapshot =>
         {
             Check(snapshot.Released && !snapshot.RootLive && snapshot.Controls == 0 && snapshot.CallbackEntries == 0 && snapshot.RetainedInputBytes == 0,
@@ -85,7 +89,8 @@ internal static class BorrowedBatchHostTests
             await enteredMapper.Task;
             Console.WriteLine($"BORROWED_HOST_PHASE provider={provider} stop={stop} mapperFailure={failMapping} phase=mapper-entered");
             Check(Counts(engine)[4] == 1, "the paused public mapper owns one real native result buffer");
-            var beforeStop = Volatile.Read(ref retired);
+            var beforeClose = Volatile.Read(ref retired);
+            var beforeStop = Volatile.Read(ref stopped);
             switch (stop)
             {
                 case Stop.Dispose:
@@ -102,11 +107,16 @@ internal static class BorrowedBatchHostTests
                     closingSession = session.DisposeAsync().AsTask();
                     break;
             }
-            // Confirm that the stop/close control really retired, instead of
-            // checking the buffer before a queued native action had run.
-            await Until(() => Volatile.Read(ref retired) > beforeStop,
-                "The real stop/close operation did not retire while its result batch was held.");
-            Console.WriteLine($"BORROWED_HOST_PHASE provider={provider} stop={stop} mapperFailure={failMapping} phase=stop-retired");
+            // Pull stop is a synchronous channel control. Its returned boundary
+            // proves the stop reached native code while this mapper holds its
+            // span. Parent close retains its separate generic close retirement.
+            if (stop is Stop.Dispose or Stop.Cancel)
+                await Until(() => Volatile.Read(ref stopped) > beforeStop,
+                    "The native pull stop did not return while its result batch was held.");
+            else
+                await Until(() => Volatile.Read(ref retired) > beforeClose,
+                    "The real parent close operation did not retire while its result batch was held.");
+            Console.WriteLine($"BORROWED_HOST_PHASE provider={provider} stop={stop} mapperFailure={failMapping} phase=stop-or-close-observed");
             if (closingSource is not null)
             {
                 await closingSource.WaitAsync(Bound);
@@ -183,12 +193,12 @@ internal static class BorrowedBatchHostTests
     private static async Task WaitZero(EngineDescriptor engine)
     {
         await Until(() => Counts(engine).All(value => value == 0), "Native borrowed batch fixture did not drain: " + string.Join(',', Counts(engine)));
-        Check(true, "all real source/session/operation/cursor/buffer/handle owners drain to zero");
+        Check(true, "all real source/session/operation/cursor/buffer/handle/pull owners drain to zero");
     }
     private static unsafe ulong[] Counts(EngineDescriptor engine)
     {
         var count = (delegate* unmanaged[Cdecl]<uint, ulong>)EngineModuleLoader.ResolveExport(engine, "nw_db_diagnostic_count_v1");
-        return Enumerable.Range(0, 6).Select(index => count((uint)index)).ToArray();
+        return new uint[] { 0, 1, 2, 3, 4, 5, 8 }.Select(index => count(index)).ToArray();
     }
     private static async Task<TException> Failure<TException>(Task task) where TException : Exception
     {

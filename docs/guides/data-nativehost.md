@@ -158,26 +158,32 @@ pool. DI does not become a required facade dependency.
 
 ## Runtime and allocation costs
 
-Each source creates one bounded Tokio runtime (two worker threads, at most four
-blocking workers) and one lazy native pool. The Core library acquires no global
-executor. Native metadata, shape-cache entries, waiters, operations, parameters,
+Each source creates a C++ worker pool with `min(MaxConnections, 16) + 2` workers,
+two control workers, an admission dispatcher and one lazy native connection
+pool. The Core library acquires no global executor. Native metadata,
+shape-cache entries, waiters, operations, parameters,
 fields and batches all have finite source limits. Shape caches retain immutable
 query shape/metadata, not mutable parameter values or sessions. A native query
 owner has one separate boxed query payload so small sessions, plans and operations
 do not each reserve the large mutable AST's inline size.
 
-One asynchronous call uses create/start/terminal/typed-take/retire/release and a
-managed callback root. Registration and cancellation controls participate in
-retirement separately from native worker completion. A transferred cursor retains
-its own session/source parent after the producing operation is released. Only one
-unreleased batch is admitted per cursor. SQL/configuration use explicit bounded
-UTF-8 copies. The streaming host reads validated db-wire results directly from
-the retained native batch; codecs still create the owned strings, byte arrays or
-objects required by the result type. Ordinary internal batches without native
-ownership or an exclusive managed-array handoff retain defensive copying. This
-does not remove driver-to-wire serialization, operation/lease objects or business
-result allocations, and is not a claim of an allocation-free query. Comparative
-benchmarks remain with their assigned tasks.
+Generic asynchronous operations use create/start/terminal/typed-take/retire/
+release and a managed callback root. Streaming uses the separately negotiated
+`db.cursor.pull.v1` extension: lazy creation, an accepted request and detached
+ready notification for each generation, then one result take. The reusable
+managed controller roots only an active request. Cancellation registrations,
+callback access and request/stop controls drain before its ValueTask publishes.
+No generic operation, SafeHandle or memory wrapper is allocated for each batch.
+Final close joins the independent native worker tails and provider cleanup; it
+uses at most one generic close operation, or the already-retired snapshot.
+
+The cursor retains its session/source and admits only one unreleased batch.
+SQL/configuration use explicit bounded UTF-8 copies. A stable scoped owner reads
+validated db-wire results directly from native storage through spans; codecs
+still allocate the owned strings, byte arrays or objects required by the result
+type. Driver-to-wire serialization, per-query owners and business result
+allocations remain. Whole-process allocation and performance claims require
+separate local measurements from the exact candidate and consumer bytes.
 
 ## Examples and verification
 

@@ -227,7 +227,7 @@ internal sealed class QueryContext : IDisposable
         private readonly CancellationTokenRegistration _registration;
         internal QueryTransport(IStreamTransport inner, CancellationTokenSource linked)
         { _inner = inner; _linked = linked; _registration = linked.Token.Register(static o => ((IStreamTransport)o!).RequestStop(), inner); }
-        public ValueTask<IStreamBatch> FetchAsync() => _inner.FetchAsync();
+        public ValueTask<ScopedStreamBatch> FetchAsync() => _inner.FetchAsync();
         public void CheckReadAdmission() => _inner.CheckReadAdmission();
         public void RequestStop() => _inner.RequestStop();
         public async Task<StreamRetirement> JoinAsync()

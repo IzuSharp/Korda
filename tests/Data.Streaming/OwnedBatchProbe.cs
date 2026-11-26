@@ -1,4 +1,3 @@
-using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
@@ -6,18 +5,13 @@ using System.Text.Json;
 using Korda.Data;
 using Korda.Database.Internal;
 
-// One isolated regression boundary: batch acquisition and its first native ->
-// managed copy have already occurred. Both lanes parse, consume every numeric
-// row, and dispose. Each raw total includes validation/lease/framework work.
-// The copy-only control identifies the removed byte[]; it is never subtracted
-// to declare the owned path allocation-free or used as public-provider evidence.
+// The former owned/unmarked managed transfer routes were removed from the
+// product. Schema 2 measures only the actual scoped native boundary. Old schema
+// 1 receipts remain historical and are not relabeled as this implementation.
 internal static class OwnedBatchProbe
 {
     private const int Rows = 128, Operations = 64, Rounds = 3, Warmup = 1024;
-    // The measured normal numeric path is 256 B/batch after ordered-range
-    // validation. A 512 B ceiling rejects the former 2,448 B range-list path;
-    // it is a bounded-allocation regression, never a zero-byte assertion.
-    private const long OwnedAllocatedBytesLimitPerBatch = 512;
+    private const long NewLeaseBytesLimitPerBatch = 512;
     private static long s_sink;
     private static int s_assertions;
     private static readonly Projection<long> Shape = Projection<long>.Create(
@@ -25,90 +19,70 @@ internal static class OwnedBatchProbe
     private static readonly WireExpectation Expected = new(PayloadKind.Rows, 2,
         Convert.FromHexString(Shape.ShapeHash), 0, 71, [new(0, Codecs.Int64.Descriptor, 3)]);
     private static readonly StreamLimits Limits = new(Rows, 8192, Rows * 2, 16 * 1024);
-
-    private readonly record struct Counter(long Bytes, long CurrentThreadBytes, int Gen0, int Gen1, int Gen2);
+    private readonly record struct Counter(long Bytes, long ThreadBytes, int Gen0, int Gen1, int Gen2);
     private readonly record struct Window(string Lane, int Round, Counter Before, Counter After,
         long Operations, long Rows, long Checksum);
 
     internal static void RunCorrectness()
     {
+        s_assertions = 0;
         var payload = Encode(Rows);
         Correctness(payload);
-        foreach (var owned in new[] { false, true })
+        var batches = Prepare(payload, 2);
+        long rows = 0, checksum = 0;
+        foreach (var owner in batches)
         {
-            var batches = Prepare(payload, 2, owned);
-            long rows = 0, checksum = 0;
-            foreach (var owner in batches)
+            using var lease = new RowBatchLease(owner.Batch, Expected, Shape.Fields, Limits);
+            for (uint row = 0; row < lease.Rows; row++)
             {
-                using var lease = new RowBatchLease(owner, Expected, Shape.Fields, Limits);
-                for (uint row = 0; row < lease.Rows; row++)
-                {
-                    var value = lease.Materialize(row, Shape);
-                    Check(value == row + 1, "Complete batch consumption changed a numeric value.");
-                    rows++; checksum += value;
-                }
+                var value = lease.Materialize(row, Shape);
+                Check(value == row + 1, "Complete scoped batch consumption changed a numeric value.");
+                rows++; checksum += value;
             }
-            Check(rows == 2 * Rows && checksum == (long)Rows * (Rows + 1),
-                "Borrowed/owned batches changed their complete row count or checksum.");
-            AssertReleased(batches, takes: owned ? 1 : 0);
         }
-        Console.WriteLine($"PASS owned batch correctness: {s_assertions} assertions; complete consumption, ownership and malformed-transfer compensation");
+        Check(rows == 2 * Rows && checksum == (long)Rows * (Rows + 1),
+            "Scoped batches changed their complete row count or checksum.");
+        AssertReleased(batches);
+        Console.WriteLine($"PASS scoped batch correctness: {s_assertions} assertions; complete consumption, independent input, ownership and malformed-batch compensation");
     }
 
     internal static void Run(string output)
     {
+        s_assertions = 0;
         var payload = Encode(Rows);
         Correctness(payload);
-        _ = Consume(Prepare(payload, Warmup, owned: false), 0, "warmup-borrowed");
-        _ = Consume(Prepare(payload, Warmup, owned: true), 0, "warmup-owned");
-        _ = CopyOnly(payload, Warmup, 0);
+        var initial = Prepare(payload, 1)[0];
+        using var reusable = new RowBatchLease(initial.Batch, Expected, Shape.Fields, Limits);
+        reusable.Dispose();
+        var warmNew = Prepare(payload, Warmup); var warmReuse = Prepare(payload, Warmup);
+        _ = Consume(warmNew, null, -1); _ = Consume(warmReuse, reusable, -1);
+        AssertReleased(warmNew); AssertReleased(warmReuse);
         _ = Capture();
-        var windows = new Window[Rounds * 3];
-        bool passed = true;
-        for (int round = 0; round < Rounds; round++)
+        var windows = new Window[Rounds * 2];
+        var passed = true;
+        for (var round = 0; round < Rounds; round++)
         {
-            // Every owner/input array is ready before either measured boundary.
-            // Ownership transfer is single-use; no measurement reuses a batch.
-            var borrowed = Prepare(payload, Operations, owned: false);
-            var owned = Prepare(payload, Operations, owned: true);
-            Window baseline, after;
+            var fresh = Prepare(payload, Operations); var reused = Prepare(payload, Operations);
+            Window first, second;
             if ((round & 1) == 0)
-            {
-                baseline = Consume(borrowed, round, "borrowed-defensive-copy");
-                after = Consume(owned, round, "exclusive-owned-handoff");
-            }
+            { first = Consume(fresh, null, round); second = Consume(reused, reusable, round); }
             else
-            {
-                after = Consume(owned, round, "exclusive-owned-handoff");
-                baseline = Consume(borrowed, round, "borrowed-defensive-copy");
-            }
-            var copy = CopyOnly(payload, Operations, round);
-            windows[round * 3] = baseline; windows[round * 3 + 1] = after; windows[round * 3 + 2] = copy;
-            AssertReleased(borrowed, takes: 0); AssertReleased(owned, takes: 1);
-            long removed = baseline.After.Bytes - baseline.Before.Bytes - (after.After.Bytes - after.Before.Bytes);
-            long copyBytes = copy.After.Bytes - copy.Before.Bytes;
-            long threadRemoved = baseline.After.CurrentThreadBytes - baseline.Before.CurrentThreadBytes
-                - (after.After.CurrentThreadBytes - after.Before.CurrentThreadBytes);
-            long threadCopyBytes = copy.After.CurrentThreadBytes - copy.Before.CurrentThreadBytes;
-            // A process-wide counter may contain additional runtime work.
-            // Preserve it; do not demand or manufacture an exact equality.
-            // The ownership assertions establish array identity, the local
-            // counter isolates the synchronous lane, and the global raw totals
-            // must still show at least one copy saved with a bounded owned lane.
-            passed &= removed >= copyBytes && threadRemoved >= threadCopyBytes
-                && copyBytes >= payload.LongLength * Operations && threadCopyBytes >= payload.LongLength * Operations
-                && after.After.Bytes - after.Before.Bytes <= OwnedAllocatedBytesLimitPerBatch * Operations
-                && baseline.Rows == Operations * Rows && after.Rows == baseline.Rows
-                && baseline.Checksum == after.Checksum
-                && baseline.Checksum == Operations * (long)Rows * (Rows + 1) / 2;
+            { second = Consume(reused, reusable, round); first = Consume(fresh, null, round); }
+            windows[round * 2] = first; windows[round * 2 + 1] = second;
+            AssertReleased(fresh); AssertReleased(reused);
+            passed &= first.After.Bytes - first.Before.Bytes <= NewLeaseBytesLimitPerBatch * Operations
+                && second.After.Bytes - second.Before.Bytes == 0
+                && second.After.ThreadBytes - second.Before.ThreadBytes == 0
+                && first.Rows == Operations * Rows && second.Rows == first.Rows
+                && first.Checksum == second.Checksum
+                && first.Checksum == Operations * (long)Rows * (Rows + 1) / 2;
         }
-
         var path = Path.Combine(output, "owned-batch-probe.json");
         using (var file = File.Create(path))
         using (var json = new Utf8JsonWriter(file, new() { Indented = true }))
         {
-            json.WriteStartObject(); json.WriteNumber("schema_version", 1);
-            json.WriteString("task", "DB-Perf-01"); json.WriteString("kind", "isolated-owned-batch-regression");
+            json.WriteStartObject(); json.WriteNumber("schema_version", 2);
+            json.WriteString("task", "DB-Exec-02"); json.WriteString("kind", "isolated-scoped-native-row-lease");
             json.WriteBoolean("passed", passed); json.WriteBoolean("public_provider_acceptance", false);
             json.WriteBoolean("native_aot", !RuntimeFeature.IsDynamicCodeSupported);
             json.WriteString("runtime", RuntimeInformation.FrameworkDescription); json.WriteNumber("process_id", Environment.ProcessId);
@@ -121,176 +95,112 @@ internal static class OwnedBatchProbe
             json.WriteNumber("warmup_operations_per_lane", Warmup); json.WriteNumber("rounds", Rounds);
             json.WriteNumber("operations_per_window", Operations); json.WriteNumber("rows_per_batch", Rows);
             json.WriteNumber("encoded_batch_bytes", payload.Length);
-            json.WriteNumber("owned_raw_bytes_limit_per_batch", OwnedAllocatedBytesLimitPerBatch);
+            json.WriteNumber("new_lease_raw_bytes_limit_per_batch", NewLeaseBytesLimitPerBatch);
             json.WriteString("batch_sha256", Convert.ToHexStringLower(SHA256.HashData(payload)));
             json.WriteNumber("correctness_assertions", s_assertions);
-            json.WriteString("boundary", "Precreated exclusive or borrowed managed input and batch owner; RowBatchLease construction, all 128 numeric row reads and owner disposal are measured. Native fetch and its first managed copy are excluded. All process threads count via GC.GetTotalAllocatedBytes(true).");
-            json.WriteString("attribution", "Raw lane totals remain nonzero. Identity assertions establish the removed payload array. The gate requires at least one equal-sized copy saved in both whole-process and auxiliary current-thread totals, and a fixed owned-lane budget. Excess difference is unattributed; no control is subtracted to claim zero or attribute public query totals.");
-            json.WriteString("ownership", "No array pool or retained payload cache. Each prepared owner is used once; all release counters equal one after the window. Production native owner/byte-permit retention is verified separately by Data.NativeHost actual-provider tests.");
+            json.WriteString("boundary", "NativeMemory, GCHandle-backed release counters and scoped owners are prepared before each window. New or reused RowBatchLease validation, all 128 typed row reads, disposal and native release are measured. Provider fetch and controller scheduling are excluded. Raw all-thread totals are not adjusted.");
+            json.WriteString("history", "Schema 1 compared deleted managed-owned and unmarked transport implementations. Schema 2 contains only the production scoped native representation; it makes no copy-savings comparison with schema 1.");
+            json.WriteString("ownership", "Every native buffer attaches and releases once; no fixture roots its ScopedStreamBatch. New lease and warmed reuse costs are separate. A zero reuse window never implies a zero-byte public query.");
             json.WriteStartArray("windows");
             foreach (var window in windows)
             {
                 json.WriteStartObject(); json.WriteString("lane", window.Lane); json.WriteNumber("round", window.Round);
                 WriteCounter(json, "before", window.Before); WriteCounter(json, "after", window.After);
-                long bytes = window.After.Bytes - window.Before.Bytes;
+                var bytes = window.After.Bytes - window.Before.Bytes;
                 json.WriteNumber("allocated_bytes_total", bytes); json.WriteNumber("operations", window.Operations);
                 json.WriteNumber("rows", window.Rows); json.WriteNumber("checksum", window.Checksum);
-                json.WriteNumber("bytes_per_operation", bytes / (double)window.Operations);
-                if (window.Rows > 0) json.WriteNumber("bytes_per_row", bytes / (double)window.Rows); else json.WriteNull("bytes_per_row");
-                json.WriteEndObject();
+                json.WriteNumber("bytes_per_operation", bytes / (double)window.Operations); json.WriteEndObject();
             }
             json.WriteEndArray(); json.WriteEndObject();
         }
-        if (!passed) throw new InvalidOperationException("Owned-batch lane exceeded its fixed raw budget or saved less than one same-sized managed copy; inspect every raw window.");
-        Console.WriteLine("PASS owned batch: " + s_assertions + " ownership/validation assertions; " + Rounds
-            + " raw allocation windows per lane; no full-query zero-allocation claim; " + path);
+        if (!passed) throw new InvalidOperationException("Scoped row-lease construction or warmed reuse exceeded its explicit raw allocation boundary; inspect every original window.");
+        Console.WriteLine($"PASS scoped row lease: {s_assertions} ownership/validation assertions; {Rounds} raw allocation windows per lane; no public-query zero claim; {path}");
     }
 
     private static byte[] Encode(int rows)
     {
         var cells = new ReadOnlyMemory<byte>?[rows];
-        for (int i = 0; i < rows; i++) cells[i] = Codecs.Int64.Encode(i + 1L);
+        for (var i = 0; i < rows; i++) cells[i] = Codecs.Int64.Encode(i + 1L);
         return DbWire.Encode(Expected, checked((uint)rows), cells);
     }
-
-    private static ProbeBatch[] Prepare(byte[] payload, int count, bool owned)
+    private static ScopedBatchFixture[] Prepare(byte[] payload, int count)
     {
-        var batches = new ProbeBatch[count];
-        for (int i = 0; i < count; i++)
-        {
-            var input = (byte[])payload.Clone();
-            batches[i] = owned ? new OwnedProbeBatch(input) : new ProbeBatch(input);
-        }
+        var batches = new ScopedBatchFixture[count];
+        for (var i = 0; i < count; i++) { batches[i] = new(payload); batches[i].Acquire(); }
         return batches;
     }
-
-    private static Window Consume(ProbeBatch[] batches, int round, string lane)
+    private static Window Consume(ScopedBatchFixture[] batches, RowBatchLease? reusable, int round)
     {
         long rows = 0, checksum = 0;
         var before = Capture();
         foreach (var owner in batches)
         {
-            using var lease = new RowBatchLease(owner, Expected, Shape.Fields, Limits);
-            for (uint row = 0; row < lease.Rows; row++) { checksum += lease.Materialize(row, Shape); rows++; }
+            var lease = reusable;
+            if (lease is null) lease = new(owner.Batch, Expected, Shape.Fields, Limits);
+            else lease.Attach(owner.Batch, Expected, Limits);
+            try
+            { for (uint row = 0; row < lease.Rows; row++) { checksum += lease.Materialize(row, Shape); rows++; } }
+            finally { lease.Dispose(); }
         }
         Volatile.Write(ref s_sink, checksum);
         var after = Capture();
-        return new(lane, round, before, after, batches.Length, rows, checksum);
+        return new(reusable is null ? "new-scoped-row-lease" : "reused-scoped-row-lease", round, before, after, batches.Length, rows, checksum);
     }
-
-    private static Window CopyOnly(byte[] payload, int count, int round)
-    {
-        long checksum = 0;
-        var before = Capture();
-        for (int i = 0; i < count; i++)
-        {
-            var copy = payload.AsSpan().ToArray();
-            checksum += copy.Length;
-            GC.KeepAlive(copy);
-        }
-        Volatile.Write(ref s_sink, checksum);
-        var after = Capture();
-        return new("same-sized-byte-array-copy-control", round, before, after, count, 0, checksum);
-    }
-
-    private static Counter Capture()
-    {
-        long threadBytes = GC.GetAllocatedBytesForCurrentThread();
-        long bytes = GC.GetTotalAllocatedBytes(true);
-        return new(bytes, threadBytes, GC.CollectionCount(0), GC.CollectionCount(1), GC.CollectionCount(2));
-    }
-
+    private static Counter Capture() => new(GC.GetTotalAllocatedBytes(true), GC.GetAllocatedBytesForCurrentThread(),
+        GC.CollectionCount(0), GC.CollectionCount(1), GC.CollectionCount(2));
     private static void WriteCounter(Utf8JsonWriter json, string name, Counter counter)
     {
         json.WriteStartObject(name); json.WriteNumber("allocated_bytes", counter.Bytes);
-        json.WriteNumber("current_thread_allocated_bytes", counter.CurrentThreadBytes);
-        json.WriteNumber("gc0", counter.Gen0); json.WriteNumber("gc1", counter.Gen1);
-        json.WriteNumber("gc2", counter.Gen2); json.WriteEndObject();
+        json.WriteNumber("current_thread_allocated_bytes", counter.ThreadBytes);
+        json.WriteNumber("gc0", counter.Gen0); json.WriteNumber("gc1", counter.Gen1); json.WriteNumber("gc2", counter.Gen2); json.WriteEndObject();
     }
-
     private static void Correctness(byte[] payload)
     {
         var input = (byte[])payload.Clone();
-        var borrowed = new ProbeBatch(input);
-        using (var lease = new RowBatchLease(borrowed, Expected, Shape.Fields, Limits))
+        var captured = new ScopedBatchFixture(input); captured.Acquire();
+        using (var lease = new RowBatchLease(captured.Batch, Expected, Shape.Fields, Limits))
         {
             Array.Clear(input);
             Check(lease.Materialize(0, Shape) == 1 && lease.Materialize(Rows - 1, Shape) == Rows,
-                "Borrowed mutable input no longer has defensive snapshot isolation.");
+                "Fixture native payload no longer owns a snapshot of its mutable setup input.");
         }
-        Check(borrowed.Releases == 1, "Borrowed owner release count differs.");
-
-        input = (byte[])payload.Clone();
-        var owned = new OwnedProbeBatch(input);
-        var retained = new RowBatchLease(owned, Expected, Shape.Fields, Limits);
-        Check(owned.Takes == 1 && owned.Releases == 0, "Transfer released the original owner before disposal.");
-        Reject<ObjectDisposedException>(() => { _ = owned.Bytes; });
-        Reject<ObjectDisposedException>(() => { _ = owned.TakeBytes(); });
-        Check(retained.Materialize(0, Shape) == 1, "Owned row decode changed.");
-        Check(MemoryMarshal.TryGetArray(retained.Value(0)!.Value, out var segment)
-            && ReferenceEquals(segment.Array, input), "Row lease copied the transferred managed buffer.");
+        Check(captured.NativeReleases == 1, "Captured native owner release count differs.");
+        var retainedOwner = new ScopedBatchFixture(payload); retainedOwner.Acquire();
+        var retained = new RowBatchLease(retainedOwner.Batch, Expected, Shape.Fields, Limits);
+        Check(retainedOwner.Acquisitions == 1 && retainedOwner.NativeReleases == 0,
+            "Scoped attachment released its owner before disposal.");
+        Check(retained.Materialize(0, Shape) == 1, "Scoped row decode changed.");
         retained.Dispose(); retained.Dispose();
-        Check(owned.Releases == 1, "Idempotent lease disposal released its owner twice.");
-        Reject<ObjectDisposedException>(() => retained.AssertAlive());
+        Check(retainedOwner.NativeReleases == 1, "Idempotent lease disposal released its native owner twice.");
+        Reject<ObjectDisposedException>(retained.AssertAlive);
         Reject<ObjectDisposedException>(() => retained.Materialize(0, Shape));
-        Check(BinaryPrimitives.ReadInt64LittleEndian(input.AsSpan((int)DbWire.R64(input, 120))) == 1,
-            "Retiring an owner invalidated managed storage.");
-
-        input = (byte[])payload.Clone(); input[0] = 0;
-        var malformed = new OwnedProbeBatch(input);
-        Reject<DatabaseException>(() => { using var lease = new RowBatchLease(malformed, Expected, Shape.Fields, Limits); });
-        Check(malformed.Takes == 1 && malformed.Releases == 1, "Parse failure after transfer leaked or double-released its owner.");
-        var oversized = new OwnedProbeBatch((byte[])payload.Clone());
-        Reject<DatabaseException>(() => { using var lease = new RowBatchLease(oversized, Expected, Shape.Fields, Limits with { MaxBatchBytes = payload.Length - 1 }); });
-        Check(oversized.Takes == 1 && oversized.Releases == 1, "Post-transfer byte-limit failure did not retire its owner.");
-        var tooManyRows = new OwnedProbeBatch((byte[])payload.Clone());
-        Reject<DatabaseException>(() => { using var lease = new RowBatchLease(tooManyRows, Expected, Shape.Fields, Limits with { MaxBatchRows = Rows - 1 }); });
-        Check(tooManyRows.Takes == 1 && tooManyRows.Releases == 1, "Post-parse row-limit failure did not retire its owner.");
-        var missingEnd = new OwnedProbeBatch(Encode(0));
-        Reject<DatabaseException>(() => { using var lease = new RowBatchLease(missingEnd, Expected, Shape.Fields, Limits); });
-        Check(missingEnd.Takes == 1 && missingEnd.Releases == 1, "Invalid empty-batch end marker did not retire its owner.");
-        var end = new OwnedProbeBatch(Encode(0), end: true);
-        using (var lease = new RowBatchLease(end, Expected, Shape.Fields, Limits))
-            Check(lease.End && lease.Rows == 0, "Canonical owned end batch changed.");
-        Check(end.Releases == 1, "End batch owner did not retire.");
+        foreach (var failure in new[] { "header", "bytes", "rows", "empty-not-end" })
+        {
+            var bytes = (byte[])payload.Clone(); var limits = Limits;
+            if (failure == "header") bytes[0] = 0;
+            if (failure == "bytes") limits = limits with { MaxBatchBytes = payload.Length - 1 };
+            if (failure == "rows") limits = limits with { MaxBatchRows = Rows - 1 };
+            if (failure == "empty-not-end") bytes = Encode(0);
+            var invalid = new ScopedBatchFixture(bytes); invalid.Acquire();
+            Reject<DatabaseException>(() => { using var lease = new RowBatchLease(invalid.Batch, Expected, Shape.Fields, limits); });
+            Check(invalid.NativeReleases == 1 && !invalid.Active, "Invalid scoped batch did not compensate its owner once: " + failure);
+        }
+        var end = new ScopedBatchFixture(Encode(0), end: true); end.Acquire();
+        using (var lease = new RowBatchLease(end.Batch, Expected, Shape.Fields, Limits))
+            Check(lease.End && lease.Rows == 0, "Canonical scoped end batch changed.");
+        Check(end.NativeReleases == 1, "End batch owner did not retire.");
     }
-
-    private static void AssertReleased(ProbeBatch[] batches, int takes)
+    private static void AssertReleased(ScopedBatchFixture[] batches)
     {
         foreach (var batch in batches)
-            Check(batch.Releases == 1 && batch.Takes == takes, "Measured owner release/transfer count differs.");
+            Check(batch.Acquisitions == 1 && batch.NativeReleases == 1 && !batch.Active,
+                "Measured native owner attachment/release count differs.");
     }
     private static void Check(bool condition, string message)
-    {
-        s_assertions++;
-        if (!condition) throw new InvalidOperationException(message);
-    }
+    { s_assertions++; if (!condition) throw new InvalidOperationException(message); }
     private static void Reject<T>(Action action) where T : Exception
     {
-        try { action(); }
-        catch (T) { s_assertions++; return; }
+        try { action(); } catch (T) { s_assertions++; return; }
         throw new InvalidOperationException("Expected " + typeof(T).Name);
-    }
-
-    private class ProbeBatch(byte[] bytes, bool end = false) : IStreamBatch
-    {
-        protected byte[]? Payload = bytes;
-        private int _active = 1;
-        internal int Takes, Releases;
-        public ReadOnlyMemory<byte> Bytes => Payload ?? throw new ObjectDisposedException(nameof(ProbeBatch));
-        public bool End { get; } = end;
-        public void Dispose()
-        {
-            Interlocked.Exchange(ref Payload, null);
-            if (Interlocked.Exchange(ref _active, 0) != 0) Releases++;
-        }
-    }
-    private sealed class OwnedProbeBatch(byte[] bytes, bool end = false) : ProbeBatch(bytes, end), IOwnedStreamBatch
-    {
-        public byte[] TakeBytes()
-        {
-            var result = Interlocked.Exchange(ref Payload, null) ?? throw new ObjectDisposedException(nameof(OwnedProbeBatch));
-            Takes++; return result;
-        }
     }
 }

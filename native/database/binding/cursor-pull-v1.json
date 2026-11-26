@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "capability": "db.cursor.pull.v1",
+  "capability_bit": 27,
+  "header": "native/database/binding/korda_cursor_pull_v1.h",
+  "record": {
+    "name": "nw_db_batch_result_v1",
+    "linux_x64_size": 32,
+    "offsets": {
+      "owner": 0,
+      "bytes": 8,
+      "known_end": 24,
+      "reserved": 28
+    }
+  },
+  "callback_record": {
+    "name": "nw_db_cursor_callbacks_v1",
+    "linux_x64_size": 24,
+    "offsets": {
+      "struct_size": 0,
+      "reserved": 4,
+      "context": 8,
+      "ready": 16
+    }
+  },
+  "signatures": [
+    "nw_status NW_CDECL nw_db_cursor_pull_create_v1(nw_db_ref session, nw_db_ref plan, nw_bytes_view_v1 arguments, nw_db_ref* channel, nw_error_info_v1* error);",
+    "nw_status NW_CDECL nw_db_cursor_pull_relation_create_v1(nw_db_ref session, nw_db_ref relation, nw_bytes_view_v1 key, uint32_t projection, nw_db_ref* channel, nw_error_info_v1* error);",
+    "nw_status NW_CDECL nw_db_cursor_pull_mutation_create_v1(nw_db_ref session, nw_db_ref model, uint32_t kind, nw_bytes_view_v1 payload, nw_db_ref* channel, nw_error_info_v1* error);",
+    "nw_status NW_CDECL nw_db_cursor_pull_request_v1(nw_db_ref channel, uint64_t generation, uint32_t rows, uint64_t bytes, const nw_db_cursor_callbacks_v1* callbacks, nw_error_info_v1* error);",
+    "nw_status NW_CDECL nw_db_cursor_pull_take_v1(nw_db_ref channel, uint64_t generation, nw_db_batch_result_v1* result, nw_error_info_v1* error);",
+    "nw_status NW_CDECL nw_db_cursor_pull_take_error_v1(nw_db_ref channel, uint64_t generation, nw_db_buffer** result, nw_error_info_v1* error);",
+    "nw_status NW_CDECL nw_db_cursor_pull_check_read_v1(nw_db_ref channel, nw_error_info_v1* error);",
+    "nw_status NW_CDECL nw_db_cursor_pull_stop_v1(nw_db_ref channel);"
+  ]
+}

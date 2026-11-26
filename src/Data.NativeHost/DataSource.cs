@@ -2,6 +2,7 @@ using Korda.Data;
 using Korda.Interop;
 using Korda.Interop.Abi;
 using Korda.Interop.Async;
+using Korda.Interop.Callbacks;
 using Korda.Interop.Lifetime;
 using Korda.Query.Internal;
 
@@ -25,6 +26,9 @@ public sealed partial class DataSource : IDisposable, IAsyncDisposable
     internal Action? TestAfterErrorTake { get; set; }
     internal Action? TestAfterOwnerTake { get; set; }
     internal Action<AsyncSnapshot>? TestRetirement { get; set; }
+    internal Action<HostPullBoundary>? TestPullBoundary { get; set; }
+    internal Action<HostPullSnapshot>? TestPullSnapshot { get; set; }
+    internal CallbackCoordinator CallbackCoordinator => _resources.Coordinator;
     private DataSource(SourceBinding binding, DatabaseOwner owner, DatabaseProvider provider, string name, DatabaseLimits limits, EngineInfo info)
     {
         Binding = binding; Owner = owner; Provider = provider; Name = name; Limits = limits; Capabilities = new(provider, info);
@@ -36,10 +40,10 @@ public sealed partial class DataSource : IDisposable, IAsyncDisposable
         var info = descriptor.Inspect();
         var calls = new NativeCalls(descriptor.EngineId, symbol => EngineModuleLoader.ResolveExport(descriptor, symbol));
         var binding = new SourceBinding(calls, provider == DatabaseProvider.Sqlite ? 1u : 2u);
-        if (!info.Capabilities.Any(capability => capability.Name == BatchResultCalls.Capability))
-            throw new DatabaseCapabilityException(BatchResultCalls.Capability, provider == DatabaseProvider.Sqlite ? "sqlite.v1" : "postgresql.v1");
-        binding.Batches = new(symbol => EngineModuleLoader.ResolveExport(descriptor, symbol));
-        binding.Batches.Require();
+        if (!info.Capabilities.Any(capability => capability.Name == CursorPullCalls.Capability))
+            throw new DatabaseCapabilityException(CursorPullCalls.Capability, provider == DatabaseProvider.Sqlite ? "sqlite.v1" : "postgresql.v1");
+        binding.Pulls = new(symbol => EngineModuleLoader.ResolveExport(descriptor, symbol));
+        binding.Pulls.Require();
         binding.Commands = new(new QueryCommandCalls(symbol => EngineModuleLoader.ResolveExport(descriptor, symbol)),
             limits.MaxQueryNodes, limits.MaxQueryDepth, limits.MaxParameters, checked((int)limits.MaxParameterBytes),
             info.Capabilities.Select(capability => capability.Name));
@@ -80,22 +84,6 @@ public sealed partial class DataSource : IDisposable, IAsyncDisposable
             return Complete(operation, operation.Start());
         }
         catch { if (resource is not null) resource.Dispose(); else handle?.Dispose(); throw; }
-    }
-    // Only the internal single-consumer fetch seam uses this result form. Public
-    // Task APIs keep their independently awaitable result and cleanup bridge.
-    internal ValueTask<T> StartRetiredValueTask<T>(Func<nint> create, Func<nint, T> take, CancellationToken token)
-    {
-        CheckOpen(); if (token.IsCancellationRequested) return new(Task.FromCanceled<T>(token));
-        OperationHandle? handle = null;
-        try
-        {
-            handle = new(Binding, create());
-            var operation = new AsyncOperation.RetiredValueTask<T>(handle, _async, _resources.Coordinator, take, token,
-                testBoundary: TestBoundary);
-            handle = null;
-            return operation.Start();
-        }
-        catch { handle?.Dispose(); throw; }
     }
     private async Task<T> Complete<T>(AsyncOperation<T> operation, Task<T> result)
     {

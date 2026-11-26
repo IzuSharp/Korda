@@ -13,7 +13,7 @@ using Korda.Query;
 internal static class FetchProbe
 {
     private const int BatchRows = 32, DataRows = 256;
-    private static long _retired, _emptySink;
+    private static long _retired, _pulled, _emptySink;
     private sealed record Item(long Id);
     private static readonly Table<Item> Table;
     private static readonly Column<Item, long> Id;
@@ -23,12 +23,12 @@ internal static class FetchProbe
         Id = builder.Column("Id", Codecs.Int64, new() { IsPrimaryKey = true });
         Table = builder.Build(row => new(row.Get(Id)), (row, item) => row.Set(Id, item.Id));
     }
-    private readonly record struct Counter(long Bytes, int Gen0, int Gen1, int Gen2, long Retirements, long Ticks)
+    private readonly record struct Counter(long Bytes, int Gen0, int Gen1, int Gen2, long Retirements, long Pulls, long Ticks)
     {
         internal static Counter Read()
         {
             var g0 = GC.CollectionCount(0); var g1 = GC.CollectionCount(1); var g2 = GC.CollectionCount(2);
-            return new(GC.GetTotalAllocatedBytes(true), g0, g1, g2, Interlocked.Read(ref _retired), Stopwatch.GetTimestamp());
+            return new(GC.GetTotalAllocatedBytes(true), g0, g1, g2, Interlocked.Read(ref _retired), Interlocked.Read(ref _pulled), Stopwatch.GetTimestamp());
         }
     }
     private readonly record struct Sample(string Name, int Window, long Operations, long Rows, long Checksum,
@@ -72,24 +72,33 @@ internal static class FetchProbe
                 throw new InvalidOperationException("A public operation retained its managed bridge owners.");
             Interlocked.Increment(ref _retired);
         };
+        source.TestPullSnapshot = static snapshot =>
+        {
+            if (!snapshot.Published || snapshot.Consumed) return;
+            if (!snapshot.SetupReturned || !snapshot.Accepted || !snapshot.Ready || !snapshot.ResultTaken
+                || snapshot.Rooted || snapshot.SlotReserved || snapshot.Controls != 0 || snapshot.CallbackEntries != 0
+                || !snapshot.RegistrationDrained)
+                throw new InvalidOperationException("A public pull published before releasing its bridge obligations.");
+            Interlocked.Increment(ref _pulled);
+        };
         var full = new Sample[plans.Length][];
         for (var i = 0; i < plans.Length; i++) full[i] = await Full(session, plans[i], rowCounts[i], warmup, iterations, windows, native);
         var slices = await Slices(session, plans[2], warmup, iterations, native);
         var empty = Empty(iterations); var emptyAsync = await EmptyAsync(warmup, iterations);
         foreach (var plan in plans) plan.Dispose();
         await session.DisposeAsync(); await source.DisposeAsync(); var drained = native.Counts();
-        if (!session.Cleanup.LocalResourcesReleased || !source.Cleanup.LocalResourcesReleased || drained.Take(6).Any(v => v != 0))
+        if (!session.Cleanup.LocalResourcesReleased || !source.Cleanup.LocalResourcesReleased || drained.Take(6).Any(v => v != 0) || drained[8] != 0)
             throw new InvalidOperationException("The public fetch fixture did not release all owners.");
         using var file = File.Create(Path.Combine(args[3], "fetch-allocation.json"));
         using var json = new Utf8JsonWriter(file, new() { Indented = true });
-        json.WriteStartObject(); json.WriteBoolean("NativeAot", true); json.WriteString("Provider", source.Provider.ToString());
+        json.WriteStartObject(); json.WriteNumber("SchemaVersion", 2); json.WriteBoolean("NativeAot", true); json.WriteString("Provider", source.Provider.ToString());
         json.WriteString("ExecutableSha256", Hash(Environment.ProcessPath!)); json.WriteString("LoadedNativePath", native.Path);
         json.WriteString("LoadedNativeSha256", Hash(native.Path)); json.WriteNumber("Warmup", warmup);
         json.WriteNumber("IterationsPerWindow", iterations); json.WriteNumber("Windows", windows);
         json.WriteNumber("DataRows", DataRows); json.WriteNumber("BatchRows", BatchRows);
         json.WriteString("Boundary", "Raw whole-process all-thread GC.GetTotalAllocatedBytes(true); no subtraction. Complete queries include one-shot stream, all rows, final false and Dispose; preparations/fixture/sample arrays are outside.");
-        json.WriteString("Attribution", "No business DTO/string/list/result-array within measurements. Runtime/harness async infrastructure remains in raw process totals; static retirement observer has no per-operation managed allocation.");
-        json.WriteString("FetchAccounting", "Complete-query fetch count is inferred from configured 32-row batches: a partial final batch carries known EOF, while an exact row boundary needs an additional fetch. Actual per-region retirement counts are separately recorded. Supplemental interval must retire exactly one operation and consume row33.");
+        json.WriteString("Attribution", "No business DTO/string/list/result-array within measurements. Runtime/harness async infrastructure remains in raw process totals; static retirement and pull observers have no per-operation managed allocation.");
+        json.WriteString("FetchAccounting", "Schema 2 counts actual completed pull publications separately from generic operation retirements. A partial final batch carries known EOF, while an exact row boundary needs an additional pull. Each complete query must publish the expected number of pulls and retire at most one final close: a native snapshot proving both channel worker and cursor retirement can complete close directly. The supplemental interval must publish exactly one pull, retire no generic operation and consume row33. Historical schema 1 measured the removed generic-fetch route.");
         json.WriteString("Scope", "Source-project public Fluent Native AOT attribution, not final independent-package or long-run acceptance; diagnostic ticks are not a throughput comparison.");
         json.WriteStartArray("Queries");
         for (var i = 0; i < plans.Length; i++)
@@ -101,7 +110,7 @@ internal static class FetchProbe
         }
         json.WriteEndArray(); json.WriteStartArray("SupplementalAndWithinBatch"); foreach (var sample in slices) Write(json, sample); json.WriteEndArray();
         json.WriteStartArray("Controls"); Write(json, empty); Write(json, emptyAsync); json.WriteEndArray();
-        WriteNative(json, "NativeDrained", drained); json.WriteString("NativeCounterOrder", "sources,sessions,operations,cursors,buffers,handles,cumulative-sql,cumulative-protocol");
+        WriteNative(json, "NativeDrained", drained); json.WriteString("NativeCounterOrder", "sources,sessions,operations,cursors,buffers,handles,cumulative-sql,cumulative-protocol,pulls");
         json.WriteBoolean("OwnersReturnedToZero", true); json.WriteEndObject();
         Console.WriteLine($"FETCH_PROBE_PASS provider={source.Provider} windows={windows} iterations={iterations}");
         return true;
@@ -145,6 +154,9 @@ internal static class FetchProbe
             var after = Counter.Read(); var nativeAfter = native.Counts(); SameOwners(nativeBefore, nativeAfter);
             if (rows != (long)count * resultRows || checksum != (long)count * resultRows * (resultRows + 1) / 2)
                 throw new InvalidOperationException("Complete result aggregate differs.");
+            if (after.Pulls - before.Pulls != (long)count * (resultRows / BatchRows + 1)
+                || after.Retirements - before.Retirements < 0 || after.Retirements - before.Retirements > count)
+                throw new InvalidOperationException("A complete query did not use its expected pulls and at most one final close.");
             if (window >= 0) samples[window] = new(name, window, count, rows, checksum, incomplete, disposalIncomplete, before, after, nativeBefore, nativeAfter, threadChanges);
         }
         return samples;
@@ -164,8 +176,9 @@ internal static class FetchProbe
             var move = reader.MoveNextAsync(); var incomplete = !move.IsCompletedSuccessfully;
             var moved = await move.ConfigureAwait(false); var value = reader.Current; var fetchAfter = Counter.Read();
             var threadChanges = thread == Environment.CurrentManagedThreadId ? 0 : 1;
-            if (!moved || value != BatchRows + 1 || fetchAfter.Retirements - fetchBefore.Retirements != 1)
-                throw new InvalidOperationException("Supplemental fetch did not return row33 through exactly one operation retirement.");
+            if (!moved || value != BatchRows + 1 || fetchAfter.Pulls - fetchBefore.Pulls != 1
+                || fetchAfter.Retirements != fetchBefore.Retirements)
+                throw new InvalidOperationException("Supplemental fetch did not return row33 through exactly one pull and no generic operation retirement.");
             var fetch = new Sample("supplemental-fetch-and-first-row", i, 1, 1, value, incomplete ? 1 : 0, 0, fetchBefore, fetchAfter, MoveThreadChanges: threadChanges);
             var row = BatchRows + 1; sum += 1 + value;
             while (await reader.MoveNextAsync().ConfigureAwait(false))
@@ -201,7 +214,10 @@ internal static class FetchProbe
         return new("task-yield-control-not-native-equivalent", 0, iterations, 0, 0, iterations, 0, before, after);
     }
     private static void SameOwners(ulong[] before, ulong[] after)
-    { for (var i = 0; i < 6; i++) if (before[i] != after[i]) throw new InvalidOperationException("Live native owners did not return to the warm baseline."); }
+    {
+        for (var i = 0; i < 6; i++) if (before[i] != after[i]) throw new InvalidOperationException("Live native owners did not return to the warm baseline.");
+        if (before[8] != after[8]) throw new InvalidOperationException("Native pull objects did not return to the warm baseline.");
+    }
     private static string Hash(string path) { using var file = File.OpenRead(path); return Convert.ToHexStringLower(SHA256.HashData(file)); }
     private static void Write(Utf8JsonWriter json, Sample sample)
     {
@@ -214,6 +230,8 @@ internal static class FetchProbe
         json.WriteNumber("Gen0", sample.After.Gen0 - sample.Before.Gen0); json.WriteNumber("Gen1", sample.After.Gen1 - sample.Before.Gen1); json.WriteNumber("Gen2", sample.After.Gen2 - sample.Before.Gen2);
         json.WriteNumber("RetirementsBefore", sample.Before.Retirements); json.WriteNumber("RetirementsAfter", sample.After.Retirements);
         json.WriteNumber("Retirements", sample.After.Retirements - sample.Before.Retirements);
+        json.WriteNumber("PullsBefore", sample.Before.Pulls); json.WriteNumber("PullsAfter", sample.After.Pulls);
+        json.WriteNumber("Pulls", sample.After.Pulls - sample.Before.Pulls);
         json.WriteNumber("StartedTicks", sample.Before.Ticks); json.WriteNumber("FinishedTicks", sample.After.Ticks);
         WriteNative(json, "NativeBefore", sample.NativeBefore); WriteNative(json, "NativeAfter", sample.NativeAfter); json.WriteEndObject();
     }
@@ -236,7 +254,7 @@ internal static class FetchProbe
         }
         internal unsafe ulong[] Counts()
         {
-            var count = (delegate* unmanaged[Cdecl]<uint, ulong>)_counter; var result = new ulong[8];
+            var count = (delegate* unmanaged[Cdecl]<uint, ulong>)_counter; var result = new ulong[9];
             for (uint i = 0; i < result.Length; i++) result[i] = count(i); return result;
         }
         public void Dispose() => NativeLibrary.Free(_module);
