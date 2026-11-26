@@ -83,12 +83,12 @@ internal static class TransactionDefaultProbe
             try { await admission; throw new InvalidOperationException("Expected canceled admission."); }
             catch (OperationCanceledException failure) when (failure.CancellationToken == canceled.Token) { }
         }
-        var finalImmediate = new ulong[9]; var drained = new ulong[9]; var zero = new ulong[9];
+        var finalImmediate = new ulong[10]; var drained = new ulong[10]; var zero = new ulong[10];
         var finalBefore = Counter.Read();
         foreach (var session in sessions) await session.DisposeAsync();
         await source.DisposeAsync(); var finalAfter = Counter.Read(); native.Fill(finalImmediate);
         var finalPolls = Settle(native, drained, zero, "final-source-close", -1); var finalSettled = Counter.Read();
-        if (!source.Cleanup.LocalResourcesReleased || sessions.Any(s => !s.Cleanup.LocalResourcesReleased) || (drained.Take(6).Any(value => value != 0) || drained[8] != 0))
+        if (!source.Cleanup.LocalResourcesReleased || sessions.Any(s => !s.Cleanup.LocalResourcesReleased) || (drained.Take(6).Any(value => value != 0) || drained[8] != 0 || drained[9] != 0))
             throw new InvalidOperationException("Default-transaction fixture did not release all owners.");
         try { _ = sessions[0].BeginTransactionAsync(); throw new InvalidOperationException("Disposed default admission was accepted."); }
         catch (ObjectDisposedException) { }
@@ -152,11 +152,11 @@ internal static class TransactionDefaultProbe
     {
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var results = new WorkerResult[concurrency]; var workers = new Task[concurrency];
-        var nativeBeforeImmediate = new ulong[9]; var nativeBefore = new ulong[9];
-        var nativeAfter = new ulong[9]; var nativeSettledAfter = new ulong[9];
+        var nativeBeforeImmediate = new ulong[10]; var nativeBefore = new ulong[10];
+        var nativeAfter = new ulong[10]; var nativeSettledAfter = new ulong[10];
         // The fixture owns exactly one source and four open sessions; no query,
         // cursor, buffer or operation is allowed to become a new warm baseline.
-        var expectedOwners = new ulong[] { 1, (ulong)sessions.Length, 0, 0, 0, (ulong)sessions.Length + 1, 0, 0, 0 };
+        var expectedOwners = new ulong[] { 1, (ulong)sessions.Length, 0, 0, 0, (ulong)sessions.Length + 1, 0, 0, 0, 0 };
         var ingressName = name + "/ingress";
         for (var i = 0; i < concurrency; i++) workers[i] = Worker(sessions[i], options, useExplicit, iterations, gate.Task, results, i);
         var completion = Task.WhenAll(workers); await Task.Yield();
@@ -177,7 +177,7 @@ internal static class TransactionDefaultProbe
         {
             native.Fill(values); polls++; var match = true;
             for (var i = 0; i < 6; i++) if (values[i] != expected[i]) match = false;
-            if (values[8] != expected[8]) match = false;
+            if (values[8] != expected[8] || values[9] != expected[9]) match = false;
             consecutive = match ? consecutive + 1 : 0;
             if (consecutive == 2) return polls;
             if (Stopwatch.GetTimestamp() >= deadline)
@@ -265,7 +265,7 @@ internal static class TransactionDefaultProbe
         }
         internal unsafe ulong[] Counts()
         {
-            var result = new ulong[9]; Fill(result); return result;
+            var result = new ulong[10]; Fill(result); return result;
         }
         internal unsafe void Fill(ulong[] result)
         { var count = (delegate* unmanaged[Cdecl]<uint, ulong>)_counter; for (uint i = 0; i < result.Length; i++) result[i] = count(i); }

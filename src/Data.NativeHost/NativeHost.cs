@@ -85,34 +85,48 @@ internal sealed unsafe class HostAsyncCalls(DataSource source) : AsyncNativeCall
     internal override void Poison() => source.Poison();
     internal override Exception MapFailure(nint operation, uint status, in NwErrorInfoV1 error, CancellationToken token)
     {
-        string? provider = null; bool cleanupFailed = false; BulkProgress? nativeProgress = null;
         if (source.Binding.Calls.nw_db_operation_take_error_v1 != null)
         {
             nint pointer = 0; var detail = BindingChecks.Error(); var taken = source.Binding.Calls.nw_db_operation_take_error_v1(operation, &pointer, &detail);
             if (taken == NativeStatus.Ok)
-            {
-                using var owner = new NativeBuffer(source.Binding, pointer);
-                source.TestAfterErrorTake?.Invoke();
-                var fields = HostEncoding.ReadControl(BulkErrorPayload.Read(owner.Copy(), out nativeProgress), 7);
-                if (fields.TryGetValue(9, out var code)) provider = HostEncoding.Utf8.GetString(code);
-                cleanupFailed = fields.TryGetValue(4, out var cleanup) && BinaryPrimitives.ReadUInt32LittleEndian(cleanup) == (uint)CleanupStatus.Failed;
-            }
+                return HostFailure.ReadDetails(source.Binding, status, error, token, pointer, source.TestAfterErrorTake,
+                    "Administrative rollback or connection closure also failed; the dedicated connection was discarded.");
         }
-        var failure = HostFailure.Create(source.Binding, status, error, provider, token);
-        if (!cleanupFailed) return BulkErrorPayload.AttachNative(failure, nativeProgress);
-        var cleanupFailure = new DatabaseException("Administrative rollback or connection closure also failed; the dedicated connection was discarded.", DatabaseErrorKind.Provider);
-        Exception enriched = failure switch
-        {
-            DatabaseException database => new DatabaseException(database.Message, database.Kind, database.ProviderCode, database.CorrelationId, database.IsTransient, cleanupFailure),
-            OperationCanceledException cancellation => new OperationCanceledException(cancellation.Message, cleanupFailure, cancellation.CancellationToken),
-            TimeoutException timeout => new TimeoutException(timeout.Message, cleanupFailure),
-            _ => new AggregateException(failure, cleanupFailure)
-        };
-        return BulkErrorPayload.AttachNative(enriched, nativeProgress);
+        return HostFailure.Create(source.Binding, status, error, token: token);
     }
 }
 internal static class HostFailure
 {
+    internal static unsafe Exception ReadDetails(SourceBinding binding, uint status, in NwErrorInfoV1 error,
+        CancellationToken token, nint pointer, Action? afterTake, string cleanupMessage)
+    {
+        NativeBuffer? owner = null;
+        try
+        {
+            owner = new(binding, pointer); pointer = 0;
+            afterTake?.Invoke();
+            var fields = HostEncoding.ReadControl(BulkErrorPayload.Read(owner.Copy(), out var progress), 7);
+            var provider = fields.TryGetValue(9, out var code) ? HostEncoding.Utf8.GetString(code) : null;
+            var cleanupFailed = fields.TryGetValue(4, out var cleanup)
+                && BinaryPrimitives.ReadUInt32LittleEndian(cleanup) == (uint)CleanupStatus.Failed;
+            var failure = Create(binding, status, error, provider, token);
+            if (!cleanupFailed) return BulkErrorPayload.AttachNative(failure, progress);
+            var cleanupFailure = new DatabaseException(cleanupMessage, DatabaseErrorKind.Provider);
+            Exception enriched = failure switch
+            {
+                DatabaseException database => new DatabaseException(database.Message, database.Kind, database.ProviderCode, database.CorrelationId, database.IsTransient, cleanupFailure),
+                OperationCanceledException cancellation => new OperationCanceledException(cancellation.Message, cleanupFailure, cancellation.CancellationToken),
+                TimeoutException timeout => new TimeoutException(timeout.Message, cleanupFailure),
+                _ => new AggregateException(failure, cleanupFailure)
+            };
+            return BulkErrorPayload.AttachNative(enriched, progress);
+        }
+        finally
+        {
+            owner?.Dispose();
+            if (pointer != 0) binding.Calls.nw_db_buffer_release_v1(pointer);
+        }
+    }
     internal static void Check(SourceBinding binding, uint status, in NwErrorInfoV1 error)
     { if (status != NativeStatus.Ok) throw Create(binding, status, error); }
     internal static Exception Create(SourceBinding binding, uint status, in NwErrorInfoV1 error, string? provider = null, CancellationToken token = default)
@@ -143,8 +157,6 @@ internal static class NativeHost
         nint result = 0; var error = BindingChecks.Error(); HostFailure.Check(binding, binding.Calls.nw_db_operation_take_owner_v1(operation, kind, &result, &error), error);
         try { return new(binding, tag, result); } catch { binding.Calls.nw_db_owner_release_v1(result); throw; }
     }
-    internal static unsafe long TakeCount(SourceBinding binding, nint operation)
-    { long result = 0; var error = BindingChecks.Error(); HostFailure.Check(binding, binding.Calls.nw_db_operation_take_count_v1(operation, &result, &error), error); return result; }
     internal static unsafe NativeBuffer TakeBuffer(SourceBinding binding, nint operation)
     { nint result = 0; var error = BindingChecks.Error(); HostFailure.Check(binding, binding.Calls.nw_db_operation_take_buffer_v1(operation, &result, &error), error); try { return new(binding, result); } catch { binding.Calls.nw_db_buffer_release_v1(result); throw; } }
     internal static unsafe void TakePullBatch(SourceBinding binding, nint channel, ulong generation,
@@ -194,33 +206,9 @@ internal static class NativeHost
             return new NativeEngineException("The pull ready notification preceded a transferable result.");
         nint pointer = 0; var detail = BindingChecks.Error();
         var taken = Pulls(binding).TakeError(channel, generation, &pointer, &detail);
-        NativeBuffer? owner = null;
-        try
-        {
-            if (taken != NativeStatus.Ok) return HostFailure.Create(binding, status, error, token: token);
-            owner = new(binding, pointer); pointer = 0;
-            afterErrorTake?.Invoke();
-            var fields = HostEncoding.ReadControl(BulkErrorPayload.Read(owner.Copy(), out var progress), 7);
-            var provider = fields.TryGetValue(9, out var code) ? HostEncoding.Utf8.GetString(code) : null;
-            var cleanupFailed = fields.TryGetValue(4, out var cleanup)
-                && BinaryPrimitives.ReadUInt32LittleEndian(cleanup) == (uint)CleanupStatus.Failed;
-            var failure = HostFailure.Create(binding, status, error, provider, token);
-            if (!cleanupFailed) return BulkErrorPayload.AttachNative(failure, progress);
-            var cleanupFailure = new DatabaseException("Native cursor cleanup also failed; the connection cannot be reused.", DatabaseErrorKind.Provider);
-            Exception enriched = failure switch
-            {
-                DatabaseException database => new DatabaseException(database.Message, database.Kind, database.ProviderCode, database.CorrelationId, database.IsTransient, cleanupFailure),
-                OperationCanceledException cancellation => new OperationCanceledException(cancellation.Message, cleanupFailure, cancellation.CancellationToken),
-                TimeoutException timeout => new TimeoutException(timeout.Message, cleanupFailure),
-                _ => new AggregateException(failure, cleanupFailure)
-            };
-            return BulkErrorPayload.AttachNative(enriched, progress);
-        }
-        finally
-        {
-            owner?.Dispose();
-            if (pointer != 0) binding.Calls.nw_db_buffer_release_v1(pointer);
-        }
+        if (taken != NativeStatus.Ok) return HostFailure.Create(binding, status, error, token: token);
+        return HostFailure.ReadDetails(binding, status, error, token, pointer, afterErrorTake,
+            "Native cursor cleanup also failed; the connection cannot be reused.");
     }
     internal static CursorPullCalls Pulls(SourceBinding binding) => binding.Pulls
         ?? throw new NotSupportedException("The native cursor pull extension is unavailable.");

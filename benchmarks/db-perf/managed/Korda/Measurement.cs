@@ -174,7 +174,7 @@ internal sealed class RunState
 internal sealed class NativeDiagnostics : IDisposable
 {
     private readonly nint _module, _count;
-    private readonly bool _pullSupported;
+    private readonly bool _pullSupported, _commandsSupported;
     internal string Path { get; }
     internal string Sha256 { get; }
     internal NativeDiagnostics(DatabaseProvider provider)
@@ -187,18 +187,19 @@ internal sealed class NativeDiagnostics : IDisposable
         using (var file = File.OpenRead(Path)) Sha256 = Convert.ToHexStringLower(SHA256.HashData(file));
         _module = NativeLibrary.Load(Path); _count = NativeLibrary.GetExport(_module, "nw_db_diagnostic_count_v1");
         _pullSupported = NativeLibrary.TryGetExport(_module, "nw_db_cursor_pull_create_v1", out _);
+        _commandsSupported = NativeLibrary.TryGetExport(_module, "nw_db_command_request_v1", out _);
     }
     internal unsafe NativeCounts Read()
     {
         var count = (delegate* unmanaged[Cdecl]<uint, ulong>)_count;
         return new(count(0), count(1), count(2), count(3), count(4), count(5), count(6), count(7),
-            _pullSupported ? count(8) : null);
+            _pullSupported ? count(8) : null, _commandsSupported ? count(9) : null);
     }
     public void Dispose() => NativeLibrary.Free(_module);
 }
 
 internal sealed record NativeCounts(ulong Sources, ulong Sessions, ulong Operations, ulong Cursors,
-    ulong Buffers, ulong Owners, ulong SqlExecutions, ulong ProtocolSubmissions, ulong? PullChannels);
+    ulong Buffers, ulong Owners, ulong SqlExecutions, ulong ProtocolSubmissions, ulong? PullChannels, ulong? CommandCompletions);
 internal sealed record SecondCount(int Second, long Completed, long Rows, long Failed);
 internal sealed record Latencies(double P50MicrosecondsUpper, double P95MicrosecondsUpper, double P99MicrosecondsUpper,
     string Method, long[] Histogram);
@@ -316,7 +317,7 @@ internal static class Measurement
             await source.DisposeAsync();
             var drained = native.Read();
             var ownersZero = drained is { Sources: 0, Sessions: 0, Operations: 0, Cursors: 0, Buffers: 0, Owners: 0 }
-                && drained.PullChannels is null or 0;
+                && drained.PullChannels is null or 0 && drained.CommandCompletions is null or 0;
             allocationProfile?.CaptureAfterDrain();
             IdleReading? idle = null;
             if(options.IdleSeconds > 0)

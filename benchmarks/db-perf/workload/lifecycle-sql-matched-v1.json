@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "mode": "matched",
+  "baseManifest": "queries-v3.json",
+  "baseManifestSha256": "76443b1c88bf011f57b3c9819dc85a8bedb5376121d3ef2670304f96b6d2aae2",
+  "constants": {
+    "FindSql": {
+      "case": "tx-commit",
+      "step": "find-original",
+      "parameterNames": [
+        "tenant",
+        "id",
+        "take"
+      ]
+    },
+    "UpdateSql": {
+      "case": "tx-commit",
+      "step": "change",
+      "parameterNames": [
+        "note",
+        "version",
+        "tenant",
+        "id"
+      ]
+    },
+    "PartialSql": {
+      "case": "partial-update",
+      "step": "change",
+      "parameterNames": [
+        "note",
+        "tenant",
+        "id"
+      ]
+    },
+    "CheckedSql": {
+      "case": "stale-conflict",
+      "step": "change",
+      "parameterNames": [
+        "note",
+        "version",
+        "tenant",
+        "id",
+        "expected"
+      ]
+    },
+    "StaleSql": {
+      "case": "stale-conflict",
+      "step": "stale-change",
+      "parameterNames": [
+        "note",
+        "tenant",
+        "id",
+        "expected"
+      ]
+    }
+  },
+  "resultColumns": [
+    "TenantId",
+    "Id",
+    "CreatedAt",
+    "CustomerId",
+    "Total",
+    "Note",
+    "Version",
+    "Settings",
+    "InternalMemo"
+  ],
+  "findLimit": {
+    "name": "take",
+    "clrType": "Int64",
+    "dbType": "Int64",
+    "value": 2
+  },
+  "providerPlaceholderPolicy": {
+    "postgresql": "Named parameters rewrite to positional $N in SQL occurrence order; require byte-identical resulting business SQL and same ordered DbType values.",
+    "sqlite": "The sole permitted difference is ordinal ? to unique @name. All other SQL bytes, ordered types and values must match; raw SQLite SQL bytes are not claimed identical."
+  },
+  "providerControls": "Use each provider normal transaction API. Do not add Korda internal SELECT 1, protocol Sync, or PRAGMA query_only work to Dapper."
+}

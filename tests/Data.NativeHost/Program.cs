@@ -21,6 +21,7 @@ if (await TransactionDefaultProbe.RunIfRequested(args)) return;
 if (args.Contains("--pull-scheduler-races-only", StringComparer.Ordinal)) { await Suite.RejectedPullSchedulerOnly(); return; }
 if (args.Contains("--cursor-close-only", StringComparer.Ordinal)) { await CursorCloseTests.RunIfRequested(args); return; }
 if (args.Contains("--pull-ready-scheduling-only", StringComparer.Ordinal)) { await ReadySchedulingTests.RunIfRequested(); return; }
+if (args.Contains("--command-completion-only", StringComparer.Ordinal)) { await CommandCompletionTests.RunIfRequested(); return; }
 Console.WriteLine("snapshot parser oracle inputs=" + SnapshotProbe.Verify());
 BatchResultTests.VerifyRecord();
 CursorCloseRecordTests.Verify();
@@ -153,10 +154,12 @@ internal static class Suite
         await CursorCloseTests.Run(DatabaseProvider.PostgreSql, pg);
         await ReadySchedulingTests.Run(DatabaseProvider.Sqlite, Path.Combine(directory, "ready-scheduling.db"));
         await ReadySchedulingTests.Run(DatabaseProvider.PostgreSql, pg);
+        await CommandCompletionTests.Run(DatabaseProvider.Sqlite, Path.Combine(directory, "command-completion.db"));
+        await CommandCompletionTests.Run(DatabaseProvider.PostgreSql, pg);
         await DependencyInjection(Path.Combine(directory, "di.db"));
         await WaitZero(SqliteDataSource.Engine);
         Directory.Delete(directory, true);
-        Console.WriteLine("B04 actual Linux two-provider assertions=" + _assertions + "; separately observed managed retirements=" + _retirements + "; all source/session/operation/cursor/buffer/handle/pull counters=0");
+        Console.WriteLine("B04 actual Linux two-provider assertions=" + _assertions + "; separately observed managed retirements=" + _retirements + "; all source/session/operation/cursor/buffer/handle/pull/command counters=0");
     }
     private static unsafe void WrongModule(DataSource owner, DataSource foreign)
     {
@@ -542,7 +545,7 @@ internal static class Suite
         throw new InvalidOperationException("Native resource leak: " + string.Join(',', Counts(engine)));
     }
     private static unsafe ulong[] Counts(EngineDescriptor engine)
-    { var count = (delegate* unmanaged[Cdecl]<uint, ulong>)EngineModuleLoader.ResolveExport(engine, "nw_db_diagnostic_count_v1"); return new uint[] { 0, 1, 2, 3, 4, 5, 8 }.Select(index => count(index)).ToArray(); }
+    { var count = (delegate* unmanaged[Cdecl]<uint, ulong>)EngineModuleLoader.ResolveExport(engine, "nw_db_diagnostic_count_v1"); return new uint[] { 0, 1, 2, 3, 4, 5, 8, 9 }.Select(index => count(index)).ToArray(); }
     private static unsafe ulong Diagnostic(EngineDescriptor engine, uint index)
     { var count = (delegate* unmanaged[Cdecl]<uint, ulong>)EngineModuleLoader.ResolveExport(engine, "nw_db_diagnostic_count_v1"); return count(index); }
     private sealed record Row(long Id, string Name);

@@ -59,14 +59,24 @@ arrays are zero for void-returning functions. Inspect at least:
   `nw_db_tx_finish_create_v1` and `nw_db_close_create_v1` for their factories.
 - `nw_db_cursor_pull_close_request_v1` and `nw_db_cursor_pull_close_take_v1`
   for direct cursor close, separately from generic transaction/source close.
+- `nw_db_command_request_v1`, `nw_db_command_take_v1`,
+  `nw_db_command_take_error_v1` and `nw_db_command_cancel_v1` for the private
+  one-shot path when the bound ABI inventory declares that extension.
 
 `TryRetire` returning `NW_OK` proves its generic quiet contract; a ready callback
 alone does not. A non-Pending return is not necessarily OK. A Pending count is a
 count of attempts, not a count of distinct operations or elapsed timer waits.
 No per-operation timing spans are added. With persistent sessions, ordinary
-numeric row queries should not start generic operations in the steady window;
-transaction cases still have begin, non-returning mutations and finish, plus a
-generic close when their transaction cleanup snapshot is not already released.
+numeric row queries should not start generic operations in the steady window.
+Before the one-shot completion extension, transaction cases have generic begin,
+non-returning mutations and finish, plus a generic close when their cleanup
+snapshot is not already released. With the extension selected by the public
+provider, these use command request/take and owner release. Source admission,
+Source close and indeterminate cleanup proofs keep their generic contract.
+Compare the actual before/after counters; export availability alone is not
+evidence that the public route selected it. Current ordinary consumers also
+record diagnostic owner kind 9 as `CommandCompletions` and require it to reach
+zero after source disposal; an older provider reports this field as null.
 
 The diagnostic count exports are outside the wrapped ABI inventory and do not
 add to these call totals. Native-to-managed notifications are not intercepted;

@@ -22,13 +22,15 @@ def main():
     p.add_argument("--kind", choices=("probe","benchmark","query-phases"), default="probe")
     p.add_argument("--output", type=Path, required=True)
     p.add_argument("--manifest", type=Path, default=HERE.parent/"workload/queries-v3.json")
+    p.add_argument("--lifecycle-sql-mode", choices=("observed","matched"), default="matched",
+        help="Benchmark lifecycle SQL contract; observed is for retained historical sources")
     a=p.parse_args(); app=a.output.resolve()
     manifest_path=a.manifest.resolve()
     if a.kind == "benchmark":
         validator_path=HERE.parent/"workload/check_dapper_contract.py"
         spec=importlib.util.spec_from_file_location("db_perf_contract",validator_path)
         validator=importlib.util.module_from_spec(spec); spec.loader.exec_module(validator)
-        validator.validate(manifest_path,HERE/"Dapper/Contracts.generated.cs")
+        validator.validate(manifest_path,HERE/"Dapper/Contracts.generated.cs",a.lifecycle_sql_mode)
     if app.exists() or app == ROOT or ROOT in app.parents:
         raise ValueError("Use a fresh output directory outside the source tree")
     app.mkdir(parents=True)
@@ -37,6 +39,11 @@ def main():
         if file.suffix in (".cs", ".csproj"): shutil.copy2(file, app/file.name)
     if a.kind == "benchmark":
         for file in (HERE/"Shared").glob("*.cs"): shutil.copy2(file,app/file.name)
+        shutil.copy2(manifest_path,app/"workload-manifest.json")
+        sql_contract=validator.contract_receipt(app/"workload-manifest.json",app/"Contracts.generated.cs",a.lifecycle_sql_mode)
+        (app/"sql-contract.json").write_text(json.dumps(sql_contract,indent=2)+"\n")
+        if a.lifecycle_sql_mode == "matched":
+            shutil.copy2(validator.POLICY,app/"lifecycle-sql-policy.json")
     shutil.copy2(ROOT/"global.json", app/"global.json")
     (app/"NuGet.Config").write_text('<configuration><packageSources><clear/><add key="nuget" value="https://api.nuget.org/v3/index.json"/></packageSources></configuration>')
     provider="Sqlite" if a.provider == "sqlite" else "PostgreSql"
@@ -47,9 +54,12 @@ def main():
     receipt={"schemaVersion":1,"provider":a.provider,"kind":a.kind,"command":command,"exitCode":result.returncode,
         "sources":{file.name:sha(file) for file in sorted(app.glob("*.cs"))},"projectSha256":sha(project),"logSha256":sha(app/"publish.log")}
     if a.kind == "benchmark":
-        shutil.copy2(manifest_path,app/"workload-manifest.json")
-        receipt["workloadManifestSha256"]=sha(manifest_path)
+        receipt["workloadManifestSha256"]=sha(app/"workload-manifest.json")
         receipt["contractValidatorSha256"]=sha(validator_path)
+        receipt["lifecycleSqlMode"]=a.lifecycle_sql_mode
+        receipt["sqlContract"]={"path":"sql-contract.json","sha256":sha(app/"sql-contract.json")}
+        if a.lifecycle_sql_mode == "matched":
+            receipt["lifecycleSqlPolicySha256"]=sha(app/"lifecycle-sql-policy.json")
     if result.returncode == 0:
         assets=app/"obj/project.assets.json"; shutil.copy2(assets,app/"project.assets.json")
         graph=json.loads(assets.read_text())
@@ -67,6 +77,15 @@ def main():
         receipt["executableSha256"]=sha(binary)
         generated=app/"obj/Release/net11.0/linux-x64/generated"
         if generated.is_dir(): shutil.copytree(generated,app/"generated")
+        if a.kind == "benchmark" and a.lifecycle_sql_mode == "matched":
+            try:
+                generated_contract=validator.validate_generated(app,sql_contract)
+                (app/"generated-sql-contract.json").write_text(json.dumps(generated_contract,indent=2)+"\n")
+                receipt["generatedSqlContract"]={"path":"generated-sql-contract.json","sha256":sha(app/"generated-sql-contract.json")}
+            except Exception as error:
+                receipt["postValidationError"]={"type":type(error).__name__,"message":str(error)}
+                (app/"build-receipt.json").write_text(json.dumps(receipt,indent=2)+"\n")
+                raise
         if a.kind == "query-phases":
             try:
                 receipt["generatedSourceSha256"]={str(file.relative_to(app/"generated")):sha(file)

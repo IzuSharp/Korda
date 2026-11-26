@@ -118,7 +118,7 @@ await source.DisposeAsync();
 var teardownEnded = Stopwatch.GetTimestamp();
 var drained = identity.Read();
 if (drained is not { Sources: 0, Sessions: 0, Operations: 0, Cursors: 0, Buffers: 0, Owners: 0 }
-    || drained.PullChannels is not (null or 0))
+    || drained.PullChannels is not (null or 0) || drained.CommandCompletions is not (null or 0))
     throw new InvalidOperationException("Native owners did not drain after explicit disposal.");
 var receipt = new Receipt(3, source.Provider.ToString(), true, databaseVersion,
     typeof(DataSource).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "unknown",
@@ -318,7 +318,7 @@ internal sealed class PhaseProbe : IDisposable
 internal sealed record PhaseOrder([property: DbKey] long TenantId, [property: DbKey] long Id, string? Note);
 [DbProjection(DescriptorName = "PhaseRows")]
 internal sealed record PhaseRow(long Id, string? Note);
-internal readonly record struct Counts(ulong Sources, ulong Sessions, ulong Operations, ulong Cursors, ulong Buffers, ulong Owners, ulong SqlExecutions, ulong ProtocolSubmissions, ulong? PullChannels);
+internal readonly record struct Counts(ulong Sources, ulong Sessions, ulong Operations, ulong Cursors, ulong Buffers, ulong Owners, ulong SqlExecutions, ulong ProtocolSubmissions, ulong? PullChannels, ulong? CommandCompletions);
 internal readonly record struct Sample(long ConstructTicks, long SubmitToFirstRowTicks, long ReadCompleteTicks, long ReleaseTicks, int Rows);
 internal sealed record Window(string Route, int Index, int Operations, long AllocatedBefore, long AllocatedAfter, int Gen0, int Gen1, int Gen2,
     long CpuBeforeTicks, long CpuAfterTicks, long ResidentBytes, long PeakResidentBytes, long StartedTicks, long FinishedTicks,
@@ -444,7 +444,7 @@ internal sealed class FailureDiagnostics
 internal sealed class NativeIdentity : IDisposable
 {
     private readonly nint _module, _count;
-    private readonly bool _pullSupported;
+    private readonly bool _pullSupported, _commandsSupported;
     private readonly object _lifetime = new();
     private bool _disposed;
     internal string Path { get; }
@@ -459,10 +459,11 @@ internal sealed class NativeIdentity : IDisposable
         _module = NativeLibrary.Load(Path);
         _count = NativeLibrary.GetExport(_module, "nw_db_diagnostic_count_v1");
         _pullSupported = NativeLibrary.TryGetExport(_module, "nw_db_cursor_pull_create_v1", out _);
+        _commandsSupported = NativeLibrary.TryGetExport(_module, "nw_db_command_request_v1", out _);
     }
     internal static string Hash(string path) { using var file = File.OpenRead(path); return Convert.ToHexStringLower(SHA256.HashData(file)); }
     internal unsafe Counts Read()
-    { var count = (delegate* unmanaged[Cdecl]<uint, ulong>)_count; return new(count(0), count(1), count(2), count(3), count(4), count(5), count(6), count(7), _pullSupported ? count(8) : null); }
+    { var count = (delegate* unmanaged[Cdecl]<uint, ulong>)_count; return new(count(0), count(1), count(2), count(3), count(4), count(5), count(6), count(7), _pullSupported ? count(8) : null, _commandsSupported ? count(9) : null); }
     internal bool TryRead(out Counts counts, out string? unavailable)
     {
         lock (_lifetime)

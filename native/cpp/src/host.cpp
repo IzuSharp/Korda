@@ -10,7 +10,7 @@
 namespace nw
 {
 std::atomic<std::uint64_t> source_count{0}, session_count{0}, operation_count{0}, cursor_count{0}, buffer_count{0},
-    pull_count{0};
+    pull_count{0}, command_count{0};
 namespace
 {
 std::atomic<std::uint64_t> next_source{1};
@@ -143,7 +143,7 @@ Bytes snapshot_record(std::uint32_t state, std::uint32_t outcome, bool attempted
 }
 std::uint64_t capability_mask()
 {
-    std::uint64_t result = (1ULL << 28) - 1;
+    std::uint64_t result = (1ULL << 29) - 1;
 #if !NW_ENABLE_POSTGRES
     result &= ~((1ULL << 11) | (1ULL << 14));
 #endif
@@ -666,6 +666,7 @@ void Source::join()
 #endif
     transaction_workers->wait();
     pull_workers->wait();
+    command_workers->wait();
     workers.stop();
     controls.stop();
     retired.store(true);
@@ -820,6 +821,8 @@ Owner::~Owner()
             (*transaction)->request_close();
         else if (auto savepoint = std::get_if<std::shared_ptr<Savepoint>>(&data))
             (*savepoint)->request_close();
+        else if (auto command = std::get_if<std::shared_ptr<CommandCompletion>>(&data))
+            (*command)->request_close();
     }
     catch (...)
     {
@@ -1029,6 +1032,441 @@ void DbOperation::fail(Error failure)
     lease.reset();
 }
 
+struct CommandCompletion::Lifetime
+{
+    Lifetime()
+    {
+        ++command_count;
+    }
+    ~Lifetime()
+    {
+        --command_count;
+    }
+};
+
+struct CommandCompletion::ReadyState
+{
+    mutable std::mutex mutex;
+    std::shared_ptr<Lifetime> lifetime = std::make_shared<Lifetime>();
+    std::shared_ptr<Cancel> cancel = std::make_shared<Cancel>();
+    nw_db_cursor_callbacks_v1 callbacks{};
+    std::optional<Value> value;
+    std::optional<Error> error, cleanup_error;
+    std::uint32_t kind = 0;
+    bool ready = false, outstanding = true, closing = false, discarding = false;
+
+    nw_db_cursor_callbacks_v1 publish(std::optional<Value> result, std::optional<Error> failure)
+    {
+        std::lock_guard lock(mutex);
+        value = std::move(result);
+        error = std::move(failure);
+        auto notification = callbacks;
+        callbacks = {};
+        ready = true;
+        return notification;
+    }
+};
+
+struct CommandCompletion::Worker
+{
+    std::shared_ptr<Source> source;
+    std::shared_ptr<ReadyState> state;
+    std::shared_ptr<Cancel> cancel;
+    std::shared_ptr<CommandGate> gate;
+    std::function<Value(std::shared_ptr<Cancel>)> action;
+    std::shared_ptr<RetirementFence> completion, parent;
+    std::shared_ptr<Lifetime> lifetime;
+    std::shared_ptr<std::atomic<bool>> submitted = std::make_shared<std::atomic<bool>>(false);
+    bool control, counted = false, own_ticket = false, parent_ticket = false, entered = false;
+#ifdef NW_HOST_TEST_HOOKS
+    std::function<void()> before_work, result_frozen, after_ready;
+#endif
+
+    Worker(std::shared_ptr<Source> owner, std::shared_ptr<ReadyState> ready, std::shared_ptr<RetirementFence> done,
+           bool is_control, std::function<Value(std::shared_ptr<Cancel>)> work,
+           std::shared_ptr<CommandGate> admission_gate)
+        : source(std::move(owner)), state(std::move(ready)), cancel(state->cancel), gate(std::move(admission_gate)),
+          action(std::move(work)), completion(std::move(done)), parent(source->command_workers),
+          lifetime(state->lifetime), control(is_control)
+    {
+        if (!source->reserve_operation(control))
+            throw Error::closed();
+        counted = true;
+        try
+        {
+            completion->add();
+            own_ticket = true;
+            parent->add();
+            parent_ticket = true;
+        }
+        catch (...)
+        {
+            if (own_ticket)
+                completion->complete();
+            source->release_operation();
+            throw;
+        }
+    }
+
+    ~Worker()
+    {
+        // An unstarted request can fail before its public handle is accepted.
+        // On the completed path these accessors were already emptied before
+        // notification. Only independent tickets and the counter remain live.
+        action = {};
+        gate.reset();
+        cancel.reset();
+        state.reset();
+        if (counted)
+            source->release_operation();
+        source.reset();
+        lifetime.reset();
+        if (own_ticket)
+            completion->complete();
+        if (parent_ticket)
+            parent->complete();
+    }
+
+    void settle(std::optional<Value> result, std::optional<Error> failure)
+    {
+#ifdef NW_HOST_TEST_HOOKS
+        auto observer = std::move(after_ready);
+        try
+        {
+            if (result_frozen)
+                result_frozen();
+        }
+        catch (...)
+        {
+            source->poisoned.store(true);
+            if (failure)
+            {
+                if (!failure->cleanup)
+                    failure->cleanup = cursor_cleanup_failure();
+            }
+            else
+                failure.emplace(NW_NATIVE_PANIC, 8, "observer failed");
+            result.reset();
+        }
+        before_work = {};
+        result_frozen = {};
+#endif
+        cancel->detach();
+        action = {};
+        // A helper can reject cancellation/deadline before entering its own
+        // cleanup try block. Once its capture is destroyed, an exclusive gate
+        // belongs only to this worker and must be finished explicitly so a
+        // secondary parent launch failure cannot disappear into a destructor.
+        // An Unknown transaction still has independent workers holding this
+        // gate; release only our reference in that case.
+        if (gate && (!entered || gate.use_count() == 1))
+        {
+            try
+            {
+                gate->finish(gate->dispatched && !gate->completed);
+            }
+            catch (...)
+            {
+                gate->session->discard.store(true);
+                source->poisoned.store(true);
+                if (failure)
+                {
+                    if (!failure->cleanup)
+                        failure->cleanup = cursor_cleanup_failure();
+                }
+                else
+                {
+                    failure.emplace(NW_NATIVE_PANIC, 8, "cleanup failed");
+                    failure->cleanup = cursor_cleanup_failure();
+                }
+                result.reset();
+            }
+        }
+        gate.reset();
+        cancel.reset();
+        source->release_operation();
+        counted = false;
+        source.reset();
+        const auto notification = state->publish(std::move(result), std::move(failure));
+        state.reset();
+        notification.ready(notification.context, 0);
+        // Neither the command state nor any execution accessor is touched
+        // after ready. This optional test observer owns only its local capture.
+#ifdef NW_HOST_TEST_HOOKS
+        if (observer)
+            observer();
+#endif
+    }
+
+    void run()
+    {
+        submitted->wait(false, std::memory_order_acquire);
+        std::optional<Value> result;
+        std::optional<Error> failure;
+        try
+        {
+#ifdef NW_HOST_TEST_HOOKS
+            if (before_work)
+                before_work();
+#endif
+            entered = true;
+            result.emplace(action(cancel));
+        }
+        catch (Error& error)
+        {
+            failure.emplace(std::move(error));
+        }
+        catch (const std::bad_alloc&)
+        {
+            failure.emplace(NW_OUT_OF_MEMORY, 8, "out of memory");
+        }
+        catch (...)
+        {
+            source->poisoned.store(true);
+            failure.emplace(NW_NATIVE_PANIC, 8, "command failed");
+        }
+        settle(std::move(result), std::move(failure));
+    }
+};
+
+CommandCompletion::CommandCompletion()
+    : state_(std::make_shared<ReadyState>()), completion_(std::make_shared<RetirementFence>())
+{
+}
+CommandCompletion::~CommandCompletion() = default;
+
+std::shared_ptr<CommandCompletion> CommandCompletion::create(std::shared_ptr<Source> source, std::uint32_t result_kind,
+                                                             bool control,
+                                                             std::function<Value(std::shared_ptr<Cancel>)> work,
+                                                             nw_db_cursor_callbacks_v1 callbacks,
+                                                             std::shared_ptr<CommandGate> admission_gate)
+{
+    if (callbacks.struct_size != sizeof(callbacks) || callbacks.reserved || !callbacks.ready)
+        throw Error::invalid("command callback record");
+    if (result_kind != 3 && result_kind != 4 && result_kind != 100 && result_kind != 101)
+        throw Error::invalid("command result kind");
+    if (!work)
+        throw Error::invalid("command action missing");
+    auto command = std::shared_ptr<CommandCompletion>(new CommandCompletion());
+    command->state_->callbacks = callbacks;
+    command->state_->kind = result_kind;
+    command->source_ = source;
+    command->pending_ = std::make_shared<Worker>(std::move(source), command->state_, command->completion_, control,
+                                                 std::move(work), std::move(admission_gate));
+    return command;
+}
+
+void CommandCompletion::start()
+{
+    std::shared_ptr<Worker> worker;
+    {
+        std::lock_guard lock(start_mutex_);
+        if (!pending_)
+            throw Error::state("command already started");
+        worker = std::move(pending_);
+    }
+    auto submitted = worker->submitted;
+#ifdef NW_HOST_TEST_HOOKS
+    std::function<void()> before_return;
+#endif
+    try
+    {
+#ifdef NW_HOST_TEST_HOOKS
+        worker->before_work = test_before_work;
+        worker->result_frozen = test_result_frozen;
+        worker->after_ready = test_after_ready;
+        before_return = test_before_request_return;
+#endif
+        std::function<void()> queued = [worker] { worker->run(); };
+        if (worker->control)
+            worker->source->controls.post(std::move(queued));
+        else
+            worker->source->workers.post(std::move(queued));
+    }
+    catch (Error& error)
+    {
+        worker->settle({}, std::move(error));
+        return;
+    }
+    catch (const std::bad_alloc&)
+    {
+        worker->settle({}, Error(NW_OUT_OF_MEMORY, 8, "out of memory"));
+        return;
+    }
+    catch (...)
+    {
+        worker->source->poisoned.store(true);
+        worker->settle({}, Error(NW_NATIVE_PANIC, 8, "queue failed"));
+        return;
+    }
+    // The queue call must return before the worker can drop the Source which
+    // owns that pool. Remove this stack's worker accessor before releasing the
+    // independent gate. No command or worker field is read after this store.
+    worker.reset();
+    submitted->store(true, std::memory_order_release);
+    submitted->notify_all();
+#ifdef NW_HOST_TEST_HOOKS
+    if (before_return)
+        before_return();
+#endif
+}
+
+Value CommandCompletion::take(std::uint32_t expected_kind)
+{
+    std::lock_guard lock(state_->mutex);
+    if (expected_kind != state_->kind)
+        throw Error::state("command result kind differs");
+    if (!state_->outstanding || state_->discarding)
+        throw Error::state("command result was consumed");
+    if (!state_->ready)
+        throw Error(NW_PENDING, 8, "command is pending");
+    if (state_->error)
+        throw *state_->error;
+    if (!state_->value)
+        throw Error::state("command result unavailable");
+    if (state_->kind == 100)
+    {
+        if (!std::holds_alternative<std::int64_t>(*state_->value))
+            throw Error::state("command count result required");
+    }
+    else if (state_->kind == 101)
+    {
+        auto buffer = std::get_if<std::shared_ptr<Buffer>>(&*state_->value);
+        if (!buffer || !*buffer)
+            throw Error::state("command buffer result required");
+    }
+    else
+    {
+        auto owner = std::get_if<std::shared_ptr<Owner>>(&*state_->value);
+        if (!owner || !*owner || (*owner)->kind() != state_->kind)
+            throw Error::state("command owner kind differs");
+    }
+    auto result = std::move(*state_->value);
+    state_->value.reset();
+    state_->outstanding = false;
+    return result;
+}
+
+Error CommandCompletion::take_error()
+{
+    std::lock_guard lock(state_->mutex);
+    if (!state_->outstanding || state_->discarding)
+        throw Error::state("command result was consumed");
+    if (!state_->ready)
+        throw Error(NW_PENDING, 8, "command is pending");
+    if (!state_->error)
+        throw Error::state("command has no rich error");
+    auto result = std::move(*state_->error);
+    state_->error.reset();
+    state_->outstanding = false;
+    return result;
+}
+
+void CommandCompletion::request_close()
+{
+    {
+        std::lock_guard lock(state_->mutex);
+        state_->closing = true;
+    }
+    state_->cancel->request();
+}
+
+void CommandCompletion::join()
+{
+    std::lock_guard joining(join_mutex_);
+    std::optional<Error> failure;
+    try
+    {
+        request_close();
+    }
+    catch (Error& error)
+    {
+        failure.emplace(std::move(error));
+    }
+    catch (...)
+    {
+        failure.emplace(NW_NATIVE_PANIC, 8, "cleanup failed");
+    }
+    completion_->wait();
+    std::optional<Value> abandoned;
+    {
+        std::lock_guard lock(state_->mutex);
+        state_->discarding = true;
+        abandoned = state_->value;
+    }
+    try
+    {
+        // An untaken new child belongs to this command. Retire it rather than
+        // reporting release merely because its public wrapper was dropped.
+        // Existing transaction snapshots are buffers and do not join that
+        // transaction's independently owned post-Unknown cleanup.
+        if (abandoned)
+            if (auto value = std::get_if<std::shared_ptr<Owner>>(&*abandoned))
+            {
+                if (auto tx = std::get_if<std::shared_ptr<Transaction>>(&(*value)->data))
+                    (*tx)->join();
+                else if (auto point = std::get_if<std::shared_ptr<Savepoint>>(&(*value)->data))
+                {
+                    (void)(*point)->transaction->dispose_savepoint((*point)->token);
+                    (*point)->cleanup_requested.store(true);
+                }
+                else
+                    throw Error::state("unexpected command child owner");
+            }
+    }
+    catch (Error& error)
+    {
+        if (!failure)
+            failure.emplace(std::move(error));
+    }
+    catch (...)
+    {
+        if (!failure)
+            failure.emplace(NW_NATIVE_PANIC, 8, "cleanup failed");
+    }
+    abandoned.reset();
+    if (failure)
+    {
+        if (auto source = source_.lock())
+            source->poisoned.store(true);
+        {
+            std::lock_guard lock(state_->mutex);
+            state_->cleanup_error = std::move(failure);
+        }
+        std::lock_guard lock(state_->mutex);
+        throw *state_->cleanup_error;
+    }
+    std::optional<Value> released;
+    {
+        std::lock_guard lock(state_->mutex);
+        released = std::move(state_->value);
+        state_->value.reset();
+        state_->error.reset();
+        state_->cleanup_error.reset();
+    }
+    released.reset();
+    {
+        std::lock_guard lock(state_->mutex);
+        state_->outstanding = false;
+        state_->discarding = false;
+    }
+}
+
+Bytes CommandCompletion::snapshot() const
+{
+    std::lock_guard lock(state_->mutex);
+    const bool done =
+        completion_->done() && !state_->outstanding && !state_->discarding && !state_->value && !state_->cleanup_error;
+    return snapshot_record(0, 0, false,
+                           state_->cleanup_error ? 4
+                           : done                ? 2
+                           : state_->closing     ? 1
+                                                 : 0,
+                           state_->cleanup_error ? 2 : 0, done, false,
+                           state_->cleanup_error ? state_->cleanup_error->correlation : 0,
+                           state_->cleanup_error ? state_->cleanup_error->provider : std::optional<std::string>{});
+}
+
 std::shared_ptr<SqlPlan> SqlPlan::parse(std::shared_ptr<Source> source, ByteView sql_bytes, ByteView values,
                                         ByteView options)
 {
@@ -1171,9 +1609,8 @@ CommandGate::~CommandGate()
 }
 void CommandGate::finish(bool failed)
 {
-    if (completed)
+    if (completed.exchange(true))
         return;
-    completed = true;
     if (dispatched && failed)
     {
         std::shared_ptr<Transaction> tx;
@@ -1320,7 +1757,7 @@ std::shared_ptr<CommandGate> Session::admit(bool transaction_control)
     return gate;
 }
 std::shared_ptr<Cursor> Session::open_cursor(std::shared_ptr<SqlPlan> plan, std::shared_ptr<Cancel> cancel,
-                                             std::shared_ptr<CommandGate> gate)
+                                             std::shared_ptr<CommandGate> gate, bool retain_gate)
 {
     if (cancel->requested())
         throw Error::canceled();
@@ -1334,7 +1771,7 @@ std::shared_ptr<Cursor> Session::open_cursor(std::shared_ptr<SqlPlan> plan, std:
     gate->dispatched = true;
     try
     {
-        auto cursor = Cursor::open(shared_from_this(), plan, cancel, gate, deadline);
+        auto cursor = Cursor::open(shared_from_this(), plan, cancel, retain_gate ? gate : nullptr, deadline);
         {
             std::lock_guard lock(mutex);
             cursors.erase(
@@ -1513,6 +1950,44 @@ Value Session::execute(std::shared_ptr<SqlPlan> plan, std::shared_ptr<Cancel> ca
         std::rethrow_exception(primary);
     }
 }
+std::int64_t Session::execute_scalar_count(std::shared_ptr<SqlPlan> plan, std::shared_ptr<Cancel> cancel,
+                                           std::shared_ptr<CommandGate> gate)
+{
+    if (!plan->scalar_count || plan->result_kind == 0)
+        throw Error::state("scalar count plan required");
+    // Scalar count retains its Session gate here, separately from provider
+    // retirement. A failed parent cleanup launch must not turn an already
+    // finalized statement into an unconfirmed Cursor self-retention.
+    auto cursor = open_cursor(std::move(plan), cancel, gate, false);
+    try
+    {
+        auto count = cursor->read_scalar_count(std::move(cancel));
+        // A parent can have scheduled cleanup before read admission. A
+        // close_now fast return is not by itself proof of that worker's exit.
+        cursor->request_close();
+        cursor->join();
+        gate->finish();
+        return count;
+    }
+    catch (...)
+    {
+        const auto primary = std::current_exception();
+        try
+        {
+            cursor->request_close();
+            cursor->join();
+            gate->finish(cursor->failed);
+        }
+        catch (...)
+        {
+            discard.store(true);
+            source->poisoned.store(true);
+            rethrow_command_cleanup_failure(primary);
+        }
+        std::rethrow_exception(primary);
+    }
+}
+
 void Session::request_close()
 {
     if (closing.exchange(true))
@@ -1859,6 +2334,94 @@ std::shared_ptr<Buffer> Cursor::fetch(std::shared_ptr<Cancel> cancel, std::size_
         throw;
     }
 }
+std::int64_t Cursor::read_scalar_count(std::shared_ptr<Cancel> cancel)
+{
+    CursorReadAdmission admission(*this);
+    failed = true;
+    admission.check();
+    if (cancel->requested())
+        throw Error::canceled();
+    {
+        std::lock_guard lock(mutex);
+        current_cancel = cancel;
+    }
+    try
+    {
+        struct ScalarRow
+        {
+            std::array<std::uint8_t, 8> bytes{};
+            std::size_t cells = 0;
+        } row;
+        const auto& limits = session->source->config.limits;
+        const std::size_t base = 96 + 16 * codecs.size(), per_row = 24 * codecs.size();
+        const auto field_limit = std::min({limits.field_bytes, limits.batch_bytes - base - per_row, MAX_BYTES});
+        // payload_limit also bounds the provider's textual input before its
+        // typed conversion. It must not be eight merely because the canonical
+        // Int64 destination is eight bytes (a PostgreSQL value can have 20
+        // decimal input bytes). Keep the accepted existing field grant.
+        const RowSink output{&row, field_limit, [](void* state) { static_cast<ScalarRow*>(state)->cells = 0; },
+                             [](void* state, std::optional<ByteView> value)
+                             {
+                                 auto& target = *static_cast<ScalarRow*>(state);
+                                 if (target.cells++ || !value || value->size() != target.bytes.size())
+                                     throw Error::state("count scalar width");
+                                 std::copy(value->begin(), value->end(), target.bytes.begin());
+                             },
+                             [](void*) { return true; }};
+        std::size_t rows = 0;
+        std::int64_t count = 0;
+        while (rows != 2)
+        {
+            const auto result = statement->append_next(output, codecs, field_limit, {cancel, deadline});
+            if (result.state == RowAppendState::End)
+            {
+                ended = true;
+                retire_provider();
+                break;
+            }
+            if (result.state != RowAppendState::Appended || row.cells != 1)
+                throw Error::state("count scalar width");
+            if (!rows)
+                count = static_cast<std::int64_t>(read_u64(row.bytes, 0));
+            ++rows;
+            if (result.advanced)
+            {
+                ++rows_pulled;
+                provider_rows_peak = std::max<std::size_t>(provider_rows_peak, 1);
+            }
+        }
+        cancel->detach();
+        // A fully converted zero/two-row result is a semantic cardinality
+        // error. The retained terminal retires its gate normally before
+        // reporting it; only read/conversion failures mark the transaction.
+        failed = false;
+        // Like the retained scalar terminal, cardinality failure is detected
+        // after retiring its statement. No row buffer or batch-row quota is
+        // needed to observe the second converted row.
+        close_now();
+        if (rows != 1)
+            throw Error(NW_DOMAIN_ERROR, 4, "count cardinality");
+        if (cleanup_unconfirmed.load())
+        {
+            Error failure(NW_NATIVE_PANIC, 8, "cleanup failed");
+            failure.cleanup = cursor_cleanup_failure();
+            throw failure;
+        }
+        return count;
+    }
+    catch (...)
+    {
+        const auto primary = std::current_exception();
+        stop_observed = cancel->requested();
+        closing.store(true);
+        cancel->detach();
+        close_now();
+        if (cleanup_unconfirmed.load())
+            rethrow_command_cleanup_failure(primary);
+        std::rethrow_exception(primary);
+    }
+}
+
 void Cursor::request_close()
 {
     closing.store(true);

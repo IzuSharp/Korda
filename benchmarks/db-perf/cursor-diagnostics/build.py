@@ -29,7 +29,7 @@ def replace_once(text, old, new):
 def generate(source):
     binding = source / 'native/database/binding'
     records = [binding / 'signatures-v1.json', binding / 'query-command-v1.json']
-    for name in ('cursor-pull-v1.json', 'result-batch-v1.json'):
+    for name in ('cursor-pull-v1.json', 'result-batch-v1.json', 'command-completion-v1.json'):
         if (binding / name).exists():
             records.append(binding / name)
     declarations = [line for path in records for line in json.loads(path.read_text())['signatures']]
@@ -66,9 +66,14 @@ def generate(source):
 def instrument(consumer, output, kind):
     path = 'Program.cs' if kind == 'query-phases' else 'Measurement.cs'
     program = (consumer / path).read_text()
-    program = replace_once(program, 'ulong? PullChannels);', 'ulong? PullChannels, FfiCounters Ffi);')
-    program = replace_once(program, '_pullSupported ? count(8) : null);',
-                           '_pullSupported ? count(8) : null, FfiProbe.Read());')
+    if 'ulong? CommandCompletions);' in program:
+        program = replace_once(program, 'ulong? CommandCompletions);', 'ulong? CommandCompletions, FfiCounters Ffi);')
+        program = replace_once(program, '_commandsSupported ? count(9) : null);',
+                               '_commandsSupported ? count(9) : null, FfiProbe.Read());')
+    else:
+        program = replace_once(program, 'ulong? PullChannels);', 'ulong? PullChannels, FfiCounters Ffi);')
+        program = replace_once(program, '_pullSupported ? count(8) : null);',
+                               '_pullSupported ? count(8) : null, FfiProbe.Read());')
     if kind == 'query-phases':
         program = replace_once(program, '"Local phase diagnostic. Construction',
                                '"Instrumented ABI diagnostic; no timing or allocation acceptance credit. Construction')

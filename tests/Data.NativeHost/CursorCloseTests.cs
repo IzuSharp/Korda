@@ -348,7 +348,7 @@ internal static class CursorCloseTests
     {
         var engine = provider == DatabaseProvider.Sqlite ? SqliteDataSource.Engine : PostgreSqlDataSource.Engine;
         var count = (delegate* unmanaged[Cdecl]<uint, ulong>)EngineModuleLoader.ResolveExport(engine, "nw_db_diagnostic_count_v1");
-        foreach (var index in new uint[] { 0, 1, 2, 3, 4, 5, 8 })
+        foreach (var index in new uint[] { 0, 1, 2, 3, 4, 5, 8, 9 })
             Check(count(index) == 0, "A joined close leaves no native owner in counter " + index);
     }
 

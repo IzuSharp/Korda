@@ -1,0 +1,38 @@
+{
+  "version": 1,
+  "capability": "db.command.completion.v1",
+  "capability_bit": 28,
+  "header": "native/database/binding/korda_command_completion_v1.h",
+  "request_record": {
+    "name": "nw_db_command_request_args_v1",
+    "linux_x64_size": 48,
+    "offsets": {
+      "struct_size": 0,
+      "kind": 4,
+      "target": 8,
+      "input": 16,
+      "payload": 24,
+      "action": 40,
+      "reserved": 44
+    }
+  },
+  "result_record": {
+    "name": "nw_db_command_result_v1",
+    "linux_x64_size": 32,
+    "offsets": {
+      "struct_size": 0,
+      "kind": 4,
+      "count": 8,
+      "owner": 16,
+      "buffer": 24
+    }
+  },
+  "callback_record": "nw_db_cursor_callbacks_v1",
+  "callback_generation": 0,
+  "signatures": [
+    "nw_status NW_CDECL nw_db_command_request_v1(const nw_db_command_request_args_v1* request, const nw_db_cursor_callbacks_v1* callbacks, nw_db_ref* command, nw_error_info_v1* error);",
+    "nw_status NW_CDECL nw_db_command_take_v1(nw_db_ref command, uint32_t expected_kind, nw_db_command_result_v1* result, nw_error_info_v1* error);",
+    "nw_status NW_CDECL nw_db_command_take_error_v1(nw_db_ref command, nw_db_buffer** result, nw_error_info_v1* error);",
+    "nw_status NW_CDECL nw_db_command_cancel_v1(nw_db_ref command);"
+  ]
+}

@@ -57,12 +57,4 @@ internal static class MutationEncoding
         return ControlRecord.Encode(4, [new(1, 1, ControlRecord.U32(table.Identity.Id)), .. fields]);
     }
     internal static ControlField Bytes(ushort id, byte[] value) => new(id, 5, value);
-    internal static unsafe nint Create(DataSession session, DatabaseOwner model, uint kind, byte[] payload)
-    {
-        BindingChecks.SameSource(session.Source.Binding, model);
-        using var s = session.Owner.Borrow(DatabaseOwnerKind.Session); using var m = model.Borrow(DatabaseOwnerKind.Model);
-        nint operation = 0; var error = BindingChecks.Error();
-        fixed (byte* input = payload) HostFailure.Check(session.Source.Binding, session.Source.Binding.Calls.nw_db_mutation_create_v1(s.Pointer, m.Pointer, kind, BindingChecks.View(input, payload.Length), &operation, &error), error);
-        return operation;
-    }
 }

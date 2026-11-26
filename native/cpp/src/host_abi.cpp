@@ -4,11 +4,13 @@
 // CMake derives this private C++ view from the byte-frozen C header, changing
 // only its `template` parameter name. Every definition is type-checked against
 // the normative declarations; applications still consume the original C ABI.
+#include "../../database/binding/korda_command_completion_v1.h"
 #include "../../database/binding/korda_cursor_pull_v1.h"
 #include "../../database/binding/korda_query_command_v1.h"
 #include "nw_database_declarations.hpp"
 
 #include <algorithm>
+#include <type_traits>
 #include <unordered_map>
 
 #ifdef _WIN32
@@ -56,6 +58,35 @@ template <class T> void release(void* raw)
             handles.erase(found);
         }
     }
+}
+template <class T>
+void* take_command_handle(const std::shared_ptr<CommandCompletion>& command, std::uint32_t expected_kind)
+{
+    // Both registry allocations precede consumption. If either fails, the
+    // command still owns its returned child/buffer for a later take or actual
+    // cold join. No generic operation behavior or public ABI is changed.
+    auto allocation = std::make_unique<Stored>(Stored{T{}});
+    void* address = allocation.get();
+    std::unique_lock lock(handles_mutex);
+    auto [slot, inserted] = handles.emplace(reinterpret_cast<std::uintptr_t>(address), std::move(allocation));
+    (void)inserted;
+    try
+    {
+        auto value = command->take(expected_kind);
+        auto result = std::get<T>(std::move(value));
+        if constexpr (std::is_same_v<T, std::shared_ptr<Buffer>>)
+            result->mark_taken();
+        slot->second->value = std::move(result);
+    }
+    catch (...)
+    {
+        auto rollback = std::move(slot->second);
+        handles.erase(slot);
+        lock.unlock();
+        rollback.reset();
+        throw;
+    }
+    return address;
 }
 template <class F> nw_status boundary(nw_error_info_v1* output, F&& action) noexcept
 {
@@ -322,6 +353,182 @@ CapturedTimedExecution capture_mutation(const std::shared_ptr<Session>& session,
     auto gate = session->admit(false);
     return {std::move(plan), std::move(gate), timeout, admitted, std::move(mutation)};
 }
+struct CapturedCommand
+{
+    std::shared_ptr<Source> source;
+    std::uint32_t result_kind;
+    bool control = false;
+    std::function<Value(std::shared_ptr<Cancel>)> action;
+    std::shared_ptr<CommandGate> gate;
+};
+CapturedCommand capture_command(const nw_db_command_request_args_v1& request)
+{
+    if (request.struct_size != sizeof(request) || request.reserved || request.kind < 1 || request.kind > 7)
+        throw Error::invalid("command request record");
+    if (request.kind >= 3 && request.input)
+        throw Error::invalid("unexpected command input");
+    if (request.kind >= 4 && (request.payload.data || request.payload.length))
+        throw Error::invalid("unexpected command payload");
+    if ((request.kind == 1 || request.kind == 3 || request.kind == 5 || request.kind == 7) && request.action)
+        throw Error::invalid("unexpected command action");
+    if ((request.kind == 4 || request.kind == 6) && request.action > 1)
+        throw Error::invalid("command action");
+
+    switch (request.kind)
+    {
+        case 1:
+        {
+            auto session = typed<std::shared_ptr<Session>>(request.target);
+            auto captured = capture_execution(session, request.input, request.payload);
+            if (captured.plan->result_kind != 0 && !captured.plan->scalar_count)
+                throw Error::invalid("one-shot command cannot return rows");
+            auto source = session->source;
+            auto gate = captured.gate;
+            return {std::move(source), 100, false,
+                    [session = std::move(session), plan = std::move(captured.plan),
+                     gate = std::move(captured.gate)](auto cancel) -> Value
+                    {
+                        if (plan->scalar_count)
+                            return session->execute_scalar_count(plan, std::move(cancel), gate);
+                        return session->execute(plan, std::move(cancel), gate);
+                    },
+                    std::move(gate)};
+        }
+        case 2:
+        {
+            if (request.action == 1)
+                throw Error::invalid("one-shot mutation cannot return rows");
+            auto session = typed<std::shared_ptr<Session>>(request.target);
+            auto captured = capture_mutation(session, request.input, request.action, request.payload);
+            auto source = session->source;
+            auto gate = captured.gate;
+            return {std::move(source), 100, false,
+                    [session = std::move(session), plan = std::move(captured.plan), gate = std::move(captured.gate),
+                     mutation = std::move(captured.mutation), timeout = captured.timeout, admitted = captured.admitted,
+                     kind = request.action](auto cancel) -> Value
+                    {
+                        try
+                        {
+                            plan->timeout_ns = remaining_command_time(timeout, admitted);
+                            auto value = session->execute(plan, std::move(cancel), gate);
+                            if (auto count = std::get_if<std::int64_t>(&value))
+                                mutation.validate_affected(*count);
+                            return value;
+                        }
+                        catch (Error& error)
+                        {
+                            if (kind == 0)
+                            {
+                                std::uint32_t outcome = 0;
+                                {
+                                    std::lock_guard lock(session->mutex);
+                                    if (auto tx = session->transaction.lock())
+                                    {
+                                        std::lock_guard state(tx->mutex);
+                                        outcome = tx->outcome;
+                                    }
+                                }
+                                error.bulk = NativeBulkProgress{0, 0, false, outcome};
+                            }
+                            throw;
+                        }
+                    },
+                    std::move(gate)};
+        }
+        case 3:
+        {
+            auto session = typed<std::shared_ptr<Session>>(request.target);
+            auto options = TransactionOptions::parse(borrow(request.payload));
+            auto gate = session->admit(true);
+            auto source = session->source;
+            return {std::move(source), 3, false,
+                    [session = std::move(session), options, gate](auto cancel) -> Value
+                    {
+                        return std::make_shared<Owner>(session->source,
+                                                       Transaction::begin(session, options, std::move(cancel), gate));
+                    },
+                    std::move(gate)};
+        }
+        case 4:
+        {
+            auto tx = typed<std::shared_ptr<Transaction>>(request.target);
+            auto gate = tx->session->admit(true);
+            auto source = tx->session->source;
+            return {std::move(source), 101, false,
+                    [tx = std::move(tx), action = request.action, gate](auto cancel) -> Value
+                    {
+                        return std::make_shared<Buffer>(tx->session->source,
+                                                        tx->finish(action == 0, std::move(cancel), gate));
+                    },
+                    std::move(gate)};
+        }
+        case 5:
+        {
+            auto tx = typed<std::shared_ptr<Transaction>>(request.target);
+            auto gate = tx->session->admit(true);
+            auto source = tx->session->source;
+            return {
+                std::move(source), 4, false, [tx = std::move(tx), gate](auto cancel) -> Value
+                { return std::make_shared<Owner>(tx->session->source, tx->create_savepoint(std::move(cancel), gate)); },
+                std::move(gate)};
+        }
+        case 6:
+        {
+            auto point = typed<std::shared_ptr<Savepoint>>(request.target);
+            auto gate = point->transaction->session->admit(true);
+            auto source = point->transaction->session->source;
+            return {std::move(source), 101, false,
+                    [point = std::move(point), action = request.action, gate](auto cancel) -> Value
+                    {
+                        (void)point->transaction->savepoint_action(point->token, action, std::move(cancel), gate);
+                        return std::make_shared<Buffer>(point->transaction->session->source,
+                                                        point->transaction->snapshot());
+                    },
+                    std::move(gate)};
+        }
+        case 7:
+        {
+            auto value = owner(request.target);
+            auto source = value->source;
+            if (auto session = std::get_if<std::shared_ptr<Session>>(&value->data))
+                return {std::move(source),
+                        101,
+                        true,
+                        [session = *session](auto) -> Value
+                        {
+                            session->request_close();
+                            session->join();
+                            return std::make_shared<Buffer>(session->source, session->snapshot());
+                        },
+                        {}};
+            if (auto tx = std::get_if<std::shared_ptr<Transaction>>(&value->data))
+                return {std::move(source),
+                        101,
+                        true,
+                        [tx = *tx](auto) -> Value
+                        {
+                            tx->request_close();
+                            tx->join();
+                            return std::make_shared<Buffer>(tx->session->source, tx->snapshot());
+                        },
+                        {}};
+            if (auto point = std::get_if<std::shared_ptr<Savepoint>>(&value->data))
+                return {std::move(source),
+                        101,
+                        true,
+                        [point = *point](auto) -> Value
+                        {
+                            auto bytes = point->transaction->dispose_savepoint(point->token);
+                            point->cleanup_requested.store(true);
+                            return std::make_shared<Buffer>(point->transaction->session->source, std::move(bytes));
+                        },
+                        {}};
+            throw Error::invalid("one-shot close requires session, transaction or savepoint");
+        }
+        default:
+            throw Error::invalid("command request kind");
+    }
+}
 std::shared_ptr<Buffer> snapshot_buffer(const std::shared_ptr<Owner>& value)
 {
     Bytes bytes;
@@ -335,6 +542,8 @@ std::shared_ptr<Buffer> snapshot_buffer(const std::shared_ptr<Owner>& value)
         bytes = (*transaction)->snapshot();
     else if (auto pull = std::get_if<std::shared_ptr<CursorPull>>(&value->data))
         bytes = (*pull)->snapshot();
+    else if (auto command = std::get_if<std::shared_ptr<CommandCompletion>>(&value->data))
+        bytes = (*command)->snapshot();
     else
         throw Error::state("owner has no snapshot");
     return std::make_shared<Buffer>(value->source, std::move(bytes));
@@ -836,6 +1045,90 @@ NW_DATABASE_API nw_status NW_CDECL nw_db_sql_create_v1(nw_db_ref raw, nw_bytes_v
                                      SqlPlan::parse(session->source, borrow(sql), borrow(parameters), borrow(options)));
                     });
 }
+NW_DATABASE_API nw_status NW_CDECL nw_db_command_request_v1(const nw_db_command_request_args_v1* request,
+                                                            const nw_db_cursor_callbacks_v1* callbacks,
+                                                            nw_db_ref* output, nw_error_info_v1* error)
+{
+    return boundary(
+        error,
+        [&]
+        {
+            clear(output);
+            if (!request || reinterpret_cast<std::uintptr_t>(request) % alignof(nw_db_command_request_args_v1))
+                throw Error::invalid("command request record address");
+            if (!callbacks || reinterpret_cast<std::uintptr_t>(callbacks) % alignof(nw_db_cursor_callbacks_v1) ||
+                callbacks->struct_size != sizeof(*callbacks) || callbacks->reserved || !callbacks->ready)
+                throw Error::invalid("command callback record");
+            std::shared_ptr<CommandCompletion> command;
+            {
+                auto captured = capture_command(*request);
+                command = CommandCompletion::create(captured.source, captured.result_kind, captured.control,
+                                                    std::move(captured.action), *callbacks, std::move(captured.gate));
+                output_owner(output, std::move(captured.source), command);
+            }
+            // Captured Session/plan/gate/input owners are gone from
+            // this stack before the worker can notify. The handle
+            // slot is already written for an early ready callback.
+            command->start();
+        });
+}
+
+NW_DATABASE_API nw_status NW_CDECL nw_db_command_take_v1(nw_db_ref raw, std::uint32_t expected_kind,
+                                                         nw_db_command_result_v1* output, nw_error_info_v1* error)
+{
+    return boundary(
+        error,
+        [&]
+        {
+            clear(output);
+            auto command = typed<std::shared_ptr<CommandCompletion>>(raw);
+            nw_db_command_result_v1 result{sizeof(nw_db_command_result_v1), expected_kind, 0, nullptr, nullptr};
+            if (expected_kind == 100)
+            {
+                result.count = std::get<std::int64_t>(command->take(expected_kind));
+            }
+            else if (expected_kind == 101)
+            {
+                result.buffer = reinterpret_cast<nw_db_buffer*>(
+                    take_command_handle<std::shared_ptr<Buffer>>(command, expected_kind));
+            }
+            else
+            {
+                result.owner =
+                    reinterpret_cast<nw_db_ref>(take_command_handle<std::shared_ptr<Owner>>(command, expected_kind));
+            }
+            *output = result;
+        });
+}
+
+NW_DATABASE_API nw_status NW_CDECL nw_db_command_take_error_v1(nw_db_ref raw, nw_db_buffer** output,
+                                                               nw_error_info_v1* error)
+{
+    return boundary(error,
+                    [&]
+                    {
+                        clear(output);
+                        auto value = owner(raw);
+                        auto command = std::get_if<std::shared_ptr<CommandCompletion>>(&value->data);
+                        if (!command)
+                            throw Error::state("command owner required");
+                        auto failure = (*command)->take_error();
+                        auto bytes = snapshot_record(0, 0, false, failure.cleanup ? 4 : 0, failure.cleanup ? 2 : 0,
+                                                     false, false, failure.correlation, failure.provider);
+                        if (failure.bulk)
+                        {
+                            auto bulk = failure.bulk->encode();
+                            bytes.insert(bytes.end(), bulk.begin(), bulk.end());
+                        }
+                        output_buffer(output, value->source, std::move(bytes));
+                    });
+}
+
+NW_DATABASE_API nw_status NW_CDECL nw_db_command_cancel_v1(nw_db_ref raw)
+{
+    return boundary(nullptr, [&] { typed<std::shared_ptr<CommandCompletion>>(raw)->request_close(); });
+}
+
 NW_DATABASE_API nw_status NW_CDECL nw_db_execute_create_v1(nw_db_ref raw, nw_db_ref input, nw_bytes_view_v1 arguments,
                                                            nw_db_ref* output, nw_error_info_v1* error)
 {
@@ -1249,6 +1542,14 @@ NW_DATABASE_API nw_status NW_CDECL nw_db_close_create_v1(nw_db_ref raw, nw_db_re
                                 return std::make_shared<Buffer>(source, pull->snapshot());
                             };
                         }
+                        else if (auto command = std::get_if<std::shared_ptr<CommandCompletion>>(&value->data))
+                        {
+                            action = [command = *command, source](auto) -> Value
+                            {
+                                command->join();
+                                return std::make_shared<Buffer>(source, command->snapshot());
+                            };
+                        }
                         else if (auto tx = std::get_if<std::shared_ptr<Transaction>>(&value->data))
                         {
                             action = [tx = *tx, source](auto) -> Value
@@ -1340,6 +1641,8 @@ NW_DATABASE_API std::uint64_t NW_CDECL nw_db_diagnostic_count_v1(std::uint32_t k
             return provider_protocol_count();
         case 8:
             return pull_count.load();
+        case 9:
+            return command_count.load();
         default:
             return 0;
     }

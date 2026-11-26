@@ -98,7 +98,7 @@ internal static class SnapshotProbe
         if (!beforeOwners.SequenceEqual(afterOwners) || _cleanupSink!.Status != CleanupStatus.NotStarted)
             throw new InvalidOperationException("Live snapshot changed ownership, SQL counters, or source state.");
         await session.DisposeAsync(); await source.DisposeAsync(); var drained = Counts(engine);
-        if ((drained.Take(6).Any(value => value != 0) || drained[8] != 0) || !session.Cleanup.LocalResourcesReleased || !source.Cleanup.LocalResourcesReleased)
+        if ((drained.Take(6).Any(value => value != 0) || drained[8] != 0 || drained[9] != 0) || !session.Cleanup.LocalResourcesReleased || !source.Cleanup.LocalResourcesReleased)
             throw new InvalidOperationException("Public snapshot owners did not retire.");
         Write(output, provider + "/public-session-cleanup", 1, samples, beforeOwners, afterOwners, drained, actualNativePayload);
     }
@@ -113,7 +113,7 @@ internal static class SnapshotProbe
     private static unsafe ulong[] Counts(EngineDescriptor engine)
     {
         var count = (delegate* unmanaged[Cdecl]<uint, ulong>)EngineModuleLoader.ResolveExport(engine, "nw_db_diagnostic_count_v1");
-        var values = new ulong[9]; for (uint i = 0; i < values.Length; i++) values[i] = count(i); return values;
+        var values = new ulong[10]; for (uint i = 0; i < values.Length; i++) values[i] = count(i); return values;
     }
     private static void Bounds(int iterations, int windows)
     { if (iterations <= 0 || windows is < 1 or > 100) throw new ArgumentOutOfRangeException(nameof(iterations)); }

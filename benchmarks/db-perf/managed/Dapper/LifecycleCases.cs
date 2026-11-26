@@ -39,15 +39,15 @@ internal sealed partial class Workload
     [CacheCommand(false)]
     private ValueTask<OperationResult> EarlyDynamic(DbConnection connection)
         =>Read(connection.QueryUnbufferedAsync<Order>(BuildContractSql(4),new Parameters(p1:1,p2:_options.OrdersPerTenant)),HashOrder,3);
-    private const string FindSql="SELECT \"TenantId\",\"Id\",\"CreatedAt\",\"CustomerId\",\"Total\",\"Note\",\"Version\",\"Settings\",\"InternalMemo\" FROM orders WHERE \"TenantId\"=@tenant AND \"Id\"=@id";
-    private const string UpdateSql="UPDATE orders SET \"Note\"=@note,\"Version\"=@version WHERE \"TenantId\"=@tenant AND \"Id\"=@id";
-    private const string PartialSql="UPDATE orders SET \"Note\"=@note WHERE \"TenantId\"=@tenant AND \"Id\"=@id";
-    private const string CheckedSql="UPDATE orders SET \"Note\"=@note,\"Version\"=@version WHERE \"TenantId\"=@tenant AND \"Id\"=@id AND \"Version\"=@expected";
-    private const string StaleSql="UPDATE orders SET \"Note\"=@note WHERE \"TenantId\"=@tenant AND \"Id\"=@id AND \"Version\"=@expected";
+    private const string FindSql="SELECT \"orders\".\"TenantId\" AS \"TenantId\", \"orders\".\"Id\" AS \"Id\", \"orders\".\"CreatedAt\" AS \"CreatedAt\", \"orders\".\"CustomerId\" AS \"CustomerId\", \"orders\".\"Total\" AS \"Total\", \"orders\".\"Note\" AS \"Note\", \"orders\".\"Version\" AS \"Version\", \"orders\".\"Settings\" AS \"Settings\", \"orders\".\"InternalMemo\" AS \"InternalMemo\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = @tenant AND \"orders\".\"Id\" = @id LIMIT @take";
+    private const string UpdateSql="UPDATE \"orders\" SET \"Note\" = @note, \"Version\" = @version WHERE \"TenantId\" = @tenant AND \"Id\" = @id";
+    private const string PartialSql="UPDATE \"orders\" SET \"Note\" = @note WHERE \"TenantId\" = @tenant AND \"Id\" = @id";
+    private const string CheckedSql="UPDATE \"orders\" SET \"Note\" = @note, \"Version\" = @version WHERE \"TenantId\" = @tenant AND \"Id\" = @id AND \"Version\" = @expected";
+    private const string StaleSql="UPDATE \"orders\" SET \"Note\" = @note WHERE \"TenantId\" = @tenant AND \"Id\" = @id AND \"Version\" = @expected";
     [CacheCommand(false)]
     private async ValueTask<OperationResult> TransactionCase(DbConnection connection,string name)
     {
-        long suspensions=0;var digest=Digest.Create();long id=_options.OrdersPerTenant;var key=new{tenant=1L,id};
+        long suspensions=0;var digest=Digest.Create();long id=_options.OrdersPerTenant;var key=new{tenant=1L,id,take=2L};
 #if POSTGRES
         var begin=connection.BeginTransactionAsync(IsolationLevel.ReadCommitted);
 #else

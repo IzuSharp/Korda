@@ -41,7 +41,7 @@ internal static class BorrowedBatchHostTests
         if (provider == DatabaseProvider.Sqlite) builder.UseSqlite(connection);
         else builder.UsePostgreSql(connection, options => options.TlsMode = PostgreSqlTlsMode.DisableForLocalDevelopment);
         var source = builder.Build();
-        var retired = 0; var stopped = 0;
+        var retired = 0; var stopped = 0; var closedChildren = 0;
         source.TestPullBoundary = boundary =>
         {
             if (boundary == HostPullBoundary.StopReturned) Interlocked.Increment(ref stopped);
@@ -51,6 +51,15 @@ internal static class BorrowedBatchHostTests
             Check(snapshot.Released && !snapshot.RootLive && snapshot.Controls == 0 && snapshot.CallbackEntries == 0 && snapshot.RetainedInputBytes == 0,
                 "a real provider operation retires its managed bridge owners");
             Interlocked.Increment(ref retired);
+        };
+        source.TestCommandSnapshot = snapshot =>
+        {
+            Check(snapshot.RequestKind == 7 && snapshot.ExpectedKind == 101 && snapshot.Accepted && snapshot.Ready
+                && snapshot.ResultTaken && snapshot.Published && snapshot.NativeSafe && snapshot.SetupReturned
+                && snapshot.RegistrationDrained && !snapshot.Rooted && !snapshot.SlotReserved
+                && snapshot.Controls == 0 && snapshot.CallbackEntries == 0 && !snapshot.FallbackStarted,
+                "the real child close takes its ready snapshot after draining every managed command obligation");
+            Interlocked.Increment(ref closedChildren);
         };
         var session = await source.OpenSessionAsync();
         using var cancellation = new CancellationTokenSource();
@@ -97,6 +106,7 @@ internal static class BorrowedBatchHostTests
             Console.WriteLine($"BORROWED_HOST_PHASE provider={provider} stop={stop} mapperFailure={failMapping} phase=mapper-entered");
             Check(Counts(engine)[4] == 1, "the paused public mapper owns one real native result buffer");
             var beforeClose = Volatile.Read(ref retired);
+            var beforeChildClose = Volatile.Read(ref closedChildren);
             var beforeStop = Volatile.Read(ref stopped);
             switch (stop)
             {
@@ -116,13 +126,18 @@ internal static class BorrowedBatchHostTests
             }
             // Pull stop is a synchronous channel control. Its returned boundary
             // proves the stop reached native code while this mapper holds its
-            // span. Parent close retains its separate generic close retirement.
+            // span. Source close retains its generic retirement; session close
+            // reports the new command's ready/taken/drained snapshot. The held
+            // result buffer is independent of either parent's provider join.
             if (stop is Stop.Dispose or Stop.Cancel)
                 await Until(() => Volatile.Read(ref stopped) > beforeStop,
                     "The native pull stop did not return while its result batch was held.");
-            else
+            else if (stop == Stop.SourceClose)
                 await Until(() => Volatile.Read(ref retired) > beforeClose,
                     "The real parent close operation did not retire while its result batch was held.");
+            else
+                await Until(() => Volatile.Read(ref closedChildren) > beforeChildClose,
+                    "The real child close command did not drain while its result batch was held.");
             Console.WriteLine($"BORROWED_HOST_PHASE provider={provider} stop={stop} mapperFailure={failMapping} phase=stop-or-close-observed");
             if (closingSource is not null)
             {
@@ -133,6 +148,8 @@ internal static class BorrowedBatchHostTests
             {
                 await closingSession.WaitAsync(Bound);
                 Check(session.Cleanup.LocalResourcesReleased, "session shutdown joins native safety independently of a held result buffer");
+                Check(Volatile.Read(ref closedChildren) == beforeChildClose + 1 && Volatile.Read(ref retired) == beforeClose,
+                    "normal session shutdown publishes one command snapshot and creates no generic retirement");
             }
             Check(!move.IsCompleted, "control completion cannot finish an executing synchronous mapper");
             Check(Counts(engine)[4] == 1, "the real native result buffer survives completed stop/close control while the mapper is paused");
@@ -208,7 +225,7 @@ internal static class BorrowedBatchHostTests
     private static unsafe ulong[] Counts(EngineDescriptor engine)
     {
         var count = (delegate* unmanaged[Cdecl]<uint, ulong>)EngineModuleLoader.ResolveExport(engine, "nw_db_diagnostic_count_v1");
-        return new uint[] { 0, 1, 2, 3, 4, 5, 8 }.Select(index => count(index)).ToArray();
+        return new uint[] { 0, 1, 2, 3, 4, 5, 8, 9 }.Select(index => count(index)).ToArray();
     }
     private static async Task<TException> Failure<TException>(Task task) where TException : Exception
     {

@@ -87,7 +87,7 @@ Codec scalar(std::uint32_t id, bool nullable = false)
 }
 Capabilities all_caps(Profile profile)
 {
-    return Capabilities::from_mask((1ULL << 27) - 1, profile);
+    return Capabilities::from_mask((1ULL << 29) - 1, profile);
 }
 Bytes cells(Profile profile, Codec codec, const std::vector<std::optional<Bytes>>& values)
 {
@@ -1070,8 +1070,10 @@ void binding_and_safety()
           "schema draft capability leaves existing query capabilities available");
     check(Capabilities::from_mask(1ULL << 26, Profile::Sqlite).command, "complete query capability bit");
     check(!Capabilities::from_mask(1ULL << 27, Profile::Sqlite).query,
-          "result batch capability does not authorize query composition");
-    rejects(NW_INVALID_ARGUMENT, [] { (void)Capabilities::from_mask(1ULL << 28, Profile::Sqlite); });
+          "cursor pull capability does not authorize query composition");
+    check(!Capabilities::from_mask(1ULL << 28, Profile::Sqlite).query,
+          "one-shot command completion does not authorize query composition");
+    rejects(NW_INVALID_ARGUMENT, [] { (void)Capabilities::from_mask(1ULL << 29, Profile::Sqlite); });
     rejects(NW_INVALID_ARGUMENT, [] { (void)Capabilities::from_mask(1ULL << 63, Profile::PostgreSql); });
     Context c(Profile::Sqlite);
     auto q = c.query();

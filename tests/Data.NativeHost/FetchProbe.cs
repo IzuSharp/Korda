@@ -87,7 +87,7 @@ internal static class FetchProbe
         var empty = Empty(iterations); var emptyAsync = await EmptyAsync(warmup, iterations);
         foreach (var plan in plans) plan.Dispose();
         await session.DisposeAsync(); await source.DisposeAsync(); var drained = native.Counts();
-        if (!session.Cleanup.LocalResourcesReleased || !source.Cleanup.LocalResourcesReleased || drained.Take(6).Any(v => v != 0) || drained[8] != 0)
+        if (!session.Cleanup.LocalResourcesReleased || !source.Cleanup.LocalResourcesReleased || drained.Take(6).Any(v => v != 0) || drained[8] != 0 || drained[9] != 0)
             throw new InvalidOperationException("The public fetch fixture did not release all owners.");
         using var file = File.Create(Path.Combine(args[3], "fetch-allocation.json"));
         using var json = new Utf8JsonWriter(file, new() { Indented = true });
@@ -254,7 +254,7 @@ internal static class FetchProbe
         }
         internal unsafe ulong[] Counts()
         {
-            var count = (delegate* unmanaged[Cdecl]<uint, ulong>)_counter; var result = new ulong[9];
+            var count = (delegate* unmanaged[Cdecl]<uint, ulong>)_counter; var result = new ulong[10];
             for (uint i = 0; i < result.Length; i++) result[i] = count(i); return result;
         }
         public void Dispose() => NativeLibrary.Free(_module);

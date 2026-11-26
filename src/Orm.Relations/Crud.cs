@@ -162,5 +162,5 @@ public sealed partial class DataSession
         return Mutate(table, 6, MutationEncoding.Record(Source, table, MutationEncoding.Bytes(2, MutationEncoding.Values(Source, table, [insert])), target, MutationEncoding.Bytes(8, assignments)), cancellationToken);
     }
     private Task<long> Mutate<TEntity>(Table<TEntity> table, uint kind, byte[] payload, CancellationToken token, BulkSessionLease? bulk = null) where TEntity : class
-    { var model = Source.RegisterModel(table); return Source.Start(() => AdmitOperation(() => MutationEncoding.Create(this, model, kind, payload), bulk), operation => NativeHost.TakeCount(Source.Binding, operation), token); }
+    { var model = Source.RegisterModel(table); return SubmitCommand(NativeCommandKind.Mutation, model, payload, kind, 100, NativeCommand.Count, token, bulk); }
 }

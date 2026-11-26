@@ -43,4 +43,15 @@ assert batch['record']=={'name':'nw_db_batch_result_v1','linux_x64_size':32,
     'offsets':{'owner':0,'bytes':8,'known_end':24,'reserved':28}},'Additive batch record layout differs'
 assert batch['callback_record']=={'name':'nw_db_cursor_callbacks_v1','linux_x64_size':24,
     'offsets':{'struct_size':0,'reserved':4,'context':8,'ready':16}},'Cursor ready callback layout differs'
-print(f'PASS exact frozen signatures={len(data["signatures"])}; outputs={len(outputs)}; additive command signatures={len(declarations)}; additive batch signatures={len(batch_declarations)}')
+completion=json.loads((ROOT/'native/database/binding/command-completion-v1.json').read_text())
+assert completion['version']==1 and completion['capability']=='db.command.completion.v1' and completion['capability_bit']==28
+completion_declarations=re.findall(r'\bnw_status\s+NW_CDECL\s+nw_db_command_\w+_v1\([^;]+;', (ROOT/completion['header']).read_text())
+completion_declarations=[re.sub(r'\s+', ' ', value) for value in completion_declarations]
+assert completion_declarations==completion['signatures'],'Additive one-shot completion signatures differ from the reviewed extension'
+assert len(completion_declarations)==4 and not set(completion_declarations).intersection(data['signatures'])
+assert completion['request_record']=={'name':'nw_db_command_request_args_v1','linux_x64_size':48,
+    'offsets':{'struct_size':0,'kind':4,'target':8,'input':16,'payload':24,'action':40,'reserved':44}},'Command request layout differs'
+assert completion['result_record']=={'name':'nw_db_command_result_v1','linux_x64_size':32,
+    'offsets':{'struct_size':0,'kind':4,'count':8,'owner':16,'buffer':24}},'Command result layout differs'
+assert completion['callback_record']=='nw_db_cursor_callbacks_v1' and completion['callback_generation']==0
+print(f'PASS exact frozen signatures={len(data["signatures"])}; outputs={len(outputs)}; additive query command signatures={len(declarations)}; additive batch signatures={len(batch_declarations)}; additive completion signatures={len(completion_declarations)}')

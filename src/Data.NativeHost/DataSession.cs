@@ -39,7 +39,8 @@ public sealed partial class DataSession : IDisposable, IAsyncDisposable
     }
     private async Task<long> ExecuteCommand(SqlCommand command, CancellationToken token)
     { using var plan = SqlSubmission.Create(this, command, 0, 0); return await ExecuteCountAsync(plan, ReadOnlyMemory<byte>.Empty, token).ConfigureAwait(false); }
-    internal Task<long> ExecuteCountAsync(DatabaseOwner plan, ReadOnlyMemory<byte> values, CancellationToken token) => Source.Start(() => AdmitOperation(() => NativeHost.Execute(Owner, plan, values)), operation => NativeHost.TakeCount(Source.Binding, operation), token);
+    internal Task<long> ExecuteCountAsync(DatabaseOwner plan, ReadOnlyMemory<byte> values, CancellationToken token)
+        => SubmitCommand(NativeCommandKind.Execute, plan, values, 0, 100, NativeCommand.Count, token);
     /// <summary>Reads exactly one row and column through an explicit scalar codec.</summary>
     /// <typeparam name="T">The owned scalar type, including an explicitly nullable codec.</typeparam>
     /// <param name="command">An immutable query command.</param>
@@ -137,7 +138,7 @@ public sealed partial class DataSession : IDisposable, IAsyncDisposable
     }
     private async Task<DataTransaction> BeginCore(byte[] record, string? recovery, CancellationToken token, BulkSessionLease? bulk = null)
     {
-        var owner = await Source.Start(() => AdmitOperation(() => HostTransactionTransport.Begin(Owner, record), bulk), operation => NativeHost.TakeOwner(Source.Binding, operation, 3, HostTransactionTransport.TransactionKind), token).ConfigureAwait(false);
+        var owner = await SubmitCommand(NativeCommandKind.BeginTransaction, null, record, 0, 3, NativeCommand.Owner, token, bulk).ConfigureAwait(false);
         try { var transaction = new DataTransaction(new HostTransactionTransport(Source, owner, recovery), recovery); bulk?.AttachTransaction(transaction); Volatile.Write(ref _transaction, transaction); return transaction; }
         catch { owner.Dispose(); throw; }
     }

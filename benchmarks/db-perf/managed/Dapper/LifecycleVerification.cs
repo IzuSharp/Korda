@@ -15,7 +15,7 @@ internal sealed record LifecycleReceipt(string Route,string Provider,bool Native
 
 internal static class LifecycleVerification
 {
-    private const string FindSql="SELECT \"TenantId\",\"Id\",\"CreatedAt\",\"CustomerId\",\"Total\",\"Note\",\"Version\",\"Settings\",\"InternalMemo\" FROM orders WHERE \"TenantId\"=@tenant AND \"Id\"=@id";
+    private const string FindSql="SELECT \"orders\".\"TenantId\" AS \"TenantId\", \"orders\".\"Id\" AS \"Id\", \"orders\".\"CreatedAt\" AS \"CreatedAt\", \"orders\".\"CustomerId\" AS \"CustomerId\", \"orders\".\"Total\" AS \"Total\", \"orders\".\"Note\" AS \"Note\", \"orders\".\"Version\" AS \"Version\", \"orders\".\"Settings\" AS \"Settings\", \"orders\".\"InternalMemo\" AS \"InternalMemo\" FROM \"orders\" WHERE \"orders\".\"TenantId\" = @tenant AND \"orders\".\"Id\" = @id LIMIT @take";
     internal static async Task<LifecycleReceipt> Run(DatabaseDriver source,Options options)
     {
         var checks=new List<LifecycleCheck>();var connection=await source.OpenSessionAsync();
@@ -56,7 +56,7 @@ internal static class LifecycleVerification
         var first=await source.OpenSessionAsync();var second=await source.OpenSessionAsync();ConcurrentAttempt[] attempts;
         try
         {
-            var key=new{tenant=1L,id=(long)options.OrdersPerTenant};var original=await first.QuerySingleAsync<Order>(FindSql,key);
+            var key=new{tenant=1L,id=(long)options.OrdersPerTenant,take=2L};var original=await first.QuerySingleAsync<Order>(FindSql,key);
             var other=await second.QuerySingleAsync<Order>(FindSql,key);
             if(other!=original||original.Version!=1)throw CorrectnessOracle.Failure("Concurrent readers did not share initial version1.");
             using var barrier=new Barrier(3);

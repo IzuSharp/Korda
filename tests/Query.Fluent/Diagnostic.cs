@@ -14,6 +14,7 @@ internal sealed class Diagnostic : IDisposable
         var result = new ulong[6]; for (uint i = 0; i < result.Length; i++) result[i] = ((delegate* unmanaged[Cdecl]<uint, ulong>)_count)(i); return result;
     }
     internal unsafe ulong Count(uint index) => ((delegate* unmanaged[Cdecl]<uint, ulong>)_count)(index);
+    private ulong[] AllOwnerCounts() => [.. Counts(), Count(8), Count(9)];
     internal async Task WaitCursorZero()
     {
         for (var i = 0; i < 100; i++)
@@ -27,10 +28,10 @@ internal sealed class Diagnostic : IDisposable
     {
         for (var i = 0; i < 100; i++)
         {
-            if (Counts().All(v => v == 0)) { Suite.Check(true, "All six actual native owner counters zero"); return; }
+            if (AllOwnerCounts().All(v => v == 0)) { Suite.Check(true, "Actual native owner counters [0..5,8,9] zero"); return; }
             await Task.Delay(10);
         }
-        throw new InvalidOperationException("Native owner leak: " + string.Join(',', Counts()));
+        throw new InvalidOperationException("Native owner leak: " + string.Join(',', AllOwnerCounts()));
     }
     public void Dispose() => NativeLibrary.Free(_library);
 }
