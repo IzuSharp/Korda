@@ -23,6 +23,31 @@ const std::shared_ptr<Error>& cursor_cleanup_failure()
     static const auto failure = std::make_shared<Error>(NW_NATIVE_PANIC, 8, "cleanup failed");
     return failure;
 }
+[[noreturn]] void rethrow_command_cleanup_failure(const std::exception_ptr& primary)
+{
+    try
+    {
+        std::rethrow_exception(primary);
+    }
+    catch (Error& failure)
+    {
+        if (!failure.cleanup)
+            failure.cleanup = cursor_cleanup_failure();
+        throw;
+    }
+    catch (const std::bad_alloc&)
+    {
+        Error failure(NW_OUT_OF_MEMORY, 8, "native database allocation failed");
+        failure.cleanup = cursor_cleanup_failure();
+        throw failure;
+    }
+    catch (...)
+    {
+        Error failure(NW_NATIVE_PANIC, 8, "native database exception contained");
+        failure.cleanup = cursor_cleanup_failure();
+        throw failure;
+    }
+}
 std::uint64_t checked_timeout(std::uint64_t value)
 {
     if (!value || value > hour_ns)
@@ -1394,8 +1419,18 @@ Value Session::execute(std::shared_ptr<SqlPlan> plan, std::shared_ptr<Cancel> ca
         }
         catch (...)
         {
-            gate->finish(true);
-            throw;
+            const auto primary = std::current_exception();
+            try
+            {
+                gate->finish(true);
+            }
+            catch (...)
+            {
+                discard.store(true);
+                source->poisoned.store(true);
+                rethrow_command_cleanup_failure(primary);
+            }
+            std::rethrow_exception(primary);
         }
     }
     if (cancel->requested())
@@ -1457,13 +1492,25 @@ Value Session::execute(std::shared_ptr<SqlPlan> plan, std::shared_ptr<Cancel> ca
     }
     catch (...)
     {
-        gate->finish(true);
-        if (plan->kind == 2)
+        const auto primary = std::current_exception();
+        try
         {
-            request_close();
-            join();
+            gate->finish(true);
+            if (plan->kind == 2)
+            {
+                request_close();
+                join();
+            }
         }
-        throw;
+        catch (...)
+        {
+            // Parent cleanup can fail to launch after releasing the command
+            // gate. Keep that failure secondary and leave retirement retryable.
+            discard.store(true);
+            source->poisoned.store(true);
+            rethrow_command_cleanup_failure(primary);
+        }
+        std::rethrow_exception(primary);
     }
 }
 void Session::request_close()

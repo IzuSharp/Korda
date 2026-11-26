@@ -12,6 +12,7 @@
 #include <nlohmann/json.hpp>
 #include <sqlite3.h>
 #include <stdexcept>
+#include <system_error>
 #include <tuple>
 
 namespace nw
@@ -740,6 +741,173 @@ void source_retirement_notification()
     check(source->pending.load() == 0 && source->retired.load(),
           "source join returned before all operation owners retired");
 }
+
+struct CommandNotice
+{
+    std::atomic<unsigned> calls{0};
+    std::atomic<nw_status> status{NW_PENDING};
+};
+nw_status NW_CDECL command_notice(std::uint64_t cookie, std::uint32_t status, const nw_error_info_v1*)
+{
+    auto& notice = *reinterpret_cast<CommandNotice*>(cookie);
+    notice.status.store(status);
+    ++notice.calls;
+    return NW_OK;
+}
+void command_cleanup_error(unsigned scenario)
+{
+    check(scenario < 5, "unknown command cleanup scenario");
+    const bool count = scenario < 2, mutating = scenario == 4;
+    const unsigned failed_index = scenario % 2;
+    auto config = configuration();
+    // MaxBatchRows=1 is a valid public configuration. Count currently asks for
+    // two rows and fails before fetching. This test preserves that distinct
+    // known limitation while testing the priority of its original capacity error.
+    if (count)
+        config.limits.batch_rows = 1;
+    auto source = Source::create(config);
+    auto session = open_session(source);
+    std::shared_ptr<Transaction> transaction;
+    if (!mutating)
+        transaction = Transaction::begin(session, {0, false, 5'000'000'000, 5'000'000'000, {}},
+                                         std::make_shared<Cancel>(), session->admit(true));
+    auto plan = std::make_shared<SqlPlan>();
+    plan->source = source;
+    plan->sql = count ? "SELECT 1 AS v" : "INSERT INTO missing_command_cleanup VALUES (1)";
+    plan->kind = count ? 0 : mutating ? 2 : 1;
+    plan->result_kind = count ? 1 : 0;
+    plan->scalar_count = count;
+    plan->timeout_ns = 5'000'000'000;
+    plan->expectation = {1, Profile::Sqlite, {}, 0, 0, {}, 1};
+    plan->capture_parameters(Batch::encode(plan->expectation, 1, {}));
+    if (count)
+    {
+        auto projection = std::make_shared<Projection>(
+            Projection::parse(bytes("{\"version\":1,\"fields\":[{\"ordinal\":0,\"name\":\"v\",\"codec\":3,"
+                                    "\"codec_config\":null,\"nullable\":false}]}"),
+                              Profile::Sqlite));
+        plan->projection = source->resolve_projection({source->identity, 1, projection, source->codecs()});
+    }
+    auto gate = session->admit(false);
+    if (transaction)
+        transaction->request_close(); // The accepted command still owns admission.
+    std::optional<Error> primary;
+    auto retained_cleanup = std::make_shared<Error>(NW_TIMEOUT, 8, "earlier cleanup detail");
+    const auto record_primary = [&]
+    {
+        check(bool(std::current_exception()), "cleanup hook ran outside the original command handler");
+        try
+        {
+            throw;
+        }
+        catch (Error& error)
+        {
+            // This hook executes synchronously inside Session::execute's active
+            // catch. A bare rethrow inspects that real exception; it does not
+            // depend on exception_ptr preserving an exception object's address.
+            if (failed_index == 1)
+            {
+                error.cleanup = retained_cleanup;
+                error.bulk = NativeBulkProgress{7, 3, false, 2};
+            }
+            primary = error;
+        }
+    };
+    std::atomic<unsigned> launches{0}, posts{0};
+    if (transaction)
+        transaction->test_before_worker_start = [&](std::uint32_t index)
+        {
+            ++launches;
+            if (index == failed_index)
+            {
+                record_primary();
+                throw std::system_error(std::make_error_code(std::errc::resource_unavailable_try_again));
+            }
+        };
+    else
+        source->workers.test_before_post = [&]
+        {
+            if (++posts == 2) // The first post starts the actual command.
+            {
+                record_primary();
+                throw std::bad_alloc();
+            }
+        };
+    auto operation = DbOperation::create(source, 100, false, [session, plan, gate](auto cancel)
+                                         { return session->execute(plan, cancel, gate); });
+    CommandNotice notice;
+    check(operation->start({sizeof(nw_operation_callbacks_v1), 0, reinterpret_cast<std::uint64_t>(&notice),
+                            command_notice}) == NW_OK,
+          "command cleanup regression was not accepted");
+    eventually([&] { return operation->core->try_retire() == NW_OK; },
+               "command cleanup failure lost terminal notification or its native source");
+    const auto terminal = operation->core->snapshot().terminal_status;
+    std::optional<Error> observed;
+    {
+        std::lock_guard lock(operation->mutex);
+        observed = operation->error;
+    }
+    const bool guarded = !session->active.load() && gate->completed;
+    bool unretired;
+    {
+        std::lock_guard lock(source->mutex);
+        unretired = !session->retired.load() && source->leased == 1;
+    }
+    const bool excluded = session->discard.load() && source->poisoned.load();
+    bool retryable = !session->cleanup_scheduled.load();
+    if (transaction)
+    {
+        eventually([&] { return source->transaction_workers->done(); }, "failed launch left a detached worker");
+        std::lock_guard lock(transaction->mutex);
+        retryable = retryable && !transaction->retired && !transaction->finishing && !transaction->driver_active &&
+                    !transaction->attempted && transaction->state == 1;
+        transaction->test_before_worker_start = {};
+    }
+    source->workers.test_before_post = {};
+    operation.reset();
+    gate.reset();
+    if (transaction)
+    {
+        transaction->join();
+        check(transaction->retired && transaction->outcome == 2,
+              "removing the launch fault did not complete the real rollback");
+        transaction.reset();
+    }
+    close_session(session);
+    source->join();
+    const bool drained = source->pending == 0 && source->transaction_workers->done() && source->pull_workers->done();
+    plan.reset();
+    session.reset();
+    source.reset();
+    const bool owners_zero = source_count == 0 && session_count == 0 && operation_count == 0 && cursor_count == 0 &&
+                             buffer_count == 0 && pull_count == 0;
+    std::cout << "command cleanup scenario=" << scenario << " primary=" << (primary ? primary->status : 99) << '/'
+              << (primary ? primary->code : 99) << " observed=" << (observed ? observed->status : 99) << '/'
+              << (observed ? observed->code : 99) << " launches=" << launches << " posts=" << posts
+              << " guarded=" << guarded << " retryable=" << retryable << " unretired=" << unretired
+              << " excluded=" << excluded << " drained=" << drained << " owners_zero=" << owners_zero << '\n';
+    check(primary && primary->status == NW_DOMAIN_ERROR && primary->code == (count ? 6u : 1u) &&
+              (count || primary->provider == "1"),
+          "fixture did not reach the original capacity or actual SQLite provider error");
+    check(observed && terminal == primary->status && notice.status == primary->status && notice.calls == 1 &&
+              observed->status == primary->status && observed->code == primary->code &&
+              observed->message == primary->message && observed->provider == primary->provider &&
+              observed->correlation == primary->correlation,
+          "command cleanup failure replaced the original error or its terminal identity");
+    check(observed->cleanup &&
+              (primary->cleanup ? observed->cleanup == primary->cleanup : observed->cleanup->status == NW_NATIVE_PANIC),
+          "command cleanup lost existing detail or failed to attach secondary cleanup");
+    check(observed->bulk.has_value() == primary->bulk.has_value() &&
+              (!primary->bulk ||
+               (observed->bulk->rows == primary->bulk->rows && observed->bulk->batches == primary->bulk->batches &&
+                observed->bulk->committed == primary->bulk->committed &&
+                observed->bulk->outcome == primary->bulk->outcome)),
+          "command cleanup replaced existing bulk progress");
+    check(guarded && retryable && unretired && excluded && drained && owners_zero,
+          "command cleanup forged retirement, lost retryability or retained native owners");
+    check(mutating ? posts == 2 : launches == failed_index + 1,
+          "command cleanup did not cross the exact requested launch or post boundary");
+}
 } // namespace
 
 int main(int argc, char** argv)
@@ -774,6 +942,14 @@ int main(int argc, char** argv)
             control_during_runtime_join();
         if (mode == "all" || mode == "notification")
             source_retirement_notification();
+        if (mode == "all" || mode == "command-cleanup")
+        {
+            if (mode == "command-cleanup" && argc == 3)
+                command_cleanup_error(static_cast<unsigned>(std::stoul(argv[2])));
+            else
+                for (unsigned scenario = 0; scenario != 5; ++scenario)
+                    command_cleanup_error(scenario);
+        }
         std::cout << "host review: " << mode << " passed\n";
         return 0;
     }

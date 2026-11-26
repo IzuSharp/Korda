@@ -1,0 +1,71 @@
+    internal async ValueTask<Sample> Run(int lane, long tenant)
+    {
+        IReadOnlyList<PhaseRow>? rows = null;
+        try
+        {
+            _diagnostics.Stage = FailureStage.Construct;
+            Query<PhaseOrder>? query = null;
+            QuerySelection<PhaseRow> selection = default;
+            SqlCommand? command = null;
+            var started = Stopwatch.GetTimestamp();
+            long constructed = started, complete = started, released;
+            try
+            {
+                if (lane == 0)
+                {
+                    query = Build(tenant);
+                    selection = Select(query);
+                }
+                else if (lane == 1)
+                {
+                    _values.Set(_tenant, tenant);
+                    _values.Set(_key, (long)_resultRows);
+                }
+                else if (lane == 2)
+                {
+                    var parameters = new SqlParameters().Add("tenant", tenant, Codecs.Int64)
+                        .Add("id", (long)_resultRows, Codecs.Int64);
+                    command = SqlCommand.Create(RawTemplate, parameters);
+                }
+                else throw new ArgumentOutOfRangeException(nameof(lane));
+                constructed = Stopwatch.GetTimestamp();
+                _diagnostics.Stage = FailureStage.SubmitToList;
+                // The public terminal owns its result list and awaits cursor
+                // retirement. There is no externally observable first-row time.
+                rows = lane switch
+                {
+                    0 => await selection.ToListAsync(),
+                    1 => await _prepared.ToListAsync(_session, _values),
+                    _ => await _session.QueryAsync(command!, PhaseRows.Row),
+                };
+                complete = Stopwatch.GetTimestamp();
+            }
+            catch (Exception failure)
+            {
+                // Preserve the query error before owner disposal can expose a
+                // distinct cleanup failure. An incomplete list is not invented.
+                _diagnostics.Capture(failure, rows?.Count, "query");
+                throw;
+            }
+            finally
+            {
+                _diagnostics.Stage = FailureStage.Release;
+                query?.Dispose();
+                released = Stopwatch.GetTimestamp();
+            }
+            // Read the actual returned IReadOnlyList directly; no second list
+            // or enumeration adapter changes the public consumption contract.
+            _diagnostics.Stage = FailureStage.Verify;
+            if (rows.Count != _resultRows) throw new InvalidOperationException("Incomplete result.");
+            for (var i = 0; i < rows.Count; i++)
+                if (rows[i].Id != i + 1 || rows[i].Note != _notes[tenant - 1][i])
+                    throw new InvalidOperationException("Result field or null differs.");
+            GC.KeepAlive(rows);
+            return new(constructed - started, complete - constructed, released - complete, rows.Count);
+        }
+        catch (Exception failure)
+        {
+            _diagnostics.Capture(failure, rows?.Count, "run");
+            throw;
+        }
+    }
