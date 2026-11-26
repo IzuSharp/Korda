@@ -89,6 +89,14 @@ reservation, including Source `admission_stop`, rejects without a callback;
 the existing generic close remains available for this cold rejection path.
 An accepted final close owes exactly one ready even when queueing or cleanup
 fails. Repeated final-close requests reject without another notification.
+If a consumed channel has no live batch, all earlier fetch tickets have ended
+and cursor cleanup has already published its released receipt, final close may
+complete before `close_request` returns without a control-queue submission.
+This uses the same Source control reservation, independent notification tickets,
+receipt and rich-error path; incomplete proof retains the queued path. It never
+waits inline or treats observed EOF or fetch readiness as retirement. The
+consumer must still drain request setup, controls and callback access before
+publishing completion or releasing its callback cookie.
 An accepted queue failure requests cleanup without blocking the caller and
 retains its original error. Any already known cleanup failure is attached and
 poisons the Source; unfinished cleanup still requires an actual later join.

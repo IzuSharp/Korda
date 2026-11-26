@@ -590,7 +590,15 @@ void pull_close_joins_old_fetch_tail()
     pull->request(1, 1, 256, fetched.callbacks());
     fetched.wait(1);
     await([&] { return held->load(); });
-    pull->take(1).reset();
+    auto batch = pull->take(1);
+    auto cursor = batch->cursor;
+    batch.reset();
+    pull->request_close();
+    cursor->join();
+    check(cursor->resources_released(), "old-tail fixture completes actual cursor cleanup before final close");
+    cursor.reset();
+    std::atomic<unsigned> queued{0};
+    scope.source->controls.test_before_post = [&] { ++queued; };
     pull->close_request(closed.callbacks());
     const bool pending = reject([&] { (void)pull->close_take(); }).status == NW_PENDING;
     const bool not_released = !snapshot_released(pull->snapshot());
@@ -603,29 +611,165 @@ void pull_close_joins_old_fetch_tail()
     result.reset();
     fallback.get();
     pull.reset();
-    check(pending && not_released && waiting && released && closed.calls == 1,
+    check(pending && not_released && waiting && released && closed.calls == 1 && queued == 1,
           "final readiness and generic fallback both await the old detached fetch tail");
     check(pull_count == 0 && cursor_count == 0 && scope.source->pending == 0,
           "old-tail final close leaves no native accessor or admission");
+    scope.source->controls.test_before_post = {};
 }
-void pull_close_notification_tail()
+void pull_close_already_released()
 {
     Scope scope;
-    auto pull = scope.pull(0);
+    auto pull = scope.pull(1);
+    PullReady fetched;
+    pull->request(1, 3, 256, fetched.callbacks());
+    fetched.wait(1);
+    auto batch = pull->take(1);
+    check(batch->known_end && scope.session->active.load(),
+          "known EOF does not release the Session command gate before consumer cleanup");
+    batch.reset();
+    pull->join();
+    check(snapshot_released(pull->snapshot()), "inline fixture has actual joined resource proof");
+    std::atomic<unsigned> queued{0};
+    scope.source->controls.test_before_post = [&] { ++queued; };
+    struct InlineReady
+    {
+        PullReady ready;
+        const std::thread::id caller = std::this_thread::get_id();
+        std::atomic<bool> returned{false}, before_return{false}, same_thread{false};
+        static void NW_CDECL notify(void* context, std::uint64_t generation)
+        {
+            auto& value = *static_cast<InlineReady*>(context);
+            value.before_return.store(!value.returned.load());
+            value.same_thread.store(std::this_thread::get_id() == value.caller);
+            PullReady::notify(&value.ready, generation);
+        }
+    } closed;
+    pull->close_request({sizeof(nw_db_cursor_callbacks_v1), 0, &closed, InlineReady::notify});
+    closed.returned.store(true);
+    check(closed.ready.calls == 1 && closed.ready.generation == 0 && closed.before_return && closed.same_thread &&
+              queued == 0,
+          "already released close notifies once before request return without a control submission");
+    auto result = pull->close_take();
+    check(snapshot_released(result->bytes), "inline final close returns the original released snapshot encoding");
+    result.reset();
+    check(reject([&] { (void)pull->close_take(); }).status == NW_INVALID_STATE &&
+              reject([&] { pull->close_request(closed.ready.callbacks()); }).status == NW_INVALID_STATE &&
+              closed.ready.calls == 1,
+          "inline close retains one-shot take and duplicate-request rejection");
+    pull->join();
+    pull.reset();
+    check(scope.source->pending == 0 && scope.source->pull_workers->done() && pull_count == 0 && cursor_count == 0 &&
+              buffer_count == 0 && !scope.session->active.load() && scope.probe->reads == 1,
+          "inline close retains no control reservation, notification ticket, cursor or batch");
+    scope.source->controls.test_before_post = {};
+}
+void pull_close_cleanup_publication()
+{
+    Scope scope;
+    auto pull = scope.pull(1);
+    PullReady fetched, closed;
+    pull->request(1, 3, 256, fetched.callbacks());
+    fetched.wait(1);
+    auto batch = pull->take(1);
+    auto cursor = batch->cursor;
+    batch.reset();
+    await([&] { return scope.source->pending == 0; });
+    auto entered = std::make_shared<std::atomic<bool>>(false);
+    auto proceed = std::make_shared<std::binary_semaphore>(0);
+    cursor->test_after_cleanup_gate = [entered, proceed]
+    {
+        entered->store(true);
+        proceed->acquire();
+    };
+    pull->request_close();
+    await([&] { return entered->load(); });
+    check(cursor->retired.load() && !cursor->resources_released(),
+          "retired flag alone does not prove the cleanup worker released its accessor");
+    std::atomic<unsigned> queued{0};
+    scope.source->controls.test_before_post = [&] { ++queued; };
+    pull->close_request(closed.callbacks());
+    const bool pending = closed.calls == 0 && reject([&] { (void)pull->close_take(); }).status == NW_PENDING;
+    proceed->release();
+    closed.wait(0);
+    auto result = pull->close_take();
+    check(pending && queued == 1 && snapshot_released(result->bytes) && closed.calls == 1,
+          "unpublished cleanup completion keeps final close queued and pending until the real fence");
+    result.reset();
+    pull->join();
+    cursor.reset();
+    pull.reset();
+    check(scope.source->pending == 0 && scope.source->pull_workers->done() && cursor_count == 0 && buffer_count == 0,
+          "cleanup-publication fallback returns every accessor and ticket");
+    scope.source->controls.test_before_post = {};
+}
+void pull_close_released_error()
+{
+    Scope scope;
+    scope.probe->length = 200;
+    auto pull = scope.pull(1);
+    PullReady fetched, closed;
+    pull->request(1, 3, 256, fetched.callbacks());
+    fetched.wait(1);
+    const auto original = reject([&] { (void)pull->take(1); });
+    pull->join();
+    check(snapshot_released(pull->snapshot()), "failed-fetch fixture has completed its actual cleanup");
+    std::atomic<unsigned> queued{0};
+    scope.source->controls.test_before_post = [&]
+    {
+        ++queued;
+        throw std::bad_alloc();
+    };
+    pull->close_request(closed.callbacks());
+    closed.wait(0);
+    const auto rejected = reject([&] { (void)pull->close_take(); });
+    const auto close_error = pull->take_error(0);
+    const auto fetch_error = pull->take_error(1);
+    check(queued == 1 && rejected.status == NW_OUT_OF_MEMORY && close_error.correlation == rejected.correlation &&
+              fetch_error.correlation == original.correlation && fetch_error.code == original.code &&
+              fetched.calls == 1 && closed.calls == 1,
+          "released cursor with an outstanding rich error retains the queue and both original error identities");
+    scope.source->controls.test_before_post = {};
+    pull->join();
+    pull.reset();
+    check(scope.source->pending == 0 && scope.source->pull_workers->done() && cursor_count == 0 && buffer_count == 0,
+          "released-error fallback leaves no worker or result owner");
+}
+void pull_close_notification_tail(bool already_released = false)
+{
+    Scope scope;
+    auto pull = scope.pull(already_released ? 1 : 0);
+    if (already_released)
+    {
+        PullReady fetched;
+        pull->request(1, 3, 256, fetched.callbacks());
+        fetched.wait(1);
+        pull->take(1).reset();
+        pull->join();
+    }
     struct Held
     {
         std::atomic<bool> entered{false};
+        std::atomic<bool> returned{false}, same_thread{false};
         std::atomic<std::uint64_t> generation{1};
+        std::thread::id caller;
         std::binary_semaphore proceed{0};
         static void NW_CDECL notify(void* context, std::uint64_t generation)
         {
             auto& held = *static_cast<Held*>(context);
             held.generation.store(generation);
+            held.same_thread.store(std::this_thread::get_id() == held.caller);
             held.entered.store(true);
             held.proceed.acquire();
         }
     } held;
-    pull->close_request({sizeof(nw_db_cursor_callbacks_v1), 0, &held, Held::notify});
+    auto request = std::async(std::launch::async,
+                              [&]
+                              {
+                                  held.caller = std::this_thread::get_id();
+                                  pull->close_request({sizeof(nw_db_cursor_callbacks_v1), 0, &held, Held::notify});
+                                  held.returned.store(true);
+                              });
     await([&] { return held.entered.load(); });
     auto result = pull->close_take();
     const bool direct_released = snapshot_released(result->bytes);
@@ -636,11 +780,13 @@ void pull_close_notification_tail()
     auto parent = std::async(std::launch::async, [source = scope.source] { source->join(); });
     const bool fallback_pending = fallback.wait_for(std::chrono::milliseconds(20)) != std::future_status::ready;
     const bool parent_pending = parent.wait_for(std::chrono::milliseconds(20)) != std::future_status::ready;
+    const bool inline_pending = !already_released || (held.same_thread && !held.returned);
     held.proceed.release();
+    request.get();
     fallback.get();
     parent.get();
-    check(direct_released && public_pending && fallback_pending && parent_pending && held.generation == 0 &&
-              snapshot_released(pull->snapshot()) && scope.source->pull_workers->done(),
+    check(direct_released && public_pending && fallback_pending && parent_pending && inline_pending &&
+              held.generation == 0 && snapshot_released(pull->snapshot()) && scope.source->pull_workers->done(),
           "direct receipt excludes its own detached notification while generic snapshot/join and Source wait it");
     pull.reset();
     check(pull_count == 0 && cursor_count == 0 && scope.source->pending == 0,
@@ -706,8 +852,13 @@ void pull_close_rejection_and_errors()
     }
     {
         Scope scope;
-        auto pull = scope.pull(0);
-        PullReady closed;
+        auto pull = scope.pull(1);
+        PullReady fetched, closed;
+        pull->request(1, 3, 256, fetched.callbacks());
+        fetched.wait(1);
+        pull->take(1).reset();
+        pull->join();
+        check(snapshot_released(pull->snapshot()), "late-admission fixture is already resource-released");
         scope.source->join();
         check(scope.source->admission_stop &&
                   reject([&] { pull->close_request(closed.callbacks()); }).status == NW_INVALID_STATE &&
@@ -1362,7 +1513,11 @@ int main()
         pull_parent_cleanup_failure();
         pull_final_close_results();
         pull_close_joins_old_fetch_tail();
+        pull_close_already_released();
+        pull_close_cleanup_publication();
+        pull_close_released_error();
         pull_close_notification_tail();
+        pull_close_notification_tail(true);
         pull_close_rejection_and_errors();
         await(
             []

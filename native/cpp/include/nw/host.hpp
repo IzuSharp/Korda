@@ -357,6 +357,7 @@ struct Cursor : std::enable_shared_from_this<Cursor>
     void close_now();
     void schedule_cleanup() noexcept;
     void join();
+    bool resources_released() const;
     Bytes snapshot() const;
 
   private:

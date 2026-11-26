@@ -2544,6 +2544,13 @@ void Cursor::join()
     if (cleanup_unconfirmed.load())
         throw Error(NW_DOMAIN_ERROR, 8, "provider retirement remains unconfirmed");
 }
+bool Cursor::resources_released() const
+{
+    std::lock_guard lock(completion_->mutex);
+    // The worker drops its last accessor before publishing completion. The
+    // retired flag alone can precede that publication and is not a quiet proof.
+    return completion_->done && retired.load() && !cleanup_unconfirmed.load();
+}
 Bytes Cursor::snapshot() const
 {
     std::lock_guard lock(completion_->mutex);
@@ -3061,6 +3068,7 @@ void CursorPull::close_request(nw_db_cursor_callbacks_v1 callbacks)
     auto state = std::make_shared<CloseState>(callbacks);
     std::shared_ptr<CloseWorker> worker;
     std::function<void()> action;
+    bool released = false;
     {
         std::lock_guard lock(mutex_);
         if (close_)
@@ -3069,12 +3077,20 @@ void CursorPull::close_request(nw_db_cursor_callbacks_v1 callbacks)
         action = [worker] { worker->run(); };
         close_ = std::move(state);
         closing_ = true;
+        // Preserve the queued path for outstanding results/errors and held
+        // batches. Only an already joined cursor and every prior fetch tail
+        // can prove that the existing close worker will not wait or do I/O.
+        released = cursor_ && !running_ && !outstanding_ && !gate_ && !buffer_ && !error_ && !cancel_ &&
+                   !cursor_->batch_live.load() && completion_->done() && cursor_->resources_released();
     }
     // All allocations/admission above precede acceptance. A failed queue
     // after acceptance must still settle this independent close exactly once.
     try
     {
-        worker->source->controls.post(std::move(action));
+        if (released)
+            worker->run();
+        else
+            worker->source->controls.post(std::move(action));
     }
     catch (Error& error)
     {
