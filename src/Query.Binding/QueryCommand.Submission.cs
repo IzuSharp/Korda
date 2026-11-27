@@ -125,7 +125,12 @@ internal sealed partial class QueryCommand
                 (uint)dependencies.Length, terminal, &result, &error), error);
         if (result == 0) throw new BindingFailure(NativeStatus.ContractViolation, 0, 0, 0);
         DatabaseOwner plan;
-        try { plan = new(Source, DatabaseOwnerKind.Plan, result) { QueryPlan = Metadata() }; }
+        try
+        {
+            // Keep the raw result unadopted until allocating metadata is ready.
+            var metadata = Metadata();
+            plan = new(Source, DatabaseOwnerKind.Plan, result) { QueryPlan = metadata };
+        }
         catch { Source.Calls.nw_db_owner_release_v1(result); throw; }
         try { if (encoded is { } complete) PublishOrigins(plan, complete, gates); }
         catch { plan.Dispose(); throw; }
@@ -169,7 +174,11 @@ internal sealed partial class QueryCommand
                 (uint)encoded.Dependencies.Length, declared.Pointer, tableId, recursive ? 1u : 0u, &result, &error), error);
         if (result == 0) throw new BindingFailure(NativeStatus.ContractViolation, 0, 0, 0);
         DatabaseOwner cte;
-        try { cte = new(Source, DatabaseOwnerKind.Cte, result) { QueryCte = new(model.Table, Metadata()) }; }
+        try
+        {
+            var metadata = new QueryCteMetadata(model.Table, Metadata());
+            cte = new(Source, DatabaseOwnerKind.Cte, result) { QueryCte = metadata };
+        }
         catch { Source.Calls.nw_db_owner_release_v1(result); throw; }
         try { PublishOrigins(cte, encoded, gates); return cte; }
         catch { cte.Dispose(); throw; }
