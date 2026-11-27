@@ -17,6 +17,10 @@ internal static unsafe class CommandOnlyTests
     private sealed record CapturedCommand(byte[] Bytes, QueryCommandDependency[] Owners);
     [UnsafeAccessor(UnsafeAccessorKind.Field, Name = "_command")]
     private static extern ref QueryCommand? BufferedCommand(QueryBinding query);
+    [UnsafeAccessor(UnsafeAccessorKind.Field, Name = "_records")]
+    private static extern ref byte[] CommandRecords(QueryCommand command);
+    [UnsafeAccessor(UnsafeAccessorKind.Field, Name = "_written")]
+    private static extern ref int CommandWritten(QueryCommand command);
     private static void Check(bool condition, string message)
     { _assertions++; if (!condition) throw new InvalidOperationException(message); }
     private static void Reject<T>(Action action) where T : Exception
@@ -53,11 +57,11 @@ internal static unsafe class CommandOnlyTests
         "db.null-safe-equality.v1", "db.relationships.explicit.v1", "db.set-operations.v1", "db.cte.v1", "db.recursive-cte.v1",
         "db.window.v1", "db.row-lock.v1", "db.prepared-shape.v1"];
 
-    private static DatabaseOwner Source(NativeCalls calls, uint profile, QueryCommandCalls commands, int depth = 64, int nodes = 4096)
+    private static DatabaseOwner Source(NativeCalls calls, uint profile, QueryCommandCalls commands, int depth = 64, int nodes = 4096, int bytes = 4 * 1024 * 1024)
     {
         nint result = 0; var error = BindingChecks.Error(); var value = (byte)profile;
         BindingChecks.Status(calls.nw_db_source_create_v1(new() { Data = &value, Length = 1 }, &result, &error), error);
-        var binding = new SourceBinding(calls, profile) { Commands = new(commands, nodes, depth, 4096, 4 * 1024 * 1024, Capabilities) };
+        var binding = new SourceBinding(calls, profile) { Commands = new(commands, nodes, depth, 4096, bytes, Capabilities) };
         binding.Commands.RegisterCodec(3, Codecs.Int64.Descriptor); binding.Commands.RegisterCodec(4, Codecs.Boolean.Descriptor);
         binding.Commands.RegisterCodec(5, Codecs.String.Descriptor);
         return new(binding, DatabaseOwnerKind.Source, result);
@@ -150,6 +154,7 @@ internal static unsafe class CommandOnlyTests
             SingleRootQuota(calls, counted, library, profile, table, id, name);
             PrivateBranchTransfer(session, model, table, id, name);
             PrivateBranchFailures(calls, direct, counted, library, profile, table, id, name);
+            PrivateBranchCapacity(calls, direct, counted, library, profile, table, id, name);
 
             using var foreignSource = Source(calls, profile, counted); using var foreignSession = Session(foreignSource, library);
             using var foreignModel = MetadataBindings.RegisterModel(foreignSource, table);
@@ -273,6 +278,73 @@ internal static unsafe class CommandOnlyTests
         var predicate = query.Binary(12, query.Binary(1, key, literal), query.Binary(4, key, parameter));
         query.Clause(1, OperandEncoding.Clause(OperandEncoding.U64(1, predicate.Value)));
         Select(query, table.Row, key, text);
+    }
+
+    private static void PrivateBranchCapacity(NativeCalls calls, NativeCalls direct, QueryCommandCalls commands,
+        nint library, uint profile, Table<Parent> table, Column<Parent, long> id, Column<Parent, string> name)
+    {
+        using var source = Source(calls, profile, commands); using var session = Session(source, library);
+        using var model = MetadataBindings.RegisterModel(source, table);
+        using var original = QueryBinding.CreateBuffered(session, model, table.Identity.Id);
+        using var reserved = QueryBinding.CreateBuffered(session, model, table.Identity.Id);
+        Check(CommandWritten(BufferedCommand(reserved)!) == 0, "Fresh buffered construction emits no command prefix.");
+        TransferBranch(original, table, id, name);
+        var hint = original.PrivateBranchCapacityHint;
+        reserved.ReserveEmptyPrivateBranch(hint);
+        TransferBranch(reserved, table, id, name);
+        var oldFrame = RenderCommand(original, out var oldSql);
+        var newFrame = RenderCommand(reserved, out var newSql);
+        Check(oldSql == newSql && oldFrame.Bytes.AsSpan().SequenceEqual(newFrame.Bytes) && oldFrame.Owners.Length == newFrame.Owners.Length
+            && oldFrame.Owners.Zip(newFrame.Owners).All(pair => pair.First.Owner == pair.Second.Owner && pair.First.Kind == pair.Second.Kind),
+            "A private capacity hint preserves the complete command, literal snapshot and dependency owners.");
+        var storage = CommandRecords(BufferedCommand(reserved)!);
+        reserved.ReserveEmptyPrivateBranch(2048);
+        Check(ReferenceEquals(storage, CommandRecords(BufferedCommand(reserved)!)), "A nonempty command ignores the private reserve hint.");
+        using (var plan = reserved.Seal(8))
+        {
+            reserved.ReserveEmptyPrivateBranch(2048);
+            Check(ReferenceEquals(storage, CommandRecords(BufferedCommand(reserved)!)), "A sealed command ignores the hint without changing its storage.");
+        }
+        using (var capped = QueryBinding.CreateBuffered(session, model, table.Identity.Id))
+        {
+            capped.ReserveEmptyPrivateBranch(int.MaxValue);
+            Check(CommandRecords(BufferedCommand(capped)!).Length == 2048, "Private hints are capped without accepting semantic capacity.");
+            TransferBranch(capped, table, id, name);
+            Check(Sql(capped) == oldSql, "An oversized hint does not alter command semantics.");
+        }
+        using (var legacySource = Source(direct, profile, commands))
+        using (var legacySession = Session(legacySource, library))
+        using (var legacyModel = MetadataBindings.RegisterModel(legacySource, table))
+        using (var legacy = QueryBinding.Create(legacySession, legacyModel, table.Identity.Id))
+        {
+            legacy.ReserveEmptyPrivateBranch(2048);
+            TransferBranch(legacy, table, id, name);
+            Check(legacy.PrivateBranchCapacityHint == 0 && Sql(legacy) == oldSql, "Direct builders retain their original path and no capacity hint.");
+        }
+        foreach (var limits in new[] { (Depth: 1, Nodes: 4096, Bytes: 4 * 1024 * 1024),
+            (Depth: 64, Nodes: 6, Bytes: 4 * 1024 * 1024), (Depth: 64, Nodes: 4096, Bytes: 64), (Depth: 64, Nodes: 1, Bytes: 0) })
+        {
+            using var bounded = Source(calls, profile, commands, limits.Depth, limits.Nodes, limits.Bytes);
+            using var current = Session(bounded, library); using var metadata = MetadataBindings.RegisterModel(bounded, table);
+            using var left = QueryBinding.CreateBuffered(current, metadata, table.Identity.Id);
+            using var right = QueryBinding.CreateBuffered(current, metadata, table.Identity.Id);
+            right.ReserveEmptyPrivateBranch(2048);
+            Check(CommandRecords(BufferedCommand(right)!).Length <= Math.Max(256, bounded.Source.Commands!.MaxEnvelopeBytes),
+                "A private hint cannot reserve beyond the existing envelope ceiling.");
+            Exception Failure(QueryBinding query)
+            {
+                try { TransferBranch(query, table, id, name); }
+                catch (Exception failure) when (failure is BindingFailure or ArgumentException) { return failure; }
+                throw new InvalidOperationException("Expected unchanged finite quota failure.");
+            }
+            var first = Failure(left); var second = Failure(right);
+            var a = BufferedCommand(left)!; var b = BufferedCommand(right)!;
+            Check(first.GetType() == second.GetType() && first.Message == second.Message
+                && (first is not BindingFailure originalFailure || second is BindingFailure reservedFailure
+                    && originalFailure.Status == reservedFailure.Status && originalFailure.Domain == reservedFailure.Domain && originalFailure.Code == reservedFailure.Code)
+                && CommandRecords(a).AsSpan(0, CommandWritten(a)).SequenceEqual(CommandRecords(b).AsSpan(0, CommandWritten(b))),
+                "Reservation preserves finite byte/node/depth failure classification and the exact accepted command prefix.");
+        }
     }
 
     private static void Union(QueryBinding query, ArenaReference imported) => query.Clause(9,

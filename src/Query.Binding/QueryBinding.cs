@@ -46,6 +46,15 @@ internal sealed unsafe class QueryBinding : IDisposable
     private QueryBinding(QueryCommand command) { _source = command.Source; _command = command; }
     internal SourceBinding Source => _source;
     internal NativeCalls Calls => Source.Calls;
+    internal int PrivateBranchCapacityHint
+    {
+        get { using var admission = Enter(); return _command?.PrivateBranchCapacityHint ?? 0; }
+    }
+    internal void ReserveEmptyPrivateBranch(int capacity)
+    {
+        using var admission = Enter();
+        _command?.ReserveEmptyPrivateBranch(capacity);
+    }
     internal static QueryBinding CreateBuffered(DatabaseOwner session, DatabaseOwner model, uint tableId) => new(new QueryCommand(session, model, tableId));
     internal static QueryBinding Create(DatabaseOwner session, DatabaseOwner model, uint tableId)
     {

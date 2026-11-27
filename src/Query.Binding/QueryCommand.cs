@@ -36,6 +36,18 @@ internal sealed partial class QueryCommand
     internal SourceBinding Source => _session.Source;
     private QueryCommandCalls Calls => _environment.Calls;
 
+    // A local allocation hint for a later, equally sized private relation
+    // branch. It neither charges nor admits semantic command capacity.
+    internal int PrivateBranchCapacityHint => _written != 0 && !_sealed ? Math.Min(_records.Length, 2048) : 0;
+    internal void ReserveEmptyPrivateBranch(int capacity)
+    {
+        if (_written != 0 || _recordCount != 0 || _sealed || _reserved != 0 || _references != 1) return;
+        capacity = Math.Min(capacity, Math.Min(2048, _environment.MaxEnvelopeBytes));
+        if (capacity > _records.Length) _records = new byte[capacity];
+        // The empty old buffer owns no command bytes. Every later Append keeps
+        // its original record, byte, node and depth checks and growth fallback.
+    }
+
     internal QueryCommand(DatabaseOwner session, DatabaseOwner model, uint tableId)
     {
         BindingChecks.SameSource(session.Source, model);
