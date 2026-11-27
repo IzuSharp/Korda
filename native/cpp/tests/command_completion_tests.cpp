@@ -955,7 +955,9 @@ int main(int argc, char** argv)
         check(actual.query && actual.command, "the actual provider capability closure permits Fluent submission");
         check(!Capabilities::from_mask(1ULL << 28, Profile::Sqlite).query,
               "command completion alone must not authorize query composition");
-        check(reject([] { (void)Capabilities::from_mask(1ULL << 30, Profile::Sqlite); }).status == NW_INVALID_ARGUMENT,
+        check(!Capabilities::from_mask(1ULL << 30, Profile::Sqlite).query,
+              "cursor pull execution alone must not authorize query composition");
+        check(reject([] { (void)Capabilities::from_mask(1ULL << 31, Profile::Sqlite); }).status == NW_INVALID_ARGUMENT,
               "the next reserved database capability must still be rejected");
         early_ready_and_tail();
         zero();

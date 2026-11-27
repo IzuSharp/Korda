@@ -15,6 +15,12 @@ internal static unsafe class CommandOnlyTests
     [ThreadStatic] private static bool _observe;
     [ThreadStatic] private static CapturedCommand? _observed;
     private sealed record CapturedCommand(byte[] Bytes, QueryCommandDependency[] Owners);
+    [UnsafeAccessor(UnsafeAccessorKind.Field, Name = "_command")]
+    private static extern ref QueryCommand? BufferedCommand(QueryBinding query);
+    [UnsafeAccessor(UnsafeAccessorKind.Field, Name = "_records")]
+    private static extern ref byte[] CommandRecords(QueryCommand command);
+    [UnsafeAccessor(UnsafeAccessorKind.Field, Name = "_written")]
+    private static extern ref int CommandWritten(QueryCommand command);
     private static void Check(bool condition, string message)
     { _assertions++; if (!condition) throw new InvalidOperationException(message); }
     private static void Reject<T>(Action action) where T : Exception
@@ -51,11 +57,11 @@ internal static unsafe class CommandOnlyTests
         "db.null-safe-equality.v1", "db.relationships.explicit.v1", "db.set-operations.v1", "db.cte.v1", "db.recursive-cte.v1",
         "db.window.v1", "db.row-lock.v1", "db.prepared-shape.v1"];
 
-    private static DatabaseOwner Source(NativeCalls calls, uint profile, QueryCommandCalls commands, int depth = 64, int nodes = 4096)
+    private static DatabaseOwner Source(NativeCalls calls, uint profile, QueryCommandCalls commands, int depth = 64, int nodes = 4096, int bytes = 4 * 1024 * 1024)
     {
         nint result = 0; var error = BindingChecks.Error(); var value = (byte)profile;
         BindingChecks.Status(calls.nw_db_source_create_v1(new() { Data = &value, Length = 1 }, &result, &error), error);
-        var binding = new SourceBinding(calls, profile) { Commands = new(commands, nodes, depth, 4096, 4 * 1024 * 1024, Capabilities) };
+        var binding = new SourceBinding(calls, profile) { Commands = new(commands, nodes, depth, 4096, bytes, Capabilities) };
         binding.Commands.RegisterCodec(3, Codecs.Int64.Descriptor); binding.Commands.RegisterCodec(4, Codecs.Boolean.Descriptor);
         binding.Commands.RegisterCodec(5, Codecs.String.Descriptor);
         return new(binding, DatabaseOwnerKind.Source, result);
@@ -146,6 +152,9 @@ internal static unsafe class CommandOnlyTests
 
             SingleRoot(session, model, table, id, name);
             SingleRootQuota(calls, counted, library, profile, table, id, name);
+            PrivateBranchTransfer(session, model, table, id, name);
+            PrivateBranchFailures(calls, direct, counted, library, profile, table, id, name);
+            PrivateBranchCapacity(calls, direct, counted, library, profile, table, id, name);
 
             using var foreignSource = Source(calls, profile, counted); using var foreignSession = Session(foreignSource, library);
             using var foreignModel = MetadataBindings.RegisterModel(foreignSource, table);
@@ -258,6 +267,236 @@ internal static unsafe class CommandOnlyTests
         Check(DbWire.R32(frame.Bytes, 20) == 4 && _compiles == before, "Rejected capacity mutations do not add records or submit a command.");
         using var plan = query.Seal(8);
         Check(_compiles == before + 1, "A private root at its finite node quota can still be sealed after rejection.");
+    }
+
+    private static void TransferBranch(QueryBinding query, Table<Parent> table, Column<Parent, long> id, Column<Parent, string> name)
+    {
+        var key = query.Column(id.Id); var text = query.Column(name.Id);
+        var bytes = OperandEncoding.Value(query.Source.SemanticProfile, Codecs.Int64, 3, 19L);
+        var literal = query.Value(bytes); Array.Fill(bytes, (byte)0xA5);
+        var parameter = query.Parameter(71, "minimum"u8, 3, false);
+        var predicate = query.Binary(12, query.Binary(1, key, literal), query.Binary(4, key, parameter));
+        query.Clause(1, OperandEncoding.Clause(OperandEncoding.U64(1, predicate.Value)));
+        Select(query, table.Row, key, text);
+    }
+
+    private static void PrivateBranchCapacity(NativeCalls calls, NativeCalls direct, QueryCommandCalls commands,
+        nint library, uint profile, Table<Parent> table, Column<Parent, long> id, Column<Parent, string> name)
+    {
+        using var source = Source(calls, profile, commands); using var session = Session(source, library);
+        using var model = MetadataBindings.RegisterModel(source, table);
+        using var original = QueryBinding.CreateBuffered(session, model, table.Identity.Id);
+        using var reserved = QueryBinding.CreateBuffered(session, model, table.Identity.Id);
+        Check(CommandWritten(BufferedCommand(reserved)!) == 0, "Fresh buffered construction emits no command prefix.");
+        TransferBranch(original, table, id, name);
+        var hint = original.PrivateBranchCapacityHint;
+        reserved.ReserveEmptyPrivateBranch(hint);
+        TransferBranch(reserved, table, id, name);
+        var oldFrame = RenderCommand(original, out var oldSql);
+        var newFrame = RenderCommand(reserved, out var newSql);
+        Check(oldSql == newSql && oldFrame.Bytes.AsSpan().SequenceEqual(newFrame.Bytes) && oldFrame.Owners.Length == newFrame.Owners.Length
+            && oldFrame.Owners.Zip(newFrame.Owners).All(pair => pair.First.Owner == pair.Second.Owner && pair.First.Kind == pair.Second.Kind),
+            "A private capacity hint preserves the complete command, literal snapshot and dependency owners.");
+        var storage = CommandRecords(BufferedCommand(reserved)!);
+        reserved.ReserveEmptyPrivateBranch(2048);
+        Check(ReferenceEquals(storage, CommandRecords(BufferedCommand(reserved)!)), "A nonempty command ignores the private reserve hint.");
+        using (var plan = reserved.Seal(8))
+        {
+            reserved.ReserveEmptyPrivateBranch(2048);
+            Check(ReferenceEquals(storage, CommandRecords(BufferedCommand(reserved)!)), "A sealed command ignores the hint without changing its storage.");
+        }
+        using (var capped = QueryBinding.CreateBuffered(session, model, table.Identity.Id))
+        {
+            capped.ReserveEmptyPrivateBranch(int.MaxValue);
+            Check(CommandRecords(BufferedCommand(capped)!).Length == 2048, "Private hints are capped without accepting semantic capacity.");
+            TransferBranch(capped, table, id, name);
+            Check(Sql(capped) == oldSql, "An oversized hint does not alter command semantics.");
+        }
+        using (var legacySource = Source(direct, profile, commands))
+        using (var legacySession = Session(legacySource, library))
+        using (var legacyModel = MetadataBindings.RegisterModel(legacySource, table))
+        using (var legacy = QueryBinding.Create(legacySession, legacyModel, table.Identity.Id))
+        {
+            legacy.ReserveEmptyPrivateBranch(2048);
+            TransferBranch(legacy, table, id, name);
+            Check(legacy.PrivateBranchCapacityHint == 0 && Sql(legacy) == oldSql, "Direct builders retain their original path and no capacity hint.");
+        }
+        foreach (var limits in new[] { (Depth: 1, Nodes: 4096, Bytes: 4 * 1024 * 1024),
+            (Depth: 64, Nodes: 6, Bytes: 4 * 1024 * 1024), (Depth: 64, Nodes: 4096, Bytes: 64), (Depth: 64, Nodes: 1, Bytes: 0) })
+        {
+            using var bounded = Source(calls, profile, commands, limits.Depth, limits.Nodes, limits.Bytes);
+            using var current = Session(bounded, library); using var metadata = MetadataBindings.RegisterModel(bounded, table);
+            using var left = QueryBinding.CreateBuffered(current, metadata, table.Identity.Id);
+            using var right = QueryBinding.CreateBuffered(current, metadata, table.Identity.Id);
+            right.ReserveEmptyPrivateBranch(2048);
+            Check(CommandRecords(BufferedCommand(right)!).Length <= Math.Max(256, bounded.Source.Commands!.MaxEnvelopeBytes),
+                "A private hint cannot reserve beyond the existing envelope ceiling.");
+            Exception Failure(QueryBinding query)
+            {
+                try { TransferBranch(query, table, id, name); }
+                catch (Exception failure) when (failure is BindingFailure or ArgumentException) { return failure; }
+                throw new InvalidOperationException("Expected unchanged finite quota failure.");
+            }
+            var first = Failure(left); var second = Failure(right);
+            var a = BufferedCommand(left)!; var b = BufferedCommand(right)!;
+            Check(first.GetType() == second.GetType() && first.Message == second.Message
+                && (first is not BindingFailure originalFailure || second is BindingFailure reservedFailure
+                    && originalFailure.Status == reservedFailure.Status && originalFailure.Domain == reservedFailure.Domain && originalFailure.Code == reservedFailure.Code)
+                && CommandRecords(a).AsSpan(0, CommandWritten(a)).SequenceEqual(CommandRecords(b).AsSpan(0, CommandWritten(b))),
+                "Reservation preserves finite byte/node/depth failure classification and the exact accepted command prefix.");
+        }
+    }
+
+    private static void Union(QueryBinding query, ArenaReference imported) => query.Clause(9,
+        OperandEncoding.Clause(OperandEncoding.U64(1, imported.In(query)), OperandEncoding.U32(2, 1)));
+
+    private static void PrivateBranchTransfer(DatabaseOwner session, DatabaseOwner model, Table<Parent> table,
+        Column<Parent, long> id, Column<Parent, string> name)
+    {
+        using var copied = QueryBinding.CreateBuffered(session, model, table.Identity.Id);
+        using var consumed = QueryBinding.CreateBuffered(session, model, table.Identity.Id);
+        Select(copied, table.Row, copied.Column(id.Id), copied.Column(name.Id));
+        Select(consumed, table.Row, consumed.Column(id.Id), consumed.Column(name.Id));
+        using (var branch = QueryBinding.CreateBuffered(session, model, table.Identity.Id))
+        {
+            TransferBranch(branch, table, id, name);
+            Union(copied, copied.SnapshotAndImport(branch));
+            // Public snapshot import must keep the source usable and independent.
+            var before = RenderCommand(copied, out var expected);
+            branch.Column(id.Id);
+            Select(branch, table.Row, branch.Column(id.Id), branch.Column(name.Id));
+            var after = RenderCommand(copied, out var unchanged);
+            Check(expected == unchanged && before.Bytes.AsSpan().SequenceEqual(after.Bytes),
+                "Public snapshot import remains independent of later source composition.");
+        }
+        using (var branch = QueryBinding.CreateBuffered(session, model, table.Identity.Id))
+        {
+            TransferBranch(branch, table, id, name);
+            Union(consumed, consumed.ConsumeAndImport(branch));
+            Reject<ObjectDisposedException>(() => { using var admission = branch.Enter(); });
+            branch.Dispose(); branch.Dispose();
+        }
+        var oldFrame = RenderCommand(copied, out var oldSql);
+        var newFrame = RenderCommand(consumed, out var newSql);
+        Check(oldSql == newSql && oldFrame.Bytes.AsSpan().SequenceEqual(newFrame.Bytes)
+            && oldFrame.Owners.Length == newFrame.Owners.Length
+            && oldFrame.Owners.Zip(newFrame.Owners).All(pair => pair.First.Owner == pair.Second.Owner
+                && pair.First.Kind == pair.Second.Kind && pair.First.Reserved == pair.Second.Reserved),
+            "Private branch transfer preserves the complete command, snapshotted literal, parameter order and model sidecars.");
+        using var retained = consumed.CloneSelected();
+        using (var firstPlan = consumed.Seal(8)) { }
+        consumed.Dispose();
+        Check(Sql(retained) == oldSql, "A clone retains transferred graph origins after source, destination and its first plan are disposed.");
+        using var retainedPlan = retained.Seal(8);
+    }
+
+    private static void PrivateBranchFailures(NativeCalls calls, NativeCalls direct, QueryCommandCalls commands,
+        nint library, uint profile, Table<Parent> table, Column<Parent, long> id, Column<Parent, string> name)
+    {
+        using var source = Source(calls, profile, commands); using var session = Session(source, library);
+        using var model = MetadataBindings.RegisterModel(source, table);
+        using var destination = QueryBinding.CreateBuffered(session, model, table.Identity.Id);
+        using var branch = QueryBinding.CreateBuffered(session, model, table.Identity.Id);
+        Select(destination, table.Row, destination.Column(id.Id), destination.Column(name.Id));
+        Select(branch, table.Row, branch.Column(id.Id), branch.Column(name.Id));
+        var before = RenderCommand(destination, out var expected);
+        Reject<ArgumentException>(() => destination.ConsumeAndImport(destination));
+        using (var admission = branch.Enter()) Reject<InvalidOperationException>(() => destination.ConsumeAndImport(branch));
+        using (var admission = destination.Enter()) Reject<InvalidOperationException>(() => destination.ConsumeAndImport(branch));
+        using (var foreignSource = Source(calls, profile, commands))
+        using (var foreignSession = Session(foreignSource, library))
+        using (var foreignModel = MetadataBindings.RegisterModel(foreignSource, table))
+        using (var foreign = QueryBinding.CreateBuffered(foreignSession, foreignModel, table.Identity.Id))
+        {
+            Select(foreign, table.Row, foreign.Column(id.Id), foreign.Column(name.Id));
+            Reject<ArgumentException>(() => destination.ConsumeAndImport(foreign));
+            Check(Sql(foreign) == expected, "Cross-source rejection does not consume the foreign branch.");
+        }
+        using (var incomplete = QueryBinding.CreateBuffered(session, model, table.Identity.Id))
+        {
+            Reject<ArgumentException>(() => destination.ConsumeAndImport(incomplete));
+            Select(incomplete, table.Row, incomplete.Column(id.Id), incomplete.Column(name.Id));
+            Check(Sql(incomplete) == expected, "Projection rejection leaves the private source usable.");
+        }
+        var after = RenderCommand(destination, out var unchanged);
+        Check(unchanged == expected && before.Bytes.AsSpan().SequenceEqual(after.Bytes) && Sql(branch) == expected,
+            "Self, concurrent and owner rejection leave both admitted builders unchanged and usable.");
+        using (var closed = QueryBinding.CreateBuffered(session, model, table.Identity.Id))
+        {
+            closed.Dispose(); Reject<ObjectDisposedException>(() => destination.ConsumeAndImport(closed));
+        }
+        using (var closing = QueryBinding.CreateBuffered(session, model, table.Identity.Id))
+        using (var admittedTarget = QueryBinding.CreateBuffered(session, model, table.Identity.Id))
+        {
+            Select(closing, table.Row, closing.Column(id.Id), closing.Column(name.Id));
+            Select(admittedTarget, table.Row, admittedTarget.Column(id.Id), admittedTarget.Column(name.Id));
+            ArenaReference imported;
+            using (closing.Enter())
+            {
+                // Deterministically exercise the same deferred-release gate as
+                // transfer, without a product hook or a probabilistic race.
+                Task.Run(closing.Dispose).GetAwaiter().GetResult();
+                Reject<ObjectDisposedException>(() => { using var later = closing.Enter(); });
+                using var admitted = admittedTarget.Enter();
+                imported = new(admittedTarget, BufferedCommand(admittedTarget)!.SnapshotAndImport(BufferedCommand(closing)!));
+            }
+            Check(BufferedCommand(closing) is null, "A concurrently disposed buffered source releases its binding reference at admission exit.");
+            Union(admittedTarget, imported);
+            Check(Sql(admittedTarget).Contains("UNION ALL", StringComparison.Ordinal),
+                "An already-admitted import survives concurrent source disposal and source admission exit.");
+            using var plan = admittedTarget.Seal(8);
+        }
+        using (var sealedBranch = QueryBinding.CreateBuffered(session, model, table.Identity.Id))
+        {
+            Select(sealedBranch, table.Row, sealedBranch.Column(id.Id), sealedBranch.Column(name.Id));
+            using var plan = sealedBranch.Seal(8);
+            Reject<InvalidOperationException>(() => destination.ConsumeAndImport(sealedBranch));
+        }
+        foreach (var limits in new[] { (Depth: 64, Nodes: 6), (Depth: 1, Nodes: 4096) })
+        {
+            using var boundedSource = Source(calls, profile, commands, limits.Depth, limits.Nodes);
+            using var boundedSession = Session(boundedSource, library);
+            using var boundedModel = MetadataBindings.RegisterModel(boundedSource, table);
+            using var left = QueryBinding.CreateBuffered(boundedSession, boundedModel, table.Identity.Id);
+            using var right = QueryBinding.CreateBuffered(boundedSession, boundedModel, table.Identity.Id);
+            Select(left, table.Row, left.Column(id.Id), left.Column(name.Id));
+            Select(right, table.Row, right.Column(id.Id), right.Column(name.Id));
+            var original = RenderCommand(left, out var sql);
+            Reject<BindingFailure>(() => left.ConsumeAndImport(right));
+            var failed = RenderCommand(left, out var recovered);
+            Check(sql == recovered && original.Bytes.AsSpan().SequenceEqual(failed.Bytes) && Sql(right) == sql,
+                "Finite node/depth rejection preserves both tapes and source ownership before transfer.");
+            using var leftPlan = left.Seal(8); using var rightPlan = right.Seal(8);
+        }
+        using (var collision = QueryBinding.CreateBuffered(session, model, table.Identity.Id))
+        using (var collisionTarget = QueryBinding.CreateBuffered(session, model, table.Identity.Id))
+        {
+            collision.Parameter(801, "collision"u8, 3, false); collisionTarget.Parameter(802, "collision"u8, 3, false);
+            Select(collision, table.Row, collision.Column(id.Id), collision.Column(name.Id));
+            Select(collisionTarget, table.Row, collisionTarget.Column(id.Id), collisionTarget.Column(name.Id));
+            Reject<ArgumentException>(() => collisionTarget.ConsumeAndImport(collision));
+            Check(Sql(collision) == expected && Sql(collisionTarget) == expected,
+                "Parameter identity rejection keeps both private builders usable.");
+        }
+        using (var legacySource = Source(direct, profile, commands))
+        using (var legacySession = Session(legacySource, library))
+        using (var legacyModel = MetadataBindings.RegisterModel(legacySource, table))
+        using (var legacy = QueryBinding.Create(legacySession, legacyModel, table.Identity.Id))
+        using (var buffered = QueryBinding.CreateBuffered(legacySession, legacyModel, table.Identity.Id))
+        {
+            Select(legacy, table.Row, legacy.Column(id.Id), legacy.Column(name.Id));
+            Select(buffered, table.Row, buffered.Column(id.Id), buffered.Column(name.Id));
+            Reject<NotSupportedException>(() => buffered.ConsumeAndImport(legacy));
+            Reject<NotSupportedException>(() => legacy.ConsumeAndImport(buffered));
+            Check(Sql(legacy) == Sql(buffered), "Direct composition rejection neither consumes nor changes either source.");
+        }
+        var transferred = destination.ConsumeAndImport(branch);
+        Reject<BindingFailure>(() => destination.Clause(9,
+            OperandEncoding.Clause(OperandEncoding.U64(1, transferred.Value), OperandEncoding.U32(2, 99))));
+        Reject<ObjectDisposedException>(() => { using var admission = branch.Enter(); });
+        Check(Sql(destination) == expected, "A later union failure leaves the transferred graph owned and the destination usable.");
+        Union(destination, transferred);
+        using var finalPlan = destination.Seal(8);
     }
 
     private static Table<Parent> Declaration(string name)

@@ -48,14 +48,25 @@ public sealed partial class DataSession
         try
         {
             var selection = SelectParent(query, keys[0], relation, projection, 0);
+            var capacityHint = keys.Length > 1 ? query.Context.Binding.PrivateBranchCapacityHint : 0;
             for (var i = 1; i < keys.Length; i++)
             {
                 using var next = From(relation.Child);
-                selection = selection.Combine(SelectParent(next, keys[i], relation, projection, i));
+                if (capacityHint > 0 && MatchingKeyLengths(keys[0], keys[i]))
+                    next.Context.Binding.ReserveEmptyPrivateBranch(capacityHint);
+                selection = selection.CombineConsumed(SelectParent(next, keys[i], relation, projection, i));
             }
             return GroupRelated(query, selection.ToListAsync(cancellationToken), keys.Length);
         }
         catch { query.Dispose(); throw; }
+    }
+
+    private static bool MatchingKeyLengths<TParent>(EntityKey<TParent> first, EntityKey<TParent> next) where TParent : class
+    {
+        if (first.Values.Length != next.Values.Length) return false;
+        for (var i = 0; i < first.Values.Length; i++)
+            if (first.Values[i].Bytes?.Length != next.Values[i].Bytes?.Length) return false;
+        return true;
     }
 
     private QuerySelection<IndexedChild<TChild>> SelectParent<TParent, TChild>(Query<TChild> query, EntityKey<TParent> key,

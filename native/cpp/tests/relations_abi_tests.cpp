@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 // B14 Host adapter regressions use the real product C ABI, not Host test hooks.
 // Fixed Rust reference: native/database/relations/host.rs at 465cd0f.
+#include "../../database/binding/korda_cursor_pull_execution_v1.h"
 #include "../../database/binding/korda_cursor_pull_v1.h"
 #include "nw/contracts.hpp"
 #include "nw_database_declarations.hpp"
@@ -499,12 +500,25 @@ struct PullNotice
         ++notice.calls;
         notice.generation.store(generation);
     }
-    void request(nw_db_ref channel, std::uint64_t next = 1)
+    void request(nw_db_ref channel, std::uint64_t next = 1, bool external = false)
     {
         const nw_db_cursor_callbacks_v1 callbacks{sizeof(callbacks), 0, this, ready};
         auto error = error_slot();
-        ok(nw_db_cursor_pull_request_v1(channel, next, 64, 8192, &callbacks, &error), error,
-           "actual pull request accepted");
+        if (external)
+        {
+            const auto executions = nw_db_diagnostic_count_v1(6);
+            ok(nw_db_cursor_pull_prepare_v1(channel, next, 64, 8192, &callbacks, &error), error,
+               "actual prepared pull accepted");
+            check(nw_db_diagnostic_count_v1(6) == executions && calls == 0,
+                  "actual prepare performs no SQL and emits no premature readiness");
+            ok(nw_db_cursor_pull_run_v1(channel, next, &error), error, "actual prepared pull run");
+            check(nw_db_cursor_pull_run_v1(channel, next, &error) == NW_INVALID_STATE &&
+                      nw_db_cursor_pull_abandon_v1(channel, next, &error) == NW_INVALID_STATE,
+                  "actual execution ABI rejects duplicate run and abandon");
+        }
+        else
+            ok(nw_db_cursor_pull_request_v1(channel, next, 64, 8192, &callbacks, &error), error,
+               "actual pull request accepted");
         eventually([&] { return generation.load() == next; }, "actual detached ready callback");
     }
 };
@@ -579,7 +593,7 @@ Bytes child_input(const Fixture& fixture, std::uint64_t id)
     const auto row = Batch::encode(expected, 1, {u64_bytes(id), bytes("t"), bytes("p")});
     return encode_control(4, {u32(1, fixture.child->table_id()), {2, 5, row}, u32(7, fixture.projection_id)});
 }
-void lazy_pull_abi()
+void lazy_pull_abi(bool external = false)
 {
     Fixture fixture;
     auto error = error_slot();
@@ -600,7 +614,7 @@ void lazy_pull_abi()
                   nw_db_diagnostic_count_v1(6) == sql && nw_db_diagnostic_count_v1(8) == 1,
               "relation channel captures without generic open operation or provider dispatch");
         PullNotice notice;
-        notice.request(channel.value);
+        notice.request(channel.value, 1, external);
         const auto payload = take_pull(channel.value);
         const auto batch = Batch::parse(payload, expected);
         check(batch.rows() == 1 && read_u64(*batch.cell(0, 0), 0) == 1 && notice.calls == 1,
@@ -626,7 +640,7 @@ void lazy_pull_abi()
         check(nw_db_diagnostic_count_v1(6) == sql && nw_db_diagnostic_count_v1(2) == 0,
               "returning mutation creation has no database effect or generic open operation");
         PullNotice notice;
-        notice.request(channel.value);
+        notice.request(channel.value, 1, external);
         const auto output = take_pull(channel.value);
         const auto batch = Batch::parse(output, expected);
         check(batch.rows() == 1 && read_u64(*batch.cell(0, 0), 0) == 2,
@@ -652,7 +666,7 @@ void lazy_pull_abi()
            "actual ordinary lazy pull create");
         plan.release();
         PullNotice notice;
-        notice.request(channel.value);
+        notice.request(channel.value, 1, external);
         const auto output = take_pull(channel.value);
         const auto batch = Batch::parse(output, expected);
         check(batch.rows() == 2 && read_u64(*batch.cell(1, 0), 0) == 2,
@@ -758,6 +772,7 @@ int main(int argc, char** argv)
             raw_sql_keeps_start_deadline();
         if (mode == "all")
             lazy_pull_abi();
+        lazy_pull_abi(true);
         std::cout << "PASS B14 actual C ABI adapters: " << assertions << " checks; six owner counters zero\n";
         return 0;
     }

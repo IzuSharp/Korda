@@ -10,7 +10,7 @@ using Korda.Interop.Abi;
 using Korda.Interop.Callbacks;
 using Korda.Query.Internal;
 
-// Real provider/callback integration. The proxy forwards the actual request and
+// Real provider/callback integration. The proxy forwards the actual prepare and
 // ready notification, changing only when a test barrier lets that callback run
 // or return. It neither supplies result bytes nor selects a different drain path.
 internal static class ReadySchedulingTests
@@ -40,11 +40,11 @@ internal static class ReadySchedulingTests
     internal static async Task Run(DatabaseProvider provider, string connection)
     {
         var before = _checks;
-        await SetupAndReadyOverlap(provider, connection);
-        await LateReadyAndNativeTail(provider, connection);
-        await RejectedReadyScheduling(provider, connection);
-        await CoordinatorTailAndNextGeneration(provider, connection);
-        Console.WriteLine($"READY_SCHEDULING_PASS provider={provider} scenarios=4 assertions={_checks - before}; real readiness, deferred scheduling, rejected offers and native/coordinator tails");
+        await SetupPrecedesWorkerAndReady(provider, connection);
+        await WorkerWaitsForNativeCallbackTail(provider, connection);
+        await RejectedWorkerScheduling(provider, connection);
+        await HeldCompletionPostPreservesNextWorker(provider, connection);
+        Console.WriteLine($"READY_SCHEDULING_PASS provider={provider} scenarios=4 assertions={_checks - before}; admitted worker scheduling, real readiness, rejected offers and native/coordinator tails");
     }
 
     private static DataSource Create(DatabaseProvider provider, string connection)
@@ -81,7 +81,7 @@ internal static class ReadySchedulingTests
             "A consumed generation leaves no callback, registration, root, slot or request obligation.");
     }
 
-    private static async Task SetupAndReadyOverlap(DatabaseProvider provider, string connection)
+    private static async Task SetupPrecedesWorkerAndReady(DatabaseProvider provider, string connection)
     {
         var source = Create(provider, connection);
         var session = await source.OpenSessionAsync();
@@ -91,54 +91,68 @@ internal static class ReadySchedulingTests
         using var releaseSetup = new ManualResetEventSlim();
         using var releaseReady = new ManualResetEventSlim();
         var setupEntered = NewSignal(); var readyEntered = NewSignal();
-        var takes = 0; var publications = 0;
+        var runs = 0; var runReturns = 0; var takes = 0; var publications = 0;
         source.TestPullBoundary = boundary =>
         {
             if (boundary == HostPullBoundary.RequestReturned)
-            { setupEntered.TrySetResult(); Hold(releaseSetup, "request setup"); }
+            { setupEntered.TrySetResult(); Hold(releaseSetup, "admitted prepare setup"); }
+            if (boundary == HostPullBoundary.BeforeRun) Interlocked.Increment(ref runs);
+            if (boundary == HostPullBoundary.RunReturned) Interlocked.Increment(ref runReturns);
             if (boundary == HostPullBoundary.Ready)
             { readyEntered.TrySetResult(); Hold(releaseReady, "managed ready entry"); }
             if (boundary == HostPullBoundary.ResultTaken) Interlocked.Increment(ref takes);
             if (boundary == HostPullBoundary.Published) Interlocked.Increment(ref publications);
         };
         Task<ValueTask<ScopedStreamBatch>>? request = null;
+        Task? worker = null;
         try
         {
             request = Task.Run(() => transport.FetchAsync());
-            await setupEntered.Task.WaitAsync(Bound); await readyEntered.Task.WaitAsync(Bound);
+            await setupEntered.Task.WaitAsync(Bound);
             var held = transport.PullSnapshot;
-            Check(held.Generation == 1 && held.Active && held.Accepted && held.Ready && !held.SetupReturned
-                && held.Controls == 1 && held.CallbackEntries == 1 && held.Rooted && held.SlotReserved
+            Check(held.Generation == 1 && held.Active && held.Accepted && !held.Ready && !held.SetupReturned
+                && held.Controls == 1 && held.CallbackEntries == 0 && held.Rooted && held.SlotReserved
                 && !held.ResultTaken && !held.Published && !request.IsCompleted,
-                "Actual readiness cannot publish while request setup and its callback entry are both held.");
-            releaseReady.Set();
-            await Until(() => transport.PullSnapshot.CallbackEntries == 0, "The ready callback did not drain its last entry.");
-            await Until(() => scheduler.Queued == 1, "Early ready did not offer its work item.");
-            await Task.Run(scheduler.ExecuteOne).WaitAsync(Bound);
-            held = transport.PullSnapshot;
-            Check(scheduler.Offers == 1 && scheduler.Executions == 1 && !held.SetupReturned && held.Controls == 1 && held.Rooted && held.SlotReserved
-                && !held.ResultTaken && !held.Published && Volatile.Read(ref takes) == 0,
-                "Callback exit alone cannot bypass the remaining setup control.");
+                "A held prepare return owns its admission but has not executed provider work or produced readiness.");
+            Check(scheduler.Offers == 0 && scheduler.Executions == 0 && scheduler.Queued == 0
+                && runs == 0 && runReturns == 0 && takes == 0 && publications == 0 && !readyEntered.Task.IsCompleted,
+                "The coordinator cannot execute the admitted pull before request setup has returned.");
             releaseSetup.Set();
             var pending = await request.WaitAsync(Bound);
-            await Until(() => scheduler.Queued == 1, "Returning setup lost the earlier ready notification.");
-            await Task.Run(scheduler.ExecuteOne).WaitAsync(Bound);
+            await Until(() => scheduler.Queued == 1, "Returning prepare setup did not schedule its admitted worker.");
+            held = transport.PullSnapshot;
+            Check(held.SetupReturned && held.Accepted && !held.Ready && held.Controls == 0
+                && !pending.IsCompleted && scheduler.Offers == 1 && scheduler.Executions == 0 && runs == 0,
+                "An accepted queue offer retains a pending generation until its worker actually executes.");
+            worker = Task.Run(scheduler.ExecuteOne);
+            await readyEntered.Task.WaitAsync(Bound);
+            held = transport.PullSnapshot;
+            Check(held.SetupReturned && held.Ready && held.Controls == 1 && held.CallbackEntries == 1
+                && held.Rooted && held.SlotReserved && !held.ResultTaken && !held.Published
+                && !pending.IsCompleted && !worker.IsCompleted && runs == 1 && runReturns == 0
+                && takes == 0 && publications == 0 && scheduler.Offers == 1 && scheduler.Executions == 1,
+                "Managed readiness remains inside the native run control and cannot take or publish while its entry is held.");
+            RejectConcurrent(transport, 1);
+            releaseReady.Set();
+            await worker.WaitAsync(Bound);
             var batch = await pending.AsTask().WaitAsync(Bound);
-            Check(Read(source, batch, projectionId).Id == 1, "The first overlapping request materializes its original business row.");
+            Check(Read(source, batch, projectionId).Id == 1, "The first admitted worker materializes its original business row.");
             Drained(transport.PullSnapshot, 1);
-            Check(scheduler.Offers == 2 && scheduler.Executions == 2 && takes == 1 && publications == 1, "Overlapping setup/ready notifications take and publish only once.");
+            Check(scheduler.Offers == 1 && scheduler.Executions == 1 && runs == 1 && runReturns == 1
+                && takes == 1 && publications == 1, "One scheduled worker runs, takes and publishes once after the complete native run returns.");
         }
         finally
         {
             releaseReady.Set(); releaseSetup.Set();
             source.TestPullBoundary = null; scheduler.ReleaseAll();
+            if (worker is not null) await worker.WaitAsync(Bound);
             await transport.JoinAsync().WaitAsync(Bound);
             await session.DisposeAsync().AsTask().WaitAsync(Bound); await source.DisposeAsync().AsTask().WaitAsync(Bound);
             CheckZero(provider);
         }
     }
 
-    private static async Task LateReadyAndNativeTail(DatabaseProvider provider, string connection)
+    private static async Task WorkerWaitsForNativeCallbackTail(DatabaseProvider provider, string connection)
     {
         var source = Create(provider, connection);
         var session = await source.OpenSessionAsync();
@@ -147,63 +161,78 @@ internal static class ReadySchedulingTests
         var transport = Transport(source, session, out var projectionId);
         var arrived = Enumerable.Range(0, 3).Select(_ => NewSignal()).ToArray();
         var release = Enumerable.Range(0, 3).Select(_ => new ManualResetEventSlim()).ToArray();
-        using var releaseOldTail = new ManualResetEventSlim();
-        var oldTail = NewSignal();
+        using var releaseNativeTail = new ManualResetEventSlim();
+        var nativeTail = NewSignal();
         using var proxy = new ReadyProxy(source, provider);
         proxy.BeforeManaged = generation =>
         {
             var index = checked((int)generation - 1);
-            arrived[index].TrySetResult(); Hold(release[index], "late ready forwarding");
+            arrived[index].TrySetResult(); Hold(release[index], "worker ready forwarding");
         };
         proxy.AfterManaged = generation =>
-        { if (generation == 1) { oldTail.TrySetResult(); Hold(releaseOldTail, "old native callback tail"); } };
-        var takes = 0; var publications = 0;
+        { if (generation == 1) { nativeTail.TrySetResult(); Hold(releaseNativeTail, "native run callback tail"); } };
+        var runs = 0; var runReturns = 0; var takes = 0; var publications = 0;
         source.TestPullBoundary = boundary =>
         {
+            if (boundary == HostPullBoundary.BeforeRun) Interlocked.Increment(ref runs);
+            if (boundary == HostPullBoundary.RunReturned) Interlocked.Increment(ref runReturns);
             if (boundary == HostPullBoundary.ResultTaken) Interlocked.Increment(ref takes);
             if (boundary == HostPullBoundary.Published) Interlocked.Increment(ref publications);
         };
         ScopedStreamBatch? previous = null;
+        Task? worker = null;
         try
         {
             for (var index = 0; index < 3; index++)
             {
                 var pending = transport.FetchAsync();
+                Check(scheduler.Offers == index + 1 && scheduler.Executions == index && scheduler.Queued == 1
+                    && !pending.IsCompleted && runs == index && runReturns == index,
+                    "Prepare schedules one worker before the provider can produce readiness.");
+                worker = Task.Run(scheduler.ExecuteOne);
                 await arrived[index].Task.WaitAsync(Bound);
                 var held = transport.PullSnapshot;
                 Check(held.Generation == (ulong)index + 1 && held.SetupReturned && held.Accepted && !held.Ready
-                    && held.Rooted && held.SlotReserved && !held.Published && !pending.IsCompleted,
-                    "An accepted request retains its obligations while the real ready notification is held.");
-                Check(scheduler.Offers == index && scheduler.Executions == index && scheduler.Queued == 0,
-                    "A request awaiting native readiness does not prequeue an otherwise idle work item.");
+                    && held.Rooted && held.SlotReserved && held.Controls == 1 && held.CallbackEntries == 0
+                    && !held.ResultTaken && !held.Published && !pending.IsCompleted && !worker.IsCompleted,
+                    "The executing worker retains its control and ownership while the real native ready callback is held before forwarding.");
+                Check(scheduler.Offers == index + 1 && scheduler.Executions == index + 1 && scheduler.Queued == 0
+                    && runs == index + 1 && runReturns == index && takes == index && publications == index,
+                    "Provider execution and readiness remain in the one scheduled worker without a second drain offer.");
                 release[index].Set();
-                await Until(() => scheduler.Queued == 1, "Actual readiness did not schedule its retained request.");
-                Check(scheduler.Offers == index + 1 && takes == index && publications == index,
-                    "One actual ready notification offers exactly one asynchronous drain.");
-                await Task.Run(scheduler.ExecuteOne).WaitAsync(Bound);
+                if (index == 0)
+                {
+                    await nativeTail.Task.WaitAsync(Bound);
+                    held = transport.PullSnapshot;
+                    Check(held.Ready && held.CallbackEntries == 0 && held.Controls == 1
+                        && held.Rooted && held.SlotReserved && !held.ResultTaken && !held.Published
+                        && !pending.IsCompleted && !worker.IsCompleted && !proxy.HasReturned(1)
+                        && runReturns == 0 && takes == 0 && publications == 0 && scheduler.Queued == 0,
+                        "Returning the managed ready entry cannot release the outer native run frame or expose its result while the callback tail is held.");
+                    RejectConcurrent(transport, 1);
+                    releaseNativeTail.Set();
+                }
+                await worker.WaitAsync(Bound);
                 var batch = await pending.AsTask().WaitAsync(Bound);
                 Check(Read(source, batch, projectionId).Id == index + 1
                     && (previous is null || ReferenceEquals(batch, previous)),
                     "Immediate generation reuse preserves business order and its stable batch owner.");
                 previous = batch;
                 Drained(transport.PullSnapshot, (ulong)index + 1);
-                if (index == 0) await oldTail.Task.WaitAsync(Bound);
-                if (index == 1)
-                {
-                    Check(!proxy.HasReturned(1), "The next generation finishes before the detached older native notification tail returns.");
-                    releaseOldTail.Set();
-                    await Until(() => proxy.HasReturned(1), "The old native notification tail did not return.");
-                }
+                Check(proxy.HasReturned((ulong)index + 1) && runReturns == index + 1,
+                    "Each consumed generation proves its complete native run and forwarded callback have returned before reuse.");
             }
-            Check(scheduler.Offers == 3 && scheduler.Executions == 3 && takes == 3 && publications == 3 && proxy.Requests == 3,
-                "Three deliberately late notifications perform three scheduled drains and three distinct result transfers.");
+            Check(scheduler.Offers == 3 && scheduler.Executions == 3 && runs == 3 && runReturns == 3
+                && takes == 3 && publications == 3 && proxy.Prepares == 3,
+                "Three admitted generations perform three scheduled runs and distinct result transfers after their native tails return.");
             Console.WriteLine($"READY_SCHEDULING_COUNT provider={provider} generations=3 offers={scheduler.Offers} executions={scheduler.Executions} takes={takes} publications={publications}");
             proxy.ThrowIfFailed();
         }
         finally
         {
             foreach (var gate in release) gate.Set();
-            releaseOldTail.Set(); source.TestPullBoundary = null; scheduler.ReleaseAll();
+            releaseNativeTail.Set(); source.TestPullBoundary = null; scheduler.ReleaseAll();
+            if (worker is not null) await worker.WaitAsync(Bound);
             await transport.JoinAsync().WaitAsync(Bound);
             await session.DisposeAsync().AsTask().WaitAsync(Bound); await source.DisposeAsync().AsTask().WaitAsync(Bound);
             foreach (var gate in release) gate.Dispose();
@@ -211,7 +240,7 @@ internal static class ReadySchedulingTests
         }
     }
 
-    private static async Task RejectedReadyScheduling(DatabaseProvider provider, string connection)
+    private static async Task RejectedWorkerScheduling(DatabaseProvider provider, string connection)
     {
         var source = Create(provider, connection);
         var session = await source.OpenSessionAsync();
@@ -219,40 +248,43 @@ internal static class ReadySchedulingTests
         source.TestPullScheduler = scheduler;
         using var cancellation = new CancellationTokenSource();
         var transport = Transport(source, session, out var projectionId, cancellation.Token);
-        using var releaseReady = new ManualResetEventSlim();
-        var arrived = NewSignal();
         using var proxy = new ReadyProxy(source, provider);
-        proxy.BeforeManaged = _ => { arrived.TrySetResult(); Hold(releaseReady, "rejected scheduler readiness"); };
+        var runs = 0; var ready = 0;
+        source.TestPullBoundary = boundary =>
+        {
+            if (boundary == HostPullBoundary.BeforeRun) Interlocked.Increment(ref runs);
+            if (boundary == HostPullBoundary.Ready) Interlocked.Increment(ref ready);
+        };
         try
         {
             var pending = transport.FetchAsync();
-            await arrived.Task.WaitAsync(Bound);
-            Check(scheduler.Offers == 0 && !pending.IsCompleted,
-                "A cancelable accepted request also waits for readiness without draining its live registration early.");
-            releaseReady.Set();
-            await Until(() => scheduler.Offers >= 2, "The reserved coordinator slot did not retry a rejected ready offer.");
+            await Until(() => scheduler.Offers >= 2, "The reserved coordinator slot did not retry a rejected worker offer.");
             var held = transport.PullSnapshot;
-            Check(held.Ready && held.Accepted && held.Rooted && held.SlotReserved && !held.Published
-                && !held.RegistrationDrained && scheduler.Executions == 0 && !pending.IsCompleted,
-                "Rejected ready scheduling preserves the root, retry slot, registration and unconsumed native result.");
+            Check(held.SetupReturned && !held.Ready && held.Accepted && held.Rooted && held.SlotReserved
+                && !held.Published && !held.ResultTaken && held.Controls == 0 && held.CallbackEntries == 0
+                && !held.RegistrationDrained && scheduler.Executions == 0 && scheduler.Queued == 0
+                && !pending.IsCompleted && runs == 0 && ready == 0 && proxy.Prepares == 1,
+                "Rejected worker scheduling preserves the admitted unrun generation, root, retry slot and live cancellation registration.");
+            RejectConcurrent(transport, 1);
             scheduler.Reject = false;
-            await Until(() => scheduler.Queued == 1, "Allowing the scheduler did not make the retained ready notification runnable.");
+            await Until(() => scheduler.Queued == 1, "Allowing the scheduler did not make the retained admission runnable.");
             await Task.Run(scheduler.ExecuteOne).WaitAsync(Bound);
             var batch = await pending.AsTask().WaitAsync(Bound);
-            Check(Read(source, batch, projectionId).Id == 1 && scheduler.Executions == 1,
-                "The accepted retry drains its registration and materializes the real result exactly once.");
+            Check(Read(source, batch, projectionId).Id == 1 && scheduler.Executions == 1
+                && runs == 1 && ready == 1 && proxy.Prepares == 1 && proxy.HasReturned(1),
+                "The accepted retry executes its original admission, drains its registration and materializes the real result exactly once.");
             Drained(transport.PullSnapshot, 1); proxy.ThrowIfFailed();
         }
         finally
         {
-            releaseReady.Set(); scheduler.Reject = false; scheduler.ReleaseAll();
+            source.TestPullBoundary = null; scheduler.Reject = false; scheduler.ReleaseAll();
             await transport.JoinAsync().WaitAsync(Bound);
             await session.DisposeAsync().AsTask().WaitAsync(Bound); await source.DisposeAsync().AsTask().WaitAsync(Bound);
             CheckZero(provider); proxy.ThrowIfFailed();
         }
     }
 
-    private static async Task CoordinatorTailAndNextGeneration(DatabaseProvider provider, string connection)
+    private static async Task HeldCompletionPostPreservesNextWorker(DatabaseProvider provider, string connection)
     {
         var source = Create(provider, connection);
         var session = await source.OpenSessionAsync();
@@ -266,12 +298,19 @@ internal static class ReadySchedulingTests
         proxy.BeforeManaged = generation =>
         { if (generation == 1) { firstReady.TrySetResult(); Hold(releaseReady, "first ready registration"); } };
         proxy.AfterManaged = generation => { if (generation == 2) secondReady.TrySetResult(); };
+        var runs = 0; var runReturns = 0;
+        source.TestPullBoundary = boundary =>
+        {
+            if (boundary == HostPullBoundary.BeforeRun) Interlocked.Increment(ref runs);
+            if (boundary == HostPullBoundary.RunReturned) Interlocked.Increment(ref runReturns);
+        };
         var firstConsumed = new TaskCompletionSource<ScopedStreamBatch>(TaskCreationOptions.RunContinuationsAsynchronously);
         try
         {
             var pending = transport.FetchAsync();
             await firstReady.Task.WaitAsync(Bound);
-            Check(scheduler.Offers == 0, "The first request has no coordinator work before actual readiness.");
+            Check(scheduler.Offers == 1 && scheduler.Executions == 1 && runs == 1 && runReturns == 0,
+                "The first admitted worker is executing while its real ready notification is held.");
             var awaiter = pending.GetAwaiter();
             var priorContext = SynchronizationContext.Current;
             SynchronizationContext.SetSynchronizationContext(context);
@@ -281,7 +320,8 @@ internal static class ReadySchedulingTests
                 {
                     try
                     {
-                        Check(!ReadyProxy.InManagedReady, "A user continuation remains off the unmanaged ready callback stack.");
+                        Check(!ReadyProxy.InManagedReady && Volatile.Read(ref runReturns) == 1,
+                            "A user continuation remains off the unmanaged ready callback stack and follows the native run return.");
                         firstConsumed.TrySetResult(awaiter.GetResult());
                     }
                     catch (Exception error) { firstConsumed.TrySetException(error); }
@@ -295,25 +335,39 @@ internal static class ReadySchedulingTests
                 "The first generation is consumed while its completion scheduler still holds the original Execute stack.");
             Drained(transport.PullSnapshot, 1);
             var next = transport.FetchAsync();
-            await secondReady.Task.WaitAsync(Bound);
             var held = transport.PullSnapshot;
-            Check(held.Generation == 2 && held.SetupReturned && held.Accepted && held.Ready
+            Check(held.Generation == 2 && held.SetupReturned && held.Accepted && !held.Ready
                 && held.Rooted && held.SlotReserved && !held.Published && !held.ResultTaken && !next.IsCompleted
-                && scheduler.Offers == 1 && scheduler.Executions == 1,
-                "New readiness remains dirty while the old Execute is held after the preceding result was published.");
+                && held.Controls == 0 && held.CallbackEntries == 0 && scheduler.Offers == 1 && scheduler.Executions == 1
+                && runs == 1 && runReturns == 1 && proxy.Prepares == 2 && !secondReady.Task.IsCompleted,
+                "The next admitted generation remains dirty but unrun and not ready while the preceding Execute is held in completion Post.");
             context.Release.Set();
             var second = await next.AsTask().WaitAsync(Bound);
-            Check(Read(source, second, projectionId).Id == 2 && scheduler.Offers == 2 && scheduler.Executions == 2,
-                "The old Execute tail preserves and reschedules the next generation's ready notification once.");
+            await secondReady.Task.WaitAsync(Bound);
+            Check(Read(source, second, projectionId).Id == 2 && scheduler.Offers == 2 && scheduler.Executions == 2
+                && runs == 2 && runReturns == 2 && proxy.HasReturned(2),
+                "The old Execute tail preserves the next admission and schedules its worker once, without losing the new dirty state.");
             Drained(transport.PullSnapshot, 2); context.ThrowIfFailed(); proxy.ThrowIfFailed();
         }
         finally
         {
-            releaseReady.Set(); context.Release.Set();
+            releaseReady.Set(); context.Release.Set(); source.TestPullBoundary = null;
             await transport.JoinAsync().WaitAsync(Bound);
             await session.DisposeAsync().AsTask().WaitAsync(Bound); await source.DisposeAsync().AsTask().WaitAsync(Bound);
             CheckZero(provider); context.ThrowIfFailed(); proxy.ThrowIfFailed();
         }
+    }
+
+    private static void RejectConcurrent(HostStreamTransport transport, ulong generation)
+    {
+        try { _ = transport.FetchAsync(); }
+        catch (DatabaseException error) when (error.Kind == DatabaseErrorKind.ConcurrentUse)
+        {
+            Check(transport.PullSnapshot.Generation == generation,
+                "An outstanding worker generation rejects reentry without replacing its callback ownership or generation.");
+            return;
+        }
+        throw new InvalidOperationException("An outstanding worker generation accepted a concurrent pull.");
     }
 
     private static TaskCompletionSource NewSignal() => new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -409,23 +463,23 @@ internal static class ReadySchedulingTests
         private readonly Dictionary<ulong, NativePullCallbacks> _callbacks = new();
         private readonly HashSet<ulong> _returned = new();
         private readonly DataSource _source;
-        private readonly CursorPullCalls _original;
+        private readonly CursorPullExecutionCalls _original;
         private readonly GCHandle _root;
         private Exception? _failure;
-        private int _requests;
+        private int _prepares;
         internal Action<ulong>? BeforeManaged, AfterManaged;
-        internal int Requests => Volatile.Read(ref _requests);
+        internal int Prepares => Volatile.Read(ref _prepares);
         internal static bool InManagedReady => _inManagedReady;
 
         internal ReadyProxy(DataSource source, DatabaseProvider provider)
         {
-            _source = source; _original = source.Binding.Pulls ?? throw new InvalidOperationException("No pull exports.");
+            _source = source; _original = source.Binding.PullExecution ?? throw new InvalidOperationException("No pull execution exports.");
             if (Interlocked.CompareExchange(ref _active, this, null) is not null)
                 throw new InvalidOperationException("Only one callback-forwarding fixture may run at once.");
             _root = GCHandle.Alloc(this);
             var engine = provider == DatabaseProvider.Sqlite ? SqliteDataSource.Engine : PostgreSqlDataSource.Engine;
-            source.Binding.Pulls = new(symbol => symbol == "nw_db_cursor_pull_request_v1"
-                ? (nint)(delegate* unmanaged[Cdecl]<nint, ulong, uint, ulong, NativePullCallbacks*, NwErrorInfoV1*, uint>)&Request
+            source.Binding.PullExecution = new(symbol => symbol == "nw_db_cursor_pull_prepare_v1"
+                ? (nint)(delegate* unmanaged[Cdecl]<nint, ulong, uint, ulong, NativePullCallbacks*, NwErrorInfoV1*, uint>)&Prepare
                 : EngineModuleLoader.ResolveExport(engine, symbol));
         }
         internal bool HasReturned(ulong generation) { lock (_gate) return _returned.Contains(generation); }
@@ -433,17 +487,17 @@ internal static class ReadySchedulingTests
         private void Record(Exception error) { lock (_gate) _failure ??= error; }
 
         [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-        private static uint Request(nint channel, ulong generation, uint rows, ulong bytes, NativePullCallbacks* callbacks, NwErrorInfoV1* error)
+        private static uint Prepare(nint channel, ulong generation, uint rows, ulong bytes, NativePullCallbacks* callbacks, NwErrorInfoV1* error)
         {
             var proxy = Volatile.Read(ref _active);
             if (proxy is null) return NativeStatus.ContractViolation;
             try
             {
                 lock (proxy._gate) proxy._callbacks.Add(generation, *callbacks);
-                Interlocked.Increment(ref proxy._requests);
+                Interlocked.Increment(ref proxy._prepares);
                 var forwarding = *callbacks;
                 forwarding.Context = GCHandle.ToIntPtr(proxy._root); forwarding.Ready = &Ready;
-                return proxy._original.Request(channel, generation, rows, bytes, &forwarding, error);
+                return proxy._original.Prepare(channel, generation, rows, bytes, &forwarding, error);
             }
             catch (Exception failure) { proxy.Record(failure); return NativeStatus.ContractViolation; }
         }
@@ -465,7 +519,7 @@ internal static class ReadySchedulingTests
 
         public void Dispose()
         {
-            _source.Binding.Pulls = _original;
+            _source.Binding.PullExecution = _original;
             lock (_gate) Check(_callbacks.Count == 0, "The forwarding fixture is released only after every real native callback returns.");
             _root.Free();
             Interlocked.CompareExchange(ref _active, null, this);

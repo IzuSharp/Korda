@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "capability": "db.cursor.pull.execution.v1",
+  "capability_bit": 30,
+  "header": "native/database/binding/korda_cursor_pull_execution_v1.h",
+  "callback_record": "nw_db_cursor_callbacks_v1",
+  "signatures": [
+    "nw_status NW_CDECL nw_db_cursor_pull_prepare_v1(nw_db_ref channel, uint64_t generation, uint32_t rows, uint64_t bytes, const nw_db_cursor_callbacks_v1* callbacks, nw_error_info_v1* error);",
+    "nw_status NW_CDECL nw_db_cursor_pull_run_v1(nw_db_ref channel, uint64_t generation, nw_error_info_v1* error);",
+    "nw_status NW_CDECL nw_db_cursor_pull_abandon_v1(nw_db_ref channel, uint64_t generation, nw_error_info_v1* error);"
+  ]
+}

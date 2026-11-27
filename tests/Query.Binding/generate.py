@@ -60,4 +60,10 @@ find_declarations=re.findall(r'\bnw_status\s+NW_CDECL\s+nw_db_find_\w+_v1\([^;]+
 find_declarations=[re.sub(r'\s+', ' ', value) for value in find_declarations]
 assert find_declarations==find_shape['signatures'],'Additive Find shape signatures differ from the reviewed extension'
 assert len(find_declarations)==1 and not set(find_declarations).intersection(data['signatures'])
-print(f'PASS exact frozen signatures={len(data["signatures"])}; outputs={len(outputs)}; additive query command signatures={len(declarations)}; additive batch signatures={len(batch_declarations)}; additive completion signatures={len(completion_declarations)}; additive Find shape signatures={len(find_declarations)}')
+execution=json.loads((ROOT/'native/database/binding/cursor-pull-execution-v1.json').read_text())
+assert execution['version']==1 and execution['capability']=='db.cursor.pull.execution.v1' and execution['capability_bit']==30
+execution_declarations=re.findall(r'\bnw_status\s+NW_CDECL\s+nw_db_cursor_pull_(?:prepare|run|abandon)_v1\([^;]+;', (ROOT/execution['header']).read_text())
+execution_declarations=[re.sub(r'\s+', ' ', value) for value in execution_declarations]
+assert execution_declarations==execution['signatures'],'Additive cursor execution signatures differ from the reviewed extension'
+assert len(execution_declarations)==3 and not set(execution_declarations).intersection(data['signatures'])
+print(f'PASS exact frozen signatures={len(data["signatures"])}; outputs={len(outputs)}; additive query command signatures={len(declarations)}; additive batch signatures={len(batch_declarations)}; additive completion signatures={len(completion_declarations)}; additive Find shape signatures={len(find_declarations)}; additive cursor execution signatures={len(execution_declarations)}')

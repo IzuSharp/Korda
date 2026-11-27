@@ -12,6 +12,7 @@ internal static partial class Suite
         await ProjectionPolicies(session);
         await CompositeCursors(session);
         await RelationBatches(source, session, connection);
+        await RelationCapacityControls(source, session, connection);
         if (source.Provider == DatabaseProvider.Sqlite) await RelationCollation(session);
         await TransactionCallbacks(session);
         await CallbackCancellation(session);
@@ -102,6 +103,19 @@ internal static partial class Suite
             "parent collection snapshot and empty group preserve page order");
         Check(groups[2].Select(child => child.Id).Order().SequenceEqual([1L, 2L]) && groups[3].Select(child => child.Id).Order().SequenceEqual([1L, 2L]),
             "duplicate parent positions retain full composite matches and exclude partial NULL foreign keys");
+        using (var outer = session.From(Items.Table))
+        using (var branch = session.From(Items.Table))
+        {
+            outer.WhereEqual(Items.Tenant, 2L); branch.WhereEqual(Items.Tenant, 1L);
+            var combined = outer.SelectAll().Combine(branch.SelectAll());
+            branch.WhereEqual(Items.Id, 88L);
+            Check((await branch.SelectAll().ToListAsync()).Single().Id == 88L,
+                "public Combine leaves its source independently mutable and executable");
+            branch.Dispose();
+            var rows = await combined.ToListAsync();
+            Check(rows.Select(item => (item.Tenant, item.Id)).Order().SequenceEqual([(1L, 1L), (1L, 88L), (2L, 1L)]),
+                "public Combine retains its original snapshot after source mutation, execution and disposal");
+        }
         before = StatementCount(source);
         Check((await session.LoadRelatedAsync(Array.Empty<EntityKey<Item>>(), relation)).Count == 0 && StatementCount(source) == before,
             "empty relation batch executes no SQL");
@@ -155,6 +169,65 @@ internal static partial class Suite
             && groups[1].Single() == new CollatedChild(1, "Ada") && groups[2].Count == 0,
             "native NOCASE equality assigns differently cased parent keys to their own result positions");
     }
+
+    private static async Task RelationCapacityControls(DataSource source, DataSession session, string connection)
+    {
+        await Execute(session, "CREATE TABLE b14_capacity_parents(\"Id\" TEXT NOT NULL PRIMARY KEY)");
+        await Execute(session, "CREATE TABLE b14_capacity_children(\"Id\" BIGINT NOT NULL PRIMARY KEY,\"ParentId\" TEXT NOT NULL)");
+        var parents = new TableBuilder<CapacityParent>("b14_capacity_parents");
+        var parentId = parents.Column("Id", Codecs.String, new() { IsPrimaryKey = true });
+        var parentTable = parents.Build(row => new(row.Get(parentId)), (row, item) => row.Set(parentId, item.Id));
+        var children = new TableBuilder<CapacityChild>("b14_capacity_children");
+        var childId = children.Column("Id", Codecs.Int64, new() { IsPrimaryKey = true });
+        var foreignKey = children.Column("ParentId", Codecs.String);
+        var childTable = children.Build(row => new(row.Get(childId), row.Get(foreignKey)),
+            (row, item) => { row.Set(childId, item.Id); row.Set(foreignKey, item.ParentId); });
+        var relation = Relation<CapacityParent, CapacityChild>.Create(parentTable, parentId, childTable, foreignKey);
+        var wide = new string('w', 1024);
+        string[] values = ["aa", "bb", "é", wide];
+        for (var i = 0; i < values.Length; i++)
+        {
+            await session.InsertAsync(parentTable, new(values[i]));
+            await session.InsertAsync(childTable, new(i + 1, values[i]));
+        }
+        string[][] cases = [["aa"], ["aa", "bb"], Enumerable.Range(0, 32).Select(i => values[i % 3]).ToArray(),
+            [wide, "aa", "bb"], ["aa", wide, "bb"], ["é", "bb", "aa", "é"]];
+        foreach (var selected in cases)
+        {
+            var before = StatementCount(source);
+            var keys = selected.Select(value => parentTable.Key(parentId, value)).ToArray();
+            var groups = await session.LoadRelatedAsync(keys, relation);
+            Check(StatementCount(source) - before == 1 && groups.Count == selected.Length,
+                "Private relation capacity controls preserve one SQL and 1/2/32 parent positions.");
+            Check(groups.Select(group => group.Single().ParentId).SequenceEqual(selected)
+                && groups.Select(group => group.Single().Id).SequenceEqual(selected.Select(value => (long)Array.IndexOf(values, value) + 1)),
+                "Equal encoded lengths, different UTF-8 keys, wide/narrow orders and duplicates retain each exact native match.");
+        }
+        foreach (var limits in new[] { new DatabaseLimits { MaxQueryNodes = 8 },
+            new DatabaseLimits { MaxQueryDepth = 1 }, new DatabaseLimits { MaxParameterBytes = 1024 } })
+        {
+            await using var bounded = Source(source.Provider, connection, limits);
+            await using var current = await bounded.OpenSessionAsync();
+            var before = StatementCount(bounded);
+            var selected = limits.MaxParameterBytes == 1024 ? new[] { wide, wide } : new[] { "aa", "bb" };
+            Task Invoke() => current.LoadRelatedAsync(selected.Select(value => parentTable.Key(parentId, value)).ToArray(), relation);
+            if (limits.MaxParameterBytes == 1024)
+            {
+                var failure = await Throws<ArgumentException>(Invoke);
+                Check(failure.Message == "Expression wire size.", "The existing oversized expression error precedes relation composition.");
+            }
+            else
+            {
+                var failure = await Throws<DatabaseException>(Invoke);
+                Check(failure.Kind == DatabaseErrorKind.InvalidState && failure.Message == "The native database operation failed.",
+                    "Existing command-capacity code 11 retains its unchanged public InvalidState classification.");
+            }
+            Check(StatementCount(bounded) == before, "Private capacity reservation never admits failed finite budgets to SQL.");
+        }
+    }
+
+    private sealed record CapacityParent(string Id);
+    private sealed record CapacityChild(long Id, string ParentId);
 
     private sealed record CollatedParent(string Id);
     private sealed record CollatedChild(long Id, string ParentId);

@@ -13,7 +13,8 @@ namespace Korda.Database;
 internal enum HostPullBoundary
 {
     BeforeRoot, RootAllocated, BeforeRegister, Registered, BeforeRequest,
-    RequestReturned, Ready, BeforeTake, ResultTaken, StopEntered, StopReturned, Published
+    RequestReturned, Ready, BeforeTake, ResultTaken, StopEntered, StopReturned, Published,
+    BeforeRun, RunReturned, BeforeAbandon, AbandonReturned
 }
 
 internal readonly record struct HostPullSnapshot(ulong Generation, bool Active, bool SetupReturned,
@@ -40,6 +41,7 @@ internal sealed class HostPullController : CoordinatedCallback, IValueTaskSource
     private bool _ready, _rooted, _hasRegistration, _registrationAttempted, _registrationReady;
     private bool _drainStarted, _registrationDrained, _takeSettled, _resultTaken, _published, _consumed = true;
     private bool _stopping, _stopObserved, _closed, _forcedCloseStarted, _indeterminate;
+    private bool _executionClaimed, _executing;
     private Exception? _failure, _stopFailure;
 
     internal HostPullController(DataSource source, DatabaseOwner channel, ScopedStreamBatch batch,
@@ -76,6 +78,7 @@ internal sealed class HostPullController : CoordinatedCallback, IValueTaskSource
             _setupReturned = _accepted = _requestEntered = _requestReturned = _ready = false;
             _hasRegistration = _registrationAttempted = _registrationReady = false;
             _drainStarted = _registrationDrained = _takeSettled = _resultTaken = _published = _indeterminate = false;
+            _executionClaimed = _executing = false;
             _failure = null;
         }
         bool control = false;
@@ -122,7 +125,7 @@ internal sealed class HostPullController : CoordinatedCallback, IValueTaskSource
                 };
                 var error = BindingChecks.Error();
                 lock (_gate) _requestEntered = true;
-                var status = NativeHost.Pulls(_source.Binding).Request(lease.Pointer, _generation,
+                var status = NativeHost.PullExecution(_source.Binding).Prepare(lease.Pointer, _generation,
                     checked((uint)_rows), checked((ulong)_source.Limits.MaxBatchBytes), &callbacks, &error);
                 lock (_gate)
                 {
@@ -151,23 +154,20 @@ internal sealed class HostPullController : CoordinatedCallback, IValueTaskSource
         }
         finally
         {
-            bool deferToReady;
             lock (_gate)
             {
                 if (control) _controls--;
                 if (!_registrationAttempted && !_registrationReady)
                 { _registrationReady = true; _registrationDrained = true; }
                 _setupReturned = true;
-                deferToReady = _accepted && !_ready && _failure is null
-                    && !_stopping && !_closed && !_indeterminate;
             }
-            // A normal accepted request cannot drain before ready. The callback and
-            // this decision use the same gate: early readiness is resumed here,
-            // and later readiness signals its own work item. Fault/stop paths
-            // retain their existing independent progress notifications.
+            // Native prepare only admits work. The bounded, never-inline
+            // coordinator executes that obligation after setup has returned.
+            // A transient rejected queue offer retains its retry reservation;
+            // native cancellation/close can independently settle unrun work.
             // A pre-reservation failure has no native/cancellation obligation
             // and needs no scheduler capacity in order to release its root.
-            if (!deferToReady) Resume();
+            Resume();
         }
         return new(this, version);
     }
@@ -248,13 +248,22 @@ internal sealed class HostPullController : CoordinatedCallback, IValueTaskSource
             {
                 // The drain cannot observe zero accesses until this callback
                 // has made its last state access under the same gate.
-                lock (controller._gate) { controller._callbackEntries--; controller.Signal(); }
+                lock (controller._gate)
+                {
+                    controller._callbackEntries--;
+                    // The executing coordinator will drain this notification
+                    // after the complete native call returns. An independent
+                    // close/stop notification still schedules when no run is on
+                    // that worker stack. Do not queue a redundant ready drain.
+                    if (!controller._executing) controller.Signal();
+                }
             }
         }
     }
 
     protected override void Process()
     {
+        ExecutePrepared();
         bool forceClose, waitReady, stop;
         lock (_gate)
         {
@@ -343,6 +352,47 @@ internal sealed class HostPullController : CoordinatedCallback, IValueTaskSource
         // touched after publication. A continuation may consume and reset now.
         if (failure is null) _completion.SetResult(_batch);
         else _completion.SetException(failure);
+    }
+
+    private unsafe void ExecutePrepared()
+    {
+        bool abandon;
+        ulong generation;
+        lock (_gate)
+        {
+            if (!_active || _published || !_setupReturned || !_accepted || _executionClaimed
+                || _closed || _indeterminate) return;
+            // Accepted prepare always follows reservation. Thus this method
+            // cannot execute provider work through Resume's unreserved inline
+            // setup-failure path.
+            if (_slot < 0) throw new InvalidOperationException("An admitted cursor pull requires its scheduling reservation.");
+            _executionClaimed = _executing = true;
+            _controls++;
+            generation = _generation;
+            abandon = _failure is not null || _stopping;
+        }
+        try
+        {
+            using var lease = _channel.Borrow(DatabaseOwnerKind.Cursor);
+            var calls = NativeHost.PullExecution(_source.Binding);
+            var error = BindingChecks.Error();
+            Boundary(abandon ? HostPullBoundary.BeforeAbandon : HostPullBoundary.BeforeRun);
+            var status = abandon ? calls.Abandon(lease.Pointer, generation, &error)
+                : calls.Run(lease.Pointer, generation, &error);
+            if (status != NativeStatus.Ok)
+                throw HostFailure.Create(_source.Binding, status, error, token: _token);
+            Boundary(abandon ? HostPullBoundary.AbandonReturned : HostPullBoundary.RunReturned);
+        }
+        catch (Exception error)
+        {
+            // A missing acceptance/retirement receipt retains the root and
+            // reservation until the existing cold close proves safety.
+            lock (_gate) { _failure ??= error; _indeterminate = true; }
+        }
+        finally
+        {
+            lock (_gate) { _executing = false; _controls--; }
+        }
     }
 
     private async Task DrainRegistrationAsync(ValueTask pending)

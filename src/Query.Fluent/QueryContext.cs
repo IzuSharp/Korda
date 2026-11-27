@@ -124,6 +124,17 @@ internal sealed class QueryContext : IDisposable
             var result = Binding.SnapshotAndImport(context.Binding); MergeParameters(context.Parameters.Values); return result;
         });
     });
+    internal ArenaReference ImportConsumed<T>(QuerySelection<T> other) => Run(() =>
+    {
+        var context = other.Owner; if (!ReferenceEquals(Source, context.Source)) throw new ArgumentException("The selection belongs to another source.");
+        return context.Run(() =>
+        {
+            context.Selection(other.Projection);
+            var result = Binding.ConsumeAndImport(context.Binding);
+            context._sealed = true;
+            MergeParameters(context.Parameters.Values); return result;
+        });
+    });
     internal DatabaseOwner Seal(uint terminal) => Run(() =>
     {
         if (HasOffset && !UniqueOrder) throw new InvalidOperationException("Offset paging lost its unique ordering.");
