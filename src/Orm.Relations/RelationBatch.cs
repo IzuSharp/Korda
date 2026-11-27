@@ -51,7 +51,7 @@ public sealed partial class DataSession
             for (var i = 1; i < keys.Length; i++)
             {
                 using var next = From(relation.Child);
-                selection = selection.Combine(SelectParent(next, keys[i], relation, projection, i));
+                selection = selection.CombineConsumed(SelectParent(next, keys[i], relation, projection, i));
             }
             return GroupRelated(query, selection.ToListAsync(cancellationToken), keys.Length);
         }

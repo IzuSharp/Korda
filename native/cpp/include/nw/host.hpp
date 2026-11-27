@@ -2,6 +2,7 @@
 #pragma once
 
 #include "../../../database/binding/korda_command_completion_v1.h"
+#include "../../../database/binding/korda_cursor_pull_execution_v1.h"
 #include "nw/administration.hpp"
 #include "nw/interop.hpp"
 #include "nw/mutations.hpp"
@@ -386,6 +387,9 @@ struct CursorPull : std::enable_shared_from_this<CursorPull>
                                               std::optional<Clock::time_point> admitted = {});
     ~CursorPull();
     void request(std::uint64_t generation, std::size_t rows, std::size_t bytes, nw_db_cursor_callbacks_v1 callbacks);
+    void prepare(std::uint64_t generation, std::size_t rows, std::size_t bytes, nw_db_cursor_callbacks_v1 callbacks);
+    static void run_prepared(std::shared_ptr<CursorPull> self, std::uint64_t generation);
+    static void abandon_prepared(std::shared_ptr<CursorPull> self, std::uint64_t generation);
     std::shared_ptr<Buffer> take(std::uint64_t generation);
     Error take_error(std::uint64_t generation);
     void close_request(nw_db_cursor_callbacks_v1 callbacks);
@@ -411,6 +415,9 @@ struct CursorPull : std::enable_shared_from_this<CursorPull>
     struct CloseWorker;
     CursorPull(std::shared_ptr<Session> session, std::shared_ptr<SqlPlan> plan, std::shared_ptr<CommandGate> gate,
                std::optional<Clock::time_point> admitted);
+    void start_request(std::uint64_t generation, std::size_t rows, std::size_t bytes,
+                       nw_db_cursor_callbacks_v1 callbacks, bool external);
+    static void execute_prepared(std::shared_ptr<CursorPull> self, std::uint64_t generation, bool abandon);
     void run(std::uint64_t generation, std::size_t rows, std::size_t bytes, std::shared_ptr<Cancel> cancel);
     void complete(std::uint64_t generation, std::shared_ptr<Buffer> buffer, std::optional<Error> error);
     void join_resources();
@@ -426,6 +433,13 @@ struct CursorPull : std::enable_shared_from_this<CursorPull>
     std::shared_ptr<RetirementFence> completion_ = std::make_shared<RetirementFence>();
     std::shared_ptr<RetirementFence> close_completion_ = std::make_shared<RetirementFence>();
     std::shared_ptr<CloseState> close_;
+    // An accepted external scheduling obligation owns its original Worker.
+    // Source/Session/owner close actively extracts and settles it, so losing
+    // the managed queue cannot leave this temporary self-reference stranded.
+    std::shared_ptr<Worker> pending_external_;
+    std::size_t external_rows_ = 0, external_bytes_ = 0;
+    std::uint64_t external_generation_ = 0;
+    bool external_claimed_ = false;
     std::uint64_t generation_ = 0;
     bool outstanding_ = false, ready_ = false, running_ = false, closing_ = false;
     nw_db_cursor_callbacks_v1 callbacks_{};

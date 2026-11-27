@@ -209,6 +209,50 @@ std::uint64_t number(const Json& value, std::string_view key)
     return unsigned_number(*found);
 }
 
+struct DecimalConfiguration
+{
+    std::uint32_t precision, scale;
+};
+
+// Recognize only the complete canonical success language. Every other byte
+// sequence still uses the original JSON validator and its error ordering.
+std::optional<DecimalConfiguration> canonical_decimal_configuration(std::string_view text) noexcept
+{
+    constexpr std::string_view prefix = "{\"precision\":";
+    constexpr std::string_view separator = ",\"scale\":";
+    if (!text.starts_with(prefix))
+        return {};
+    text.remove_prefix(prefix.size());
+    const auto read_number = [&text](std::uint32_t maximum) -> std::optional<std::uint32_t>
+    {
+        if (text.empty() || text.front() < '0' || text.front() > '9')
+            return {};
+        const bool leading_zero = text.front() == '0';
+        std::uint32_t value = 0;
+        std::size_t count = 0;
+        while (count < text.size() && text[count] >= '0' && text[count] <= '9')
+        {
+            const auto digit = static_cast<std::uint32_t>(text[count] - '0');
+            if ((leading_zero && count != 0) || value > (maximum - digit) / 10)
+                return {};
+            value = value * 10 + digit;
+            ++count;
+        }
+        if (value > maximum)
+            return {};
+        text.remove_prefix(count);
+        return value;
+    };
+    const auto precision = read_number(29);
+    if (!precision || *precision == 0 || !text.starts_with(separator))
+        return {};
+    text.remove_prefix(separator.size());
+    const auto scale = read_number(28);
+    if (!scale || *scale > *precision || text != "}")
+        return {};
+    return DecimalConfiguration{*precision, *scale};
+}
+
 std::uint32_t u32_number(const Json& value, std::string_view key)
 {
     const auto result = number(value, key);
@@ -564,6 +608,8 @@ void Codec::validate(Profile profile) const
         {
             invalid("missing decimal configuration");
         }
+        if (canonical_decimal_configuration(*configuration))
+            return;
         const auto value = parse_json(view(*configuration), "invalid decimal configuration");
         require_keys(value, {"precision", "scale"});
         const auto precision = number(value, "precision");
@@ -1483,9 +1529,14 @@ void validate_scalar(const Codec& codec, ByteView bytes, Profile profile)
             }
             if (codec.id == 13)
             {
-                const auto config = parse_json(view(*codec.configuration), "decimal config");
-                const auto target_scale = number(config, "scale");
-                const auto precision = number(config, "precision");
+                const auto config = canonical_decimal_configuration(*codec.configuration);
+                // codec.validate has already checked this same immutable input.
+                // Keep a defensive failure rather than creating a second parser
+                // with a different acceptance or error contract.
+                if (!config)
+                    invalid("decimal config");
+                const auto target_scale = config->scale;
+                const auto precision = config->precision;
                 std::uint64_t digits = 0;
                 while (std::any_of(limbs.begin(), limbs.end(), [](auto value) { return value != 0; }))
                 {

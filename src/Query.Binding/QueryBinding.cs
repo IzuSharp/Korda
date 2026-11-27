@@ -161,6 +161,22 @@ internal sealed unsafe class QueryBinding : IDisposable
         // End source admission before destination admission; self-composition never recursively enters the gate.
         using var clone = source.CloneSelected(); using var plan = clone.Seal(8); return Import(plan, 2);
     }
+    // Only for a private temporary branch whose caller will never use it again.
+    // Public composition keeps SnapshotAndImport and its independent snapshot.
+    internal ArenaReference ConsumeAndImport(QueryBinding source)
+    {
+        if (ReferenceEquals(this, source)) throw new ArgumentException("A query cannot consume itself.", nameof(source));
+        if (!ReferenceEquals(Source, source.Source)) throw new ArgumentException("Query sources differ.", nameof(source));
+        using var sourceAdmission = source.Enter();
+        using var admission = Enter();
+        var incoming = source._command ?? throw new NotSupportedException("Only a buffered private branch can be consumed.");
+        var command = _command ?? throw new NotSupportedException("Only command composition can consume a private branch.");
+        var result = command.SnapshotAndImport(incoming);
+        // Import owns its retained graph before source admission closes. All
+        // validation and append failures leave the source binding unconsumed.
+        Interlocked.Exchange(ref source._disposed, 1);
+        return new(this, result);
+    }
     internal nint Render()
     {
         if (_command is { } command) { using var admission = Enter(); return command.Render(); }

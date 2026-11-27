@@ -212,6 +212,8 @@ internal static class NativeHost
     }
     internal static CursorPullCalls Pulls(SourceBinding binding) => binding.Pulls
         ?? throw new NotSupportedException("The native cursor pull extension is unavailable.");
+    internal static CursorPullExecutionCalls PullExecution(SourceBinding binding) => binding.PullExecution
+        ?? throw new NotSupportedException("The native admitted cursor execution extension is unavailable.");
     internal static unsafe void CheckPullRead(DatabaseOwner channel)
     {
         using var lease = channel.Borrow(DatabaseOwnerKind.Cursor); var error = BindingChecks.Error();

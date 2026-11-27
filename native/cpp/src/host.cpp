@@ -143,7 +143,7 @@ Bytes snapshot_record(std::uint32_t state, std::uint32_t outcome, bool attempted
 }
 std::uint64_t capability_mask()
 {
-    std::uint64_t result = (1ULL << 30) - 1;
+    std::uint64_t result = ((1ULL << 30) - 1) | NW_DB_CURSOR_PULL_EXECUTION_CAPABILITY_V1;
 #if !NW_ENABLE_POSTGRES
     result &= ~((1ULL << 11) | (1ULL << 14));
 #endif
@@ -2601,6 +2601,14 @@ struct CursorPull::Worker
             after_ready();
 #endif
     }
+    void abandon(std::uint64_t generation, std::size_t rows, std::size_t bytes, std::shared_ptr<Cancel> cancel)
+    {
+        // This token was marked while the channel state lock was held and no
+        // executor has claimed it. Reuse the exact admission/error order and
+        // complete/detach path, which must reject before any provider I/O.
+        // In particular, do not enter a held test_before_work dispatch seam.
+        pull->run(generation, rows, bytes, std::move(cancel));
+    }
 };
 
 struct CursorPull::CloseState
@@ -2801,6 +2809,16 @@ CursorPull::~CursorPull()
 void CursorPull::request(std::uint64_t generation, std::size_t rows, std::size_t bytes,
                          nw_db_cursor_callbacks_v1 callbacks)
 {
+    start_request(generation, rows, bytes, callbacks, false);
+}
+void CursorPull::prepare(std::uint64_t generation, std::size_t rows, std::size_t bytes,
+                         nw_db_cursor_callbacks_v1 callbacks)
+{
+    start_request(generation, rows, bytes, callbacks, true);
+}
+void CursorPull::start_request(std::uint64_t generation, std::size_t rows, std::size_t bytes,
+                               nw_db_cursor_callbacks_v1 callbacks, bool external)
+{
     if (callbacks.struct_size != sizeof(callbacks) || callbacks.reserved || !callbacks.ready)
         throw Error::invalid("cursor ready callback record");
     const auto& limits = session->source->config.limits;
@@ -2822,7 +2840,16 @@ void CursorPull::request(std::uint64_t generation, std::size_t rows, std::size_t
             cursor_->check_read_admission();
         cancel = std::make_shared<Cancel>();
         worker = std::make_shared<Worker>(shared_from_this());
-        action = [worker, generation, rows, bytes, cancel] { worker->run(generation, rows, bytes, cancel); };
+        if (!external)
+            action = [worker, generation, rows, bytes, cancel] { worker->run(generation, rows, bytes, cancel); };
+        else
+        {
+            pending_external_ = worker;
+            external_rows_ = rows;
+            external_bytes_ = bytes;
+        }
+        external_generation_ = external ? generation : 0;
+        external_claimed_ = false;
         generation_ = generation;
         outstanding_ = running_ = true;
         ready_ = false;
@@ -2831,6 +2858,8 @@ void CursorPull::request(std::uint64_t generation, std::size_t rows, std::size_t
         callbacks_ = callbacks;
         cancel_ = cancel;
     }
+    if (external)
+        return;
     // Everything after this point belongs to the accepted generation. A
     // queue failure therefore delivers one error notification and returns OK.
     try
@@ -2850,6 +2879,47 @@ void CursorPull::request(std::uint64_t generation, std::size_t rows, std::size_t
         session->source->poisoned.store(true);
         complete(generation, {}, Error(NW_NATIVE_PANIC, 8, "queue failed"));
     }
+}
+void CursorPull::run_prepared(std::shared_ptr<CursorPull> self, std::uint64_t generation)
+{
+    execute_prepared(std::move(self), generation, false);
+}
+void CursorPull::abandon_prepared(std::shared_ptr<CursorPull> self, std::uint64_t generation)
+{
+    execute_prepared(std::move(self), generation, true);
+}
+void CursorPull::execute_prepared(std::shared_ptr<CursorPull> self, std::uint64_t generation, bool abandon)
+{
+    // Worker is the last live owner-bearing local. Its independent tickets
+    // cover the last native accessor in this entire exported execution frame.
+    std::shared_ptr<Worker> worker;
+    std::shared_ptr<Cancel> cancel;
+    std::size_t rows = 0, bytes = 0;
+    {
+        std::lock_guard lock(self->mutex_);
+        if (!generation || generation != self->generation_ || generation != self->external_generation_ ||
+            self->external_claimed_)
+            throw Error::state("cursor prepared generation differs or was claimed");
+        self->external_claimed_ = true;
+        worker = std::move(self->pending_external_);
+        if (worker)
+        {
+            cancel = self->cancel_;
+            rows = self->external_rows_;
+            bytes = self->external_bytes_;
+            if (abandon)
+                cancel->mark_requested();
+        }
+    }
+    // The ABI passes typed(...) directly by value, so no outer local retains
+    // channel/Session/Source after the Worker's retirement fence completes.
+    self.reset();
+    if (!worker)
+        return; // Close already claimed settlement; this is its one late claim.
+    if (abandon)
+        worker->abandon(generation, rows, bytes, std::move(cancel));
+    else
+        worker->run(generation, rows, bytes, std::move(cancel));
 }
 void CursorPull::run(std::uint64_t generation, std::size_t rows, std::size_t bytes, std::shared_ptr<Cancel> cancel)
 {
@@ -3123,9 +3193,13 @@ void CursorPull::check_read_admission()
 }
 void CursorPull::request_close()
 {
+    // Keep the admitted ticket until every local accessor below has left.
+    std::shared_ptr<Worker> prepared;
     std::shared_ptr<Cancel> cancel;
     std::shared_ptr<Cursor> cursor;
     std::shared_ptr<CommandGate> gate;
+    std::uint64_t generation = 0;
+    std::size_t rows = 0, bytes = 0;
     {
         std::lock_guard lock(mutex_);
         cancel = cancel_;
@@ -3134,12 +3208,29 @@ void CursorPull::request_close()
         if (cancel)
             cancel->mark_requested();
         closing_ = true;
+        prepared = std::move(pending_external_);
+        if (prepared)
+        {
+            generation = generation_;
+            rows = external_rows_;
+            bytes = external_bytes_;
+        }
         cursor = cursor_;
         if (!running_ && !cursor)
         {
             gate = std::move(gate_);
             plan_.reset();
         }
+    }
+    if (prepared)
+    {
+        // A prepared token has installed no provider hook. The original run
+        // must reject its marked token at admission; complete performs all
+        // fallible cursor/gate cleanup before its one detached notification.
+        cursor.reset();
+        gate.reset();
+        prepared->abandon(generation, rows, bytes, std::move(cancel));
+        return;
     }
     if (cancel)
     {

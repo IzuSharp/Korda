@@ -51,6 +51,10 @@ public sealed partial class DataSource : IDisposable, IAsyncDisposable
             throw new DatabaseCapabilityException(CursorPullCalls.Capability, provider == DatabaseProvider.Sqlite ? "sqlite.v1" : "postgresql.v1");
         binding.Pulls = new(symbol => EngineModuleLoader.ResolveExport(descriptor, symbol));
         binding.Pulls.Require();
+        if (!info.Capabilities.Any(capability => capability.Name == CursorPullExecutionCalls.Capability))
+            throw new DatabaseCapabilityException(CursorPullExecutionCalls.Capability, provider == DatabaseProvider.Sqlite ? "sqlite.v1" : "postgresql.v1");
+        binding.PullExecution = new(symbol => EngineModuleLoader.ResolveExport(descriptor, symbol));
+        binding.PullExecution.Require();
         if (!info.Capabilities.Any(capability => capability.Name == CommandCompletionCalls.Capability))
             throw new DatabaseCapabilityException(CommandCompletionCalls.Capability, provider == DatabaseProvider.Sqlite ? "sqlite.v1" : "postgresql.v1");
         binding.Completions = new(symbol => EngineModuleLoader.ResolveExport(descriptor, symbol));

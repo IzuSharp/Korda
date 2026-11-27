@@ -29,7 +29,8 @@ void check(bool value, const char* message)
     if (!value)
         throw std::runtime_error(message);
 }
-template <typename Action> Error reject(Action action)
+template <typename Action>
+Error reject(Action action, const std::source_location location = std::source_location::current())
 {
     try
     {
@@ -40,7 +41,7 @@ template <typename Action> Error reject(Action action)
         ++checks;
         return error;
     }
-    throw std::runtime_error("expected streaming rejection");
+    throw std::runtime_error("expected streaming rejection at line " + std::to_string(location.line()));
 }
 template <typename Condition>
 void await(Condition condition, const std::source_location location = std::source_location::current())
@@ -494,11 +495,14 @@ struct PullReady
 {
     std::atomic<std::uint64_t> generation{0};
     std::atomic<unsigned> calls{0};
+    std::function<void()> before_return;
     static void NW_CDECL notify(void* context, std::uint64_t value)
     {
         auto& state = *static_cast<PullReady*>(context);
         ++state.calls;
         state.generation.store(value);
+        if (state.before_return)
+            state.before_return();
     }
     nw_db_cursor_callbacks_v1 callbacks()
     {
@@ -834,6 +838,289 @@ void pull_generations_and_tail()
     check(pull_count == 0 && cursor_count == 0 && scope.budget()[0] == 0,
           "joined pull drops its native owner and stream reservation immediately");
 }
+void prepared_pull_generations()
+{
+    Scope scope;
+    auto pull = scope.pull(3);
+    PullReady ready;
+    auto posts = std::make_shared<std::atomic<unsigned>>(0);
+    scope.source->workers.test_before_post = [posts] { ++*posts; };
+    check(reject([&] { pull->prepare(0, 1, 256, ready.callbacks()); }).status == NW_INVALID_STATE,
+          "prepared zero generation preserves admission");
+    check(reject([&] { pull->prepare(1, 0, 256, ready.callbacks()); }).status == NW_INVALID_ARGUMENT,
+          "prepared invalid capacity has no accepted scheduling obligation");
+    pull->prepare(1, 1, 256, ready.callbacks());
+    check(scope.probe->reads == 0 && cursor_count == 0 && ready.calls == 0 && *posts == 0 &&
+              scope.source->pending == 1 && !scope.source->pull_workers->done(),
+          "prepare owns bounded native retirement before scheduling without queueing or provider I/O");
+    check(reject([&] { pull->prepare(2, 1, 256, ready.callbacks()); }).code == 7 &&
+              reject([&] { CursorPull::run_prepared(pull, 2); }).status == NW_INVALID_STATE,
+          "an unclaimed generation cannot be replaced or run under another identity");
+    CursorPull::run_prepared(pull, 1);
+    ready.wait(1);
+    check(*posts == 0 && scope.probe->reads == 1 && scope.source->pending == 0 && scope.source->pull_workers->done(),
+          "synchronous prepared run retires its native accessors without posting a provider job");
+    check(reject([&] { CursorPull::run_prepared(pull, 1); }).status == NW_INVALID_STATE &&
+              reject([&] { CursorPull::abandon_prepared(pull, 1); }).status == NW_INVALID_STATE,
+          "run and abandon share a single consumed claim");
+    auto first = pull->take(1);
+    check(Batch::parse(first->bytes, first->cursor->expectation).rows() == 1 &&
+              reject([&] { pull->prepare(2, 1, 256, ready.callbacks()); }).status == NW_INVALID_STATE,
+          "prepared execution retains the original live-batch read admission");
+    first.reset();
+    pull->prepare(2, 1, 256, ready.callbacks());
+    check(reject([&] { CursorPull::run_prepared(pull, 1); }).status == NW_INVALID_STATE,
+          "late old-generation work cannot steal the next prepared request");
+    CursorPull::run_prepared(pull, 2);
+    auto second = pull->take(2);
+    check(Batch::parse(second->bytes, second->cursor->expectation).rows() == 1 && ready.calls == 2 &&
+              scope.probe->reads == 2 && *posts == 0,
+          "prepared generations preserve exact rows, callbacks and one-time take");
+    second.reset();
+    scope.source->workers.test_before_post = {};
+    pull->join();
+    pull.reset();
+    check(pull_count == 0 && cursor_count == 0 && buffer_count == 0, "prepared successful pulls return every owner");
+}
+
+void prepared_pull_never_run()
+{
+    // Explicit queue abandonment, pull stop, Session stop, Source stop and
+    // final native owner release all have to settle an accepted never-run job.
+    for (const int mode : {0, 1, 2, 3, 4})
+    {
+        Scope scope;
+        auto pull = scope.pull(3);
+        auto dispatches = std::make_shared<std::atomic<unsigned>>(0);
+        pull->test_before_work = [dispatches] { ++*dispatches; };
+        PullReady ready;
+        pull->prepare(1, 1, 256, ready.callbacks());
+        check(scope.source->pending == 1, "never-run work has an admitted pending reservation");
+        if (mode == 0)
+            CursorPull::abandon_prepared(pull, 1);
+        else if (mode == 1)
+            pull->request_close();
+        else if (mode == 2)
+            scope.session->request_close();
+        else if (mode == 3)
+            scope.source->request_close();
+        else
+        {
+            auto owner = std::make_shared<Owner>(scope.source, pull);
+            owner.reset();
+        }
+        ready.wait(1);
+        const auto failure = reject([&] { (void)pull->take(1); });
+        const auto rich = pull->take_error(1);
+        check(failure.status == (mode == 2 || mode == 3 ? NW_INVALID_STATE : NW_CANCELED) &&
+                  rich.status == failure.status && rich.correlation == failure.correlation,
+              "never-run settlement preserves parent/cancel error ordering and rich identity");
+        check(scope.probe->reads == 0 && *dispatches == 0 && ready.calls == 1 && scope.source->pending == 0 &&
+                  scope.source->pull_workers->done() && !scope.session->active.load(),
+              "never-run settlement executes no provider dispatch and releases both retirement tickets");
+        if (mode != 0)
+            CursorPull::run_prepared(pull, 1);
+        check(reject([&] { CursorPull::abandon_prepared(pull, 1); }).status == NW_INVALID_STATE && ready.calls == 1 &&
+                  scope.probe->reads == 0,
+              "automatic close leaves exactly one harmless late queue claim");
+        pull->join();
+        pull.reset();
+        check(pull_count == 0 && cursor_count == 0 && buffer_count == 0,
+              "abandoned prepared self-ownership is actively broken");
+    }
+}
+
+void prepared_pull_running_retirement()
+{
+    Scope scope;
+    auto pull = scope.pull(1);
+    auto entered = std::make_shared<std::atomic<bool>>(false);
+    auto proceed = std::make_shared<std::binary_semaphore>(0);
+    pull->test_after_ready = [entered, proceed]
+    {
+        entered->store(true);
+        proceed->acquire();
+    };
+    PullReady ready;
+    pull->prepare(1, 1, 256, ready.callbacks());
+    std::future<void> executing, joined;
+    bool pending = false;
+    {
+        struct Release
+        {
+            std::shared_ptr<std::binary_semaphore> proceed;
+            ~Release()
+            {
+                proceed->release();
+            }
+        } release{proceed};
+        // Transfer the execution caller's only extra channel reference into the
+        // static entry exactly as the ABI does. The retained owner stays here.
+        executing = std::async(std::launch::async,
+                               [current = pull]() mutable { CursorPull::run_prepared(std::move(current), 1); });
+        ready.wait(1);
+        await([&] { return entered->load(); });
+        auto batch = pull->take(1);
+        batch.reset();
+        joined = std::async(std::launch::async, [source = scope.source] { source->join(); });
+        await([&] { return scope.source->closing.load(); });
+        pending = joined.wait_for(std::chrono::milliseconds(20)) != std::future_status::ready &&
+                  !scope.source->retired.load() && scope.source->pending == 1 && !scope.source->pull_workers->done();
+    }
+    executing.get();
+    joined.get();
+    check(pending && scope.source->retired.load() && scope.source->pending == 0 && scope.source->pull_workers->done(),
+          "Source join waits for the prepared execution frame's last native accessor, not only readiness");
+    pull.reset();
+    check(pull_count == 0 && cursor_count == 0 && buffer_count == 0,
+          "prepared exported execution leaves no accessor after joined retirement");
+}
+
+void prepared_pull_concurrent_claim()
+{
+    for (const bool abandon : {false, true})
+    {
+        Scope scope;
+        auto pull = scope.pull(1);
+        PullReady ready;
+        pull->prepare(1, 1, 256, ready.callbacks());
+        std::counting_semaphore<2> start{0};
+        std::array<nw_status, 2> status{};
+        auto claimant = [&](std::size_t index)
+        {
+            start.acquire();
+            try
+            {
+                if (abandon && index == 1)
+                    CursorPull::abandon_prepared(pull, 1);
+                else
+                    CursorPull::run_prepared(pull, 1);
+                status[index] = NW_OK;
+            }
+            catch (const Error& error)
+            {
+                status[index] = error.status;
+            }
+        };
+        std::thread first(claimant, 0), second(claimant, 1);
+        start.release(2);
+        first.join();
+        second.join();
+        ready.wait(1);
+        check((status[0] == NW_OK && status[1] == NW_INVALID_STATE) ||
+                  (status[1] == NW_OK && status[0] == NW_INVALID_STATE),
+              "racing run/run and run/abandon each consume exactly one prepared claim");
+        if (abandon && status[1] == NW_OK)
+        {
+            check(reject([&] { (void)pull->take(1); }).status == NW_CANCELED &&
+                      pull->take_error(1).status == NW_CANCELED && scope.probe->reads == 0,
+                  "winning abandonment has no provider effect");
+        }
+        else
+        {
+            auto batch = pull->take(1);
+            check(scope.probe->reads == 1, "winning execution reads once despite duplicate callers");
+        }
+        check(ready.calls == 1 && scope.source->pending == 0 && scope.source->pull_workers->done(),
+              "racing prepared claim publishes one terminal and retires once");
+        pull->join();
+        pull.reset();
+    }
+}
+
+void prepared_pull_inflight_stop()
+{
+    for (const bool external : {false, true})
+    {
+        Scope scope;
+        scope.probe->stop_at = 1;
+        auto pull = scope.pull(3);
+        PullReady ready;
+        std::future<void> executing;
+        bool held = false;
+        {
+            struct Release
+            {
+                std::shared_ptr<Probe> probe;
+                ~Release()
+                {
+                    probe->proceed.release();
+                }
+            } release{scope.probe};
+            // Require another row after the held provider call. Cancellation
+            // racing the last successful row may preserve that finished batch;
+            // this gate observes cancellation before unfinished work instead.
+            if (external)
+            {
+                pull->prepare(1, 2, 256, ready.callbacks());
+                executing = std::async(std::launch::async,
+                                       [current = pull]() mutable { CursorPull::run_prepared(std::move(current), 1); });
+            }
+            else
+                pull->request(1, 2, 256, ready.callbacks());
+            await([&] { return scope.probe->reads == 1; });
+            pull->request_close();
+            held = ready.calls == 0 && scope.source->pending == 1 && !scope.source->pull_workers->done();
+        }
+        if (external)
+            executing.get();
+        ready.wait(1);
+        const auto failure = reject([&] { (void)pull->take(1); });
+        const auto rich = pull->take_error(1);
+        check(held && failure.status == NW_CANCELED && rich.status == NW_CANCELED && ready.calls == 1,
+              "legacy and prepared cancellation retain the active provider until unfinished native work exits");
+        pull->join();
+        pull.reset();
+        check(scope.source->pending == 0 && scope.source->pull_workers->done() && pull_count == 0 && cursor_count == 0,
+              "in-flight prepared cancellation retires the original provider/read admission");
+    }
+}
+
+void prepared_pull_late_claim_during_close_callback()
+{
+    Scope scope;
+    auto pull = scope.pull(3);
+    auto entered = std::make_shared<std::atomic<bool>>(false);
+    auto proceed = std::make_shared<std::binary_semaphore>(0);
+    PullReady ready;
+    ready.before_return = [entered, proceed]
+    {
+        entered->store(true);
+        proceed->acquire();
+    };
+    pull->prepare(1, 1, 256, ready.callbacks());
+    std::future<void> stopped, joined;
+    bool held = false;
+    {
+        struct Release
+        {
+            std::shared_ptr<std::binary_semaphore> proceed;
+            ~Release()
+            {
+                proceed->release();
+            }
+        } release{proceed};
+        stopped = std::async(std::launch::async, [pull] { pull->request_close(); });
+        await([&] { return entered->load(); });
+        CursorPull::run_prepared(pull, 1);
+        check(reject([&] { CursorPull::abandon_prepared(pull, 1); }).status == NW_INVALID_STATE,
+              "the one late no-op claim is consumed even while auto-close's callback is returning");
+        joined = std::async(std::launch::async, [source = scope.source] { source->join(); });
+        await([&] { return scope.source->closing.load(); });
+        held = joined.wait_for(std::chrono::milliseconds(20)) != std::future_status::ready &&
+               stopped.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready &&
+               scope.source->pending == 1 && !scope.source->pull_workers->done() && scope.probe->reads == 0;
+    }
+    stopped.get();
+    joined.get();
+    check(held && ready.calls == 1 && scope.source->retired.load() && scope.source->pending == 0 &&
+              scope.source->pull_workers->done(),
+          "late no-op claim cannot retire an independent automatic close callback frame");
+    check(reject([&] { (void)pull->take(1); }).status == NW_CANCELED && pull->take_error(1).status == NW_CANCELED,
+          "later Source close leaves automatic cancellation's already-frozen error unchanged");
+    pull.reset();
+}
+
 void pull_first_fetch_admission()
 {
     for (const auto mode : {0, 1, 2})
@@ -1351,6 +1638,12 @@ int main()
         retirement_worker_owner_barrier();
         retirement_notification_barrier();
         pull_generations_and_tail();
+        prepared_pull_generations();
+        prepared_pull_never_run();
+        prepared_pull_running_retirement();
+        prepared_pull_concurrent_claim();
+        prepared_pull_inflight_stop();
+        prepared_pull_late_claim_during_close_callback();
         pull_stop_before_worker();
         pull_stop_before_wake();
         pull_queued_parent_priority();

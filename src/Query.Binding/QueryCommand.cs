@@ -356,9 +356,9 @@ internal sealed partial class QueryCommand
     internal ulong SnapshotAndImport(QueryCommand other)
     {
         if (!ReferenceEquals(Source, other.Source)) throw new ArgumentException("Query sources differ.");
-        // The binding captured this immutable snapshot under the source gate.
-        // Retain that one copy; copying its complete tape again would duplicate
-        // every value and validation table for each subquery composition.
+        // The binding supplies a cloned snapshot, or an exclusively admitted
+        // private command that it consumes only after this import succeeds.
+        // Retain the graph without copying its tape and validation tables again.
         other.ValidateSeal(8); var snapshot = other.Retain(); var index = _dependencies.Count; var fixups = _fixups.Count;
         try
         {

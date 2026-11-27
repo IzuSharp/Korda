@@ -102,6 +102,19 @@ internal static partial class Suite
             "parent collection snapshot and empty group preserve page order");
         Check(groups[2].Select(child => child.Id).Order().SequenceEqual([1L, 2L]) && groups[3].Select(child => child.Id).Order().SequenceEqual([1L, 2L]),
             "duplicate parent positions retain full composite matches and exclude partial NULL foreign keys");
+        using (var outer = session.From(Items.Table))
+        using (var branch = session.From(Items.Table))
+        {
+            outer.WhereEqual(Items.Tenant, 2L); branch.WhereEqual(Items.Tenant, 1L);
+            var combined = outer.SelectAll().Combine(branch.SelectAll());
+            branch.WhereEqual(Items.Id, 88L);
+            Check((await branch.SelectAll().ToListAsync()).Single().Id == 88L,
+                "public Combine leaves its source independently mutable and executable");
+            branch.Dispose();
+            var rows = await combined.ToListAsync();
+            Check(rows.Select(item => (item.Tenant, item.Id)).Order().SequenceEqual([(1L, 1L), (1L, 88L), (2L, 1L)]),
+                "public Combine retains its original snapshot after source mutation, execution and disposal");
+        }
         before = StatementCount(source);
         Check((await session.LoadRelatedAsync(Array.Empty<EntityKey<Item>>(), relation)).Count == 0 && StatementCount(source) == before,
             "empty relation batch executes no SQL");

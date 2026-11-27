@@ -73,7 +73,8 @@ def collect(build_manifest_path, provider=None):
                 raise ValueError('Dependency source changed after compilation')
     signatures = json.loads((ROOT / 'native/database/binding/signatures-v1.json').read_text())['signatures']
     for name, bit in (('query-command-v1.json', 26), ('cursor-pull-v1.json', 27),
-                      ('command-completion-v1.json', 28), ('find-shape-v1.json', 29)):
+                      ('command-completion-v1.json', 28), ('find-shape-v1.json', 29),
+                      ('cursor-pull-execution-v1.json', 30)):
         extension = json.loads((ROOT / 'native/database/binding' / name).read_text())
         if (extension['version'] != 1 or extension['capability_bit'] != bit or
                 DATABASE_CAPABILITIES[bit] != extension['capability']):

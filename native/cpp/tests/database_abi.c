@@ -2,6 +2,7 @@
  * Compile the unmodified normative database header as C17 and call the real
  * C++ module. C++ definitions also compile against its private declaration view.
  */
+#include "../../database/binding/korda_cursor_pull_execution_v1.h"
 #include "../../database/binding/korda_cursor_pull_v1.h"
 #include "../../database/binding/korda_database_binding_v1.h"
 #include "../../database/binding/korda_find_shape_v1.h"
@@ -22,6 +23,8 @@ _Static_assert(offsetof(nw_db_batch_result_v1, owner) == 0, "owned batch owner o
 _Static_assert(offsetof(nw_db_batch_result_v1, bytes) == 8, "owned batch byte view offset");
 _Static_assert(offsetof(nw_db_batch_result_v1, known_end) == 24, "owned batch EOF offset");
 _Static_assert(offsetof(nw_db_batch_result_v1, reserved) == 28, "owned batch reserved offset");
+_Static_assert(NW_DB_CURSOR_PULL_EXECUTION_CAPABILITY_V1 == (UINT64_C(1) << 30),
+               "admitted cursor execution capability is independent of frozen pull ABI");
 
 int main(void)
 {
@@ -54,6 +57,9 @@ int main(void)
            batch.reserved == 0);
     assert(nw_db_cursor_pull_check_read_v1(NULL, &error) == NW_INVALID_STATE);
     assert(nw_db_cursor_pull_stop_v1(NULL) == NW_INVALID_STATE);
+    assert(nw_db_cursor_pull_prepare_v1(NULL, 1, 1, 256, NULL, &error) == NW_INVALID_STATE);
+    assert(nw_db_cursor_pull_run_v1(NULL, 1, &error) == NW_INVALID_STATE);
+    assert(nw_db_cursor_pull_abandon_v1(NULL, 1, &error) == NW_INVALID_STATE);
     assert(nw_db_cursor_pull_close_request_v1(NULL, NULL, &error) == NW_INVALID_STATE);
     nw_db_buffer* closed = (nw_db_buffer*)(uintptr_t)1;
     assert(nw_db_cursor_pull_close_take_v1(NULL, &closed, &error) == NW_INVALID_STATE && closed == NULL);

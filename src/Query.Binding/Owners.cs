@@ -14,6 +14,7 @@ internal sealed class SourceBinding(NativeCalls calls, uint semanticProfile)
     internal uint SemanticProfile { get; } = semanticProfile is 1 or 2 ? semanticProfile : throw new ArgumentOutOfRangeException(nameof(semanticProfile));
     internal QueryCommandEnvironment? Commands { get; set; }
     internal CursorPullCalls? Pulls { get; set; }
+    internal CursorPullExecutionCalls? PullExecution { get; set; }
     internal CommandCompletionCalls? Completions { get; set; }
     internal FindShapeCalls? Finds { get; set; }
 }

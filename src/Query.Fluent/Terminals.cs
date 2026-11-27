@@ -30,6 +30,11 @@ public readonly struct QuerySelection<T>
         var owner = Owner; var projection = Projection; var self = this;
         return owner.Run(() => { owner.Selection(projection); var imported = owner.Import(other); owner.Clause(9, U(1, imported.In(owner.Binding)), N(2, (uint)operation)); return self; });
     }
+    internal QuerySelection<T> CombineConsumed(QuerySelection<T> other, SetOperation operation = SetOperation.UnionAll)
+    {
+        var owner = Owner; var projection = Projection; var self = this;
+        return owner.Run(() => { owner.Selection(projection); var imported = owner.ImportConsumed(other); owner.Clause(9, U(1, imported.In(owner.Binding)), N(2, (uint)operation)); return self; });
+    }
     /// <summary>Seals once and returns a bounded owned list after native cursor retirement.</summary>
     /// <inheritdoc cref="QuerySelection{T}"/>
     /// <param name="cancellationToken">Cancellation requests native stop; completion still waits for cursor and operation retirement.</param>

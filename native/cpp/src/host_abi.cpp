@@ -5,6 +5,7 @@
 // only its `template` parameter name. Every definition is type-checked against
 // the normative declarations; applications still consume the original C ABI.
 #include "../../database/binding/korda_command_completion_v1.h"
+#include "../../database/binding/korda_cursor_pull_execution_v1.h"
 #include "../../database/binding/korda_cursor_pull_v1.h"
 #include "../../database/binding/korda_find_shape_v1.h"
 #include "../../database/binding/korda_query_command_v1.h"
@@ -1327,6 +1328,35 @@ NW_DATABASE_API nw_status NW_CDECL nw_db_cursor_pull_request_v1(nw_db_ref raw, s
                             throw Error::invalid("fetch capacity");
                         pull->request(generation, rows, static_cast<std::size_t>(bytes), *callbacks);
                     });
+}
+NW_DATABASE_API nw_status NW_CDECL nw_db_cursor_pull_prepare_v1(nw_db_ref raw, std::uint64_t generation,
+                                                                std::uint32_t rows, std::uint64_t bytes,
+                                                                const nw_db_cursor_callbacks_v1* callbacks,
+                                                                nw_error_info_v1* error)
+{
+    return boundary(error,
+                    [&]
+                    {
+                        auto pull = typed<std::shared_ptr<CursorPull>>(raw);
+                        if (!callbacks ||
+                            reinterpret_cast<std::uintptr_t>(callbacks) % alignof(nw_db_cursor_callbacks_v1))
+                            throw Error::invalid("cursor callback record address");
+                        if (bytes > MAX_BYTES)
+                            throw Error::invalid("fetch capacity");
+                        pull->prepare(generation, rows, static_cast<std::size_t>(bytes), *callbacks);
+                    });
+}
+NW_DATABASE_API nw_status NW_CDECL nw_db_cursor_pull_run_v1(nw_db_ref raw, std::uint64_t generation,
+                                                            nw_error_info_v1* error)
+{
+    // Pass the temporary owner directly. The consumed Worker's tickets cover
+    // the static execution helper after it releases this channel accessor.
+    return boundary(error, [&] { CursorPull::run_prepared(typed<std::shared_ptr<CursorPull>>(raw), generation); });
+}
+NW_DATABASE_API nw_status NW_CDECL nw_db_cursor_pull_abandon_v1(nw_db_ref raw, std::uint64_t generation,
+                                                                nw_error_info_v1* error)
+{
+    return boundary(error, [&] { CursorPull::abandon_prepared(typed<std::shared_ptr<CursorPull>>(raw), generation); });
 }
 NW_DATABASE_API nw_status NW_CDECL nw_db_cursor_pull_take_v1(nw_db_ref raw, std::uint64_t generation,
                                                              nw_db_batch_result_v1* output, nw_error_info_v1* error)
