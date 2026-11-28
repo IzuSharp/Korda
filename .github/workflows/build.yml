@@ -137,7 +137,7 @@ jobs:
           git diff --exit-code
       - name: Retain action logs after a failure
         if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: diagnostics-${{ inputs.scope }}-${{ github.run_id }}
           path: |
@@ -156,7 +156,7 @@ jobs:
         run: bash eng/ci/sccache.sh stats
       - name: Pass internal build output to the package job
         if: inputs.mode == 'module-check' && fromJSON(inputs.plan).artifacts[inputs.scope] != ''
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: module-${{ inputs.scope }}-${{ github.run_id }}
           path: ${{ fromJSON(inputs.plan).artifacts[inputs.scope] }}
@@ -164,7 +164,7 @@ jobs:
           overwrite: true
       - name: Retain independently verified package
         if: inputs.mode == 'module-pack' || (inputs.mode == 'run' && contains(fromJSON(inputs.plan).public_checks, inputs.scope))
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: candidate-${{ inputs.scope }}
           overwrite: true
